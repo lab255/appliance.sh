@@ -401,7 +401,21 @@ export async function runUp(
     process.exit(1);
   }
 
-  // 2. Boot + wait for the cluster and registry.
+  // 2. Boot + wait for the cluster and registry. Name the engine binary
+  //    (path + build date) first: resolution prefers the installed
+  //    ~/.appliance/bin copy over a repo build, and a silently-stale
+  //    engine produces failures that look like guest bugs — make which
+  //    engine booted this VM a printed fact, not archaeology.
+  const engineBin = resolveVmBinary();
+  if (engineBin) {
+    let built = '';
+    try {
+      built = ` (built ${fs.statSync(engineBin).mtime.toISOString().slice(0, 10)})`;
+    } catch {
+      // best-effort — the path alone is still worth printing
+    }
+    console.log(chalk.dim(`engine: ${engineBin}${built}`));
+  }
   let vm: VmRuntimeInfo;
   try {
     vm = await ensureVmRuntime(name, { timeout, resources });
