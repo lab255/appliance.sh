@@ -352,16 +352,27 @@ async function main(): Promise<void> {
   await SUBCOMMANDS[canonical].load();
 }
 
-// Ctrl-C inside an @inquirer prompt rejects with ExitPromptError.
-// Subcommands that don't wrap their prompts in try/catch would
-// otherwise crash with a stack trace on a plain abort — catch it
-// centrally and exit with the conventional 130 instead.
+// The last-resort net for async subcommand errors. Commander actions
+// run after `program.parse` returns, so an error a subcommand doesn't
+// catch itself surfaces here, not in main().catch below. Two shapes:
+// Ctrl-C inside an @inquirer prompt (ExitPromptError — a plain abort,
+// exit 130), and everything else — which must still come out as the
+// CLI's standard red message + remediation hint, never a raw stack
+// trace dumped at a non-developer.
 process.on('unhandledRejection', (err) => {
   if (err instanceof Error && err.name === 'ExitPromptError') {
     console.error('Cancelled.');
     process.exit(130);
   }
-  throw err;
+  void import('./utils/errors.js')
+    .then(({ printCliError }) => {
+      printCliError(err);
+      process.exit(process.exitCode ?? 1);
+    })
+    .catch(() => {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    });
 });
 
 main().catch((err) => {

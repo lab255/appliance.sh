@@ -59,7 +59,11 @@ export async function pollDeploymentUntilDone(
     }
   }
 
-  throw new Error('Timed out waiting for deployment to settle.');
+  throw new Error(
+    'Timed out waiting for the deployment to settle — it may still be finishing server-side. ' +
+      'Check it with `appliance status`, and `appliance logs` once it lands; re-running the same ' +
+      'deploy later is safe (deploys are idempotent).'
+  );
 }
 
 /**

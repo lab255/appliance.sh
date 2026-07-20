@@ -30,7 +30,8 @@ export function remediationHint(message: string, apiUrl?: string): string | null
     return 'The BuildKit builder is not reachable — is the microVM up? `appliance vm up` brings it back (first-time setup: `appliance init`).';
   }
   if (/docker|container runtime|daemon|colima/i.test(message)) {
-    return 'The container runtime is not reachable — start it (`colima start`, or open Docker Desktop), then re-run (`appliance doctor` checks the host prerequisites).';
+    const start = process.platform === 'win32' ? 'open Docker Desktop' : '`colima start`, or open Docker Desktop';
+    return `The container runtime is not reachable — start it (${start}), then re-run (\`appliance doctor\` checks the host prerequisites).`;
   }
   if (/\b5\d\d\b|bad gateway|gateway timeout|service unavailable/i.test(message)) {
     return `The api-server${apiUrl ? ` at ${apiUrl}` : ''} returned a server error — it may still be starting; wait a moment and retry, or check it with \`appliance test\`.`;

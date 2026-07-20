@@ -100,6 +100,17 @@ registerManifestOptions(program)
       product: 'cli',
     });
 
+    // Ctrl+C only stops WATCHING: the deploy already dispatched and
+    // keeps running server-side. Say so, so nobody thinks the abort
+    // rolled anything back (and knows where to pick it back up).
+    process.on('SIGINT', () => {
+      console.error();
+      console.error(
+        chalk.yellow('Stopped watching — the deployment continues server-side. Check it with `appliance status`.')
+      );
+      process.exit(130);
+    });
+
     try {
       const outcome = await runDeploy({
         client,

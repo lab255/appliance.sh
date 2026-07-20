@@ -293,6 +293,54 @@ function formatStatus(d: Deployment): string {
   return d.message ? `${base} ${chalk.dim('—')} ${d.message}` : base;
 }
 
+/**
+ * A deploy can "succeed" (the rollout was applied) and the app then
+ * crashloop — the deployment record tracks the operation, not workload
+ * health. After a successful deploy, probe the environment-health
+ * endpoint for a few seconds and tell the user when their app is not
+ * actually staying up, with the exact next command. Silent on healthy,
+ * on non-Kubernetes bases (status `unknown`), and on any probe error —
+ * this is a courtesy check that must never fail a successful deploy.
+ */
+export async function warnIfNotHealthy(
+  client: ReturnType<typeof createApplianceClient>,
+  projectId: string,
+  environmentId: string,
+  projectName: string,
+  environmentName: string,
+  opts: { probes?: number; delayMs?: number } = {}
+): Promise<void> {
+  const probes = opts.probes ?? 3;
+  const delayMs = opts.delayMs ?? 3_000;
+  let last;
+  for (let i = 0; i < probes; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, delayMs));
+    const result = await client.getEnvironmentHealth(projectId, environmentId);
+    if (!result.success) return;
+    last = result.data;
+    if (last.status === 'healthy' || last.status === 'unknown' || last.status === 'not_deployed') return;
+    if (last.status === 'unhealthy') break;
+  }
+  if (!last) return;
+  const reason = last.pods.find((p) => p.reason)?.reason;
+  if (last.status === 'unhealthy') {
+    console.log(
+      chalk.yellow(
+        `Deployed, but the app is not staying up${reason ? ` (${reason})` : ''}: ` +
+          `${last.readyReplicas}/${last.desiredReplicas} replicas ready, ${last.restarts} restart(s).`
+      )
+    );
+    console.log(chalk.dim(`  See why with \`appliance logs ${projectName} ${environmentName}\`.`));
+  } else {
+    console.log(
+      chalk.dim(
+        `Still starting: ${last.readyReplicas}/${last.desiredReplicas} replicas ready` +
+          `${reason ? ` (${reason})` : ''} — \`appliance status\` shows progress.`
+      )
+    );
+  }
+}
+
 export function printFinalBanner(deployment: Deployment, projectName: string, environmentName: string): void {
   const url = extractDeploymentUrl(deployment.message);
   console.log();
@@ -313,6 +361,12 @@ export function printFinalBanner(deployment: Deployment, projectName: string, en
   } else {
     console.log(`${chalk.red(BRAND)} ${chalk.bold('Failed')} ${projectName}/${environmentName}`);
     if (deployment.message) console.log(`  ${deployment.message}`);
+    console.log(
+      chalk.dim(
+        `  If the app built but won't start, \`appliance logs ${projectName} ${environmentName}\` shows why. ` +
+          'Re-running the same deploy is safe (deploys are idempotent).'
+      )
+    );
   }
   console.log(`  ${chalk.dim('deployment')} ${deployment.id}`);
 }
@@ -425,6 +479,12 @@ export async function runDeploy(params: RunDeployParams): Promise<DeployOutcome>
   }
 
   printFinalBanner(finalDeployment, projectName, environmentName);
+
+  // "Deployed" must not be a lie: check the workload actually stays up
+  // and warn (with the logs command) when it crashloops right away.
+  if (finalDeployment.status === DeploymentStatus.Succeeded && !finalDeployment.idempotentNoop) {
+    await warnIfNotHealthy(client, project.id, environment.id, projectName, environmentName);
+  }
 
   return {
     deployment: finalDeployment,

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 // non-technical users; the raw message stays one click away for the
 // operator (and for bug reports).
 
-export type FriendlyErrorKind = 'network' | 'auth' | 'install' | 'unknown';
+export type FriendlyErrorKind = 'network' | 'auth' | 'install' | 'wsl' | 'unknown';
 
 /** Best-effort message text from an unknown thrown/rejected value. */
 export function errorText(error: unknown): string {
@@ -81,6 +81,12 @@ export function classifyError(error: unknown): FriendlyErrorKind {
   ) {
     return 'network';
   }
+  // WSL/virtualization boot failures carry their fix in the message
+  // (`wsl --install`, enable virtualization) — surface it as the
+  // headline instead of burying it behind the Details disclosure, or a
+  // non-developer just sees "couldn't start" and retries into the same
+  // wall. Matches the engine's wording (packages/vm/src/backend/wsl.rs).
+  if (/\bwsl\b|virtual machine platform|virtualization|hyper-v|0x80370102/.test(m)) return 'wsl';
   if (/install/.test(m) && /engine|binary|appliance-vm|runtime/.test(m)) return 'install';
   return 'unknown';
 }
@@ -89,7 +95,16 @@ const HEADLINES: Record<FriendlyErrorKind, string> = {
   network: "Can't reach the server — check that the machine is running",
   auth: "Your access key isn't valid anymore — reconnect to continue",
   install: "The local runtime couldn't be installed",
+  wsl: 'Windows needs WSL2 to run the Dev Machine — and it isn’t ready yet',
   unknown: 'Something went wrong',
+};
+
+/** Inline how-to-fix line for classes whose fix is knowable without the
+ *  raw details. Rendered under the headline, above any actions. */
+const FIX_LINES: Partial<Record<FriendlyErrorKind, string>> = {
+  wsl:
+    'Open PowerShell as Administrator, run `wsl --install`, then reboot. ' +
+    'If it still fails, enable virtualization in your BIOS/UEFI and run `wsl --update`.',
 };
 
 /**
@@ -123,10 +138,12 @@ export function FriendlyError({
   const kind = classifyError(error);
   const line = headline ?? (kind === 'unknown' && fallbackHeadline ? fallbackHeadline : HEADLINES[kind]);
   const raw = errorText(error);
+  const fix = FIX_LINES[kind];
 
   return (
     <div role="alert" className={cn('rounded-md border border-red-500/40 bg-red-500/5 p-3 text-sm', className)}>
       <div className="font-medium text-red-300">{line}</div>
+      {fix ? <div className="mt-1 text-xs text-red-200/90">{fix}</div> : null}
       {kind === 'auth' && !hideReconnect ? (
         <Link to="/setup/connect" className="mt-1 inline-block text-xs text-red-200 underline hover:text-red-100">
           Reconnect

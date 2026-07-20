@@ -72,7 +72,18 @@ export async function extractApplianceFile(
     // fields; `appliance deploy` forwards env / memory / timeout /
     // storage on the deploy payload.
     const parsed = applianceFullInput.safeParse(raw);
-    if (!parsed.success) return parsed;
+    if (!parsed.success) {
+      // One line per problem, naming the field — mirror the stack
+      // loader's formatting instead of returning Zod's raw issue dump.
+      const issues = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+      return {
+        success: false,
+        error: new Error(
+          `Invalid manifest ${path.basename(filePath)}: ${issues}. ` +
+            'See the manifest reference in the README, or re-scaffold with `appliance configure`.'
+        ),
+      };
+    }
 
     if (!isCode) {
       const entropyErr = rejectHighEntropyEnv(parsed.data.env);
@@ -276,7 +287,16 @@ function shannonEntropy(s: string): number {
 
 async function loadManifest(filePath: string, ext: string, ctx: ManifestContext): Promise<unknown> {
   if (ext === '.json') {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    // Name the file in parse errors: a bare "Unexpected token } at
+    // position 42" gives a non-developer nothing to act on.
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch (err) {
+      throw new Error(
+        `${path.basename(filePath)} is not valid JSON (${err instanceof Error ? err.message : String(err)}). ` +
+          'Fix the syntax (a JSON-aware editor highlights the spot), or re-scaffold with `appliance configure`.'
+      );
+    }
   }
   if (CODE_EXTENSIONS.has(ext)) {
     // Programmatic manifests run inside a QuickJS sandbox (see
