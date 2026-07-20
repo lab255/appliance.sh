@@ -106,24 +106,24 @@ Optional fields: `scripts` (lifecycle hooks: `prebuild`, `build`, `postbuild`, `
 
 ## CLI commands
 
-| Command                              | Description                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------ |
-| `appliance init`                     | First-time setup: boot the managed VM and guide your first deploy                    |
-| `appliance dev [env]`                | Dev loop: deploy this app/stack, stream merged logs, rebuild on save                 |
-| `appliance deploy [project] [env]`   | Deploy the linked target — or the whole stack in a stack folder                      |
-| `appliance destroy [project] [env]`  | Destroy an environment; defaults to the linked target                                |
-| `appliance up` / `down` / `shell`    | Build + run this repo (Dockerfile/compose/devcontainer) in the VM / stop / enter it  |
-| `appliance agent …`                  | Run coding agents in the VM (`login`, `start`, `list`, `attach`, `stop`)             |
-| `appliance stack …`                  | Scaffold (`init`), inspect (`status`), destroy a stack; `deploy` fans out on its own |
-| `appliance open` / `status` / `list` | Open the deployed URL / show status / list apps and environments                     |
-| `appliance env set/list/unset`       | Manage per-environment variables                                                     |
-| `appliance logs`                     | Stream a deployment's container logs                                                 |
-| `appliance cloud bootstrap`          | Provision a new Appliance installation on AWS                                        |
-| `appliance cloud teardown`           | Destroy a cloud installation                                                         |
-| `appliance login` / `whoami`         | Authenticate with an installation / show the active profile                          |
-| `appliance vm up/stop/status/…`      | Manage the one managed VM (also `egress` policy and `creds` broker)                  |
-| `appliance doctor`                   | Preflight checks (`--fix` auto-resolves the safe ones)                               |
-| `appliance mcp`                      | Serve deploy/debug tools over MCP (stdio) so AI agents can drive Appliance           |
+| Command                              | Description                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| `appliance init`                     | First-time setup: boot the managed VM and guide your first deploy                     |
+| `appliance dev [env]`                | Dev loop: deploy this app/stack, stream merged logs, rebuild on save                  |
+| `appliance deploy [project] [env]`   | Deploy the linked target — or the whole stack in a stack folder                       |
+| `appliance destroy [project] [env]`  | Destroy an environment; defaults to the linked target                                 |
+| `appliance up` / `down` / `shell`    | Build + run this repo (Dockerfile/compose/devcontainer) in the VM / stop / enter it   |
+| `appliance agent …`                  | Run coding agents in the VM (`login`, `start`, `list`, `attach`, `stop`)              |
+| `appliance stack …`                  | Scaffold (`init`), inspect (`status`), destroy a stack; `deploy` fans out on its own  |
+| `appliance open` / `status` / `list` | Open the deployed URL / show status / list apps and environments                      |
+| `appliance env set/list/unset`       | Manage per-environment variables                                                      |
+| `appliance logs`                     | Stream a deployment's container logs                                                  |
+| `appliance cloud bootstrap`          | Provision a new Appliance installation on AWS                                         |
+| `appliance cloud teardown`           | Destroy a cloud installation                                                          |
+| `appliance login` / `whoami`         | Authenticate with an installation / show the active profile                           |
+| `appliance vm up/stop/status/…`      | Manage the one managed VM (`reset` starts over; also `egress` policy, `creds` broker) |
+| `appliance doctor`                   | Preflight checks (`--fix` auto-resolves the safe ones)                                |
+| `appliance mcp`                      | Serve deploy/debug tools over MCP (stdio) so AI agents can drive Appliance            |
 
 Top-level `setup`, `status`, and `list` are shortcuts for `appliance app …`. Run `appliance --help` for the full, journey-grouped list.
 
@@ -144,7 +144,7 @@ Local deploys use the `local` profile, saved automatically when the VM first boo
 - **The Appliance api-server as a guest binary** — the control plane at `http://api.appliance.localhost:8081`, serving the web console at the same URL
 - **The dev/agent sandbox** — your working tree shared over VirtioFS, agents confined by the VM's egress policy (`appliance vm egress …`)
 
-The VM parks with `appliance vm stop` (state persists) and everything — cluster, registry cache, deployed apps — survives a reboot. The CLI stages the api-server guest binary automatically (from the repo build or the release download); no image pulls, no registries, no Docker.
+The VM parks with `appliance vm stop` (state persists) and everything — cluster, registry cache, deployed apps — survives a reboot. `appliance vm status` says what state it's in and what to run next; when something is beyond saving, `appliance vm reset` deletes everything and boots a fresh machine in one command. The CLI stages the api-server guest binary automatically (from the repo build or the release download); no image pulls, no registries, no Docker.
 
 `appliance vm shell` (or **Open shell** in the desktop) drops you into the guest; shells are tmux-backed and reattachable across disconnects — the desktop even reattaches them after an app restart:
 
