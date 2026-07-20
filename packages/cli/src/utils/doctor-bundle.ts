@@ -306,13 +306,27 @@ export async function writeSupportBundle(ctx: BundleContext): Promise<string> {
     // no kubeconfig — VM never came up; skip both
   }
 
-  // Tarball via spawned tar (the CLI is spawn-heavy already).
+  // Tarball via spawned tar (the CLI is spawn-heavy already). The
+  // archive name is passed RELATIVE with cwd set to its directory: GNU
+  // tar parses a `C:\…` absolute -f argument as `host:path` (remote
+  // archive) on Windows, so an absolute path breaks whenever GNU tar
+  // (Git for Windows) shadows the system bsdtar.
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outPath = ctx.outPath ?? path.resolve(`appliance-doctor-${ctx.vm}-${stamp}.tar.gz`);
-  const tar = spawnSync('tar', ['-czf', outPath, '-C', staging, '.'], { encoding: 'utf8' });
+  const tar = spawnSync('tar', ['-czf', path.basename(outPath), '-C', staging, '.'], {
+    encoding: 'utf8',
+    cwd: path.dirname(outPath),
+  });
   fs.rmSync(staging, { recursive: true, force: true });
   if (tar.error || tar.status !== 0) {
-    throw new Error(`tar failed: ${tar.error?.message ?? tar.stderr}`);
+    const detail = tar.error?.message ?? tar.stderr;
+    const hint =
+      (tar.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+        ? process.platform === 'win32'
+          ? ' (`tar.exe` ships with Windows 10 1803+; ensure C:\\Windows\\System32 is on PATH)'
+          : ' (install tar with your package manager)'
+        : '';
+    throw new Error(`tar failed: ${detail}${hint}`);
   }
   return outPath;
 }

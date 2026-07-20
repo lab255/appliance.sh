@@ -225,7 +225,9 @@ describe('writeSupportBundle redaction', () => {
     });
 
     extracted = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-bundle-x-'));
-    const untar = spawnSync('tar', ['-xzf', tarball, '-C', extracted]);
+    // Relative -f + cwd, matching writeSupportBundle: GNU tar parses an
+    // absolute `C:\…` archive path as a remote host on Windows.
+    const untar = spawnSync('tar', ['-xzf', path.basename(tarball), '-C', extracted], { cwd: path.dirname(tarball) });
     expect(untar.status).toBe(0);
 
     bundleFiles = [];
@@ -233,7 +235,8 @@ describe('writeSupportBundle redaction', () => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
-        else bundleFiles.push(path.relative(extracted, full));
+        // Posix separators so expectations read the same on Windows.
+        else bundleFiles.push(path.relative(extracted, full).split(path.sep).join('/'));
       }
     };
     walk(extracted);
