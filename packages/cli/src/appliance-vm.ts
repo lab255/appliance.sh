@@ -11,8 +11,11 @@ import {
   vmDir,
   vmBinary,
   runVm,
+  runVmQuiet,
   runUp,
   deleteVmAndProfile,
+  renderVmStatus,
+  type EngineVmStatus,
 } from './utils/microvm-up.js';
 
 // `appliance vm` — the microVM runtime engine (appliance-vm), the sole
@@ -89,18 +92,73 @@ function parsePositiveInt(value: string): number {
 
 // ---- passthrough lifecycle ---------------------------------------------
 
-for (const [cmd, desc] of [
-  ['stop', 'stop the microVM (state is preserved)'],
-  ['status', 'report microVM state as JSON'],
-] as const) {
-  program
-    .command(cmd)
-    .description(desc)
-    .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
-    .action((opts: { name: string }) => {
-      process.exit(runVm([cmd, opts.name]));
-    });
-}
+program
+  .command('stop')
+  .description('stop the microVM (state is preserved)')
+  .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
+  .action((opts: { name: string }) => {
+    process.exit(runVm(['stop', opts.name]));
+  });
+
+program
+  .command('status')
+  .description('show the microVM state and the next command (--json for the raw engine report)')
+  .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
+  .option('--json', 'print the raw engine JSON instead of the human summary', false)
+  .action((opts: { name: string; json: boolean }) => {
+    const r = spawnSync(vmBinary(), ['status', opts.name], { encoding: 'utf8' });
+    if (r.error || r.status !== 0 || !r.stdout) {
+      // Engine missing/broken: its own stderr is the best signal.
+      process.stderr.write(r.stderr ?? '');
+      process.stdout.write(r.stdout ?? '');
+      process.exit(r.status ?? 1);
+    }
+    if (opts.json) {
+      process.stdout.write(r.stdout);
+      return;
+    }
+    let status: EngineVmStatus;
+    try {
+      status = JSON.parse(r.stdout) as EngineVmStatus;
+    } catch {
+      // A future engine changed the shape — fall back to its raw output
+      // rather than hiding it.
+      process.stdout.write(r.stdout);
+      return;
+    }
+    for (const line of renderVmStatus(status)) console.log(line);
+  });
+
+program
+  .command('reset')
+  .description('start over: delete this VM (apps, images, state, credential profile) and boot a fresh one')
+  .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
+  .option('-f, --force', 'skip the confirmation prompt', false)
+  .action(async (opts: { name: string; force: boolean }) => {
+    if (!opts.force) {
+      const ok = await confirm({
+        message:
+          `Reset VM '${opts.name}'? This deletes its deployed apps, cached images, and credential profile, ` +
+          'then boots a brand-new one.',
+        default: false,
+      });
+      if (!ok) {
+        console.log(chalk.yellow('aborted'));
+        return;
+      }
+    }
+    // Best-effort stop first so delete never trips over a running VM;
+    // a delete failure after that means "nothing to delete" — still a
+    // valid starting point for the fresh boot.
+    runVmQuiet(['stop', opts.name]);
+    deleteVmAndProfile(opts.name);
+    try {
+      await runUp(opts.name, undefined, 900, {});
+    } catch (err) {
+      console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+      process.exit(1);
+    }
+  });
 
 // `delete`/`prune` are not plain passthroughs: the Rust engine removes
 // the VM and its on-disk state, but the credential profile `vm up`

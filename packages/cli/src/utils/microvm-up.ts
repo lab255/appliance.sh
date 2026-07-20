@@ -166,6 +166,80 @@ export function readVmPorts(name: string = DEFAULT_VM_NAME): VmPorts {
   return vmPorts(name);
 }
 
+/** The engine's `status <name>` JSON report (packages/vm/src/spec.rs
+ *  VmStatus, camelCase). Only the fields the summary renders. */
+export interface EngineVmStatus {
+  name: string;
+  exists: boolean;
+  running: boolean;
+  pid?: number;
+  backend: string;
+  clusterReady: boolean;
+  phase?: string;
+  phaseDetail?: string;
+  /** Backend availability error (WSL broken, no entitlement, …). */
+  message?: string;
+  hostPort?: number;
+  apiPort?: number;
+  registryPort?: number;
+  buildkitPort?: number;
+  dev?: boolean;
+}
+
+/**
+ * Render the engine's status JSON as the human summary `appliance vm
+ * status` prints: one state line, the facts that matter (URL, ports,
+ * dev-ness), and ALWAYS a "Next:" line naming the command that moves
+ * this state forward — a non-developer should never have to guess.
+ * Pure (returns lines, no printing) for testability.
+ */
+export function renderVmStatus(s: EngineVmStatus): string[] {
+  const lines: string[] = [];
+  const title = (state: string) => `VM ${chalk.bold(`'${s.name}'`)} — ${state}`;
+
+  if (!s.exists) {
+    lines.push(title('not created yet'));
+    lines.push(`  ${chalk.dim('Next:')} appliance init (first-time setup) — or \`appliance vm up\` to just boot it.`);
+    return lines;
+  }
+  if (!s.running) {
+    lines.push(title(`${chalk.yellow('stopped')} (state preserved)`));
+    if (s.dev) lines.push(`  Dev environment: yes`);
+    lines.push(`  ${chalk.dim('Next:')} appliance vm up — or just \`appliance dev\`, which boots it for you.`);
+    return lines;
+  }
+
+  const pid = s.pid !== undefined ? ` (pid ${s.pid})` : '';
+  if (!s.clusterReady) {
+    const phase = s.phase ? `${s.phase}${s.phaseDetail ? `: ${s.phaseDetail}` : ''}` : 'starting';
+    lines.push(title(`${chalk.cyan('starting')}${pid} — ${phase}`));
+    lines.push(
+      `  ${chalk.dim('Next:')} watch the boot with \`appliance vm console -f\`; first boots can take a few minutes.`
+    );
+  } else {
+    lines.push(title(`${chalk.green('running')}${pid}`));
+    if (s.hostPort !== undefined) {
+      lines.push(`  Console + API: ${chalk.cyan(`http://api.appliance.localhost:${s.hostPort}`)}`);
+      lines.push(`  Apps deploy to: http://<app>-<env>.appliance.localhost:${s.hostPort}`);
+    }
+    const ports = [
+      s.hostPort !== undefined && `ingress ${s.hostPort}`,
+      s.apiPort !== undefined && `kubernetes ${s.apiPort}`,
+      s.registryPort !== undefined && `registry ${s.registryPort}`,
+      s.buildkitPort !== undefined && `buildkit ${s.buildkitPort}`,
+    ].filter(Boolean);
+    if (ports.length > 0) lines.push(chalk.dim(`  Ports: ${ports.join(' · ')}`));
+    lines.push(
+      `  ${chalk.dim('Next:')} appliance dev — deploy + logs + rebuild on save. Park it with \`appliance vm stop\`.`
+    );
+  }
+  if (s.dev) lines.push(`  Dev environment: yes (\`appliance vm shell\` lands in the persistent workspace)`);
+  if (s.message) {
+    lines.push(chalk.yellow(`  Warning: ${s.message.split('\n')[0]}`));
+  }
+  return lines;
+}
+
 /** Pure decision core for the engine fast-pass: the history must show an
  *  `ingress` phase AND be at least as fresh as the kubeconfig. The
  *  freshness guard closes the engine-downgrade hole — old engines clear
