@@ -432,6 +432,11 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
   const [error, setError] = React.useState<string | null>(null);
   const [retrying, setRetrying] = React.useState(false);
   const [showLog, setShowLog] = React.useState(true);
+  // True when the boot has produced NO new log line or phase change for
+  // a while — the "is this thing wedged?" moment. Drives a reassurance
+  // notice; flips back as soon as anything happens.
+  const [stalled, setStalled] = React.useState(false);
+  const lastActivityRef = React.useRef(Date.now());
   const startedRef = React.useRef(false);
   const logIdRef = React.useRef(0);
   // The poll loop's liveness flag and interval handle, hoisted to refs so
@@ -448,6 +453,8 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
 
   const appendLog = React.useCallback((level: LogLine['level'], message: string) => {
     logIdRef.current += 1;
+    lastActivityRef.current = Date.now();
+    setStalled(false);
     setLogs((prev) => [...prev, { id: logIdRef.current, level, message }]);
   }, []);
 
@@ -461,13 +468,46 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     if (sub) {
       const clusterIdx = MICROVM_LADDER.findIndex((r) => r.phase === 'cluster');
       setReached((prev) => Math.max(prev, clusterIdx));
-      setClusterDetail(detail ? `${sub} (${detail})` : sub);
+      // Only a CHANGED sub-phase line counts as progress — the poll
+      // re-reports the same phase every 1.5s, which must not keep
+      // resetting the stall clock.
+      setClusterDetail((prev) => {
+        const next = detail ? `${sub} (${detail})` : sub;
+        if (next !== prev) {
+          lastActivityRef.current = Date.now();
+          setStalled(false);
+        }
+        return next;
+      });
       return;
     }
     const idx = MICROVM_LADDER.findIndex((r) => r.phase === phase);
-    if (idx >= 0) setReached((prev) => Math.max(prev, idx));
-    else if (phase === 'failed') setOutcome((prev) => (prev === 'running' ? 'failed' : prev));
+    if (idx >= 0) {
+      setReached((prev) => {
+        if (idx > prev) {
+          lastActivityRef.current = Date.now();
+          setStalled(false);
+        }
+        return Math.max(prev, idx);
+      });
+    } else if (phase === 'failed') setOutcome((prev) => (prev === 'running' ? 'failed' : prev));
   }, []);
+
+  // Watch for a quiet patch: no log line and no phase movement for a
+  // couple of minutes. Real first boots go quiet during big image pulls,
+  // so this is a reassurance ("waiting is normal, here's how long"), not
+  // an error — the engine's own timeout is the failure authority.
+  const STALL_AFTER_MS = 120_000;
+  React.useEffect(() => {
+    if (outcome !== 'running') {
+      setStalled(false);
+      return;
+    }
+    const t = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > STALL_AFTER_MS) setStalled(true);
+    }, 15_000);
+    return () => clearInterval(t);
+  }, [outcome]);
 
   const start = React.useCallback(async () => {
     if (!vmHost) {
@@ -482,6 +522,8 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     setLogs([]);
     setShowLog(true);
     setRetrying(true);
+    lastActivityRef.current = Date.now();
+    setStalled(false);
     const instance = vmHost.instance(name);
 
     // Poll the structured phase alongside the streamed log: the engine
@@ -630,6 +672,34 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
           );
         })}
       </div>
+
+      {/* Quiet-patch reassurance: nothing new for a while is NORMAL on a
+          first boot (multi-GB image pulls emit no lines), but a bare
+          spinner reads as a hang. Say what's happening, how long is
+          normal, and where the truth lives. The engine's own timeout
+          remains the failure authority — this never aborts anything. */}
+      {stalled && outcome === 'running' ? (
+        <div
+          role="status"
+          className="rounded-md border border-yellow-500/40 bg-yellow-500/5 p-3 text-sm text-yellow-200/90"
+        >
+          <div className="font-medium text-yellow-300">Still working — this step can be slow</div>
+          <div className="mt-1 text-xs">
+            Nothing new for a couple of minutes. A first start downloads several GB of images, which can take 10–15
+            minutes on a slower connection — waiting is safe. The bring-up log below shows the last activity; if it
+            never moves again, this page will report the failure and offer a Retry.
+          </div>
+          {!showLog ? (
+            <button
+              type="button"
+              onClick={() => setShowLog(true)}
+              className="mt-2 text-xs underline hover:text-yellow-100"
+            >
+              Show the bring-up log
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* The raw streamed boot lines, collapsible underneath the ladder. */}
       <div className="rounded-md border border-[var(--color-border)] bg-black/30">
