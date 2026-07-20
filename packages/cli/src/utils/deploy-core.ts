@@ -380,6 +380,14 @@ export interface RunDeployParams {
   cliProject?: string;
   cliEnvironment?: string;
   opts: DeployOptions;
+  /** Profile name to record in the link file. Callers that resolve a
+   *  per-call profile without holding the process-wide override (the
+   *  MCP server) pass it here; defaults to the override/env cascade. */
+  linkProfile?: string;
+  /** Called the moment the deployment is dispatched server-side. Before
+   *  this fires, aborting loses nothing — after it, the deploy runs to
+   *  completion regardless of this process. SIGINT messaging keys on it. */
+  onDispatched?: () => void;
 }
 
 // One full deploy: resolve target, find-or-create project + environment,
@@ -453,6 +461,7 @@ export async function runDeploy(params: RunDeployParams): Promise<DeployOutcome>
     // attaches a remediation line (auth/cluster/network shapes).
     throw new Error(`Deploy failed: ${result.error.message}`);
   }
+  params.onDispatched?.();
 
   // Persist the link so the next `appliance deploy` (no args)
   // targets the same place. Done after the dispatch succeeds so
@@ -461,7 +470,7 @@ export async function runDeploy(params: RunDeployParams): Promise<DeployOutcome>
     projectName,
     environmentName,
     apiUrl,
-    profile: getActiveProfileOverride() ?? process.env.APPLIANCE_PROFILE ?? undefined,
+    profile: params.linkProfile ?? getActiveProfileOverride() ?? process.env.APPLIANCE_PROFILE ?? undefined,
   });
 
   const progress = startProgressLine(`Deploying ${projectName}/${environmentName} — pending`);

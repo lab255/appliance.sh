@@ -100,13 +100,18 @@ registerManifestOptions(program)
       product: 'cli',
     });
 
-    // Ctrl+C only stops WATCHING: the deploy already dispatched and
-    // keeps running server-side. Say so, so nobody thinks the abort
-    // rolled anything back (and knows where to pick it back up).
+    // Ctrl+C messaging must be honest about WHERE the deploy is. Before
+    // dispatch (target resolution, the slow first build, the upload) an
+    // abort loses nothing; after dispatch the deploy keeps running
+    // server-side and the abort only stops the watching. runDeploy
+    // flips `dispatched` at the exact server-accept moment.
+    let dispatched = false;
     process.on('SIGINT', () => {
       console.error();
       console.error(
-        chalk.yellow('Stopped watching — the deployment continues server-side. Check it with `appliance status`.')
+        dispatched
+          ? chalk.yellow('Stopped watching — the deployment continues server-side. Check it with `appliance status`.')
+          : chalk.yellow('Cancelled — nothing was deployed.')
       );
       process.exit(130);
     });
@@ -119,6 +124,9 @@ registerManifestOptions(program)
         cliProject,
         cliEnvironment,
         opts: { build: opts.build, imageUri: opts.imageUri, envFile: opts.envFile, yes: opts.yes },
+        onDispatched: () => {
+          dispatched = true;
+        },
       });
 
       if (outcome.deployment.status !== DeploymentStatus.Succeeded) {

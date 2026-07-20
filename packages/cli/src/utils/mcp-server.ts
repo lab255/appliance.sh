@@ -348,6 +348,11 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
               cliProject: project,
               cliEnvironment: environment,
               opts: { build: DEFAULT_BUILD_OUTPUT, yes: true },
+              // The per-call profile never touches the process-wide
+              // override (credentialsForProfile restores it before this
+              // runs), so the link file must be told explicitly which
+              // profile this deploy used.
+              linkProfile: profile,
             });
             return jsonResult({
               project: outcome.projectName,
