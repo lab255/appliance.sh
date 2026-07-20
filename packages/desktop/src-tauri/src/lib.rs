@@ -238,12 +238,27 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     let raw = serde_json::to_string_pretty(file)?;
     fs::write(&tmp, raw)?;
     fs::rename(&tmp, &path)?;
-    // 0600 on unix so the secrets aren't world-readable. Best-effort
-    // on Windows where there's no equivalent simple permission bit.
+    // 0600 on unix so the secrets aren't world-readable. On Windows the
+    // equivalent is an ACL reset: strip inherited ACEs and grant only
+    // the current user (the OpenSSH key-file posture) — mirrors
+    // restrictWindowsAcl in the CLI's profile-store.ts, which manages
+    // the same file. Both best-effort: a failed tightening never breaks
+    // the write.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(user) = std::env::var("USERNAME") {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("icacls")
+                .arg(&path)
+                .args(["/inheritance:r", "/grant:r", &format!("{user}:F")])
+                .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+                .output();
+        }
     }
     Ok(())
 }
