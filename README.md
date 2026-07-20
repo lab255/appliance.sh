@@ -70,6 +70,8 @@ appliance agent start --autonomous --task "…" --wait   # headless run to compl
 
 `up`, `agent`, and `dev` all share the **one** `appliance` VM — one boot, one lifecycle, one thing to reason about. See [`docs/agent-sandbox.md`](docs/agent-sandbox.md) for the threat model.
 
+External agents can also drive Appliance from the outside: `appliance mcp` serves deploys, logs, health, and diagnostics over the Model Context Protocol, so a Claude Code session on your host (or any MCP client) can deploy and debug without shelling out to the human-facing CLI. See [`docs/mcp.md`](docs/mcp.md).
+
 ### 3. Ship the same app to the cloud
 
 ```bash
@@ -121,6 +123,7 @@ Optional fields: `scripts` (lifecycle hooks: `prebuild`, `build`, `postbuild`, `
 | `appliance login` / `whoami`         | Authenticate with an installation / show the active profile                          |
 | `appliance vm up/stop/status/…`      | Manage the one managed VM (also `egress` policy and `creds` broker)                  |
 | `appliance doctor`                   | Preflight checks (`--fix` auto-resolves the safe ones)                               |
+| `appliance mcp`                      | Serve deploy/debug tools over MCP (stdio) so AI agents can drive Appliance           |
 
 Top-level `setup`, `status`, and `list` are shortcuts for `appliance app …`. Run `appliance --help` for the full, journey-grouped list.
 

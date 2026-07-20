@@ -120,6 +120,10 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     description: 'evaluate a programmatic appliance manifest in a sandbox',
     load: () => import('./appliance-manifest.js'),
   },
+  mcp: {
+    description: 'serve Appliance over the Model Context Protocol (stdio) so AI agents can deploy and debug',
+    load: () => import('./appliance-mcp.js'),
+  },
   open: {
     description: 'open the latest deployment URL in a browser',
     load: () => import('./appliance-open.js'),
@@ -225,6 +229,7 @@ const COMMAND_GROUPS: Array<{ title: string; names: string[] }> = [
       'keys',
       'doctor',
       'test',
+      'mcp',
       'manifest',
       'build',
       'destroy',

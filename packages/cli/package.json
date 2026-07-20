@@ -39,6 +39,7 @@
     "@appliance.sh/helper": "workspace:*",
     "@appliance.sh/sdk": "workspace:*",
     "@inquirer/prompts": "^7.10.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/archiver": "^7.0.0",
     "@types/json-diff": "^1.0.3",
     "@types/node": "24.12.2",
@@ -51,6 +52,7 @@
     "random-word-slugs": "^0.1.7",
     "sucrase": "^3.35.1",
     "typescript": "5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "zod": "^4.3.6"
   }
 }
