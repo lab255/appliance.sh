@@ -189,9 +189,13 @@ program
     if (r.error) {
       const code = (r.error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        console.error(
-          chalk.red('kubectl not found on PATH. Install it (e.g. `brew install kubernetes-cli`), then retry.')
-        );
+        const how =
+          process.platform === 'darwin'
+            ? 'e.g. `brew install kubernetes-cli`'
+            : process.platform === 'win32'
+              ? 'e.g. `winget install Kubernetes.kubectl`, or `appliance doctor --fix` installs it for you'
+              : 'via your package manager, or `appliance doctor --fix` installs it for you';
+        console.error(chalk.red(`kubectl not found on PATH. Install it (${how}), then retry.`));
         process.exit(1);
       }
       console.error(chalk.red(`Failed to run kubectl: ${r.error.message}`));

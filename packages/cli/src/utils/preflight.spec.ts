@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { REQUIRED_PORTS, checkMacSigning, checkPorts, runFixes } from './preflight.js';
+import {
+  REQUIRED_PORTS,
+  checkDiskSpace,
+  checkMacSigning,
+  checkPorts,
+  checkWsl,
+  classifyWslFailure,
+  decodeWindowsToolOutput,
+  runFixes,
+} from './preflight.js';
 import type { PreflightReport } from './preflight.js';
 
 // These tests cover the deterministic decision logic in the preflight
@@ -38,6 +47,77 @@ describe('checkPorts', () => {
     for (const r of results) {
       expect(r.id).toMatch(/^port:\d+$/);
       expect(['pass', 'fail']).toContain(r.status);
+    }
+  });
+});
+
+describe('checkWsl', () => {
+  it('passes as not-applicable off Windows, and reaches a verdict on Windows', () => {
+    const result = checkWsl();
+    if (process.platform === 'win32') {
+      // This machine either has working WSL (pass) or a failure with an
+      // actionable remediation — never a throw, never an empty verdict.
+      expect(['pass', 'fail']).toContain(result.status);
+      if (result.status === 'fail') expect(result.remediation).toBeTruthy();
+    } else {
+      expect(result.status).toBe('pass');
+      expect(result.detail).toMatch(/not applicable/i);
+    }
+  });
+});
+
+describe('decodeWindowsToolOutput', () => {
+  it('decodes UTF-16LE output (the wsl.exe encoding) without NUL garbage', () => {
+    const text = 'WSL version: 2.0.0\r\n';
+    expect(decodeWindowsToolOutput(Buffer.from(text, 'utf16le'))).toBe(text);
+    expect(decodeWindowsToolOutput(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]))).toBe(
+      text
+    );
+  });
+
+  it('leaves UTF-8 output alone', () => {
+    expect(decodeWindowsToolOutput(Buffer.from('plain utf-8 ✓', 'utf8'))).toBe('plain utf-8 ✓');
+  });
+});
+
+describe('classifyWslFailure', () => {
+  it('maps the HCS virtualization-disabled error to the BIOS/feature fix', () => {
+    const { detail, remediation } = classifyWslFailure(
+      'WslRegisterDistribution failed with error: 0x80370102\nPlease enable the Virtual Machine Platform Windows feature and ensure virtualization is enabled in the BIOS.'
+    );
+    expect(detail).toMatch(/virtualization/i);
+    expect(remediation).toMatch(/BIOS/);
+    expect(remediation).toMatch(/VirtualMachinePlatform/);
+  });
+
+  it('maps a missing/outdated kernel to wsl --update', () => {
+    expect(classifyWslFailure('The WSL 2 kernel file is not found. Please run wsl --update').remediation).toMatch(
+      /wsl --update/
+    );
+  });
+
+  it('maps a not-installed WSL to wsl --install with a reboot', () => {
+    const { remediation } = classifyWslFailure(
+      'Windows Subsystem for Linux has no installed distributions. Use wsl --install.'
+    );
+    expect(remediation).toMatch(/wsl --install/);
+    expect(remediation).toMatch(/reboot/i);
+  });
+
+  it('falls back to pointing at wsl --status for unrecognized failures', () => {
+    const { remediation } = classifyWslFailure('some novel breakage');
+    expect(remediation).toMatch(/wsl --status/);
+  });
+});
+
+describe('checkDiskSpace', () => {
+  it('probes the nearest existing ancestor of a not-yet-created dir and reports GB free', () => {
+    const result = checkDiskSpace();
+    expect(['pass', 'warn', 'fail']).toContain(result.status);
+    // Whatever the verdict, the detail names the probed location so the
+    // user knows which disk is short.
+    if (result.detail && !/could not probe/.test(result.detail)) {
+      expect(result.detail).toMatch(/GB free at /);
     }
   });
 });

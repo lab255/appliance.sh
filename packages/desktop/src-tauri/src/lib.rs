@@ -936,7 +936,7 @@ async fn invoke_sidecar(
         ));
     }
 
-    let mut child = Command::new("node")
+    let mut child = quiet_command("node")
         .arg(&script)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1518,7 +1518,13 @@ struct PreflightCheck {
 /// install commands without first hitting a cryptic spawn error.
 #[tauri::command]
 async fn local_preflight() -> Vec<PreflightCheck> {
-    let mut out = Vec::with_capacity(LOCAL_PREREQS.len());
+    let mut out = Vec::with_capacity(LOCAL_PREREQS.len() + 1);
+    // Windows: WSL2 is THE gating prerequisite — the Dev Machine is a
+    // WSL2 distro. Without this row, a machine with WSL missing or
+    // virtualization disabled shows an all-green checkup and then dies
+    // minutes later at first boot with a generic error.
+    #[cfg(windows)]
+    out.push(wsl_preflight_check().await);
     for tool in LOCAL_PREREQS {
         let mut check = probe_tool(tool).await;
         // Docker is special: `--version` only proves the CLI exists, not
@@ -1544,8 +1550,64 @@ async fn local_preflight() -> Vec<PreflightCheck> {
     out
 }
 
+/// Decode wsl.exe output: its own diagnostics are UTF-16LE (guest
+/// output is UTF-8) — interior NULs in the head are the UTF-16 tell.
+/// Mirrors `decode_wsl` in packages/vm/src/backend/wsl.rs.
+#[cfg(windows)]
+fn decode_wsl_text(bytes: &[u8]) -> String {
+    if bytes.iter().take(64).any(|&b| b == 0) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
+/// Probe WSL2 readiness for the doctor view. Reports "installed but
+/// broken" with wsl.exe's own first diagnostic line (virtualization
+/// disabled, kernel outdated, …) rather than a bare boolean.
+#[cfg(windows)]
+async fn wsl_preflight_check() -> PreflightCheck {
+    let probe = quiet_command("wsl.exe").arg("--status").output().await;
+    let (installed, version, error) = match probe {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            false,
+            None,
+            Some("WSL is not installed (wsl.exe not found).".to_string()),
+        ),
+        Err(e) => (false, None, Some(format!("could not run wsl.exe: {e}"))),
+        Ok(out) if out.status.success() => (true, Some("WSL2 ready".to_string()), None),
+        Ok(out) => {
+            let text = decode_wsl_text(&[&out.stdout[..], &out.stderr[..]].concat());
+            let first = text
+                .lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty())
+                .unwrap_or("WSL is not ready")
+                .to_string();
+            (false, None, Some(first))
+        }
+    };
+    PreflightCheck {
+        tool: "wsl".to_string(),
+        installed,
+        version,
+        purpose: "Windows Subsystem for Linux 2 — runs the Dev Machine (the managed VM).".to_string(),
+        install_hint:
+            "Open PowerShell as Administrator, run `wsl --install`, then reboot. If it still fails, enable virtualization in your BIOS/UEFI and run `wsl --update`."
+                .to_string(),
+        auto_installable: false,
+        error,
+        daemon_running: None,
+        daemon_startable: None,
+    }
+}
+
 async fn probe_tool(tool: &PrereqTool) -> PreflightCheck {
-    let probe = Command::new(tool.name)
+    let probe = quiet_command(tool.name)
         .args(tool.version_args)
         .output()
         .await;
@@ -1651,7 +1713,7 @@ async fn resolve_missing_hint(tool: &str, raw_error: Option<String>) -> (String,
 }
 
 async fn which_succeeds(cmd: &str) -> bool {
-    Command::new(cmd)
+    quiet_command(cmd)
         .arg("--version")
         .output()
         .await
@@ -1684,8 +1746,23 @@ fn map_spawn_error(tool: &str, err: std::io::Error) -> String {
     }
 }
 
+/// Build a `tokio::process::Command` that never flashes a console
+/// window on Windows. The desktop is a GUI (windowless) process, so
+/// spawning a console child (`appliance-vm.exe`, `kubectl`, `node`)
+/// allocates a fresh console that blinks on screen by default — and the
+/// VM status poll runs every few seconds. Every raw spawn in this crate
+/// must go through here (tauri's shell-plugin sidecars already hide
+/// their consoles themselves).
+fn quiet_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    cmd
+}
+
 async fn run_status_command(args: &[&str]) -> Result<(bool, String, String), String> {
-    let output = Command::new(args[0])
+    let output = quiet_command(args[0])
         .args(&args[1..])
         .output()
         .await
@@ -2366,7 +2443,7 @@ async fn read_existing_bootstrap_token() -> Option<String> {
 /// kubectl error messages are usually self-explanatory and the caller
 /// just bubbles them up to the UI.
 async fn kubectl_apply_manifest(manifest: &str) -> Result<(), String> {
-    let mut child = Command::new("kubectl")
+    let mut child = quiet_command("kubectl")
         .args(["apply", "-f", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

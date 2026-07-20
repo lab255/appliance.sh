@@ -1,4 +1,7 @@
+import * as fs from 'node:fs';
 import * as net from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import * as tls from 'node:tls';
 import { spawnSync } from 'node:child_process';
 import { helperBinDir, runInstall, runStatus } from '@appliance.sh/helper';
@@ -96,11 +99,15 @@ export function checkRust(): CheckResult {
     return pass('rust', 'Rust toolchain (rustc, cargo)', rustc);
   }
   const missing = [!rustc && 'rustc', !cargo && 'cargo'].filter(Boolean).join(', ');
+  const install =
+    process.platform === 'win32'
+      ? 'Install Rust via rustup: `winget install Rustlang.Rustup` (or the installer at https://rustup.rs).'
+      : 'Install Rust via rustup: `curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh`.';
   return warn(
     'rust',
     'Rust toolchain (rustc, cargo)',
     `${missing} not found — only needed to build appliance-vm from source`,
-    'Install Rust via rustup: `curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh`. Skip if you use the published microVM binary.'
+    `${install} Skip if you use the published microVM binary.`
   );
 }
 
@@ -112,11 +119,15 @@ export function checkBun(): CheckResult {
   if (version) {
     return pass('bun', 'bun (build toolchain)', `v${version}`);
   }
+  const install =
+    process.platform === 'win32'
+      ? 'Install bun: `powershell -c "irm bun.sh/install.ps1 | iex"`.'
+      : 'Install bun: `curl -fsSL https://bun.sh/install | bash`.';
   return warn(
     'bun',
     'bun (build toolchain)',
     'bun not found — only needed to compile the CLI / api-server guest binary from source',
-    'Install bun: `curl -fsSL https://bun.sh/install | bash`. Skip if you only run published binaries.'
+    `${install} Skip if you only run published binaries.`
   );
 }
 
@@ -220,14 +231,169 @@ export async function checkPorts(): Promise<CheckResult[]> {
       if (ours) {
         return pass(id, label, `held by a running Appliance runtime (${purpose})`);
       }
+      const finder =
+        process.platform === 'win32'
+          ? `netstat -ano | findstr :${port}\` then \`taskkill /PID <pid>`
+          : `lsof -i :${port}`;
       return fail(
         id,
         label,
         `something is already listening on ${port} (${purpose})`,
-        `Free port ${port} (find the listener with \`lsof -i :${port}\`) or stop a previously-started runtime before starting a new one.`
+        `Free port ${port} (find the listener with \`${finder}\`) or stop a previously-started runtime before starting a new one.`
       );
     })
   );
+}
+
+// ---- Windows: WSL2 ------------------------------------------------------
+
+/**
+ * Decode output captured from a Windows system tool. `wsl.exe` writes
+ * UTF-16LE to its streams (most other console tools write UTF-8/ANSI),
+ * so a plain utf8 decode turns its messages into NUL-riddled garbage.
+ * Sniff for the UTF-16LE signature — ASCII text has a NUL in every
+ * second byte — and decode accordingly.
+ */
+export function decodeWindowsToolOutput(buf: Buffer): string {
+  if (buf.length >= 2) {
+    // BOM, or the even-index-NUL pattern of UTF-16LE ASCII.
+    const hasBom = buf[0] === 0xff && buf[1] === 0xfe;
+    let nulEven = 0;
+    const probe = Math.min(buf.length, 64);
+    for (let i = 1; i < probe; i += 2) if (buf[i] === 0) nulEven++;
+    if (hasBom || nulEven > probe / 4) {
+      return buf.toString('utf16le').replace(/^\uFEFF/, '');
+    }
+  }
+  return buf.toString('utf8');
+}
+
+/**
+ * Map a `wsl.exe` failure to what actually went wrong + the fix. The
+ * two big classes a fresh machine hits:
+ *   - virtualization disabled (BIOS/UEFI, or the "Virtual Machine
+ *     Platform" Windows feature off) — HCS error 0x80370102 et al.
+ *   - the WSL2 kernel missing/outdated — fixed by `wsl --update`.
+ * Exported for tests; keep the signature list in sync with
+ * packages/vm/src/backend/wsl.rs's boot-time classification.
+ */
+export function classifyWslFailure(output: string): { detail: string; remediation: string } {
+  const text = output.toLowerCase();
+  if (
+    text.includes('0x80370102') ||
+    text.includes('0x80370114') ||
+    text.includes('virtual machine platform') ||
+    text.includes('hypervisor') ||
+    (text.includes('virtualization') && (text.includes('enable') || text.includes('not'))) ||
+    text.includes('hcs')
+  ) {
+    return {
+      detail: 'virtualization is not available to WSL2',
+      remediation:
+        'Enable virtualization in your BIOS/UEFI (often called "Intel VT-x", "AMD-V", or "SVM"), then enable the ' +
+        'Windows feature: open PowerShell as Administrator, run ' +
+        '`Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform`, and reboot.',
+    };
+  }
+  if (text.includes('wsl --update') || text.includes('kernel') || text.includes('0x800701bc')) {
+    return {
+      detail: 'the WSL2 kernel is missing or outdated',
+      remediation: 'Update WSL: open PowerShell and run `wsl --update`, then retry.',
+    };
+  }
+  if (text.includes('wsl --install') || text.includes('not installed') || text.includes('no installed distributions')) {
+    return {
+      detail: 'WSL is not set up on this machine',
+      remediation: 'Open PowerShell as Administrator, run `wsl --install`, reboot, then re-run `appliance init`.',
+    };
+  }
+  return {
+    detail: `wsl.exe is not working: ${output.trim().split('\n')[0] || 'unknown error'}`,
+    remediation: 'Run `wsl --status` in PowerShell to see the underlying error; `wsl --update` fixes most of them.',
+  };
+}
+
+/**
+ * WSL2 is THE gating prerequisite on Windows — the managed VM is a WSL2
+ * distro. Probe `wsl --status` so a machine without it fails preflight
+ * with the actual fix, instead of sailing all-green and then dying
+ * minutes later at first boot. No-op (pass) off Windows.
+ */
+export function checkWsl(): CheckResult {
+  const id = 'wsl';
+  const label = 'WSL2 (runs the managed VM)';
+  if (process.platform !== 'win32') {
+    return pass(id, label, 'not applicable on this platform');
+  }
+  let r;
+  try {
+    r = spawnSync('wsl.exe', ['--status'], { encoding: 'buffer', timeout: 15_000, windowsHide: true });
+  } catch (err) {
+    r = { error: err as Error, status: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+  }
+  if (r.error && (r.error as NodeJS.ErrnoException).code === 'ENOENT') {
+    return fail(
+      id,
+      label,
+      'wsl.exe not found — WSL is not installed',
+      'Open PowerShell as Administrator, run `wsl --install`, reboot, then re-run `appliance init`.'
+    );
+  }
+  const output = decodeWindowsToolOutput(Buffer.concat([r.stdout ?? Buffer.alloc(0), r.stderr ?? Buffer.alloc(0)]));
+  if (r.error || r.status !== 0) {
+    const { detail, remediation } = classifyWslFailure(output);
+    return fail(id, label, detail, remediation);
+  }
+  return pass(id, label, 'wsl.exe responds');
+}
+
+// ---- disk space ---------------------------------------------------------
+
+/** Free-space floor for the VM's home. First boot imports a multi-GB
+ *  distro image and pulls the k3s images into it; a nearly-full disk
+ *  fails half-way with an opaque import/containerd error. */
+const DISK_FAIL_GB = 3;
+const DISK_WARN_GB = 12;
+
+export function checkDiskSpace(dir: string = path.join(os.homedir(), '.appliance')): CheckResult {
+  const id = 'disk';
+  const label = 'Free disk space (VM images + build cache)';
+  let probe = dir;
+  // ~/.appliance may not exist yet on a fresh machine — stat the
+  // nearest existing ancestor (worst case the home dir / drive root).
+  while (!fs.existsSync(probe)) {
+    const parent = path.dirname(probe);
+    if (parent === probe) break;
+    probe = parent;
+  }
+  let free: number;
+  try {
+    const stat = fs.statfsSync(probe);
+    free = stat.bavail * stat.bsize;
+  } catch {
+    return pass(id, label, 'could not probe free space — skipping');
+  }
+  const freeGb = free / 1024 ** 3;
+  const detail = `${freeGb.toFixed(1)} GB free at ${probe}`;
+  if (freeGb < DISK_FAIL_GB) {
+    return fail(
+      id,
+      label,
+      detail,
+      `Free up disk space: the managed VM needs at least ${DISK_FAIL_GB} GB to boot (first boot imports the VM ` +
+        'image and pulls its runtime images). `appliance vm prune` removes stopped VMs you no longer use.'
+    );
+  }
+  if (freeGb < DISK_WARN_GB) {
+    return warn(
+      id,
+      label,
+      detail,
+      `Running low: builds and deploys cache images inside the VM; keep ~${DISK_WARN_GB} GB free to avoid ` +
+        'mid-deploy failures. `appliance vm prune` removes stopped VMs you no longer use.'
+    );
+  }
+  return pass(id, label, detail);
 }
 
 // ---- macOS signing / keychain ------------------------------------------
@@ -276,7 +442,17 @@ export interface PreflightReport {
 export async function runPreflight(): Promise<PreflightReport> {
   const [helperBinaries, ports] = await Promise.all([checkHelperBinaries(), checkPorts()]);
 
-  const results: CheckResult[] = [...helperBinaries, checkRust(), checkBun(), ...ports, checkMacSigning()];
+  // WSL first: on Windows it gates everything else, so its verdict
+  // should lead the checklist a stuck user reads top-to-bottom.
+  const results: CheckResult[] = [
+    checkWsl(),
+    ...helperBinaries,
+    checkRust(),
+    checkBun(),
+    ...ports,
+    checkMacSigning(),
+    checkDiskSpace(),
+  ];
 
   return { results, ok: results.every((r) => r.status !== 'fail') };
 }

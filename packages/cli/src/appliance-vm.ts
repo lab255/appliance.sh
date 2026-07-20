@@ -57,7 +57,10 @@ program
   .command('up')
   .description('boot the microVM, bootstrap the in-VM api-server, and log in')
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
-  .option('--image <ref>', 'api-server image to run in the VM (must exist in the local docker daemon)')
+  .option(
+    '--image <ref>',
+    '(deprecated, ignored) the api-server runs as a guest binary — set APPLIANCE_API_SERVER_BINARY to override it'
+  )
   .option('--timeout <seconds>', 'seconds to wait for the platform to be ready', '900')
   .option('--cpus <n>', 'virtual CPUs for the VM (persisted; takes effect on next boot)', parsePositiveInt)
   .option('--memory <MiB>', 'guest memory in MiB (persisted; takes effect on next boot)', parsePositiveInt)
@@ -296,6 +299,23 @@ function runInteractiveShell(name: string, fallback: string[], root = false, ses
   return runHostShell(name, fallback);
 }
 
+/** Run one command in the VM, preferring the engine's shell channel
+ *  (vsock on macOS, wsl.exe on Windows — no k3s, no kubectl) with the
+ *  kubectl-debug host shell as the fallback for older VMs. Mirrors
+ *  runInteractiveShell's channel preference: on Windows the engine is
+ *  always right (the WSL backend has no relay socket, and the kubectl
+ *  path would demand a kubeconfig an agent-only VM never has). */
+function runOneShot(name: string, script: string, root = false): number {
+  if (process.platform === 'win32' || fs.existsSync(shellSock(name))) {
+    const args = ['shell', name];
+    if (root) args.push('--root');
+    args.push('--', script);
+    const r = spawnSync(vmBinary(), args, { stdio: 'inherit' });
+    return r.status ?? 1;
+  }
+  return runHostShell(name, ['/bin/sh', '-c', script]);
+}
+
 /** Run one command in the VM host and capture its stdout (no TTY) — the
  *  quiet probe behind `vm dev status`. Debugger-session chatter goes to
  *  the inherited stderr's /dev/null, so the returned stdout is clean. */
@@ -339,11 +359,13 @@ program
   )
   .argument('[command...]', 'command to run instead of an interactive shell')
   .action((command: string[], opts: { name: string; root: boolean; session?: string }) => {
-    // One-shot commands go through kubectl-debug `sh -c` (clean output +
-    // an exit code); an interactive shell prefers the fast vsock path,
-    // and only that path carries a reattachable --session.
+    // One-shot commands prefer the engine's shell channel (vsock, or
+    // wsl.exe on Windows) — no k3s, no kubeconfig, no kubectl needed —
+    // and fall back to kubectl-debug `sh -c` for older VMs without one.
+    // Interactive shells share the same preference; only the engine
+    // path carries a reattachable --session.
     if (command.length) {
-      process.exit(runHostShell(opts.name, ['/bin/sh', '-c', command.join(' ')]));
+      process.exit(runOneShot(opts.name, command.join(' '), opts.root));
     }
     process.exit(runInteractiveShell(opts.name, ['/bin/sh'], opts.root, opts.session));
   });
@@ -407,7 +429,10 @@ dev
   .command('up')
   .description('boot a microVM as a dev environment (toolchain + persistent /persist/workspace)')
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
-  .option('--image <ref>', 'api-server image to run in the VM (must exist in the local docker daemon)')
+  .option(
+    '--image <ref>',
+    '(deprecated, ignored) the api-server runs as a guest binary — set APPLIANCE_API_SERVER_BINARY to override it'
+  )
   .option('--timeout <seconds>', 'seconds to wait for the platform to be ready', '900')
   .option('--cpus <n>', 'virtual CPUs for the VM (persisted; takes effect on next boot)', parsePositiveInt)
   .option('--memory <MiB>', 'guest memory in MiB (persisted; takes effect on next boot)', parsePositiveInt)
@@ -444,12 +469,12 @@ dev
       );
       process.exit(1);
     }
-    // One-shot commands run on kubectl-debug (clean output + exit code);
-    // an interactive dev shell prefers the fast vsock path, which lands
-    // in /persist/workspace via the guest agent.
+    // One-shot commands prefer the engine's shell channel (see
+    // runOneShot); an interactive dev shell prefers the same fast path,
+    // which lands in /persist/workspace via the guest agent.
     if (command.length) {
       const script = `export HOME=/persist/workspace; cd /persist/workspace 2>/dev/null || true; ${command.join(' ')}`;
-      process.exit(runHostShell(opts.name, ['/bin/sh', '-c', script]));
+      process.exit(runOneShot(opts.name, script));
     }
     process.exit(runInteractiveShell(opts.name, ['/bin/sh', '-c', DEV_SHELL_LOGIN]));
   });

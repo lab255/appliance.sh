@@ -142,8 +142,11 @@ pub fn run_captured(name: &str, command: &str, root: bool) -> Result<(i32, Strin
     hide_console(&mut cmd);
     cmd.args(["--cd", "~", "--", "sh", "-lc", command]);
     let out = cmd.output().context("run wsl.exe")?;
-    let mut text = String::from_utf8_lossy(&out.stdout).to_string();
-    text.push_str(&String::from_utf8_lossy(&out.stderr));
+    // Guest output is UTF-8, but when wsl.exe itself fails (distro
+    // missing, WSL broken) its diagnostics are UTF-16LE — decode_wsl
+    // sniffs per stream so those messages don't come back NUL-riddled.
+    let mut text = crate::backend::wsl::decode_wsl(&out.stdout);
+    text.push_str(&crate::backend::wsl::decode_wsl(&out.stderr));
     Ok((out.status.code().unwrap_or(255), text))
 }
 

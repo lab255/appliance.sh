@@ -83,11 +83,17 @@ impl VmBackend for WslBackend {
                  from an elevated prompt, reboot, then retry."
             ),
             Err(e) => bail!("could not run wsl.exe: {e}"),
-            Ok(out) if !out.status.success() => bail!(
-                "WSL is not ready: {}\nInstall or repair it with `wsl --install` (elevated), \
-                 reboot, then retry.",
-                combined_output(&out).trim()
-            ),
+            Ok(out) if !out.status.success() => {
+                let detail = combined_output(&out);
+                let detail = detail.trim();
+                match explain_wsl_failure(detail) {
+                    Some(fix) => bail!("WSL is not ready: {detail}\n{fix}"),
+                    None => bail!(
+                        "WSL is not ready: {detail}\nInstall or repair it with `wsl --install` \
+                         (elevated), reboot, then retry."
+                    ),
+                }
+            }
             Ok(_) => Ok(()),
         }
     }
@@ -252,8 +258,10 @@ impl VmBackend for WslBackend {
 }
 
 /// Decode wsl.exe output: its own messages are UTF-16LE, guest output
-/// is UTF-8. Interior NULs in the head are the UTF-16 tell.
-fn decode_wsl(bytes: &[u8]) -> String {
+/// is UTF-8. Interior NULs in the head are the UTF-16 tell. pub(crate)
+/// so `shell.rs`'s Windows capture path decodes wsl.exe-level errors
+/// the same way.
+pub(crate) fn decode_wsl(bytes: &[u8]) -> String {
     if bytes.iter().take(64).any(|&b| b == 0) {
         let units: Vec<u16> = bytes
             .chunks_exact(2)
@@ -263,6 +271,32 @@ fn decode_wsl(bytes: &[u8]) -> String {
     } else {
         String::from_utf8_lossy(bytes).into_owned()
     }
+}
+
+/// Targeted guidance for the WSL failure classes a fresh machine
+/// actually hits, keyed on the error text wsl.exe prints. The raw HCS
+/// codes are opaque ("0x80370102") — name the real cause and the exact
+/// fix. Kept in sync with `classifyWslFailure` in
+/// packages/cli/src/utils/preflight.ts.
+fn explain_wsl_failure(text: &str) -> Option<&'static str> {
+    let lower = text.to_lowercase();
+    if lower.contains("0x80370102")
+        || lower.contains("0x80370114")
+        || lower.contains("virtual machine platform")
+        || lower.contains("hypervisor")
+        || (lower.contains("virtualization") && (lower.contains("enable") || lower.contains("not")))
+    {
+        return Some(
+            "virtualization is not available to WSL2. Enable it in your BIOS/UEFI \
+             (\"Intel VT-x\", \"AMD-V\", or \"SVM\"), then enable the Windows feature from an \
+             elevated PowerShell: `Enable-WindowsOptionalFeature -Online -FeatureName \
+             VirtualMachinePlatform`, and reboot.",
+        );
+    }
+    if lower.contains("wsl --update") || lower.contains("kernel") || lower.contains("0x800701bc") {
+        return Some("the WSL2 kernel is missing or outdated — run `wsl --update`, then retry.");
+    }
+    None
 }
 
 /// Both streams of a finished command, decoded — wsl.exe splits its
@@ -337,11 +371,15 @@ fn ensure_distro(distro: &str, paths: &VmPaths) -> Result<()> {
         .output()
         .context("wsl --import")?;
     if !out.status.success() {
-        bail!(
-            "could not import WSL distro '{distro}': {}\n\
-             (if this mentions the WSL2 kernel, run `wsl --update` and retry)",
-            combined_output(&out).trim()
-        );
+        let detail = combined_output(&out);
+        let detail = detail.trim();
+        match explain_wsl_failure(detail) {
+            Some(fix) => bail!("could not import WSL distro '{distro}': {detail}\n{fix}"),
+            None => bail!(
+                "could not import WSL distro '{distro}': {detail}\n\
+                 (if this mentions the WSL2 kernel, run `wsl --update` and retry)"
+            ),
+        }
     }
     Ok(())
 }
@@ -791,10 +829,40 @@ fn discover_guest_ip(distro: &str, timeout: Duration) -> Result<IpAddr> {
             }
         }
         if Instant::now() >= deadline {
+            // The whole forwarding model (host dials guest_ip directly)
+            // assumes classic NAT networking. Mirrored mode has no NAT
+            // eth0 lease, so IP discovery times out here — name the real
+            // cause instead of a bare timeout.
+            if wslconfig_uses_mirrored_networking() {
+                bail!(
+                    "guest eth0 address did not appear within {timeout:?} — your WSL is in \
+                     mirrored networking mode, which the managed VM does not support yet. \
+                     Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
+                     (or remove the setting), run `wsl --shutdown`, then retry."
+                );
+            }
             bail!("guest eth0 address did not appear within {timeout:?}");
         }
         std::thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// Whether `%USERPROFILE%\.wslconfig` opts WSL2 into mirrored
+/// networking. A plain-text sniff (ini parsing would be overkill):
+/// uncommented `networkingMode` set to `mirrored`, case-insensitive.
+fn wslconfig_uses_mirrored_networking() -> bool {
+    let Some(home) = std::env::var_os("USERPROFILE") else {
+        return false;
+    };
+    let Ok(text) = std::fs::read_to_string(PathBuf::from(home).join(".wslconfig")) else {
+        return false;
+    };
+    text.lines().any(|line| {
+        let line = line.trim();
+        !line.starts_with('#')
+            && !line.starts_with(';')
+            && line.to_lowercase().replace(' ', "").starts_with("networkingmode=mirrored")
+    })
 }
 
 /// The distro's default-gateway IPv4 — where the Windows host answers on

@@ -12,11 +12,14 @@ import chalk from 'chalk';
 // for the platform; falls back to printing the URL if we can't find
 // one.
 function openInBrowser(url: string): void {
+  // Windows: rundll32's FileProtocolHandler takes the URL as a plain
+  // argument. `cmd /c start` re-parses its command line, so a URL with
+  // a query string (`&`) gets split into separate commands.
   const command =
     process.platform === 'darwin'
       ? { cmd: 'open', args: [url] }
       : process.platform === 'win32'
-        ? { cmd: 'cmd', args: ['/c', 'start', '""', url] }
+        ? { cmd: 'rundll32', args: ['url.dll,FileProtocolHandler', url] }
         : { cmd: 'xdg-open', args: [url] };
   try {
     const child = spawn(command.cmd, command.args, { stdio: 'ignore', detached: true });
