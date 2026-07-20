@@ -17,6 +17,7 @@ import {
   renderVmStatus,
   type EngineVmStatus,
 } from './utils/microvm-up.js';
+import { runVmCapture } from './utils/sandbox.js';
 
 // `appliance vm` — the microVM runtime engine (appliance-vm), the sole
 // local runtime now that bare k3d has been removed. Workloads run inside
@@ -106,15 +107,15 @@ program
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
   .option('--json', 'print the raw engine JSON instead of the human summary', false)
   .action((opts: { name: string; json: boolean }) => {
-    const r = spawnSync(vmBinary(), ['status', opts.name], { encoding: 'utf8' });
-    if (r.error || r.status !== 0 || !r.stdout) {
-      // Engine missing/broken: its own stderr is the best signal.
-      process.stderr.write(r.stderr ?? '');
-      process.stdout.write(r.stdout ?? '');
-      process.exit(r.status ?? 1);
+    // runVmCapture streams the engine's stderr through live, so a
+    // broken engine explains itself; we only own stdout.
+    const r = runVmCapture(['status', opts.name]);
+    if (r.status !== 0 || !r.stdout) {
+      if (r.stdout) console.log(r.stdout);
+      process.exit(r.status || 1);
     }
     if (opts.json) {
-      process.stdout.write(r.stdout);
+      console.log(r.stdout);
       return;
     }
     let status: EngineVmStatus;
@@ -123,7 +124,7 @@ program
     } catch {
       // A future engine changed the shape — fall back to its raw output
       // rather than hiding it.
-      process.stdout.write(r.stdout);
+      console.log(r.stdout);
       return;
     }
     for (const line of renderVmStatus(status)) console.log(line);

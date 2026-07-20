@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import chalk from 'chalk';
+import type { EngineVmStatus } from './microvm-up.js';
 
 // Shared plumbing for the `appliance up`/`down`/`logs`/`status` sandbox
 // commands (docs/up.md). These drive the in-guest Docker engine inside
@@ -108,11 +109,10 @@ function readVmSpec(name: string): VmSpecOnDisk | null {
   }
 }
 
-export interface VmStatusJson {
-  exists: boolean;
-  running: boolean;
-  clusterReady?: boolean;
-}
+/** The slice of the engine's status JSON the sandbox flows read. The
+ *  full shape is `EngineVmStatus` in microvm-up.ts — derive from it so
+ *  the two can never model the same engine output differently. */
+export type VmStatusJson = Pick<EngineVmStatus, 'exists' | 'running'> & Partial<Pick<EngineVmStatus, 'clusterReady'>>;
 
 /** Parse `appliance-vm status <vm>` JSON, or null when unreadable. */
 export function vmStatus(name: string): VmStatusJson | null {

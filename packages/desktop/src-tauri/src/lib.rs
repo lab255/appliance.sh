@@ -1567,7 +1567,12 @@ async fn local_preflight() -> Vec<PreflightCheck> {
 
 /// Decode wsl.exe output: its own diagnostics are UTF-16LE (guest
 /// output is UTF-8) — interior NULs in the head are the UTF-16 tell.
-/// Mirrors `decode_wsl` in packages/vm/src/backend/wsl.rs.
+/// Copy of `decode_wsl` in packages/vm/src/backend/wsl.rs (this crate
+/// drives appliance-vm as a sidecar binary, not a Cargo dependency, so
+/// the 10 lines can't be shared). Note the TS analogue
+/// (`decodeWindowsToolOutput` in the CLI's preflight) uses a stricter
+/// even-offset-NUL sniff; this any-NUL form is adequate for wsl.exe
+/// diagnostics, which are pure ASCII UTF-16LE.
 #[cfg(windows)]
 fn decode_wsl_text(bytes: &[u8]) -> String {
     if bytes.iter().take(64).any(|&b| b == 0) {

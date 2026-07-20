@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { createApplianceClient, DeploymentStatus, VERSION } from '@appliance.sh/sdk';
-import type { Deployment, Environment } from '@appliance.sh/sdk';
+import type { Deployment } from '@appliance.sh/sdk';
 import { getActiveProfileOverride, loadCredentials, setActiveProfileOverride } from './credentials.js';
 import { readProfiles, resolveProfile } from './profile-store.js';
 import { resolveEnvironment } from './deployment-target.js';
@@ -172,14 +172,6 @@ function serialized<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function resolveTargetEnvironment(
-  bundle: McpClientBundle,
-  project: string,
-  environment: string
-): Promise<Environment> {
-  return resolveEnvironment(bundle.client, project, environment);
-}
-
 const PROFILE_ARG = z
   .string()
   .optional()
@@ -191,6 +183,23 @@ const PROFILE_ARG = z
 
 export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpServer {
   const deps: McpDeps = { ...DEFAULT_DEPS, ...overrides };
+
+  // Every tool but `overview` (which has its own no-credentials story)
+  // needs a client and must surface a credential failure as a tool
+  // error — one wrapper instead of a try/catch per handler.
+  function withClient<A extends { profile?: string }>(
+    fn: (bundle: McpClientBundle, args: A) => Promise<CallToolResult>
+  ): (args: A) => Promise<CallToolResult> {
+    return async (args) => {
+      let bundle: McpClientBundle;
+      try {
+        bundle = deps.getClient(args.profile);
+      } catch (err) {
+        return errorResult(err);
+      }
+      return fn(bundle, args);
+    };
+  }
 
   const server = new McpServer(
     { name: 'appliance', version: VERSION.replace(/^v/, '') },
@@ -247,10 +256,11 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
               'For the local runtime, boot it with the vm tool (action "up"); the doctor tool diagnoses deeper issues.',
           });
         }
-        const projectsResult = await bundle.client.listProjects();
+        const [projectsResult, deployments] = await Promise.all([
+          bundle.client.listProjects(),
+          bundle.client.listDeployments({ limit: 200 }),
+        ]);
         if (!projectsResult.success) throw new Error(`Failed to list projects: ${projectsResult.error.message}`);
-
-        const deployments = await bundle.client.listDeployments({ limit: 200 });
         const urls = urlsByEnvironment(deployments.success ? deployments.data : undefined);
 
         const projects = await Promise.all(
@@ -309,15 +319,8 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
         profile: PROFILE_ARG,
       },
     },
-    async ({ directory, project, environment, profile }) =>
+    withClient(async (bundle, { directory, project, environment, profile }) =>
       serialized(async () => {
-        let bundle: McpClientBundle;
-        try {
-          bundle = deps.getClient(profile);
-        } catch (err) {
-          return errorResult(err);
-        }
-
         const dir = path.resolve(directory ?? process.cwd());
         if (!fs.existsSync(dir)) return errorResult(new Error(`Directory not found: ${dir}`));
 
@@ -366,6 +369,7 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
           return errorResult(err, bundle.apiUrl);
         }
       })
+    )
   );
 
   server.registerTool(
@@ -378,16 +382,15 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
         profile: PROFILE_ARG,
       },
     },
-    async ({ deploymentId, profile }) => {
+    withClient(async (bundle, { deploymentId }) => {
       try {
-        const bundle = deps.getClient(profile);
         const result = await bundle.client.getDeployment(deploymentId);
         if (!result.success) return errorResult(new Error(result.error.message), bundle.apiUrl);
         return jsonResult(summarizeDeployment(result.data));
       } catch (err) {
-        return errorResult(err);
+        return errorResult(err, bundle.apiUrl);
       }
-    }
+    })
   );
 
   server.registerTool(
@@ -404,15 +407,9 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
         profile: PROFILE_ARG,
       },
     },
-    async ({ project, environment, profile }) => {
-      let bundle: McpClientBundle;
+    withClient(async (bundle, { project, environment }) => {
       try {
-        bundle = deps.getClient(profile);
-      } catch (err) {
-        return errorResult(err);
-      }
-      try {
-        const env = await resolveTargetEnvironment(bundle, project, environment);
+        const env = await resolveEnvironment(bundle.client, project, environment);
         const result = await bundle.client.getEnvironmentHealth(env.projectId, env.id);
         if (!result.success) return errorResult(new Error(result.error.message), bundle.apiUrl);
         const h = result.data;
@@ -440,7 +437,7 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
       } catch (err) {
         return errorResult(err, bundle.apiUrl);
       }
-    }
+    })
   );
 
   server.registerTool(
@@ -469,15 +466,9 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
         profile: PROFILE_ARG,
       },
     },
-    async ({ project, environment, pod, container, tailLines, sinceSeconds, profile }) => {
-      let bundle: McpClientBundle;
+    withClient(async (bundle, { project, environment, pod, container, tailLines, sinceSeconds }) => {
       try {
-        bundle = deps.getClient(profile);
-      } catch (err) {
-        return errorResult(err);
-      }
-      try {
-        const env = await resolveTargetEnvironment(bundle, project, environment);
+        const env = await resolveEnvironment(bundle.client, project, environment);
         const workloads = await bundle.client.listEnvironmentWorkloads(env.id);
         if (!workloads.success) {
           return errorResult(
@@ -516,7 +507,7 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
       } catch (err) {
         return errorResult(err, bundle.apiUrl);
       }
-    }
+    })
   );
 
   server.registerTool(
@@ -533,19 +524,13 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
         profile: PROFILE_ARG,
       },
     },
-    async ({ project, environment, confirm, profile }) =>
+    withClient(async (bundle, { project, environment, confirm }) =>
       serialized(async () => {
         if (!confirm) {
           return errorResult(new Error(`Refusing to destroy ${project}/${environment} without confirm: true.`));
         }
-        let bundle: McpClientBundle;
         try {
-          bundle = deps.getClient(profile);
-        } catch (err) {
-          return errorResult(err);
-        }
-        try {
-          const env = await resolveTargetEnvironment(bundle, project, environment);
+          const env = await resolveEnvironment(bundle.client, project, environment);
           const started = await bundle.client.destroy(env.id);
           if (!started.success) return errorResult(new Error(started.error.message), bundle.apiUrl);
           const { deployment } = await pollDeploymentUntilDone(bundle.client, started.data.id, {});
@@ -559,6 +544,7 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
           return errorResult(err, bundle.apiUrl);
         }
       })
+    )
   );
 
   server.registerTool(
@@ -618,12 +604,7 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
     },
     async ({ action, name }) => {
       const vmName = name ?? DEFAULT_VM_NAME;
-      const args =
-        action === 'up'
-          ? ['vm', 'up', '--name', vmName]
-          : action === 'stop'
-            ? ['vm', 'stop', '--name', vmName]
-            : ['vm', 'status', '--name', vmName];
+      const args = ['vm', action, '--name', vmName];
       // First boot pulls images; give `up` real headroom.
       const timeoutMs = action === 'up' ? 20 * 60_000 : 2 * 60_000;
       const { status, output } = deps.selfInvoke(args, timeoutMs);

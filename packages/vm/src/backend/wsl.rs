@@ -277,7 +277,11 @@ pub(crate) fn decode_wsl(bytes: &[u8]) -> String {
 /// actually hits, keyed on the error text wsl.exe prints. The raw HCS
 /// codes are opaque ("0x80370102") — name the real cause and the exact
 /// fix. Kept in sync with `classifyWslFailure` in
-/// packages/cli/src/utils/preflight.ts.
+/// packages/cli/src/utils/preflight.ts — specifically the shared
+/// signature keys: 0x80370102/0x80370114/"virtual machine platform"/
+/// "hypervisor" (virtualization), 0x800701bc/"kernel" (kernel update),
+/// and "wsl --install"/"not installed" (not set up). The surrounding
+/// prose may differ; the keys must not.
 fn explain_wsl_failure(text: &str) -> Option<&'static str> {
     let lower = text.to_lowercase();
     if lower.contains("0x80370102")
@@ -295,6 +299,15 @@ fn explain_wsl_failure(text: &str) -> Option<&'static str> {
     }
     if lower.contains("wsl --update") || lower.contains("kernel") || lower.contains("0x800701bc") {
         return Some("the WSL2 kernel is missing or outdated — run `wsl --update`, then retry.");
+    }
+    if lower.contains("wsl --install")
+        || lower.contains("not installed")
+        || lower.contains("no installed distributions")
+    {
+        return Some(
+            "WSL is not set up on this machine — open PowerShell as Administrator, run \
+             `wsl --install`, reboot, then retry.",
+        );
     }
     None
 }
