@@ -35,6 +35,10 @@ export default defineConfig([
     // Rust build artifacts under src-tauri/target/ include generated
     // .js shims (e.g. __global-api-script.js) that eslint can't parse.
     '**/target/**',
+    // Staged docker build context (gitignored): carries a prebuilt
+    // console bundle that would drown `eslint .` in generated-code
+    // errors on any machine that has run the docker prep.
+    '**/.docker-deps/**',
     '.nx/cache/**/*', // ignore all files cached by the Nx build system
   ]),
 ]);
