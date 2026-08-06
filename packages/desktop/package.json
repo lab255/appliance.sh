@@ -1,6 +1,6 @@
 {
   "name": "@appliance.sh/desktop",
-  "version": "1.54.1",
+  "version": "1.54.2",
   "private": true,
   "description": "Tauri shell for the Appliance desktop app",
   "license": "MIT",

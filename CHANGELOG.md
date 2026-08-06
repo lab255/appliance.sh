@@ -1,3 +1,13 @@
+## 1.54.2 (2026-08-06)
+
+### Bug Fixes
+
+- **desktop:** sign staged binaries in beforeBundleCommand, not before tauri build ([c605dce](https://github.com/appliance-sh/appliance.sh/commit/c605dce))
+
+### ❤️ Thank You
+
+- Eliot Lim
+
 ## 1.54.1 (2026-08-06)
 
 ### Bug Fixes

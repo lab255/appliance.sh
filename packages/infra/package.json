@@ -1,6 +1,6 @@
 {
   "name": "@appliance.sh/infra",
-  "version": "1.54.1",
+  "version": "1.54.2",
   "private": true,
   "description": "Deploy the Appliance Infrastructure",
   "repository": {
