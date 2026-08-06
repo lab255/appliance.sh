@@ -1,3 +1,13 @@
+## 1.54.1 (2026-08-06)
+
+### Bug Fixes
+
+- **desktop:** derive signing identity and Developer-ID-sign staged binaries ([14e6445](https://github.com/appliance-sh/appliance.sh/commit/14e6445))
+
+### ❤️ Thank You
+
+- Eliot Lim
+
 ## 1.54.0 (2026-08-06)
 
 ### Features

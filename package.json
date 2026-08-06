@@ -1,6 +1,6 @@
 {
   "name": "appliance.sh",
-  "version": "1.54.0",
+  "version": "1.54.1",
   "description": "Appliance is a platform to install and run applications on the cloud",
   "homepage": "https://github.com/appliance-sh/appliance.sh#readme",
   "bugs": {
