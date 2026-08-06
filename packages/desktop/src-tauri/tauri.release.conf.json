@@ -1,5 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBundleCommand": "node scripts/sign-staged.mjs"
+  },
   "bundle": {
     "createUpdaterArtifacts": true
   }

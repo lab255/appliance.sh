@@ -1,6 +1,15 @@
 #!/usr/bin/env node
-// Developer-ID-sign the binaries staged into src-tauri/ BEFORE `tauri
-// build` bundles them, so Apple's notary service accepts the archive.
+// Developer-ID-sign the binaries staged into src-tauri/ right before
+// the bundler packages them, so Apple's notary service accepts the
+// archive.
+//
+// MUST run as the release overlay's `beforeBundleCommand`
+// (tauri.release.conf.json), NOT earlier in the script chain: `tauri
+// build` first runs beforeBuildCommand (`pnpm build`), which re-runs
+// vm:build + vm:bundle and re-stages a fresh AD-HOC-signed copy over
+// anything signed before it — that clobber sank the first fix attempt
+// (run 31097880178). beforeBundleCommand is the only hook between that
+// re-staging and the resource copy into the .app.
 //
 // Why: Tauri signs the app shell and its externalBin sidecars, but
 // bundle.resources are copied into Contents/Resources verbatim — a
