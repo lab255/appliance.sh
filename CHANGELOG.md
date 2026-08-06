@@ -1,3 +1,38 @@
+## 1.54.0 (2026-08-06)
+
+### Features
+
+- **cli:** appliance mcp — MCP server so external agents can deploy and debug ([aed6967](https://github.com/appliance-sh/appliance.sh/commit/aed6967))
+- **cli:** human vm status with next-step guidance + one-command vm reset ([3cd9830](https://github.com/appliance-sh/appliance.sh/commit/3cd9830))
+- **cli:** vm up names the engine binary it resolved (path + build date) ([89e02b3](https://github.com/appliance-sh/appliance.sh/commit/89e02b3))
+- **desktop:** reassure instead of bare-spinning when a VM boot goes quiet ([1a2d5ea](https://github.com/appliance-sh/appliance.sh/commit/1a2d5ea))
+
+### Bug Fixes
+
+- **api-server:** build bootstrap before web console in docker-prep ([c801905](https://github.com/appliance-sh/appliance.sh/commit/c801905))
+- **cli:** make support-bundle tar work when GNU tar shadows bsdtar on Windows ([cf2c598](https://github.com/appliance-sh/appliance.sh/commit/cf2c598))
+- **cli:** honest Ctrl+C messaging pre-dispatch; record per-call profile in MCP deploy links ([25faa91](https://github.com/appliance-sh/appliance.sh/commit/25faa91))
+- **security:** restrict profiles.json ACL to the owning user on Windows ([8a15a7b](https://github.com/appliance-sh/appliance.sh/commit/8a15a7b))
+- **ux:** honest deploys, no stack traces, inline WSL fix — unhappy paths for non-developers ([de9466a](https://github.com/appliance-sh/appliance.sh/commit/de9466a))
+- **windows:** preflight WSL2 + disk checks, no console flashes, targeted WSL error guidance ([98debfd](https://github.com/appliance-sh/appliance.sh/commit/98debfd))
+
+### Refactoring
+
+- simplify MCP handlers, reuse vm capture helper, true up WSL classifier parity ([28a9c2a](https://github.com/appliance-sh/appliance.sh/commit/28a9c2a))
+
+### Documentation
+
+- **readme:** mention vm status guidance and the one-command vm reset ([69184e8](https://github.com/appliance-sh/appliance.sh/commit/69184e8))
+- **rfcs:** add design RFC collection with status index ([7d515ff](https://github.com/appliance-sh/appliance.sh/commit/7d515ff))
+
+### Chores
+
+- **lint:** ignore staged .docker-deps build context in eslint ([1075e08](https://github.com/appliance-sh/appliance.sh/commit/1075e08))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.53.2 (2026-07-20)
 
 ### Bug Fixes
