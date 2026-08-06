@@ -145,9 +145,26 @@ Required environment / CI secrets:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `APPLE_CERTIFICATE`           | Base64 of the Developer ID Application `.p12` (cert + private key), imported into a temp keychain in CI |
 | `APPLE_CERTIFICATE_PASSWORD`  | Export password for that `.p12`                                                                         |
-| `APPLE_SIGNING_IDENTITY`      | e.g. `Developer ID Application: Acme, Inc. (TEAMID1234)`                                                |
 | `APPLE_TEAM_ID`               | 10-char Apple Developer Team ID                                                                         |
 | `APPLE_ID` + `APPLE_PASSWORD` | Apple ID + an **app-specific** password for notarytool auth                                             |
+
+There is deliberately **no** `APPLE_SIGNING_IDENTITY` secret: the signing
+scripts derive the identity from whatever `Developer ID Application` cert is in
+the keychain search list (`scripts/macos-signing.mjs`) — in CI that's exactly
+the one the workflow imported from `APPLE_CERTIFICATE`. A hardcoded identity
+string goes stale on cert rotation and silently no-ops the signing scripts.
+Setting `APPLE_SIGNING_IDENTITY` in the env still overrides the derivation
+(useful on a machine with several Developer ID certs); `APPLE_TEAM_ID` also
+falls back to the `(TEAMID1234)` suffix of the derived identity when unset.
+
+Bundle **resources** need their own Developer ID signatures — Tauri signs the
+app shell and `externalBin` sidecars, but copies `bundle.resources` verbatim,
+and notarization rejects the whole archive over one ad-hoc Mach-O (this is
+exactly how the ad-hoc-signed `vm-bin/appliance-vm` used to sink every release
+build). `scripts/sign-staged.mjs` runs before `tauri build` in
+`tauri:build:release` and Developer-ID-signs every Mach-O staged under
+`src-tauri/` (hardened runtime + timestamp, per-binary entitlements), skipping
+non-Mach-O files like the Linux api-server guest binary.
 
 Alternatively, instead of `APPLE_ID`/`APPLE_PASSWORD`, notarization can use an
 App-Store-Connect API key — set `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, and

@@ -51,7 +51,7 @@ jobs:
             runs_on: macos-15-intel
     runs-on: ${{ matrix.runs_on }}
     # The Developer ID cert (APPLE_CERTIFICATE + password), the notarization
-    # creds (APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID/APPLE_SIGNING_IDENTITY) and
+    # creds (APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID) and
     # the Tauri updater keys (TAURI_SIGNING_PRIVATE_KEY, TAURI_UPDATER_PUBKEY)
     # are scoped to the `publish` GitHub environment. A job only sees
     # environment-scoped secrets when it opts in here; without this the
@@ -134,8 +134,11 @@ jobs:
           # private key, and its export password.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # --- Developer ID signing + notarization (notarize-macos.mjs) ---
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # --- Developer ID signing + notarization ---
+          # No APPLE_SIGNING_IDENTITY secret: the signing scripts
+          # (sign-staged.mjs, notarize-macos.mjs — see macos-signing.mjs)
+          # derive the identity from the imported cert below, so a cert
+          # rotation can't silently strand a stale identity string.
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}

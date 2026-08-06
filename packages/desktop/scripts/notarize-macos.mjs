@@ -27,9 +27,14 @@
 // sign-macos.mjs no-ops without its dev cert. So local builds, CI
 // builds without secrets, and non-macOS platforms all skip cleanly.
 //
-// Required env (all must be set to actually sign + notarize):
+// Signing identity + team:
+//   Derived from the keychain search list (the first valid "Developer
+//   ID Application" identity — in CI, the one cert the release
+//   workflow imported; see macos-signing.mjs). The team id comes from
+//   the identity's "(TEAMID1234)" suffix. Env overrides both:
 //   APPLE_SIGNING_IDENTITY  e.g. "Developer ID Application: Acme, Inc. (TEAMID1234)"
 //   APPLE_TEAM_ID           10-char Apple Developer Team ID
+// Required env (to actually notarize):
 //   Notarization auth — EITHER:
 //     a) App-Store-Connect API key (preferred for CI):
 //        APPLE_API_KEY_ID, APPLE_API_ISSUER, APPLE_API_KEY_PATH (path to the .p8)
@@ -45,6 +50,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { resolveSigningIdentity, teamIdFromIdentity } from './macos-signing.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(__dirname, '..');
@@ -58,14 +64,14 @@ if (process.platform !== 'darwin') {
   process.exit(0);
 }
 
-const IDENTITY = process.env.APPLE_SIGNING_IDENTITY;
-const TEAM_ID = process.env.APPLE_TEAM_ID;
+const IDENTITY = resolveSigningIdentity();
+const TEAM_ID = process.env.APPLE_TEAM_ID || teamIdFromIdentity(IDENTITY);
 
 // Without a Developer ID identity there's nothing production-grade to
 // do — leave the (ad-hoc or dev-cert) signature from `tauri build`
 // untouched. Mirrors sign-macos.mjs's "cert absent → no-op" contract.
 if (!IDENTITY || !TEAM_ID) {
-  log('APPLE_SIGNING_IDENTITY / APPLE_TEAM_ID not set — skipping production signing + notarization.');
+  log('no Developer ID identity in env or keychain — skipping production signing + notarization.');
   process.exit(0);
 }
 
