@@ -15,6 +15,11 @@ export const bootstrapRoutes: Router = Router();
 
 bootstrapRoutes.post('/create-key', async (req, res) => {
   try {
+    if (await apiKeyService.exists()) {
+      res.status(409).json({ error: 'Appliance is already initialized' });
+      return;
+    }
+
     const bootstrapToken = process.env.BOOTSTRAP_TOKEN;
     if (!bootstrapToken) {
       res.status(500).json({ error: 'Bootstrap token not configured' });

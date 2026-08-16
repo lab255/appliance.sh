@@ -214,7 +214,11 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
           apiServerUrl,
           apiKey,
           stateBackendUrl,
-          lastBootstrapInput: bootstrapInput,
+          lastBootstrapInput: result.installGeneration ? undefined : bootstrapInput,
+          installGeneration: result.installGeneration,
+          cloudFormationStackName: result.cloudFormationStackName,
+          awsAccountId: result.awsAccountId,
+          awsRegion: result.awsRegion,
         });
         await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
         setHandoff('saved');

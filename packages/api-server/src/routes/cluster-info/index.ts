@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { readFileSync } from 'fs';
-import { applianceBaseConfig, sanitizeBaseConfigForWire, VERSION, type ApplianceBaseConfig } from '@appliance.sh/sdk';
+import { sanitizeBaseConfigForWire, VERSION, type ApplianceBaseConfig } from '@appliance.sh/sdk';
 import { getConsoleMode, getExternalConsoleUrl, type ConsoleMode } from '../../console-static';
 import { supportsUploadBuilds } from '../../services/build-upload.service';
 import { logger } from '../../logger';
+import { requireBaseConfigSnapshot } from '../../services/base-config.service';
 
 export interface ClusterInfo {
   /**
@@ -89,12 +90,7 @@ export const clusterInfoRoutes: Router = Router();
 
 clusterInfoRoutes.get('/', async (req, res) => {
   try {
-    const raw = process.env.APPLIANCE_BASE_CONFIG;
-    if (!raw) {
-      res.status(500).json({ error: 'APPLIANCE_BASE_CONFIG is not set' });
-      return;
-    }
-    const baseConfig = applianceBaseConfig.parse(JSON.parse(raw));
+    const baseConfig = requireBaseConfigSnapshot();
     const externalUrl = getExternalConsoleUrl();
     const warnings = readWarnings();
     const body: ClusterInfo = {

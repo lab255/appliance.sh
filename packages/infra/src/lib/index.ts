@@ -2,6 +2,9 @@
 export * from './aws/ApplianceStack';
 export * from './aws/ApplianceBaseAwsPublic';
 export * from './aws/ApplianceBaseAwsVpc';
+export * from './aws/ApplianceSystemSubstrate';
+export * from './aws/ApplianceEdgeBase';
+export * from './aws/edge-router-handler';
 
 // Deployment Service
 export * from './ApplianceDeploymentService';

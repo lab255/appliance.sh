@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "clean": "rm -rf ./dist ./sidecar/dist ./src-tauri/binaries ./src-tauri/vm-bin ./src-tauri/apiserver-bin",
     "deps:build": "nx run-many -t build -p @appliance.sh/cli @appliance.sh/app @appliance.sh/bootstrap @appliance.sh/helper",
-    "sidecar:build": "tsc -p sidecar/tsconfig.json && node scripts/finalize-sidecar.mjs",
+    "sidecar:build": "tsc -p sidecar/tsconfig.json --noEmit && bun build sidecar/src/main.ts --target=node --outfile=sidecar/dist/main.mjs",
     "cli:bundle": "node scripts/copy-cli.mjs",
     "vm:build": "node scripts/build-vm.mjs",
     "vm:bundle": "node scripts/copy-vm.mjs",
@@ -48,6 +48,7 @@
   "dependencies": {
     "@appliance.sh/app": "workspace:*",
     "@appliance.sh/bootstrap": "workspace:*",
+    "@appliance.sh/install-aws": "workspace:*",
     "@appliance.sh/helper": "workspace:*",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",

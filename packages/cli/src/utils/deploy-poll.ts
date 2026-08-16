@@ -44,6 +44,12 @@ export async function pollDeploymentUntilDone(
     }
 
     const d = status.data;
+    if (d.target?.type === 'edge' && d.status === DeploymentStatus.InProgress && d.edgeConvergence?.state === 'ready') {
+      const continued = await client.continueDeployment(deploymentId);
+      if (!continued.success) {
+        throw new Error(`Failed to continue edge convergence: ${continued.error.message}`);
+      }
+    }
     const key = `${d.status}::${d.message ?? ''}`;
     if (key !== lastKey) {
       opts.onProgress?.(d);

@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { runWorkspaceEngine, runDownloadEngine } from './engines/workspace';
 import type { BootstrapInput, BootstrapOptions, BootstrapResult } from './types';
+import { assertLegacyInstallation, emitLegacyDeprecation } from './deprecation';
 
 /**
  * Public entry point. Both `@appliance.sh/cli` (for
@@ -12,6 +13,11 @@ import type { BootstrapInput, BootstrapOptions, BootstrapResult } from './types'
  * and event shapes are identical either way.
  */
 export async function runBootstrap(input: BootstrapInput, options: BootstrapOptions = {}): Promise<BootstrapResult> {
+  const emit = options.onEvent ?? (() => undefined);
+  emitLegacyDeprecation(emit);
+  if (options.prior?.phase1?.baseConfig) {
+    assertLegacyInstallation(options.prior.phase1.baseConfig, 'runBootstrap');
+  }
   const cacheDir = options.cacheDir ?? path.join(os.homedir(), '.appliance');
   const engine = options.engine ?? 'workspace';
 

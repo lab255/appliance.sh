@@ -38,6 +38,10 @@ export interface Cluster {
   // (which would risk flipping declarative state). Absent for
   // clusters added via Connect or migrated from older shells.
   lastBootstrapInput?: BootstrapInput;
+  installGeneration?: 'cloudformation-v1';
+  cloudFormationStackName?: string;
+  awsAccountId?: string;
+  awsRegion?: string;
 }
 
 export interface HostConfig {
@@ -55,6 +59,10 @@ export interface AddClusterInput {
   apiKey: { id: string; secret: string };
   stateBackendUrl?: string;
   lastBootstrapInput?: BootstrapInput;
+  installGeneration?: 'cloudformation-v1';
+  cloudFormationStackName?: string;
+  awsAccountId?: string;
+  awsRegion?: string;
 }
 
 // Drives a bootstrap run from the UI. Tauri host implements this by
@@ -161,6 +169,8 @@ export interface TeardownInput {
    * environment.
    */
   awsProfile?: string;
+  cluster?: Cluster;
+  apiKey?: { id: string; secret: string };
 }
 
 /** A pending self-update the updater feed advertised — the running app

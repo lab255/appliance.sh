@@ -36,6 +36,12 @@ export interface Profile {
   lastBootstrapInput?: unknown;
   /** Informational: which surface created the profile. */
   managed?: 'desktop' | 'cli';
+  /** Server/profile generation marker for CloudFormation-owned installs. */
+  installGeneration?: 'cloudformation-v1';
+  /** CloudFormation stack that owns this profile's substrate. */
+  cloudFormationStackName?: string;
+  awsAccountId?: string;
+  awsRegion?: string;
 }
 
 export interface ProfilesFile {

@@ -5,7 +5,9 @@ import * as auto from '@pulumi/pulumi/automation';
 import * as aws from '@pulumi/aws';
 import * as awsNative from '@pulumi/aws-native';
 import { ApplianceStack, ApplianceStackMetadata, toResourceId } from './aws/ApplianceStack';
-import { applianceBaseConfig, ApplianceBaseConfig } from '@appliance.sh/sdk';
+import { ApplianceEdgeBase } from './aws/ApplianceEdgeBase';
+import { ApplianceSystemSubstrate } from './aws/ApplianceSystemSubstrate';
+import { applianceBaseConfig, type ApplianceBaseConfig, type EdgeDeploymentTarget } from '@appliance.sh/sdk';
 
 // Plugin cache + PULUMI_HOME layout in the api-server container image.
 // The Dockerfile pre-downloads each pinned Pulumi plugin into
@@ -38,6 +40,10 @@ export interface PulumiResult {
    * stack outputs to populate it). Consumers must tolerate undefined.
    */
   url?: string;
+  /** Resolved epoch-2 config returned by an edge deployment. */
+  baseConfig?: ApplianceBaseConfig;
+  /** Edge-only: true only after a no-change verification pass. */
+  converged?: boolean;
 }
 
 export interface ResolvedBuildParams {
@@ -64,6 +70,7 @@ export interface ApplianceDeploymentServiceOptions {
 
 export class ApplianceDeploymentService {
   private readonly projectName = 'appliance-api-managed-proj';
+  private readonly edgeProjectName = 'appliance-edge-managed-proj';
   private readonly baseConfig: ApplianceBaseConfig | undefined;
   private readonly region: string;
 
@@ -156,6 +163,30 @@ export class ApplianceDeploymentService {
 
       return {
         applianceStack,
+      };
+    };
+  }
+
+  private inlineEdgeProgram(stackName: string, target: EdgeDeploymentTarget) {
+    return async () => {
+      if (!this.baseConfig) throw new Error('Missing base config');
+      const substrate = ApplianceSystemSubstrate.fromBaseConfig(this.baseConfig);
+      const rid = toResourceId(stackName);
+      const globalProvider = new aws.Provider(`${rid}-edge-global`, { region: 'us-east-1' });
+      const edge = new ApplianceEdgeBase(
+        stackName,
+        {
+          substrate,
+          domain: {
+            domainName: target.domainName,
+            zone: target.zone,
+          },
+        },
+        { globalProvider }
+      );
+      return {
+        baseConfig: edge.config,
+        apiServerPublicUrl: edge.apiServerPublicUrl,
       };
     };
   }
@@ -282,12 +313,30 @@ export class ApplianceDeploymentService {
     return stack;
   }
 
-  private async selectExistingStack(stackName: string, projectId?: string): Promise<auto.Stack> {
+  private async getOrCreateEdgeStack(stackName: string, target: EdgeDeploymentTarget): Promise<auto.Stack> {
+    const program = this.inlineEdgeProgram(stackName, target);
+    const envVars = this.buildEnvVars();
+    const workDir = this.workDirFor('system-edge');
+    const secretsProvider = this.secretsProvider();
+    const stack = await auto.LocalWorkspace.createOrSelectStack(
+      { projectName: this.edgeProjectName, stackName, program },
+      { envVars, workDir, ...(secretsProvider ? { secretsProvider } : {}) }
+    );
+    await stack.setConfig('aws:region', { value: 'us-east-1' });
+    await this.clearStaleProfileConfig(stack);
+    return stack;
+  }
+
+  private async selectExistingStack(
+    stackName: string,
+    projectId?: string,
+    projectName = this.projectName
+  ): Promise<auto.Stack> {
     const envVars = this.buildEnvVars();
     const workDir = this.workDirFor(projectId);
 
     const ws = await auto.LocalWorkspace.create({
-      projectSettings: { name: this.projectName, runtime: 'nodejs' },
+      projectSettings: { name: projectName, runtime: 'nodejs' },
       workDir,
       envVars,
     });
@@ -346,6 +395,159 @@ export class ApplianceDeploymentService {
       message: idempotentNoop ? 'No changes (idempotent)' : 'Stack updated',
       stackName,
     };
+  }
+
+  /**
+   * One bounded edge convergence pass. A successful pass that changed
+   * resources deliberately returns `converged:false`; the next invocation
+   * verifies a no-change plan before the control plane publishes epoch 2.
+   */
+  async convergeEdge(stackName: string, target: EdgeDeploymentTarget, opts?: PulumiOpOptions): Promise<PulumiResult> {
+    const stack = await this.getOrCreateEdgeStack(stackName, target);
+    opts?.onStack?.(stack);
+    let softDeadlineReached = false;
+    const timer = opts?.softDeadlineMs
+      ? setTimeout(() => {
+          softDeadlineReached = true;
+          // Known live-test watch-item: Pulumi cancel is an unsafe emergency
+          // operation. A create that never checkpointed (for example hosted-zone
+          // creation or a retried distribution CNAMEAlreadyExists) can orphan or
+          // duplicate resources. Keep this bounded-pass behavior under AWS testing.
+          // Cancellation is best-effort: the `up` rejection is the signal this
+          // pass waits for. Avoid leaking an unhandled rejection if the CLI has
+          // already exited by the time the soft-deadline callback runs.
+          void stack.cancel().catch((error) => {
+            console.warn('Failed to cancel edge Pulumi pass at its soft deadline', error);
+          });
+        }, opts.softDeadlineMs)
+      : undefined;
+    let result: auto.UpResult;
+    try {
+      result = await stack.up({ onOutput: (message) => console.log(message), refresh: opts?.refresh });
+    } catch (error) {
+      if (!softDeadlineReached) throw error;
+      await stack.refresh({ onOutput: (message) => console.log(message) });
+      return {
+        action: 'deploy',
+        ok: true,
+        converged: false,
+        idempotentNoop: false,
+        message: 'Edge still converging; soft deadline reached and Pulumi state was refreshed',
+        stackName,
+      };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    const changes = result.summary.resourceChanges || {};
+    const totalChanges = Object.entries(changes)
+      .filter(([kind]) => kind !== 'same')
+      .reduce((total, [, count]) => total + (count || 0), 0);
+    const baseConfig = result.outputs.baseConfig?.value as ApplianceBaseConfig | undefined;
+    const url = result.outputs.apiServerPublicUrl?.value as string | undefined;
+    if (!baseConfig || !url) throw new Error('Edge convergence pass completed without its resolved config outputs');
+    const converged = totalChanges === 0;
+    return {
+      action: 'deploy',
+      ok: true,
+      converged,
+      idempotentNoop: converged,
+      message: converged ? 'Edge converged (verified no changes)' : 'Edge applied changes; verification pass required',
+      stackName,
+      url,
+      baseConfig,
+    };
+  }
+
+  async destroyEdge(stackName: string, opts?: PulumiOpOptions): Promise<PulumiResult> {
+    try {
+      const stack = await this.selectExistingStack(stackName, 'system-edge', this.edgeProjectName);
+      opts?.onStack?.(stack);
+      let softDeadlineReached = false;
+      const timer = opts?.softDeadlineMs
+        ? setTimeout(() => {
+            softDeadlineReached = true;
+            void stack.cancel().catch((error) => {
+              console.warn('Failed to cancel edge destroy pass at its soft deadline', error);
+            });
+          }, opts.softDeadlineMs)
+        : undefined;
+      let result: auto.DestroyResult;
+      try {
+        result = await stack.destroy({ onOutput: (message) => console.log(message) });
+      } catch (error) {
+        if (!softDeadlineReached) throw error;
+        await stack.refresh({ onOutput: (message) => console.log(message) });
+        return {
+          action: 'destroy',
+          ok: true,
+          converged: false,
+          idempotentNoop: false,
+          message: 'Edge destroy still converging; soft deadline reached and Pulumi state was refreshed',
+          stackName,
+        };
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      const changes = result.summary.resourceChanges || {};
+      const totalChanges = Object.entries(changes)
+        .filter(([kind]) => kind !== 'same')
+        .reduce((total, [, count]) => total + (count || 0), 0);
+      const converged = totalChanges === 0;
+      return {
+        action: 'destroy',
+        ok: true,
+        converged,
+        idempotentNoop: converged,
+        message: converged
+          ? 'Edge destroy converged (verified no remaining resources)'
+          : 'Edge resources deleted; verification pass required',
+        stackName,
+      };
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      if (error.message.includes('no stack named') || error.message.includes('not found')) {
+        return {
+          action: 'destroy',
+          ok: true,
+          converged: true,
+          idempotentNoop: true,
+          message: 'Edge stack not found (idempotent)',
+          stackName,
+        };
+      }
+      throw error;
+    }
+  }
+
+  async refreshEdge(stackName: string, opts?: PulumiOpOptions): Promise<PulumiResult> {
+    try {
+      const stack = await this.selectExistingStack(stackName, 'system-edge', this.edgeProjectName);
+      opts?.onStack?.(stack);
+      const result = await stack.refresh({ onOutput: (message) => console.log(message) });
+      const changes = result.summary.resourceChanges || {};
+      const totalChanges = Object.entries(changes)
+        .filter(([kind]) => kind !== 'same')
+        .reduce((total, [, count]) => total + (count || 0), 0);
+      return {
+        action: 'refresh',
+        ok: true,
+        idempotentNoop: totalChanges === 0,
+        message: totalChanges === 0 ? 'No edge drift' : 'Edge state refreshed',
+        stackName,
+      };
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      if (error.message.includes('no stack named') || error.message.includes('not found')) {
+        return {
+          action: 'refresh',
+          ok: true,
+          idempotentNoop: true,
+          message: 'Edge stack not found (nothing to refresh)',
+          stackName,
+        };
+      }
+      throw error;
+    }
   }
 
   async destroy(stackName: string, projectId?: string, opts?: PulumiOpOptions): Promise<PulumiResult> {
@@ -419,6 +621,8 @@ export interface PulumiOpOptions {
    * failed prior deploy. Ignored for destroy/refresh.
    */
   refresh?: boolean;
+  /** Edge-only wall-clock budget before cancel+refresh yields a continuation. */
+  softDeadlineMs?: number;
 }
 
 export interface PulumiStackHandle {

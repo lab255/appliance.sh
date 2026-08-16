@@ -1,0 +1,291 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Appliance system substrate and Lambda control plane
+
+Parameters:
+  InstallationName:
+    Type: String
+    AllowedPattern: '^[a-z][a-z0-9-]{2,31}$'
+    Description: Stable lowercase name used to identify this Appliance installation
+  ImageUri:
+    Type: String
+    Default: ''
+    Description: Digest-pinned image URI in ImageRepository; empty creates only the substrate
+  ImageArchitecture:
+    Type: String
+    Default: x86_64
+    AllowedValues: [x86_64, arm64]
+
+Conditions:
+  HasImage: !Not [!Equals [!Ref ImageUri, '']]
+
+Resources:
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketOwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketOwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  StateKmsKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: !Sub Appliance ${InstallationName} Pulumi secrets key
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootAndIamPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+
+  StateKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/appliance-${InstallationName}
+      TargetKeyId: !Ref StateKmsKey
+
+  SystemApiServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  SystemWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  ImageRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {"rules":[{"rulePriority":1,"description":"Keep the newest 50 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  BootstrapTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub One-time bootstrap credential for Appliance ${InstallationName}
+      GenerateSecretString:
+        ExcludePunctuation: true
+        GenerateStringKey: token
+        PasswordLength: 43
+        SecretStringTemplate: '{}'
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: HasImage
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${InstallationName}-worker
+      RetentionInDays: 30
+
+  WorkerFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasImage
+    DependsOn: WorkerLogGroup
+    Properties:
+      FunctionName: !Sub ${InstallationName}-worker
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt SystemWorkerRole.Arn
+      Architectures: [!Ref ImageArchitecture]
+      Timeout: 900
+      MemorySize: 2048
+      EphemeralStorage:
+        Size: 4096
+      Environment:
+        Variables:
+          APPLIANCE_MODE: worker
+          APPLIANCE_DATA_BUCKET: !Ref DataBucket
+          APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
+          PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
+          PULUMI_CONFIG_PASSPHRASE: ''
+          APPLIANCE_TRUST_PROXY: 'true'
+
+  WorkerFunctionUrl:
+    Type: AWS::Lambda::Url
+    Condition: HasImage
+    Properties:
+      TargetFunctionArn: !GetAtt WorkerFunction.Arn
+      AuthType: NONE
+      InvokeMode: BUFFERED
+
+  WorkerFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasImage
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref WorkerFunction
+      FunctionUrlAuthType: NONE
+      Principal: '*'
+
+  ApiServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: HasImage
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${InstallationName}-api-server
+      RetentionInDays: 30
+
+  ApiServerFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasImage
+    DependsOn: ApiServerLogGroup
+    Properties:
+      FunctionName: !Sub ${InstallationName}-api-server
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt SystemApiServerRole.Arn
+      Architectures: [!Ref ImageArchitecture]
+      Timeout: 30
+      MemorySize: 2048
+      EphemeralStorage:
+        Size: 4096
+      Environment:
+        Variables:
+          APPLIANCE_MODE: server
+          APPLIANCE_DATA_BUCKET: !Ref DataBucket
+          APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
+          PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
+          PULUMI_CONFIG_PASSPHRASE: ''
+          APPLIANCE_TRUST_PROXY: 'true'
+          WORKER_URL: !GetAtt WorkerFunctionUrl.FunctionUrl
+          BOOTSTRAP_TOKEN: !Sub '{{resolve:secretsmanager:${BootstrapTokenSecret}:SecretString:token}}'
+
+  ApiServerFunctionUrl:
+    Type: AWS::Lambda::Url
+    Condition: HasImage
+    Properties:
+      TargetFunctionArn: !GetAtt ApiServerFunction.Arn
+      AuthType: NONE
+      InvokeMode: BUFFERED
+
+  ApiServerFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasImage
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref ApiServerFunction
+      FunctionUrlAuthType: NONE
+      Principal: '*'
+
+Outputs:
+  StateBucketName:
+    Value: !Ref StateBucket
+  StateBucketArn:
+    Value: !GetAtt StateBucket.Arn
+  DataBucketName:
+    Value: !Ref DataBucket
+  DataBucketArn:
+    Value: !GetAtt DataBucket.Arn
+  StateKmsKeyArn:
+    Value: !GetAtt StateKmsKey.Arn
+  StateKmsAliasName:
+    Value: !Ref StateKmsAlias
+  ImageRepositoryUrl:
+    Value: !GetAtt ImageRepository.RepositoryUri
+  SystemApiServerRoleArn:
+    Value: !GetAtt SystemApiServerRole.Arn
+  SystemWorkerRoleArn:
+    Value: !GetAtt SystemWorkerRole.Arn
+  BootstrapTokenSecretArn:
+    Value: !Ref BootstrapTokenSecret
+  WorkerFunctionName:
+    Condition: HasImage
+    Value: !Ref WorkerFunction
+  WorkerFunctionArn:
+    Condition: HasImage
+    Value: !GetAtt WorkerFunction.Arn
+  WorkerFunctionUrl:
+    Condition: HasImage
+    Value: !GetAtt WorkerFunctionUrl.FunctionUrl
+  ApiServerFunctionName:
+    Condition: HasImage
+    Value: !Ref ApiServerFunction
+  ApiServerFunctionArn:
+    Condition: HasImage
+    Value: !GetAtt ApiServerFunction.Arn
+  ApiServerFunctionUrl:
+    Condition: HasImage
+    Value: !GetAtt ApiServerFunctionUrl.FunctionUrl

@@ -10,6 +10,8 @@ import * as slug from 'random-word-slugs';
 import chalk from 'chalk';
 import { runBootstrap, type BootstrapEvent, type BootstrapPhase } from '@appliance.sh/bootstrap';
 import { ApplianceBaseType, type ApplianceBaseConfigInput } from '@appliance.sh/sdk';
+import { getActiveProfileOverride } from './utils/credentials.js';
+import { readProfiles, resolveProfile } from './utils/profile-store.js';
 
 const COMMON_REGIONS = [
   'us-east-1',
@@ -29,6 +31,12 @@ const COMMON_REGIONS = [
 const ALL_PHASES: BootstrapPhase[] = ['phase1', 'phase2', 'phase3'];
 
 const program = new Command();
+
+console.error(
+  chalk.yellow(
+    'deprecated: legacy 3-phase bootstrap; new installs use appliance cloud install (CloudFormation). Supported for 2 releases.'
+  )
+);
 
 program
   .option('--name <name>', 'base name (e.g. my-cluster)')
@@ -63,6 +71,12 @@ program
       profile?: string;
       yes?: boolean;
     }) => {
+      const active = resolveProfile(readProfiles(), { override: getActiveProfileOverride() });
+      if (active?.profile.installGeneration === 'cloudformation-v1') {
+        throw new Error(
+          `Active profile ${active.name} is a CloudFormation install. Refusing to run the legacy three-phase bootstrap against it.`
+        );
+      }
       // Fail fast on a missing Pulumi CLI — every phase shells out to it,
       // so an actionable pointer beats an ENOENT halfway through.
       ensurePulumiCli();

@@ -1,7 +1,6 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
-  applianceBaseConfig,
   BuildType,
   generateId,
   isDockerBase,
@@ -13,6 +12,7 @@ import { randomBytes } from 'node:crypto';
 import { getStorageService } from './storage.service';
 import { scopePath } from './tenant-context';
 import { assertSupportedBase } from './deployment-backend';
+import { requireBaseConfigSnapshot } from './base-config.service';
 
 const COLLECTION = 'builds';
 
@@ -162,9 +162,7 @@ export class BuildUploadService {
 }
 
 export function getBaseConfig(): ApplianceBaseConfig {
-  const raw = process.env.APPLIANCE_BASE_CONFIG;
-  if (!raw) throw new Error('APPLIANCE_BASE_CONFIG not set');
-  return applianceBaseConfig.parse(JSON.parse(raw));
+  return requireBaseConfigSnapshot();
 }
 
 export const buildUploadService = new BuildUploadService();

@@ -54,6 +54,16 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     description: 'provision a new Appliance installation on AWS (alias: `appliance cloud bootstrap`)',
     load: () => import('./appliance-bootstrap.js'),
   },
+  'cloud-install': {
+    description: 'install the Appliance control plane on AWS with CloudFormation',
+    hidden: true,
+    load: () => import('./appliance-cloud-install.js'),
+  },
+  'cloud-update': {
+    description: 'update CloudFormation-owned system Lambdas',
+    hidden: true,
+    load: () => import('./appliance-cloud-update.js'),
+  },
   build: {
     description: 'builds the appliance in the current working directory',
     load: () => import('./appliance-build.js'),
@@ -189,6 +199,8 @@ const SHORTCUTS: Record<string, { target: string; prefix: string[] }> = {
 // lifecycle. Routes to the existing command modules so `cloud
 // bootstrap` and `bootstrap` can never drift.
 const CLOUD_VERBS: Record<string, string> = {
+  install: 'cloud-install',
+  update: 'cloud-update',
   bootstrap: 'bootstrap',
   teardown: 'teardown',
 };
@@ -267,13 +279,13 @@ function showHelp(): void {
     if (grouped.has(name)) continue;
     console.log(`  ${name.padEnd(width)}  alias for \`appliance ${sc.target} ${sc.prefix.join(' ')}\``);
   }
-  console.log(`  ${'cloud'.padEnd(width)}  umbrella: \`appliance cloud bootstrap|teardown\``);
+  console.log(`  ${'cloud'.padEnd(width)}  umbrella: \`appliance cloud install|update|bootstrap|teardown\``);
   console.log();
   console.log('The three journeys:');
   console.log('  1. Build & run your app(s):   appliance dev            (deploy + logs + rebuild on save;');
   console.log('                                multi-service via appliance.stack.json — same command)');
   console.log('  2. Dev environment + agents:  appliance up  →  appliance agent login  →  appliance agent start');
-  console.log('  3. Ship the same app to AWS:  appliance cloud bootstrap  →  appliance deploy --profile <cloud>');
+  console.log('  3. Ship the same app to AWS:  appliance cloud install  →  provision edge  →  appliance deploy');
   console.log();
   console.log('Environment variables:');
   console.log('  APPLIANCE_PROFILE               credential profile to use (overrides the active profile)');
@@ -328,7 +340,8 @@ async function main(): Promise<void> {
     const target = verb ? CLOUD_VERBS[verb] : undefined;
     if (!target) {
       console.error(`Usage: appliance cloud <${Object.keys(CLOUD_VERBS).join('|')}> [options]`);
-      console.error('  bootstrap  provision a new Appliance installation on AWS');
+      console.error('  install    provision a new Appliance installation on AWS with CloudFormation');
+      console.error('  bootstrap  legacy three-phase installer (deprecated)');
       console.error('  teardown   destroy a cloud installation');
       process.exit(verb ? 1 : 0);
     }

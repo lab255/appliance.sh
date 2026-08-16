@@ -5,6 +5,7 @@ import express from 'express';
 const mockDeploymentService = vi.hoisted(() => ({
   execute: vi.fn(),
   get: vi.fn(),
+  continueEdge: vi.fn(),
 }));
 
 vi.mock('../../services/deployment.service', () => ({
@@ -25,13 +26,14 @@ vi.mock('../../services/api-key.service', () => ({
 
 import { deploymentRoutes } from './index';
 
-function createTestApp() {
+function createTestApp(role: 'admin' | 'member' = 'admin') {
   const app = express();
   app.use(express.json());
   // Stand-in for the signature-auth middleware: the POST route reads
   // req.apiKeyId to re-sign the worker dispatch with the caller's key.
   app.use((req, _res, next) => {
     req.apiKeyId = 'ak_test';
+    req.apiKeyRole = role;
     next();
   });
   app.use('/api/v1/deployments', deploymentRoutes);
@@ -105,6 +107,23 @@ describe('Deployment routes', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it('requires an admin key for the explicit edge target', async () => {
+      const input = {
+        environmentId: 'env-edge',
+        action: 'deploy',
+        target: { type: 'edge', domainName: 'example.com', zone: { mode: 'create' } },
+      };
+
+      const denied = await request(createTestApp('member')).post('/api/v1/deployments').send(input);
+      expect(denied.status).toBe(403);
+      expect(mockDeploymentService.execute).not.toHaveBeenCalled();
+
+      mockDeploymentService.execute.mockResolvedValue({ id: 'deploy-edge', ...input, status: 'pending' });
+      const allowed = await request(createTestApp('admin')).post('/api/v1/deployments').send(input);
+      expect(allowed.status).toBe(201);
+      expect(mockDeploymentService.execute).toHaveBeenCalledOnce();
+    });
   });
 
   describe('GET /api/v1/deployments/:id', () => {
@@ -129,6 +148,31 @@ describe('Deployment routes', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe('Deployment not found');
+    });
+  });
+
+  describe('POST /api/v1/deployments/:id/continue', () => {
+    it('requires admin and re-dispatches a ready edge deployment with the caller key', async () => {
+      const deployment = {
+        id: 'deploy-edge',
+        environmentId: 'env-edge',
+        action: 'deploy',
+        target: { type: 'edge' },
+        status: 'in_progress',
+        edgeConvergence: { state: 'running', attempt: 2 },
+      };
+      mockDeploymentService.continueEdge.mockResolvedValue(deployment);
+
+      const denied = await request(createTestApp('member')).post('/api/v1/deployments/deploy-edge/continue').send({});
+      expect(denied.status).toBe(403);
+      expect(mockDeploymentService.continueEdge).not.toHaveBeenCalled();
+
+      const allowed = await request(createTestApp('admin')).post('/api/v1/deployments/deploy-edge/continue').send({});
+      expect(allowed.status).toBe(202);
+      expect(mockDeploymentService.continueEdge).toHaveBeenCalledWith('deploy-edge', {
+        keyId: 'ak_test',
+        secret: 'sk_test',
+      });
     });
   });
 });

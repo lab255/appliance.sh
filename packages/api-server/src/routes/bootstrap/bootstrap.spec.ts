@@ -33,6 +33,7 @@ describe('Bootstrap routes', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockApiKeyService.exists.mockResolvedValue(false);
     process.env = { ...originalEnv, BOOTSTRAP_TOKEN: 'test-token-123' };
   });
 
@@ -59,6 +60,19 @@ describe('Bootstrap routes', () => {
       expect(res.body.id).toBe('ak_test');
       expect(res.body.secret).toBe('sk_secret');
       expect(mockApiKeyService.create).toHaveBeenCalledWith('cli');
+    });
+
+    it('rejects the permanent bootstrap token after the first API key exists', async () => {
+      mockApiKeyService.exists.mockResolvedValue(true);
+
+      const res = await request(createTestApp())
+        .post('/bootstrap/create-key')
+        .set('x-bootstrap-token', 'test-token-123')
+        .send({ name: 'second-admin' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/already initialized/i);
+      expect(mockApiKeyService.create).not.toHaveBeenCalled();
     });
 
     it('should return 403 for invalid bootstrap token', async () => {

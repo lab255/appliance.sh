@@ -1,8 +1,21 @@
 import { createApplianceClient } from '@appliance.sh/sdk';
+import { assertLegacyInstallation } from './deprecation';
 
 export interface ClusterRef {
   apiServerUrl: string;
   apiKey: { id: string; secret: string };
+}
+
+export async function verifyLegacyCluster(cluster: ClusterRef | undefined): Promise<void> {
+  if (!cluster) return;
+  const client = createApplianceClient({
+    baseUrl: cluster.apiServerUrl,
+    credentials: { keyId: cluster.apiKey.id, secret: cluster.apiKey.secret },
+  });
+  const result = await client.getClusterInfo();
+  if (!result.success)
+    throw new Error(`cluster-info unavailable; cannot verify legacy ownership: ${result.error.message}`);
+  assertLegacyInstallation(result.data.baseConfig, 'legacy bootstrap');
 }
 
 /**
@@ -39,6 +52,7 @@ export async function verifyStateBackendUrl(
     return;
   }
   const expected = r.data.baseConfig.stateBackendUrl;
+  assertLegacyInstallation(r.data.baseConfig, 'legacy installer-state operation');
   if (expected !== stateBackendUrl) {
     throw new Error(
       `stateBackendUrl mismatch: cluster /cluster-info reports ${expected || '<empty>'}, ` +

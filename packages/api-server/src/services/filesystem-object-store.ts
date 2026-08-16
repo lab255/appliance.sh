@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import type { ObjectStore } from '@appliance.sh/sdk';
+import { createHash, randomUUID } from 'node:crypto';
+import type { ObjectStore, VersionedObject } from '@appliance.sh/sdk';
 
 /**
  * Filesystem-backed object store. Used by the local-runtime variant
@@ -26,12 +27,26 @@ export class FilesystemObjectStore implements ObjectStore {
     }
   }
 
+  async getWithVersion(key: string): Promise<VersionedObject | null> {
+    const value = await this.get(key);
+    return value === null ? null : { value, version: versionOf(value) };
+  }
+
   async set(key: string, value: string): Promise<void> {
     const fullPath = this.resolveKey(key);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    const tmpPath = `${fullPath}.tmp`;
-    await fs.writeFile(tmpPath, value, 'utf-8');
-    await fs.rename(tmpPath, fullPath);
+    await this.withWriteLock(fullPath, () => this.writeAtomic(fullPath, value));
+  }
+
+  async setIfVersion(key: string, value: string, version: string): Promise<boolean> {
+    const fullPath = this.resolveKey(key);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    return this.withWriteLock(fullPath, async () => {
+      const current = await this.get(key);
+      if (current === null || versionOf(current) !== version) return false;
+      await this.writeAtomic(fullPath, value);
+      return true;
+    });
   }
 
   async delete(key: string): Promise<void> {
@@ -64,7 +79,7 @@ export class FilesystemObjectStore implements ObjectStore {
         .filter((rel) => (prefix ? rel.startsWith(prefix) : true))
         // Skip the in-flight `.tmp` files set() leaves behind on crash —
         // they aren't legitimate keys and would deserialise as bad JSON.
-        .filter((rel) => !rel.endsWith('.tmp'))
+        .filter((rel) => !rel.includes('.tmp-') && !rel.endsWith('.lock'))
     );
   }
 
@@ -78,6 +93,37 @@ export class FilesystemObjectStore implements ObjectStore {
     }
     return resolved;
   }
+
+  private async writeAtomic(fullPath: string, value: string): Promise<void> {
+    const tmpPath = `${fullPath}.tmp-${randomUUID()}`;
+    await fs.writeFile(tmpPath, value, 'utf-8');
+    await fs.rename(tmpPath, fullPath);
+  }
+
+  private async withWriteLock<T>(fullPath: string, operation: () => Promise<T>): Promise<T> {
+    const lockPath = `${fullPath}.lock`;
+    let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      try {
+        handle = await fs.open(lockPath, 'wx');
+        break;
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'EEXIST') throw error;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    }
+    if (!handle) throw new Error(`Timed out acquiring object-store write lock for ${fullPath}`);
+    try {
+      return await operation();
+    } finally {
+      await handle.close();
+      await fs.unlink(lockPath).catch(() => undefined);
+    }
+  }
+}
+
+function versionOf(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 async function collectFiles(dir: string): Promise<string[]> {

@@ -5,6 +5,7 @@ export { runApiServerUpdate, type ApiServerUpdateInput, type ApiServerUpdateOpti
 export { runBaselineUpdate, type BaselineUpdateInput, type BaselineUpdateOptions } from './baseline-update';
 export { latestGhcrTag, type LatestGhcrTagInput } from './ghcr-latest';
 export { runTeardown, type TeardownOptions } from './teardown';
+export { LEGACY_BOOTSTRAP_DEPRECATION, assertLegacyInstallation } from './deprecation';
 export type {
   BootstrapInput,
   BootstrapOptions,
@@ -13,4 +14,5 @@ export type {
   BootstrapPhase,
   BootstrapEngineKind,
   BootstrapPriorOutputs,
+  CloudFormationInstallationRef,
 } from './types';

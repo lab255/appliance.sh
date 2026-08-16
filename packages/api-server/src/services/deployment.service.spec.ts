@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DeploymentAction } from '@appliance.sh/sdk';
+import { DeploymentAction, DeploymentStatus } from '@appliance.sh/sdk';
 
 // Capture the event the service dispatches to the worker so we can
 // assert the environment it injected.
@@ -12,6 +12,8 @@ vi.mock('./deployment-executor.service', () => ({
 const mockStore = vi.hoisted(() => ({
   set: vi.fn(),
   get: vi.fn(),
+  getVersioned: vi.fn(),
+  setIfVersion: vi.fn(),
 }));
 
 vi.mock('./storage.service', () => ({
@@ -67,6 +69,7 @@ describe('DeploymentService env injection', () => {
     mockEnvironmentService.updateStatus.mockResolvedValue(undefined);
     mockProjectService.get.mockResolvedValue({ id: 'proj-1', name: 'proj-1' });
     mockStore.set.mockResolvedValue(undefined);
+    mockStore.setIfVersion.mockResolvedValue(true);
   });
 
   function dispatchedEnv(): Record<string, string> | undefined {
@@ -101,5 +104,82 @@ describe('DeploymentService env injection', () => {
     // No env lookup at all for destroy, and nothing injected.
     expect(mockEnvVarService.get).not.toHaveBeenCalled();
     expect(dispatchedEnv()).toBeUndefined();
+  });
+
+  it('re-dispatches only a ready edge continuation and advances its persisted attempt', async () => {
+    const edge = {
+      id: 'dep-edge',
+      environmentId: 'env-1',
+      projectId: 'proj-1',
+      action: DeploymentAction.Deploy,
+      target: { type: 'edge' as const, domainName: 'example.com', zone: { mode: 'create' as const } },
+      status: DeploymentStatus.InProgress,
+      startedAt: new Date().toISOString(),
+      edgeConvergence: { state: 'ready' as const, attempt: 1 },
+    };
+    mockStore.get.mockResolvedValue(edge);
+    mockStore.getVersioned.mockResolvedValue({ value: structuredClone(edge), version: 'v1' });
+    mockEnvironmentService.get.mockResolvedValue({
+      id: 'env-1',
+      projectId: 'proj-1',
+      stackName: 'edge-stack',
+      name: 'edge',
+      status: 'deploying',
+    });
+    mockProjectService.get.mockResolvedValue({ id: 'proj-1', name: 'appliance-system' });
+
+    const result = await service.continueEdge(edge.id, caller);
+    expect(result?.edgeConvergence).toEqual({ state: 'running', attempt: 2 });
+    expect(mockExecuteDeployment).toHaveBeenCalledWith(expect.objectContaining({ edgeAttempt: 2 }));
+  });
+
+  it('leases a concurrent edge continuation once so only one worker is dispatched', async () => {
+    const edge = {
+      id: 'dep-edge',
+      environmentId: 'env-1',
+      projectId: 'proj-1',
+      action: DeploymentAction.Deploy,
+      target: { type: 'edge' as const, domainName: 'example.com', zone: { mode: 'create' as const } },
+      status: DeploymentStatus.InProgress,
+      startedAt: new Date().toISOString(),
+      edgeConvergence: { state: 'ready' as const, attempt: 1 },
+    };
+    mockStore.getVersioned.mockImplementation(async () => ({ value: structuredClone(edge), version: 'same-etag' }));
+    mockStore.setIfVersion.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    mockStore.get.mockResolvedValue({
+      ...edge,
+      edgeConvergence: { state: 'running', attempt: 2 },
+    });
+    mockEnvironmentService.get.mockResolvedValue({
+      id: 'env-1',
+      projectId: 'proj-1',
+      stackName: 'edge-stack',
+      name: 'edge',
+      status: 'deploying',
+    });
+    mockProjectService.get.mockResolvedValue({ id: 'proj-1', name: 'appliance-system' });
+
+    await Promise.all([service.continueEdge(edge.id, caller), service.continueEdge(edge.id, caller)]);
+
+    expect(mockStore.setIfVersion).toHaveBeenCalledTimes(2);
+    expect(mockExecuteDeployment).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles a cancellation immediately between edge invocations', async () => {
+    const edge = {
+      id: 'dep-edge',
+      environmentId: 'env-1',
+      projectId: 'proj-1',
+      action: DeploymentAction.Deploy,
+      target: { type: 'edge' as const, domainName: 'example.com', zone: { mode: 'create' as const } },
+      status: DeploymentStatus.InProgress,
+      startedAt: new Date().toISOString(),
+      edgeConvergence: { state: 'ready' as const, attempt: 2 },
+    };
+    mockStore.get.mockResolvedValue(edge);
+    const result = await service.cancel(edge.id);
+    expect(result?.status).toBe(DeploymentStatus.Cancelled);
+    expect(mockEnvironmentService.updateStatus).toHaveBeenCalledWith('env-1', 'failed');
+    expect(mockExecuteDeployment).not.toHaveBeenCalled();
   });
 });

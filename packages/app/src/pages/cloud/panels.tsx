@@ -180,7 +180,9 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
           (lastBootstrapInput is the signal). A Connect-added cluster has
           no local state to destroy. Kept visible (not under Advanced) but
           last. */}
-      {canTeardown && cluster.lastBootstrapInput ? <DestroyClusterPanel cluster={cluster} /> : null}
+      {canTeardown && (cluster.lastBootstrapInput || cluster.installGeneration === 'cloudformation-v1') ? (
+        <DestroyClusterPanel cluster={cluster} />
+      ) : null}
     </div>
   );
 }
@@ -237,11 +239,13 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
     }
   }, []);
 
-  const canUpdate = Boolean(host.bootstrap?.updateBaseline && cluster.lastBootstrapInput);
+  const canUpdate = Boolean(
+    host.bootstrap?.updateBaseline && (cluster.lastBootstrapInput || cluster.installGeneration === 'cloudformation-v1')
+  );
 
   const onRun = async () => {
     if (!host.bootstrap?.updateBaseline) return;
-    if (!cluster.lastBootstrapInput) return;
+    if (!cluster.lastBootstrapInput && cluster.installGeneration !== 'cloudformation-v1') return;
     setStatus('running');
     setLogs([]);
     setError(null);
@@ -252,6 +256,19 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
           stateBackendUrl: stateBackendUrl || undefined,
           awsProfile: awsProfile || undefined,
           cluster: apiKey ? { apiServerUrl: cluster.apiServerUrl, apiKey } : undefined,
+          ...(cluster.installGeneration === 'cloudformation-v1' &&
+          cluster.cloudFormationStackName &&
+          cluster.awsAccountId &&
+          cluster.awsRegion
+            ? {
+                installation: {
+                  installGeneration: cluster.installGeneration,
+                  cloudFormationStackName: cluster.cloudFormationStackName,
+                  awsAccountId: cluster.awsAccountId,
+                  awsRegion: cluster.awsRegion,
+                },
+              }
+            : {}),
         },
         undefined,
         handleEvent
@@ -328,7 +345,7 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
         )}
       </label>
 
-      {!cluster.lastBootstrapInput ? (
+      {!cluster.lastBootstrapInput && cluster.installGeneration !== 'cloudformation-v1' ? (
         <div className="rounded-md border border-dashed border-[var(--color-border)] p-2 text-xs text-[var(--color-muted-foreground)]">
           No cached bootstrap input on this cluster — needed to preserve dns / vpc choices when re-running phase 1.
           Re-run the bootstrap wizard (<code className="font-mono">/cloud/bootstrap</code>) from this device to cache
@@ -468,6 +485,19 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
           targetVersion,
           awsProfile: awsProfile || undefined,
           baseConfigOverride: clusterInfoUnavailable ? (parsedOverride ?? undefined) : undefined,
+          ...(cluster.installGeneration === 'cloudformation-v1' &&
+          cluster.cloudFormationStackName &&
+          cluster.awsAccountId &&
+          cluster.awsRegion
+            ? {
+                installation: {
+                  installGeneration: cluster.installGeneration,
+                  cloudFormationStackName: cluster.cloudFormationStackName,
+                  awsAccountId: cluster.awsAccountId,
+                  awsRegion: cluster.awsRegion,
+                },
+              }
+            : {}),
         },
         undefined,
         handleEvent
@@ -859,6 +889,7 @@ async function setClusterStateBackendIfPossible(
  */
 function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
   const host = useHost();
+  const { config } = useSelectedCluster();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const { toast } = useToast();
@@ -912,7 +943,10 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
     setLogs([]);
     setError(null);
     try {
-      await host.bootstrap.teardown({ awsProfile: awsProfile || undefined }, handleEvent);
+      await host.bootstrap.teardown(
+        { awsProfile: awsProfile || undefined, cluster, apiKey: config?.apiKey ?? undefined },
+        handleEvent
+      );
       setStatus('succeeded');
       toast(`Cluster "${cluster.name}" destroyed`);
       // The infra is gone, so the local (URL, key) registration is now

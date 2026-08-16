@@ -62,6 +62,45 @@ describe('GET /api/v1/cluster-info', () => {
     expect(res.body.capabilities).toEqual({ uploadBuilds: false });
   });
 
+  it('sanitizes both substrate and attached-edge cloud epochs', async () => {
+    const substrate = {
+      name: 'prod',
+      type: 'appliance-base-aws-public',
+      provisioner: 'cloudformation-v1',
+      stateBackendUrl: 's3://state',
+      aws: {
+        region: 'us-east-1',
+        dataBucketName: 'data',
+        futureSecret: 'must-not-leak',
+      },
+    };
+    process.env.APPLIANCE_BASE_CONFIG = JSON.stringify(substrate);
+    const first = await request(createTestApp()).get('/api/v1/cluster-info');
+    expect(first.status).toBe(200);
+    expect(first.body.baseConfig.domainName).toBeUndefined();
+    expect(first.body.baseConfig.aws.zoneId).toBeUndefined();
+    expect(first.text).not.toContain('must-not-leak');
+
+    process.env.APPLIANCE_BASE_CONFIG = JSON.stringify({
+      ...substrate,
+      domainName: 'example.com',
+      aws: {
+        ...substrate.aws,
+        zoneId: 'Z1',
+        certificateArn: 'arn:cert',
+        cloudfrontDistributionId: 'DIST',
+        cloudfrontDistributionDomainName: 'dist.cloudfront.net',
+        edgeRouterRoleArn: 'arn:edge',
+        apiServerPublicUrl: 'https://api.example.com',
+      },
+    });
+    const second = await request(createTestApp()).get('/api/v1/cluster-info');
+    expect(second.status).toBe(200);
+    expect(second.body.baseConfig.domainName).toBe('example.com');
+    expect(second.body.baseConfig.aws.apiServerPublicUrl).toBe('https://api.example.com');
+    expect(second.text).not.toContain('must-not-leak');
+  });
+
   it('never leaks cluster credentials or unknown config keys in baseConfig', async () => {
     process.env.APPLIANCE_BASE_CONFIG = JSON.stringify({
       ...K8S_BASE,

@@ -18,9 +18,13 @@ import { environmentService } from './environment.service';
 import { buildService, type ResolvedBuild } from './build.service';
 import { getCurrentTenant, runWithTenant, DEFAULT_TENANT } from './tenant-context';
 import { readBaseConfig, resolveContainerBackend } from './deployment-backend';
+import { resolveBaseConfig, runWithBaseConfig } from './base-config.service';
+import { attachEdgeBaseConfig, detachEdgeBaseConfig } from './base-config-writer.service';
 import { logger } from '../logger';
 
-// Project + env name pair that triggers the dogfood role override.
+// LEGACY BOOTSTRAP ONLY: project + env names that trigger the old
+// dogfood role override. CFN-owned system functions never use this path;
+// keep it frozen for the two-release compatibility window.
 // The cluster's base provisions two pre-existing Lambda roles
 // (systemRoleArns.apiServer / systemRoleArns.worker) carrying broader
 // IAM than ApplianceStack's per-appliance role grants. When a deploy
@@ -29,6 +33,8 @@ import { logger } from '../logger';
 const SYSTEM_PROJECT = 'api';
 const SYSTEM_API_SERVER_ENV = 'server';
 const SYSTEM_API_WORKER_ENV = 'worker';
+const EDGE_PROJECT = 'appliance-system';
+const EDGE_ENVIRONMENT = 'edge';
 
 const COLLECTION = 'deployments';
 
@@ -36,6 +42,7 @@ const COLLECTION = 'deployments';
 // a Pulumi op is running. 3s strikes a balance between cancellation
 // latency and storage churn (S3 GET per tick).
 const CANCEL_POLL_INTERVAL_MS = 3000;
+const EDGE_SOFT_DEADLINE_MS = Number(process.env.APPLIANCE_EDGE_SOFT_DEADLINE_MS ?? 8 * 60_000);
 
 // Annotated with z.ZodType<ApplianceStackMetadata> so the compiler flags
 // drift if the infra-side interface changes shape.
@@ -64,6 +71,7 @@ export const workerEventSchema = z.object({
   // HTTP worker path the re-signed request's own auth resolves the tenant
   // from the key, which is authoritative and takes precedence.
   tenantId: z.string().optional(),
+  edgeAttempt: z.number().int().positive().optional(),
 });
 
 export type WorkerEvent = z.infer<typeof workerEventSchema>;
@@ -79,12 +87,13 @@ export type WorkerEvent = z.infer<typeof workerEventSchema>;
  * the re-signed request's auth has already set the ambient tenant from
  * the key — that is authoritative, so it wins over the event value.
  */
-export async function executeDeployment(event: WorkerEvent): Promise<void> {
+export async function executeDeployment(event: WorkerEvent): Promise<'complete' | 'continue'> {
   const tenantId = getCurrentTenant() ?? event.tenantId ?? DEFAULT_TENANT;
-  return runWithTenant(tenantId, () => executeDeploymentInTenant(event));
+  const baseConfig = await resolveBaseConfig();
+  return runWithBaseConfig(baseConfig, () => runWithTenant(tenantId, () => executeDeploymentInTenant(event)));
 }
 
-async function executeDeploymentInTenant(event: WorkerEvent): Promise<void> {
+async function executeDeploymentInTenant(event: WorkerEvent): Promise<'complete' | 'continue'> {
   const { deploymentId, input, metadata, priorEnvStatus } = event;
   const storage = getStorageService();
 
@@ -93,13 +102,23 @@ async function executeDeploymentInTenant(event: WorkerEvent): Promise<void> {
     throw new Error(`Deployment not found: ${deploymentId}`);
   }
 
-  // Idempotency guard: only process pending deployments (handles retries)
-  if (deployment.status !== DeploymentStatus.Pending) {
+  const isEdge = input.target?.type === 'edge';
+  const isEdgeContinuation =
+    isEdge &&
+    deployment.status === DeploymentStatus.InProgress &&
+    deployment.edgeConvergence?.state === 'running' &&
+    deployment.edgeConvergence.attempt === event.edgeAttempt;
+  // Ordinary jobs remain single-invocation/pending-only. Edge continuation
+  // invocations carry the persisted attempt lease established by the API.
+  if (deployment.status !== DeploymentStatus.Pending && !isEdgeContinuation) {
     logger.info('skipping non-pending deployment', { deploymentId, status: deployment.status });
-    return;
+    return 'complete';
   }
 
   deployment.status = DeploymentStatus.InProgress;
+  if (isEdge && !deployment.edgeConvergence) {
+    deployment.edgeConvergence = { state: 'running', attempt: event.edgeAttempt ?? 1 };
+  }
   await storage.set(COLLECTION, deployment.id, deployment);
 
   // Capture the live Pulumi Stack so the cancel poller can call
@@ -132,16 +151,57 @@ async function executeDeploymentInTenant(event: WorkerEvent): Promise<void> {
     if (backend) {
       result = await executeLocalAction(backend, input, metadata, deployment.id);
     } else {
-      const infraService = createApplianceDeploymentService();
+      const infraService = createApplianceDeploymentService({ baseConfig });
       result = await executeCloudAction(infraService, input, metadata, deployment.id, onStack);
     }
 
     stopPolling();
 
+    // A bounded edge pass may have applied changes or yielded at its soft
+    // deadline. Persist a continuation point; only a later no-change pass
+    // is allowed to publish epoch 2 or mark the deployment succeeded.
+    if (result.continuing) {
+      const latest = await storage.get<Deployment>(COLLECTION, deployment.id);
+      if (!latest) throw new Error(`Deployment disappeared during edge convergence: ${deployment.id}`);
+      if (latest?.status === DeploymentStatus.Cancelling) {
+        latest.status = DeploymentStatus.Cancelled;
+        latest.completedAt = new Date().toISOString();
+        latest.message = 'Edge convergence cancelled between worker invocations.';
+        await storage.set(COLLECTION, latest.id, latest);
+        await environmentService.updateStatus(metadata.environmentId, EnvironmentStatus.Failed);
+        return 'complete';
+      }
+      latest.status = DeploymentStatus.InProgress;
+      latest.message = result.message;
+      latest.edgeConvergence = {
+        state: 'ready',
+        attempt: latest.edgeConvergence?.attempt ?? event.edgeAttempt ?? 1,
+      };
+      await storage.set(COLLECTION, latest.id, latest);
+      logger.info('edge convergence pass yielded', {
+        deploymentId,
+        attempt: latest.edgeConvergence.attempt,
+      });
+      return 'continue';
+    }
+
+    if (isEdge && input.action === DeploymentAction.Deploy) {
+      if (!result.baseConfig) throw new Error('Converged edge deployment did not return its epoch-2 config');
+      await attachEdgeBaseConfig(result.baseConfig);
+    } else if (isEdge && input.action === DeploymentAction.Destroy) {
+      await detachEdgeBaseConfig();
+    }
+
     deployment.status = DeploymentStatus.Succeeded;
     deployment.completedAt = new Date().toISOString();
     deployment.message = result.message;
     deployment.idempotentNoop = result.idempotentNoop;
+    if (isEdge) {
+      deployment.edgeConvergence = {
+        state: 'converged',
+        attempt: deployment.edgeConvergence?.attempt ?? event.edgeAttempt ?? 1,
+      };
+    }
     await storage.set(COLLECTION, deployment.id, deployment);
 
     // Refresh restores whatever the env was before. Deploy/Destroy
@@ -167,6 +227,7 @@ async function executeDeploymentInTenant(event: WorkerEvent): Promise<void> {
     await environmentService.updateStatus(metadata.environmentId, finalEnvStatus, urlUpdate);
 
     logger.info('deployment succeeded', { deploymentId, action: input.action });
+    return 'complete';
   } catch (error) {
     stopPolling();
 
@@ -187,7 +248,7 @@ async function executeDeploymentInTenant(event: WorkerEvent): Promise<void> {
       await environmentService.updateStatus(metadata.environmentId, EnvironmentStatus.Failed);
 
       logger.info('deployment cancelled', { deploymentId, action: input.action });
-      return;
+      return 'complete';
     }
 
     deployment.status = DeploymentStatus.Failed;
@@ -232,6 +293,7 @@ function startCancelPoller(deploymentId: string, onCancelObserved: () => void): 
   };
 }
 
+/** @deprecated Frozen compatibility path for pre-CFN bootstrap installs. */
 function resolveSystemRoleArn(metadata: ApplianceStackMetadata): string | undefined {
   if (metadata.projectName !== SYSTEM_PROJECT) return undefined;
   const raw = process.env.APPLIANCE_BASE_CONFIG;
@@ -260,6 +322,10 @@ interface ExecutionResult {
    * outputs plumbing yet).
    */
   url?: string;
+  /** Edge-only continuation marker; ordinary workloads never set it. */
+  continuing?: boolean;
+  /** Epoch-2 config is published only after convergence. */
+  baseConfig?: ReturnType<typeof applianceBaseConfig.parse>;
 }
 
 /**
@@ -287,6 +353,46 @@ async function executeCloudAction(
   deploymentId: string,
   onStack: (s: PulumiStackHandle) => void
 ): Promise<ExecutionResult> {
+  if (input.target?.type === 'edge') {
+    // The typed target is authoritative; names alone never select the edge
+    // program. The reserved record is still enforced so control-plane state
+    // cannot be attached to an arbitrary user environment.
+    if (metadata.projectName !== EDGE_PROJECT || metadata.environmentName !== EDGE_ENVIRONMENT) {
+      throw new Error(`Edge deployments must target the reserved ${EDGE_PROJECT}/${EDGE_ENVIRONMENT} environment`);
+    }
+    switch (input.action) {
+      case DeploymentAction.Deploy: {
+        const result = await infraService.convergeEdge(metadata.stackName, input.target, {
+          onStack,
+          refresh: input.refresh,
+          softDeadlineMs: EDGE_SOFT_DEADLINE_MS,
+        });
+        return {
+          message: result.message,
+          idempotentNoop: result.idempotentNoop,
+          url: result.url,
+          baseConfig: result.baseConfig,
+          continuing: result.converged !== true,
+        };
+      }
+      case DeploymentAction.Destroy: {
+        const result = await infraService.destroyEdge(metadata.stackName, {
+          onStack,
+          softDeadlineMs: EDGE_SOFT_DEADLINE_MS,
+        });
+        return {
+          message: result.message,
+          idempotentNoop: result.idempotentNoop,
+          continuing: result.converged !== true,
+        };
+      }
+      case DeploymentAction.Refresh: {
+        const result = await infraService.refreshEdge(metadata.stackName, { onStack });
+        return { message: result.message, idempotentNoop: result.idempotentNoop };
+      }
+    }
+  }
+
   switch (input.action) {
     case DeploymentAction.Deploy: {
       if (input.buildId) await noteProgress(deploymentId, 'Resolving build (building the image server-side)…');

@@ -4,7 +4,6 @@ import {
   latestGhcrTag,
   runApiServerUpdate,
   runBaselineUpdate,
-  runBootstrap,
   runStateDemotion,
   runStatePromotion,
   runTeardown,
@@ -21,6 +20,16 @@ import {
   type StatePromotionInput,
   type StatePromotionOptions,
 } from '@appliance.sh/bootstrap';
+import {
+  createAwsCloudInstallDependencies,
+  createAwsCloudLifecycleDependencies,
+  runCloudBaselineUpdate,
+  runCloudInstall,
+  runCloudSystemUpdate,
+  runCloudTeardown,
+  type CloudLifecycleProfile,
+} from '@appliance.sh/install-aws';
+import { resolveInstallGeneration } from './generation.js';
 
 // The Tauri side spawns this sidecar for any operation that needs the
 // bootstrap package's local-machine capabilities (Pulumi automation,
@@ -69,7 +78,19 @@ type SidecarInput =
       // on a specific cluster record — the only knob is the AWS profile
       // to authenticate the destroy with. `cacheDir` defaults to
       // ~/.appliance (the desktop never overrides it).
-      input?: { awsProfile?: string; cacheDir?: string };
+      input?: {
+        awsProfile?: string;
+        cacheDir?: string;
+        cluster?: {
+          name: string;
+          apiServerUrl: string;
+          installGeneration?: 'cloudformation-v1';
+          cloudFormationStackName?: string;
+          awsAccountId?: string;
+          awsRegion?: string;
+        };
+        apiKey?: { id: string; secret: string };
+      };
     };
 
 async function readStdin(): Promise<string> {
@@ -100,11 +121,47 @@ async function main(): Promise<void> {
   try {
     switch (parsed.kind) {
       case 'bootstrap': {
-        const result = await runBootstrap(parsed.bootstrapInput, {
-          ...(parsed.options ?? {}),
-          onEvent,
+        const config = parsed.bootstrapInput.base.config;
+        if (!('region' in config)) throw new Error('CloudFormation installer currently supports AWS bases only');
+        onEvent({ type: 'phase-started', phase: 'phase1' });
+        const deps = createAwsCloudInstallDependencies({
+          region: config.region,
+          awsProfile: parsed.bootstrapInput.aws?.profile,
+          writeProfile: () => undefined,
+          log: (message) => onEvent({ type: 'log', level: 'info', message }),
         });
-        emit({ type: 'result', result });
+        const stackName = `appliance-${parsed.bootstrapInput.base.name}`;
+        const profile = await runCloudInstall(
+          {
+            installationName: parsed.bootstrapInput.base.name,
+            stackName,
+            region: config.region,
+            architecture: 'x86_64',
+            sourceImage: parsed.bootstrapInput.apiServerImageUri,
+            awsProfile: parsed.bootstrapInput.aws?.profile,
+            profileName: parsed.bootstrapInput.base.name,
+          },
+          deps
+        );
+        onEvent({ type: 'phase-completed', phase: 'phase1' });
+        onEvent({
+          type: 'log',
+          level: 'info',
+          message: 'CloudFormation substrate installed. Provision the typed edge target to attach the chosen domain.',
+        });
+        emit({
+          type: 'result',
+          result: {
+            stateBackendUrl: '',
+            apiServerUrl: profile.apiUrl,
+            apiKey: { id: profile.keyId, secret: profile.secret },
+            statePromoted: true,
+            installGeneration: profile.installGeneration,
+            cloudFormationStackName: profile.cloudFormationStackName,
+            awsAccountId: profile.awsAccountId,
+            awsRegion: profile.awsRegion,
+          },
+        });
         break;
       }
       case 'promote-state': {
@@ -127,18 +184,60 @@ async function main(): Promise<void> {
         break;
       }
       case 'update-api-server': {
-        await runApiServerUpdate(parsed.input, {
-          ...(parsed.options ?? {}),
-          onEvent,
-        });
+        const install = parsed.input.installation;
+        if (resolveInstallGeneration(install?.installGeneration) === 'cloudformation-v1') {
+          if (!install) throw new Error('CloudFormation update is missing installation metadata');
+          const deps = createAwsCloudInstallDependencies({
+            region: install.awsRegion,
+            awsProfile: parsed.input.awsProfile,
+            writeProfile: () => undefined,
+            log: (message) => onEvent({ type: 'log', level: 'info', message }),
+          });
+          await runCloudSystemUpdate(
+            {
+              profile: {
+                ...install,
+                apiUrl: parsed.input.apiServerUrl,
+                keyId: parsed.input.apiKey.id,
+                secret: parsed.input.apiKey.secret,
+              },
+              installationName: install.cloudFormationStackName.replace(/^appliance-/, ''),
+              sourceImage: `${parsed.input.imageBase ?? 'ghcr.io/appliance-sh/api-server'}:${parsed.input.targetVersion}`,
+              awsProfile: parsed.input.awsProfile,
+            },
+            deps
+          );
+        } else {
+          await runApiServerUpdate(parsed.input, { ...(parsed.options ?? {}), onEvent });
+        }
         emit({ type: 'result', result: {} });
         break;
       }
       case 'update-baseline': {
-        await runBaselineUpdate(parsed.input, {
-          ...(parsed.options ?? {}),
-          onEvent,
-        });
+        const install = parsed.input.installation;
+        if (resolveInstallGeneration(install?.installGeneration) === 'cloudformation-v1') {
+          if (!install) throw new Error('CloudFormation update is missing installation metadata');
+          const deps = createAwsCloudInstallDependencies({
+            region: install.awsRegion,
+            awsProfile: parsed.input.awsProfile,
+            writeProfile: () => undefined,
+            log: (message) => onEvent({ type: 'log', level: 'info', message }),
+          });
+          await runCloudBaselineUpdate(
+            {
+              profile: {
+                ...install,
+                apiUrl: parsed.input.cluster?.apiServerUrl ?? '',
+                keyId: parsed.input.cluster?.apiKey.id ?? '',
+                secret: parsed.input.cluster?.apiKey.secret ?? '',
+              },
+              installationName: install.cloudFormationStackName.replace(/^appliance-/, ''),
+            },
+            deps
+          );
+        } else {
+          await runBaselineUpdate(parsed.input, { ...(parsed.options ?? {}), onEvent });
+        }
         emit({ type: 'result', result: {} });
         break;
       }
@@ -148,14 +247,41 @@ async function main(): Promise<void> {
         break;
       }
       case 'teardown': {
-        // Mirror the CLI's default: the desktop's installer state lives
-        // in ~/.appliance unless explicitly overridden.
-        await runTeardown({
-          cacheDir: parsed.input?.cacheDir ?? path.join(os.homedir(), '.appliance'),
-          awsProfile: parsed.input?.awsProfile,
-          emit: onEvent,
-        });
-        emit({ type: 'result', result: {} });
+        const cluster = parsed.input?.cluster;
+        if (resolveInstallGeneration(cluster?.installGeneration) === 'cloudformation-v1') {
+          if (!cluster) throw new Error('CloudFormation teardown is missing cluster metadata');
+          if (!cluster.cloudFormationStackName || !cluster.awsAccountId || !cluster.awsRegion || !parsed.input?.apiKey)
+            throw new Error('CFN teardown requires stack/account/region metadata and the selected API key');
+          const profile: CloudLifecycleProfile = {
+            installGeneration: 'cloudformation-v1',
+            cloudFormationStackName: cluster.cloudFormationStackName,
+            awsAccountId: cluster.awsAccountId,
+            awsRegion: cluster.awsRegion,
+            apiUrl: cluster.apiServerUrl,
+            keyId: parsed.input.apiKey.id,
+            secret: parsed.input.apiKey.secret,
+          };
+          const deps = createAwsCloudLifecycleDependencies({
+            region: cluster.awsRegion,
+            awsProfile: parsed.input.awsProfile,
+            log: (message) => onEvent({ type: 'log', level: 'info', message }),
+          });
+          const result = await runCloudTeardown(profile, deps);
+          for (const retained of result.retained) {
+            onEvent({ type: 'log', level: 'warn', message: `retained ${retained.kind}: ${retained.value}` });
+          }
+          emit({ type: 'result', result });
+        } else {
+          await runTeardown({
+            cacheDir: parsed.input?.cacheDir ?? path.join(os.homedir(), '.appliance'),
+            awsProfile: parsed.input?.awsProfile,
+            ...(cluster && parsed.input?.apiKey
+              ? { cluster: { apiServerUrl: cluster.apiServerUrl, apiKey: parsed.input.apiKey } }
+              : {}),
+            emit: onEvent,
+          });
+          emit({ type: 'result', result: {} });
+        }
         break;
       }
       default: {

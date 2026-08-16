@@ -51,6 +51,13 @@ export class StorageService {
     return JSON.parse(data) as T;
   }
 
+  async getVersioned<T>(collection: string, id: string): Promise<{ value: T; version: string } | null> {
+    if (!this.store.getWithVersion) throw new Error('Object store does not support optimistic concurrency');
+    const data = await this.store.getWithVersion(this.getKey(collection, id));
+    if (!data) return null;
+    return { value: JSON.parse(data.value) as T, version: data.version };
+  }
+
   async getAll<T>(collection: string): Promise<T[]> {
     const keys = await this.store.list(this.getListPrefix(collection));
     const items: T[] = [];
@@ -69,6 +76,11 @@ export class StorageService {
     await this.store.set(this.getKey(collection, id), JSON.stringify(value));
   }
 
+  async setIfVersion<T>(collection: string, id: string, value: T, version: string): Promise<boolean> {
+    if (!this.store.setIfVersion) throw new Error('Object store does not support optimistic concurrency');
+    return this.store.setIfVersion(this.getKey(collection, id), JSON.stringify(value), version);
+  }
+
   async delete(collection: string, id: string): Promise<void> {
     await this.store.delete(this.getKey(collection, id));
   }
@@ -79,7 +91,16 @@ export class StorageService {
   }
 }
 
-function createStorageService(): StorageService {
+export function createStorageService(): StorageService {
+  // New CFN installs can initialize storage before the first base-config
+  // read. This also breaks the config↔storage bootstrap cycle: the config
+  // object itself lives in this bucket.
+  const dataBucket = process.env.APPLIANCE_DATA_BUCKET;
+  if (dataBucket) {
+    return new StorageService(
+      new S3ObjectStore(dataBucket, process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-1')
+    );
+  }
   const baseConfigJson = process.env.APPLIANCE_BASE_CONFIG;
   if (!baseConfigJson) {
     throw new Error('APPLIANCE_BASE_CONFIG environment variable is required');
@@ -115,4 +136,8 @@ export function getStorageService(): StorageService {
     storageServiceInstance = createStorageService();
   }
   return storageServiceInstance;
+}
+
+export function resetStorageServiceForTests(): void {
+  storageServiceInstance = null;
 }

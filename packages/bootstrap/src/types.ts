@@ -105,6 +105,18 @@ export interface BootstrapResult {
   apiKey?: { id: string; secret: string };
   /** `true` once state has been moved from local file to S3 (phase 3). */
   statePromoted?: boolean;
+  /** Present only when the desktop sidecar used the new CFN installer. */
+  installGeneration?: 'cloudformation-v1';
+  cloudFormationStackName?: string;
+  awsAccountId?: string;
+  awsRegion?: string;
+}
+
+export interface CloudFormationInstallationRef {
+  installGeneration: 'cloudformation-v1';
+  cloudFormationStackName: string;
+  awsAccountId: string;
+  awsRegion: string;
 }
 
 export type BootstrapEvent =

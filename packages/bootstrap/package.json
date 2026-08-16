@@ -23,7 +23,7 @@
     "clean": "rm -rf ./dist",
     "typecheck": "tsc --noEmit",
     "dev:setup": "echo 'pnpm workspaces handle linking automatically'",
-    "test": "echo \"@appliance.sh/bootstrap: no unit tests yet (exercised via helper/cli); add vitest specs here when ready\""
+    "test": "vitest run"
   },
   "dependencies": {
     "@appliance.sh/infra": "workspace:*",
@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "24.12.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
   }
 }

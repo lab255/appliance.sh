@@ -1,7 +1,7 @@
-import { applianceBaseConfig, isDockerBase, isKubernetesBase } from '@appliance.sh/sdk';
+import { isDockerBase, isKubernetesBase } from '@appliance.sh/sdk';
 import type { ApplianceBaseConfig } from '@appliance.sh/sdk';
 import { LocalContainerDeploymentService, type ContainerDeploymentBackend } from '@appliance.sh/infra';
-import { logger } from '../logger';
+import { readBaseConfigSnapshot } from './base-config.service';
 
 // THE base-type fork. Every service that used to branch on
 // isKubernetesBase/isDockerBase/else resolves its runtime through
@@ -24,16 +24,9 @@ export class RemovedDockerBaseError extends Error {
   }
 }
 
-/** Parse APPLIANCE_BASE_CONFIG, or undefined when unset/invalid. */
+/** Read the immutable request/job snapshot (legacy env fallback included). */
 export function readBaseConfig(): ApplianceBaseConfig | undefined {
-  const raw = process.env.APPLIANCE_BASE_CONFIG;
-  if (!raw) return undefined;
-  try {
-    return applianceBaseConfig.parse(JSON.parse(raw));
-  } catch (error) {
-    logger.warn('failed to parse APPLIANCE_BASE_CONFIG', { error: String(error) });
-    return undefined;
-  }
+  return readBaseConfigSnapshot();
 }
 
 /**

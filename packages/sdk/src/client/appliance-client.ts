@@ -3,7 +3,7 @@ import { ClientConfig, ListOptions } from './types';
 import { Project, ProjectInput } from '../models/project';
 import { Environment, EnvironmentInput } from '../models/environment';
 import { EnvironmentHealth } from '../models/environment-health';
-import { Deployment } from '../models/deployment';
+import { Deployment, type EdgeDeploymentTarget } from '../models/deployment';
 import { ApiKeyCreateResponse, ApiKeySummary, ApiKeyRole } from '../models/api-key';
 import { InviteCreateResponse, InviteSummary } from '../models/invite';
 import { ApplianceBaseConfig } from '../models/appliance-base';
@@ -456,6 +456,8 @@ export class ApplianceClient {
   async deploy(
     environmentId: string,
     options?: {
+      /** Explicit control-plane target. Omit for ordinary workload deploys. */
+      target?: EdgeDeploymentTarget;
       /** Reference a build created via POST /api/v1/builds (either uploaded or external). */
       buildId?: string;
       /** Runtime environment variables. */
@@ -489,6 +491,7 @@ export class ApplianceClient {
       {
         environmentId,
         action: 'deploy',
+        target: options?.target,
         ...(options?.buildId ? { buildId: options.buildId } : {}),
         ...(options?.environment ? { environment: options.environment } : {}),
         ...(options?.memory !== undefined ? { memory: options.memory } : {}),
@@ -534,6 +537,31 @@ export class ApplianceClient {
 
   async getDeployment(id: string): Promise<Result<Deployment>> {
     return this.request<Deployment>('GET', `/api/v1/deployments/${id}`);
+  }
+
+  async deployEdge(
+    environmentId: string,
+    domainName: string,
+    zone: { mode: 'create' } | { mode: 'attach'; hostedZoneId: string }
+  ): Promise<Result<Deployment>> {
+    return this.request<Deployment>('POST', '/api/v1/deployments', {
+      environmentId,
+      action: 'deploy',
+      target: { type: 'edge', domainName, zone },
+    });
+  }
+
+  async destroyEdge(environmentId: string, domainName: string, hostedZoneId: string): Promise<Result<Deployment>> {
+    return this.request<Deployment>('POST', '/api/v1/deployments', {
+      environmentId,
+      action: 'destroy',
+      target: { type: 'edge', domainName, zone: { mode: 'attach', hostedZoneId } },
+    });
+  }
+
+  /** Dispatch the next bounded worker pass for an edge deployment. */
+  async continueDeployment(id: string): Promise<Result<Deployment>> {
+    return this.request<Deployment>('POST', `/api/v1/deployments/${id}/continue`, {});
   }
 
   // Workloads + pod logs

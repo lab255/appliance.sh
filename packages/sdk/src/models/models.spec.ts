@@ -77,6 +77,38 @@ describe('deploymentInput schema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an explicit edge target with create or attach zone inputs', () => {
+    expect(
+      deploymentInput.safeParse({
+        environmentId: 'env-edge',
+        action: DeploymentAction.Deploy,
+        target: { type: 'edge', domainName: 'example.com', zone: { mode: 'create' } },
+      }).success
+    ).toBe(true);
+    expect(
+      deploymentInput.safeParse({
+        environmentId: 'env-edge',
+        action: DeploymentAction.Deploy,
+        target: {
+          type: 'edge',
+          domainName: 'example.com',
+          zone: { mode: 'attach', hostedZoneId: 'Z123' },
+        },
+      }).success
+    ).toBe(true);
+  });
+
+  it('refuses workload build/runtime fields on an edge target', () => {
+    const result = deploymentInput.safeParse({
+      environmentId: 'env-edge',
+      action: DeploymentAction.Deploy,
+      target: { type: 'edge', domainName: 'example.com', zone: { mode: 'create' } },
+      buildId: 'build-1',
+      memory: 2048,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('apiKeyInput schema', () => {

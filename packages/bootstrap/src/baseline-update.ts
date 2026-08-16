@@ -1,8 +1,9 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runPhase1 } from './phases/phase1';
-import { verifyStateBackendUrl, type ClusterRef } from './cluster-verify';
-import type { BootstrapEvent, BootstrapInput } from './types';
+import { verifyLegacyCluster, verifyStateBackendUrl, type ClusterRef } from './cluster-verify';
+import type { BootstrapEvent, BootstrapInput, CloudFormationInstallationRef } from './types';
+import { emitLegacyDeprecation } from './deprecation';
 
 export interface BaselineUpdateInput {
   /**
@@ -12,7 +13,7 @@ export interface BaselineUpdateInput {
    * Route53 zone between managed and unmanaged. The desktop
    * persists this on the Cluster record at handoff time.
    */
-  bootstrap: BootstrapInput;
+  bootstrap?: BootstrapInput;
   /**
    * The cluster's S3 state backend URL. After phase 3 has run,
    * the installer stack lives in S3 — baseline updates have to
@@ -33,6 +34,8 @@ export interface BaselineUpdateInput {
    * wrong bucket. Skipped silently if cluster-info is unreachable.
    */
   cluster?: ClusterRef;
+  /** Desktop generation dispatcher; legacy engine rejects this marker. */
+  installation?: CloudFormationInstallationRef;
 }
 
 export interface BaselineUpdateOptions {
@@ -64,6 +67,9 @@ export async function runBaselineUpdate(
 ): Promise<void> {
   const cacheDir = options.cacheDir ?? path.join(os.homedir(), '.appliance');
   const emit = options.onEvent ?? (() => {});
+  emitLegacyDeprecation(emit);
+  await verifyLegacyCluster(input.cluster);
+  if (!input.bootstrap) throw new Error('Legacy baseline update requires the original BootstrapInput');
 
   if (input.stateBackendUrl) {
     await verifyStateBackendUrl(input.stateBackendUrl, input.cluster, (level, message) =>

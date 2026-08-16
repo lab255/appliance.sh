@@ -5,7 +5,7 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
-import type { ObjectStore } from '@appliance.sh/sdk';
+import type { ObjectStore, VersionedObject } from '@appliance.sh/sdk';
 
 export class S3ObjectStore implements ObjectStore {
   private readonly client: S3Client;
@@ -17,13 +17,20 @@ export class S3ObjectStore implements ObjectStore {
   }
 
   async get(key: string): Promise<string | null> {
+    return (await this.getWithVersion(key))?.value ?? null;
+  }
+
+  async getWithVersion(key: string): Promise<VersionedObject | null> {
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
       const response = await this.client.send(command);
-      return (await response.Body?.transformToString()) ?? null;
+      const value = await response.Body?.transformToString();
+      if (value === undefined) return null;
+      if (!response.ETag) throw new Error(`S3 object ${key} did not return an ETag`);
+      return { value, version: response.ETag };
     } catch (error) {
       if ((error as { name?: string }).name === 'NoSuchKey') {
         return null;
@@ -40,6 +47,25 @@ export class S3ObjectStore implements ObjectStore {
       ContentType: 'application/json',
     });
     await this.client.send(command);
+  }
+
+  async setIfVersion(key: string, value: string, version: string): Promise<boolean> {
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+          Body: value,
+          ContentType: 'application/json',
+          IfMatch: version,
+        })
+      );
+      return true;
+    } catch (error) {
+      const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (candidate.name === 'PreconditionFailed' || candidate.$metadata?.httpStatusCode === 412) return false;
+      throw error;
+    }
   }
 
   async delete(key: string): Promise<void> {

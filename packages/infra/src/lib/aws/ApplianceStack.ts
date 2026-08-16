@@ -74,6 +74,27 @@ export interface ApplianceStackOpts extends pulumi.ComponentResourceOptions {
   nativeGlobalProvider: awsNative.Provider;
 }
 
+/** Fail explicitly during the substrate-only epoch, before any workload resources register. */
+export function assertAwsEdgeProvisioned(config: ApplianceBaseConfig): asserts config is ApplianceBaseConfig & {
+  domainName: string;
+  aws: NonNullable<ApplianceBaseConfig['aws']> & {
+    zoneId: string;
+    cloudfrontDistributionId: string;
+    cloudfrontDistributionDomainName: string;
+  };
+} {
+  if (!config.aws?.cloudfrontDistributionId) {
+    throw new Error(
+      'This cloud installation has only its system substrate. Provision the edge base first (`appliance cloud install` or deploy the typed edge target) before deploying an ordinary appliance.'
+    );
+  }
+  if (!config.aws.zoneId || !config.domainName || !config.aws.cloudfrontDistributionDomainName) {
+    throw new Error(
+      'The edge base is incomplete (missing Route53/CloudFront config). Provision the edge base first before deploying an ordinary appliance.'
+    );
+  }
+}
+
 export class ApplianceStack extends pulumi.ComponentResource {
   // lambdaRole / lambdaRolePolicy are present only when the stack
   // mints its own role. When `lambdaRoleArn` is supplied via args,
@@ -96,17 +117,16 @@ export class ApplianceStack extends pulumi.ComponentResource {
     if (!args.config.aws) {
       throw new Error(`ApplianceStack requires an AWS-typed base config; got type '${args.config.type}'`);
     }
+    assertAwsEdgeProvisioned(args.config);
     const awsConfig = args.config.aws;
 
     // CloudFront is the only supported ingress — the Lambda Function URL is
     // always created with AWS_IAM auth and is intended to be invoked either
     // by the CloudFront distribution (via OAC) or by the edge router role.
     // Refuse to build a stack that would expose the function URL publicly.
-    if (!awsConfig.cloudfrontDistributionId) {
-      throw new Error(
-        'ApplianceStack requires a cloudfrontDistributionId in base config — publicly accessible Lambda Function URLs are not supported.'
-      );
-    }
+    const zoneId = awsConfig.zoneId;
+    const domainName = args.config.domainName;
+    const cloudfrontDistributionDomainName = awsConfig.cloudfrontDistributionDomainName;
 
     // Short ID for AWS resource names (subject to 64-char limits)
     const rid = toResourceId(name);
@@ -267,7 +287,7 @@ export class ApplianceStack extends pulumi.ComponentResource {
     );
 
     // DNS uses the full stack name, not the truncated resource ID
-    this.dnsRecord = pulumi.interpolate`${dnsLabel}.${args.config.domainName ?? ''}`;
+    this.dnsRecord = pulumi.interpolate`${dnsLabel}.${domainName}`;
 
     new aws.lambda.Permission(
       `${rid}-cf-invoke-url`,
@@ -311,7 +331,7 @@ export class ApplianceStack extends pulumi.ComponentResource {
       );
     }
 
-    if (awsConfig.cloudfrontDistributionId && awsConfig.cloudfrontDistributionDomainName) {
+    if (awsConfig.cloudfrontDistributionId && cloudfrontDistributionDomainName) {
       new awsNative.lambda.Permission(
         `${rid}-cf-invoke`,
         {
@@ -329,11 +349,11 @@ export class ApplianceStack extends pulumi.ComponentResource {
       new aws.route53.Record(
         `${rid}-cname`,
         {
-          zoneId: awsConfig.zoneId,
-          name: pulumi.interpolate`${dnsLabel}.${args.config.domainName ?? ''}`,
+          zoneId,
+          name: pulumi.interpolate`${dnsLabel}.${domainName}`,
           type: 'CNAME',
           ttl: 60,
-          records: [awsConfig.cloudfrontDistributionDomainName],
+          records: [cloudfrontDistributionDomainName],
         },
         { parent: this, provider: opts.globalProvider }
       );
@@ -341,8 +361,8 @@ export class ApplianceStack extends pulumi.ComponentResource {
       new aws.route53.Record(
         `${rid}-txt`,
         {
-          zoneId: awsConfig.zoneId,
-          name: pulumi.interpolate`origin.${dnsLabel}.${args.config.domainName ?? ''}`,
+          zoneId,
+          name: pulumi.interpolate`origin.${dnsLabel}.${domainName}`,
           type: 'TXT',
           ttl: 60,
           records: [this.lambdaUrl.functionUrl],

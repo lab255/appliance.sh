@@ -2,6 +2,15 @@
   "name": "@appliance.sh/install-aws",
   "version": "1.54.2",
   "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "description": "Install the Appliance platform on AWS",
   "repository": {
     "type": "git",
@@ -11,20 +20,24 @@
   "license": "MIT",
   "author": "Eliot Lim",
   "scripts": {
-    "build": "mkdir -p ./dist && cdk synth > dist/appliance-install-aws.yml",
-    "deploy": "cdk deploy --all",
-    "deploy:direct": "cdk deploy --all -- direct",
+    "build": "tsc",
     "clean": "rm -rf ./dist/",
-    "test": "echo \"@appliance.sh/install-aws: no unit tests yet (CDK synth is exercised by build); add cdk assertion tests here when ready\""
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@appliance.sh/sdk": "workspace:*",
-    "@aws-sdk/client-cloudfront": "^3.955.0",
-    "aws-cdk": "^2.1033.0",
-    "aws-cdk-lib": "^2.230.0",
-    "constructs": "^10.4.3"
+    "@aws-sdk/client-cloudformation": "^3.1005.0",
+    "@aws-sdk/client-ecr": "^3.1005.0",
+    "@aws-sdk/client-s3": "^3.1005.0",
+    "@aws-sdk/client-secrets-manager": "^3.1005.0",
+    "@aws-sdk/client-sts": "^3.1005.0",
+    "@aws-sdk/credential-providers": "^3.1044.0"
   },
   "devDependencies": {
-    "@types/node": "24.12.2"
+    "@types/node": "24.12.2",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4",
+    "yaml": "^2.8.3"
   }
 }

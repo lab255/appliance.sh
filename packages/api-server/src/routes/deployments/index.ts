@@ -9,6 +9,10 @@ export const deploymentRoutes: Router = Router();
 deploymentRoutes.post('/', async (req, res) => {
   try {
     const input = deploymentInput.parse(req.body);
+    if (input.target?.type === 'edge' && req.apiKeyRole !== 'admin') {
+      res.status(403).json({ error: 'Edge provisioning requires an admin key' });
+      return;
+    }
     logger.info('deployment started', {
       requestId: req.requestId,
       environmentId: input.environmentId,
@@ -82,6 +86,32 @@ deploymentRoutes.get('/:id', async (req, res) => {
   } catch (error) {
     logger.error('get deployment failed', error, { requestId: req.requestId, deploymentId: req.params.id });
     res.status(500).json({ error: 'Failed to get deployment', message: String(error) });
+  }
+});
+
+deploymentRoutes.post('/:id/continue', async (req, res) => {
+  try {
+    if (req.apiKeyRole !== 'admin' || !req.apiKeyId) {
+      res.status(403).json({ error: 'Edge continuation requires an admin key' });
+      return;
+    }
+    const callerKey = await apiKeyService.getByKeyId(req.apiKeyId);
+    if (!callerKey) {
+      res.status(401).json({ error: 'Api key not found' });
+      return;
+    }
+    const deployment = await deploymentService.continueEdge(req.params.id, {
+      keyId: callerKey.id,
+      secret: callerKey.secret,
+    });
+    if (!deployment) {
+      res.status(404).json({ error: 'Deployment not found' });
+      return;
+    }
+    res.status(202).json(deployment);
+  } catch (error) {
+    logger.error('continue edge deployment failed', error, { requestId: req.requestId, deploymentId: req.params.id });
+    res.status(409).json({ error: 'Failed to continue edge deployment', message: String(error) });
   }
 });
 

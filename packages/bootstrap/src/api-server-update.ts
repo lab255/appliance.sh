@@ -2,7 +2,8 @@ import { createApplianceClient, DeploymentStatus, type ApplianceBaseConfig, type
 import { mirrorImageToEcr } from './runtime/ecr-mirror';
 import { inspectImageArch } from './runtime/container';
 import { sleep } from './phases/helpers';
-import type { BootstrapEvent } from './types';
+import type { BootstrapEvent, CloudFormationInstallationRef } from './types';
+import { assertLegacyInstallation, emitLegacyDeprecation } from './deprecation';
 
 // Mirrors phase 2's system-project layout — the api-server / api-worker
 // system appliances live under `api/server` and `api/worker`. These
@@ -50,6 +51,8 @@ export interface ApiServerUpdateInput {
    * remote value is authoritative once it's reachable).
    */
   baseConfigOverride?: ApplianceBaseConfig;
+  /** Desktop generation dispatcher; legacy engine rejects this marker. */
+  installation?: CloudFormationInstallationRef;
 }
 
 export interface ApiServerUpdateOptions {
@@ -83,6 +86,7 @@ export async function runApiServerUpdate(
   options: ApiServerUpdateOptions = {}
 ): Promise<void> {
   const emit = options.onEvent ?? (() => {});
+  emitLegacyDeprecation(emit);
   const imageBase = input.imageBase ?? DEFAULT_IMAGE_BASE;
   const sourceImage = `${imageBase}:${input.targetVersion}`;
 
@@ -116,6 +120,7 @@ export async function runApiServerUpdate(
   if (!baseConfig.aws) {
     throw new Error('api-server update is AWS-only — local bases have no ECR to mirror to');
   }
+  assertLegacyInstallation(baseConfig, 'runApiServerUpdate');
   if (!baseConfig.aws.ecrRepositoryUrl) {
     throw new Error('cluster baseConfig is missing ecrRepositoryUrl — cannot mirror new image');
   }

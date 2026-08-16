@@ -140,6 +140,45 @@ describe('appliance-base-kubernetes schema', () => {
     });
     expect((docker.docker as Record<string, unknown>).futureDockerField).toBe(true);
   });
+
+  it('accepts a CFN substrate epoch with no edge fields', () => {
+    const config = applianceBaseConfig.parse({
+      type: ApplianceBaseType.ApplianceAwsPublic,
+      name: 'prod',
+      provisioner: 'cloudformation-v1',
+      stateBackendUrl: 's3://prod-state',
+      aws: {
+        region: 'us-east-1',
+        stateBucketName: 'prod-state',
+        stateBucketArn: 'arn:aws:s3:::prod-state',
+        dataBucketName: 'prod-data',
+        kmsKeyArn: 'arn:aws:kms:us-east-1:123:key/key-1',
+        kmsAliasName: 'alias/appliance/prod-state',
+        ecrRepositoryUrl: '123.dkr.ecr.us-east-1.amazonaws.com/prod',
+        systemRoleArns: {
+          apiServer: 'arn:aws:iam::123:role/api',
+          worker: 'arn:aws:iam::123:role/worker',
+        },
+        systemFunctions: {
+          apiServer: {
+            name: 'prod-api',
+            arn: 'arn:aws:lambda:us-east-1:123:function:prod-api',
+            url: 'https://api.lambda-url.us-east-1.on.aws/',
+          },
+          worker: {
+            name: 'prod-worker',
+            arn: 'arn:aws:lambda:us-east-1:123:function:prod-worker',
+            url: 'https://worker.lambda-url.us-east-1.on.aws/',
+          },
+        },
+      },
+    });
+
+    expect(config.provisioner).toBe('cloudformation-v1');
+    expect(config.aws?.zoneId).toBeUndefined();
+    expect(config.domainName).toBeUndefined();
+    expect(config.aws?.systemFunctions?.worker.name).toBe('prod-worker');
+  });
 });
 
 describe('sanitizeBaseConfigForWire', () => {

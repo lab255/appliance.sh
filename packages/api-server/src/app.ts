@@ -18,6 +18,7 @@ import { signatureAuth } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { mountConsole } from './console-static';
 import { requestLogger, logger } from './logger';
+import { baseConfigSnapshotMiddleware } from './services/base-config.service';
 
 // The api-server as a library. `main.ts` remains the container/CLI
 // entrypoint (`node dist/src/main.js`); this module carries the app
@@ -47,6 +48,10 @@ export function createApp(mode: ApplianceMode = getMode()): Express {
 
   app.use(requestLogger);
   app.use(corsMiddleware);
+  // Resolve one immutable base-config epoch for the complete request.
+  // Every downstream service reads the AsyncLocal snapshot rather than
+  // consulting S3/environment independently mid-flight.
+  app.use(baseConfigSnapshotMiddleware);
 
   app.use(
     express.json({

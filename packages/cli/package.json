@@ -37,6 +37,7 @@
   "devDependencies": {
     "@appliance.sh/bootstrap": "workspace:*",
     "@appliance.sh/helper": "workspace:*",
+    "@appliance.sh/install-aws": "workspace:*",
     "@appliance.sh/sdk": "workspace:*",
     "@inquirer/prompts": "^7.10.1",
     "@modelcontextprotocol/sdk": "^1.29.0",

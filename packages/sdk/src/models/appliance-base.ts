@@ -230,6 +230,10 @@ export const applianceBaseConfig = z
   .object({
     name: z.string(),
     type: z.enum(ApplianceBaseType),
+    // Identifies the control-plane owner for new cloud installations.
+    // Optional for backwards compatibility: existing three-phase
+    // bootstrap installs predate the marker and remain Pulumi-owned.
+    provisioner: z.literal('cloudformation-v1').optional(),
     // Cloud bases (aws-*) require this — Pulumi state backend URL,
     // typically `s3://<bucket>`. Local bases don't run Pulumi, so it
     // is optional at the schema level and enforced by the consumer
@@ -255,12 +259,23 @@ export const applianceBaseConfig = z
     aws: z
       .object({
         region: z.string(),
-        zoneId: z.string(),
+        // Absent during a CloudFormation install's substrate epoch. The
+        // running endpoint adds it after the typed edge deployment has
+        // provisioned/attached Route53.
+        zoneId: z.string().optional(),
         cloudfrontDistributionId: z.string().optional(),
         cloudfrontDistributionDomainName: z.string().optional(),
         edgeRouterRoleArn: z.string().optional(),
+        certificateArn: z.string().optional(),
         dataBucketName: z.string().optional(),
+        stateBucketName: z.string().optional(),
+        stateBucketArn: z.string().optional(),
         ecrRepositoryUrl: z.string().optional(),
+        kmsAliasName: z.string().optional(),
+        // Canonical signed-request authority after the edge epoch.
+        // Until present, installer traffic uses the raw api-server
+        // Function URL from systemFunctions.apiServer.url.
+        apiServerPublicUrl: z.string().url().optional(),
         // KMS key (ARN) used as the Pulumi stack secrets provider for
         // every stack the api-server creates against this base. Replaces
         // PULUMI_CONFIG_PASSPHRASE-based encryption — operator and
@@ -276,6 +291,27 @@ export const applianceBaseConfig = z
           .object({
             apiServer: z.string(),
             worker: z.string(),
+          })
+          .passthrough()
+          .optional(),
+        // CFN-owned system functions. Pulumi receives these as plain
+        // inputs when it creates the edge and must never recreate them.
+        systemFunctions: z
+          .object({
+            apiServer: z
+              .object({
+                name: z.string(),
+                arn: z.string(),
+                url: z.string().url(),
+              })
+              .passthrough(),
+            worker: z
+              .object({
+                name: z.string(),
+                arn: z.string(),
+                url: z.string().url(),
+              })
+              .passthrough(),
           })
           .passthrough()
           .optional(),

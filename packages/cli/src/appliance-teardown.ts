@@ -6,77 +6,90 @@ import { Command, Option } from 'commander';
 import * as prompts from '@inquirer/prompts';
 import chalk from 'chalk';
 import { runTeardown, type BootstrapEvent } from '@appliance.sh/bootstrap';
+import { createAwsCloudLifecycleDependencies, runCloudTeardown } from '@appliance.sh/install-aws';
+import { getActiveProfileOverride } from './utils/credentials.js';
+import { resolveProfileSecret } from './utils/keychain.js';
+import { readProfiles, resolveProfile } from './utils/profile-store.js';
 
 const program = new Command();
 
 program
-  .description('destroy a bootstrap installation (reverses `appliance bootstrap`)')
-  .option('--cache-dir <dir>', 'override ~/.appliance cache directory')
+  .description('destroy a cloud installation using its recorded ownership generation')
+  .option('--cache-dir <dir>', 'override ~/.appliance cache directory (legacy only)')
   .option('--aws-profile <name>', 'AWS profile to authenticate with')
   .addOption(new Option('--profile <name>', 'deprecated alias for --aws-profile').hideHelp())
   .option('-y, --yes', 'skip the confirmation prompt')
   .action(async (options: { cacheDir?: string; awsProfile?: string; profile?: string; yes?: boolean }) => {
-    // `--profile` collides with the credential-profile meaning every
-    // other command uses; `--aws-profile` is the documented flag.
-    if (options.profile) {
-      console.error(chalk.yellow('--profile here means the AWS profile and is deprecated — use --aws-profile.'));
-    }
+    if (options.profile) console.error(chalk.yellow('--profile here is deprecated — use --aws-profile.'));
     const awsProfile = options.awsProfile ?? options.profile;
+    const resolved = resolveProfile(readProfiles(), { override: getActiveProfileOverride() });
+    const profile = resolved?.profile;
+    const isCloudFormation = profile?.installGeneration === 'cloudformation-v1';
 
     if (!options.yes) {
       console.log(
         chalk.yellow(
-          '\n⚠  This will destroy the installer stack and every base AWS resource it created (Route53 zone, ' +
-            'CloudFront distribution, ACM certificate, edge router Lambda, S3 state + data buckets, ECR ' +
-            'repository, IAM roles).'
+          isCloudFormation
+            ? '\n⚠  This destroys the endpoint edge first, then deletes the CloudFormation substrate. State/data buckets and ECR are retained.'
+            : '\n⚠  This runs the deprecated legacy Pulumi teardown. User appliance stacks are not destroyed.'
         )
       );
-      console.log(
-        chalk.yellow(
-          '   User-deployed appliances on this cluster live in a separate Pulumi project and are NOT ' +
-            'destroyed by this command. Run `appliance destroy <project> <env>` for each before tearing ' +
-            'down the cluster, otherwise their AWS resources will be orphaned.\n'
-        )
-      );
-      const ok = await prompts.confirm({ message: 'Proceed with teardown?', default: false });
-      if (!ok) {
-        console.log(chalk.dim('aborted'));
-        process.exit(0);
-      }
+      if (!(await prompts.confirm({ message: 'Proceed with teardown?', default: false }))) return;
     }
 
     try {
-      await runTeardown({
-        cacheDir: options.cacheDir ?? path.join(os.homedir(), '.appliance'),
-        awsProfile,
-        emit: renderEvent,
-      });
-
-      console.log();
-      console.log(chalk.green('Teardown complete'));
-    } catch (e) {
-      console.error();
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(chalk.red('Teardown failed:'), msg);
-      process.exit(1);
+      if (isCloudFormation) {
+        if (!resolved || !profile.cloudFormationStackName || !profile.awsAccountId || !profile.awsRegion)
+          throw new Error('CFN profile is missing stack/account/region metadata');
+        if (profile.stateBackendUrl || profile.lastBootstrapInput)
+          throw new Error('Profile mixes legacy bootstrap metadata with cloudformation-v1; refusing teardown');
+        const secret = resolveProfileSecret(resolved.name, profile);
+        const deps = createAwsCloudLifecycleDependencies({
+          region: profile.awsRegion,
+          awsProfile,
+          log: (message) => console.log(chalk.dim(message)),
+        });
+        const result = await runCloudTeardown(
+          { ...profile, keyId: secret.keyId, secret: secret.secret } as never,
+          deps
+        );
+        console.log(chalk.green('\nCloudFormation teardown complete. Retained resources:'));
+        for (const item of result.retained) console.log(`  ${item.kind}: ${item.value}`);
+        console.log(
+          chalk.yellow(
+            'Delete these manually with AWS tooling only when you no longer need their data or rollback history.'
+          )
+        );
+      } else {
+        if (profile?.installGeneration)
+          throw new Error(`Unknown install generation ${profile.installGeneration}; refusing legacy teardown`);
+        console.log(
+          chalk.yellow(
+            `\n${'deprecated: legacy 3-phase bootstrap; new installs use appliance cloud install (CloudFormation). Supported for 2 releases.'}`
+          )
+        );
+        const secret = resolved && profile ? resolveProfileSecret(resolved.name, profile) : undefined;
+        await runTeardown({
+          cacheDir: options.cacheDir ?? path.join(os.homedir(), '.appliance'),
+          awsProfile,
+          ...(profile && secret
+            ? { cluster: { apiServerUrl: profile.apiUrl, apiKey: { id: secret.keyId, secret: secret.secret } } }
+            : {}),
+          emit: renderEvent,
+        });
+        console.log(chalk.green('\nLegacy teardown complete'));
+      }
+    } catch (error) {
+      console.error(chalk.red('\nTeardown failed:'), error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
     }
   });
 
-function renderEvent(e: BootstrapEvent): void {
-  switch (e.type) {
-    case 'resource': {
-      if (e.op === 'same') return;
-      const glyph = e.op === 'delete' ? '-' : e.op === 'create' ? '+' : '·';
-      const color = e.op === 'delete' ? chalk.red : e.op === 'create' ? chalk.green : chalk.dim;
-      console.log(`  ${color(glyph)} ${e.resourceType.padEnd(44)} ${e.name}`);
-      break;
-    }
-    case 'log':
-      if (e.level === 'warn') console.log(chalk.yellow(e.message));
-      else if (e.level === 'error') console.log(chalk.red(e.message));
-      else console.log(chalk.dim(e.message));
-      break;
-  }
+function renderEvent(event: BootstrapEvent): void {
+  if (event.type === 'log')
+    console.log(event.level === 'warn' ? chalk.yellow(event.message) : chalk.dim(event.message));
+  if (event.type === 'resource' && event.op !== 'same')
+    console.log(`  ${event.op} ${event.resourceType} ${event.name}`);
 }
 
 program.parse(process.argv);

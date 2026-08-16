@@ -23,9 +23,9 @@ internalRoutes.post('/jobs/deployment', async (req, res) => {
   });
 
   try {
-    await executeDeployment(event);
-    logger.info('worker job completed', { requestId: req.requestId, deploymentId: event.deploymentId });
-    res.status(200).json({ ok: true });
+    const outcome = await executeDeployment(event);
+    logger.info('worker job completed', { requestId: req.requestId, deploymentId: event.deploymentId, outcome });
+    res.status(outcome === 'continue' ? 202 : 200).json({ ok: true, outcome });
   } catch (error) {
     logger.error('worker job failed', error, { requestId: req.requestId, deploymentId: event.deploymentId });
     // Status is already persisted by executeDeployment; return 500 so retries can occur if needed.

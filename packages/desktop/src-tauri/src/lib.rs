@@ -75,6 +75,14 @@ struct Cluster {
     // before this field landed, and for clusters added via Connect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_bootstrap_input: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    install_generation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cloud_formation_stack_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    aws_account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    aws_region: Option<String>,
     // Key id last copied into the keychain from the shared profile.
     // Only set on CLI-managed adoptions (the microVM cluster): it
     // lets the recurring sync detect a CLI re-key by comparing files,
@@ -119,6 +127,14 @@ struct AddClusterInput {
     state_backend_url: Option<String>,
     #[serde(default)]
     last_bootstrap_input: Option<serde_json::Value>,
+    #[serde(default)]
+    install_generation: Option<String>,
+    #[serde(default)]
+    cloud_formation_stack_name: Option<String>,
+    #[serde(default)]
+    aws_account_id: Option<String>,
+    #[serde(default)]
+    aws_region: Option<String>,
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, HostError> {
@@ -170,6 +186,14 @@ struct SharedProfileEntry {
     state_backend_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_bootstrap_input: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    install_generation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cloud_formation_stack_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    aws_account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    aws_region: Option<String>,
     /// Which surface created the profile ("desktop" | "cli"). Used by
     /// the desktop's mirror step to only rewrite its own entries and
     /// leave CLI-managed profiles alone.
@@ -317,6 +341,10 @@ fn mirror_to_shared_profiles(cfg: &PersistedConfig) -> Result<(), HostError> {
                 created_at: Some(cluster.created_at.clone()),
                 state_backend_url: cluster.state_backend_url.clone(),
                 last_bootstrap_input: cluster.last_bootstrap_input.clone(),
+                install_generation: cluster.install_generation.clone(),
+                cloud_formation_stack_name: cluster.cloud_formation_stack_name.clone(),
+                aws_account_id: cluster.aws_account_id.clone(),
+                aws_region: cluster.aws_region.clone(),
                 managed: Some("desktop".to_string()),
                 name: Some(cluster.name.clone()),
             },
@@ -424,6 +452,16 @@ fn decide_seed(
             last_bootstrap_input: prev
                 .last_bootstrap_input
                 .or_else(|| cluster.last_bootstrap_input.clone()),
+            install_generation: prev
+                .install_generation
+                .or_else(|| cluster.install_generation.clone()),
+            cloud_formation_stack_name: prev
+                .cloud_formation_stack_name
+                .or_else(|| cluster.cloud_formation_stack_name.clone()),
+            aws_account_id: prev
+                .aws_account_id
+                .or_else(|| cluster.aws_account_id.clone()),
+            aws_region: prev.aws_region.or_else(|| cluster.aws_region.clone()),
             managed: prev.managed.or_else(|| Some("desktop".to_string())),
             name: prev.name.or_else(|| Some(cluster.name.clone())),
         },
@@ -503,6 +541,10 @@ fn ingest_shared_into_legacy(
                 .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
             state_backend_url: entry.state_backend_url.clone(),
             last_bootstrap_input: entry.last_bootstrap_input.clone(),
+            install_generation: entry.install_generation.clone(),
+            cloud_formation_stack_name: entry.cloud_formation_stack_name.clone(),
+            aws_account_id: entry.aws_account_id.clone(),
+            aws_region: entry.aws_region.clone(),
             // The keychain copy below comes from this very entry.
             synced_key_id: Some(entry.key_id.clone()),
         };
@@ -657,6 +699,10 @@ fn migrate_legacy_top_level_url(cfg: &mut PersistedConfig) -> Result<bool, HostE
         created_at: chrono::Utc::now().to_rfc3339(),
         state_backend_url: None,
         last_bootstrap_input: None,
+        install_generation: None,
+        cloud_formation_stack_name: None,
+        aws_account_id: None,
+        aws_region: None,
         synced_key_id: None,
     };
 
@@ -744,6 +790,10 @@ fn add_cluster(app: AppHandle, input: AddClusterInput) -> Result<Cluster, HostEr
         synced_key_id: None,
         state_backend_url: input.state_backend_url,
         last_bootstrap_input: input.last_bootstrap_input,
+        install_generation: input.install_generation,
+        cloud_formation_stack_name: input.cloud_formation_stack_name,
+        aws_account_id: input.aws_account_id,
+        aws_region: input.aws_region,
     };
 
     write_api_key(&cluster_keychain_account(&cluster.id), &input.api_key)?;
@@ -919,7 +969,7 @@ fn parse_ini_sections(text: &str) -> Vec<(String, String)> {
 }
 
 // Resolve the path to the compiled bootstrap sidecar. Dev-only: uses
-// CARGO_MANIFEST_DIR to find the sibling `sidecar/dist/main.cjs`.
+// CARGO_MANIFEST_DIR to find the sibling `sidecar/dist/main.mjs`.
 // Production packaging (bundling the sidecar into the installer as a
 // Tauri resource or externalBin) is tracked in RFC 0017 alongside the
 // downloadable bootstrapper stack.
@@ -928,7 +978,7 @@ fn sidecar_path() -> PathBuf {
         .join("..")
         .join("sidecar")
         .join("dist")
-        .join("main.cjs")
+        .join("main.mjs")
 }
 
 /// Spawn the sidecar with the given JSON input, stream NDJSON events
@@ -2517,7 +2567,11 @@ async fn wait_for_api_server_url(url: &str, max_wait: Duration) -> Result<(), St
 /// the host-side `mint_api_key` but takes the full URL instead of a
 /// loopback port — same `/bootstrap/create-key` route, same payload.
 /// `key_name` is the human label stored with the key.
-async fn mint_api_key_url(api_server_url: &str, token: &str, key_name: &str) -> Result<ApiKey, String> {
+async fn mint_api_key_url(
+    api_server_url: &str,
+    token: &str,
+    key_name: &str,
+) -> Result<ApiKey, String> {
     let url = format!(
         "{}/bootstrap/create-key",
         api_server_url.trim_end_matches('/')
@@ -2874,6 +2928,10 @@ fn sync_microvm_cluster(app: &AppHandle, name: &str) -> Result<(), HostError> {
                     .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
                 state_backend_url: None,
                 last_bootstrap_input: None,
+                install_generation: entry.install_generation.clone(),
+                cloud_formation_stack_name: entry.cloud_formation_stack_name.clone(),
+                aws_account_id: entry.aws_account_id.clone(),
+                aws_region: entry.aws_region.clone(),
                 synced_key_id: Some(entry.key_id.clone()),
             });
             // First-cluster convenience: select it when nothing else
@@ -3396,6 +3454,10 @@ fn persist_vm_profile_entry(
                 created_at: Some(chrono::Utc::now().to_rfc3339()),
                 state_backend_url: prev.state_backend_url,
                 last_bootstrap_input: prev.last_bootstrap_input,
+                install_generation: prev.install_generation,
+                cloud_formation_stack_name: prev.cloud_formation_stack_name,
+                aws_account_id: prev.aws_account_id,
+                aws_region: prev.aws_region,
                 managed: prev.managed.or_else(|| Some("desktop".to_string())),
                 name: prev.name,
             },
@@ -3499,11 +3561,16 @@ async fn microvm_heal_credentials(
             let bin = bin.to_string_lossy().to_string();
             return match run_status_command(&[&bin, "sync-clock", &name]).await {
                 Ok((true, _, _)) => {
-                    eprintln!("microvm heal: pushed host clock into VM '{name}' (cause=clock_skew)");
+                    eprintln!(
+                        "microvm heal: pushed host clock into VM '{name}' (cause=clock_skew)"
+                    );
                     Ok(true)
                 }
                 Ok((false, _, stderr)) => {
-                    eprintln!("microvm heal: clock sync failed for '{name}': {}", stderr.trim());
+                    eprintln!(
+                        "microvm heal: clock sync failed for '{name}': {}",
+                        stderr.trim()
+                    );
                     Ok(false)
                 }
                 Err(e) => {
@@ -3599,7 +3666,10 @@ async fn run_microvm_up(
     // version-pinned release download (dev/debug builds only — release
     // bundles carry no staged binary).
     if let Some(bin) = bundled_api_server_binary(&app) {
-        sidecar = sidecar.env("APPLIANCE_API_SERVER_BINARY", bin.to_string_lossy().to_string());
+        sidecar = sidecar.env(
+            "APPLIANCE_API_SERVER_BINARY",
+            bin.to_string_lossy().to_string(),
+        );
     }
     let (mut rx, _child) = sidecar
         .spawn()
@@ -4551,7 +4621,10 @@ async fn microvm_agent_start(app: AppHandle, input: AgentStartInput) -> Result<(
     // `agent start` can boot the VM itself (ensureSandboxVm) and stage
     // guest artifacts — same repo-built preference as run_microvm_up.
     if let Some(bin) = bundled_api_server_binary(&app) {
-        sidecar = sidecar.env("APPLIANCE_API_SERVER_BINARY", bin.to_string_lossy().to_string());
+        sidecar = sidecar.env(
+            "APPLIANCE_API_SERVER_BINARY",
+            bin.to_string_lossy().to_string(),
+        );
     }
     let (mut rx, _child) = sidecar
         .spawn()
@@ -5820,6 +5893,10 @@ mod tests {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             state_backend_url: None,
             last_bootstrap_input: None,
+            install_generation: None,
+            cloud_formation_stack_name: None,
+            aws_account_id: None,
+            aws_region: None,
             synced_key_id: None,
         }
     }
@@ -5976,7 +6053,13 @@ mod tests {
         // attempt — mint.
         let record = HealRecord::default();
         assert_eq!(
-            decide_heal(&record, Instant::now(), Some("key-dead"), Some("key-dead"), None),
+            decide_heal(
+                &record,
+                Instant::now(),
+                Some("key-dead"),
+                Some("key-dead"),
+                None
+            ),
             HealDecision::Proceed
         );
     }
@@ -6004,7 +6087,13 @@ mod tests {
             last_clock_sync: None,
         };
         assert_eq!(
-            decide_heal(&record, Instant::now(), Some("key-old"), Some("key-new"), None),
+            decide_heal(
+                &record,
+                Instant::now(),
+                Some("key-old"),
+                Some("key-new"),
+                None
+            ),
             HealDecision::AlreadyRekeyed
         );
     }
@@ -6137,7 +6226,13 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            decide_heal(&record, now, Some("key-dead"), Some("key-dead"), Some("unknown_key")),
+            decide_heal(
+                &record,
+                now,
+                Some("key-dead"),
+                Some("key-dead"),
+                Some("unknown_key")
+            ),
             HealDecision::Proceed
         );
     }

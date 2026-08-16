@@ -1,6 +1,6 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
-import { applianceBaseConfig, BuildType, isKubernetesBase } from '@appliance.sh/sdk';
+import { BuildType, isKubernetesBase } from '@appliance.sh/sdk';
 import type { ApplianceBaseConfig, ApplianceContainer, ApplianceFrameworkApp } from '@appliance.sh/sdk';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -17,6 +17,7 @@ import {
   resolveKubernetesUpload,
 } from './image-build.service';
 import { logger } from '../logger';
+import { requireBaseConfigSnapshot } from './base-config.service';
 
 export interface ResolvedBuild {
   imageUri?: string;
@@ -49,9 +50,7 @@ export interface ResolvedBuild {
 }
 
 function getBaseConfig(): ApplianceBaseConfig {
-  const raw = process.env.APPLIANCE_BASE_CONFIG;
-  if (!raw) throw new Error('APPLIANCE_BASE_CONFIG not set');
-  return applianceBaseConfig.parse(JSON.parse(raw));
+  return requireBaseConfigSnapshot();
 }
 
 const LAMBDA_ADAPTER_LAYER: Record<string, string> = {

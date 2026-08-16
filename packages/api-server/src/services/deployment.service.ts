@@ -81,6 +81,7 @@ export class DeploymentService {
       projectId: environment.projectId,
       status: DeploymentStatus.Pending,
       startedAt: now,
+      ...(effectiveInput.target?.type === 'edge' ? { edgeConvergence: { state: 'running' as const, attempt: 1 } } : {}),
     };
 
     await storage.set(COLLECTION, deployment.id, deployment);
@@ -114,6 +115,7 @@ export class DeploymentService {
       // request context) so the inline/background executor re-establishes
       // the same scope. Undefined in single-tenant mode.
       tenantId: getCurrentTenant(),
+      ...(effectiveInput.target?.type === 'edge' ? { edgeAttempt: 1 } : {}),
     };
 
     try {
@@ -189,6 +191,72 @@ export class DeploymentService {
     }
   }
 
+  /** Advance one persisted edge continuation lease and dispatch its next bounded worker pass. */
+  async continueEdge(id: string, caller: SigningCredentials): Promise<Deployment | null> {
+    const storage = getStorageService();
+    const versioned = await storage.getVersioned<Deployment>(COLLECTION, id);
+    if (!versioned) return null;
+    const deployment = versioned.value;
+    if (deployment.target?.type !== 'edge') throw new Error('Only edge deployments can be continued');
+    if (deployment.status !== DeploymentStatus.InProgress || deployment.edgeConvergence?.state !== 'ready') {
+      return deployment;
+    }
+    const environment = await environmentService.get(deployment.environmentId);
+    if (!environment) throw new Error(`Environment not found: ${deployment.environmentId}`);
+    const project = await projectService.get(environment.projectId);
+    if (!project) throw new Error(`Project not found: ${environment.projectId}`);
+
+    const attempt = deployment.edgeConvergence.attempt + 1;
+    const leased: Deployment = {
+      ...deployment,
+      edgeConvergence: { state: 'running', attempt },
+      message: `Edge convergence pass ${attempt} dispatched…`,
+    };
+    const wonLease = await storage.setIfVersion(COLLECTION, leased.id, leased, versioned.version);
+    if (!wonLease) return storage.get<Deployment>(COLLECTION, id);
+    const event: WorkerEvent = {
+      deploymentId: leased.id,
+      input: {
+        environmentId: leased.environmentId,
+        action: leased.action,
+        target: leased.target,
+      },
+      metadata: {
+        projectId: project.id,
+        projectName: project.name,
+        environmentId: environment.id,
+        environmentName: environment.name,
+        deploymentId: leased.id,
+        stackName: environment.stackName,
+      },
+      tenantId: getCurrentTenant(),
+      edgeAttempt: attempt,
+    };
+    try {
+      await this.dispatch(event, caller);
+    } catch (error) {
+      const latest = await storage.getVersioned<Deployment>(COLLECTION, leased.id);
+      if (
+        latest?.value.status === DeploymentStatus.InProgress &&
+        latest.value.edgeConvergence?.state === 'running' &&
+        latest.value.edgeConvergence.attempt === attempt
+      ) {
+        await storage.setIfVersion(
+          COLLECTION,
+          leased.id,
+          {
+            ...latest.value,
+            edgeConvergence: { state: 'ready', attempt },
+            message: `Edge continuation dispatch failed and is safe to retry: ${error instanceof Error ? error.message : String(error)}`,
+          },
+          latest.version
+        );
+      }
+      throw error;
+    }
+    return leased;
+  }
+
   async get(id: string): Promise<Deployment | null> {
     const storage = getStorageService();
     return storage.get<Deployment>(COLLECTION, id);
@@ -235,6 +303,18 @@ export class DeploymentService {
       await storage.set(COLLECTION, deployment.id, deployment);
       await environmentService.updateStatus(deployment.environmentId, EnvironmentStatus.Failed);
       logger.warn('deployment force-cancelled', { deploymentId: deployment.id });
+      return deployment;
+    }
+
+    // No worker is active between bounded edge passes, so cooperative
+    // cancellation can settle immediately instead of waiting for a poller
+    // that does not currently exist.
+    if (deployment.target?.type === 'edge' && deployment.edgeConvergence?.state === 'ready') {
+      deployment.status = DeploymentStatus.Cancelled;
+      deployment.completedAt = new Date().toISOString();
+      deployment.message = 'Edge convergence cancelled between worker invocations.';
+      await storage.set(COLLECTION, deployment.id, deployment);
+      await environmentService.updateStatus(deployment.environmentId, EnvironmentStatus.Failed);
       return deployment;
     }
 

@@ -3,6 +3,8 @@ import * as path from 'node:path';
 import * as auto from '@pulumi/pulumi/automation';
 import type { BootstrapEvent } from './types';
 import { awsCredsFromEnv, forwardPulumiEvent, homeEnv } from './phases/helpers';
+import { emitLegacyDeprecation } from './deprecation';
+import { verifyLegacyCluster, type ClusterRef } from './cluster-verify';
 
 export interface TeardownOptions {
   /** Cache dir that holds the local Pulumi state + promoted-backend marker. */
@@ -11,6 +13,8 @@ export interface TeardownOptions {
   awsProfile?: string;
   /** Stream of progress events. */
   emit?: (event: BootstrapEvent) => void;
+  /** Endpoint ownership check. Generation-aware callers must supply this. */
+  cluster?: ClusterRef;
 }
 
 const PROJECT_NAME = 'appliance-installer';
@@ -43,6 +47,8 @@ interface PromotedConfig {
  */
 export async function runTeardown(opts: TeardownOptions): Promise<void> {
   const emit = opts.emit ?? (() => {});
+  emitLegacyDeprecation(emit);
+  await verifyLegacyCluster(opts.cluster);
   const localStateDir = path.join(opts.cacheDir, 'pulumi-state');
   const workDir = path.join(opts.cacheDir, 'pulumi-workdir');
   const pulumiHome = path.join(opts.cacheDir, 'pulumi-home');
