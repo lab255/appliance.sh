@@ -94,6 +94,31 @@ export interface DeploymentHealth {
   usage?: ResourceUsage;
 }
 
+/** The method surface the api-server consumes from a container-runtime
+ * deployment backend. */
+export interface ContainerDeploymentBackend {
+  deploy(
+    stackName: string,
+    metadata: LocalDeploymentMetadata,
+    build: LocalResolvedBuild
+  ): Promise<LocalDeploymentResult>;
+  destroy(stackName: string): Promise<LocalDeploymentResult>;
+  refresh(stackName: string): Promise<LocalDeploymentResult>;
+  getDeploymentImage(stackName: string): Promise<string | undefined>;
+  getDeploymentEnv(stackName: string): Promise<Record<string, string> | undefined>;
+  getDeploymentHealth(stackName: string): Promise<DeploymentHealth>;
+  listWorkloads(opts?: { namespace?: string; labelSelector?: string }): Promise<Workloads>;
+  getPodLogs(
+    podName: string,
+    opts?: { container?: string; tailLines?: number; namespace?: string; sinceSeconds?: number }
+  ): Promise<string>;
+  streamPodLogs(
+    podName: string,
+    destination: Writable,
+    opts?: { container?: string; tailLines?: number; namespace?: string; sinceSeconds?: number }
+  ): Promise<AbortController>;
+}
+
 interface ClusterConfig {
   clusterName: string;
   namespace: string;

@@ -14,6 +14,3 @@ export * from './appliance-infra';
 
 // Local Kubernetes runtime
 export * from './local';
-
-// Plain-Docker runtime (the single-binary local daemon)
-export * from './docker';
