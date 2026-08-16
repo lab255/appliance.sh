@@ -59,7 +59,7 @@ program.description('manage the microVM runtime (isolated VM engine, no docker r
 
 program
   .command('up')
-  .description('boot the microVM, bootstrap the in-VM api-server, and log in')
+  .description('boot the fast core sandbox (add --cluster to provision the lazy deployment layer)')
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
   .option(
     '--image <ref>',
@@ -68,17 +68,33 @@ program
   .option('--timeout <seconds>', 'seconds to wait for the platform to be ready', '900')
   .option('--cpus <n>', 'virtual CPUs for the VM (persisted; takes effect on next boot)', parsePositiveInt)
   .option('--memory <MiB>', 'guest memory in MiB (persisted; takes effect on next boot)', parsePositiveInt)
-  .action(async (opts: { name: string; image?: string; timeout: string; cpus?: number; memory?: number }) => {
-    try {
-      await runUp(opts.name, opts.image, Number.parseInt(opts.timeout, 10), {
-        cpus: opts.cpus,
-        memory: opts.memory,
-      });
-    } catch (err) {
-      console.error(chalk.red(err instanceof Error ? err.message : String(err)));
-      process.exit(1);
+  .option('--cluster', 'provision k3s, BuildKit, registry, api-server, and the local profile', false)
+  .action(
+    async (opts: {
+      name: string;
+      image?: string;
+      timeout: string;
+      cpus?: number;
+      memory?: number;
+      cluster: boolean;
+    }) => {
+      try {
+        await runUp(
+          opts.name,
+          opts.image,
+          Number.parseInt(opts.timeout, 10),
+          {
+            cpus: opts.cpus,
+            memory: opts.memory,
+          },
+          { cluster: opts.cluster }
+        );
+      } catch (err) {
+        console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+        process.exit(1);
+      }
     }
-  });
+  );
 
 /** Commander option parser: a positive integer, or a clear failure.
  *  Used for --cpus / --memory so a bad value is rejected host-side

@@ -19,8 +19,8 @@ import chalk from 'chalk';
 //
 // Bare `appliance init` runs LOCAL microVM onboarding (the default):
 //   doctor preflight + safe auto-fixes  →  boot the default microVM and
-//   adopt its credential profile (the shared runUp)  →  guide the first
-//   deploy. It is idempotent: a re-run keeps existing credentials.
+//   reach core sandbox readiness (the shared runUp)  →  guide the first
+//   deploy, which lazily provisions the cluster and local profile.
 //
 // The historical remote/cloud (BYO api-server) credential setup is
 // preserved behind `appliance init --remote <url>` (and `appliance
@@ -121,7 +121,7 @@ async function runLocalInit(opts: LocalInitOptions): Promise<void> {
   //    binary is already signed (no-op); only a repo build is unsigned.
   await maybeSignDevBinary({ yes: opts.yes, isTTY });
 
-  // 4. Boot + adopt — the same runUp `appliance vm up` uses, with its
+  // 4. Boot the core sandbox — the same runUp `appliance vm up` uses, with its
   //    closing deploy hint suppressed so the hand-off below is the single
   //    next command. Idempotent: re-running keeps existing credentials
   //    when they still authenticate.
@@ -252,8 +252,8 @@ function detectTargetName(cwd: string): string {
 }
 
 async function handOff(ctx: { name: string; deploy: boolean; yes: boolean; isTTY: boolean }): Promise<void> {
-  // runUp already made the VM's profile active, so the suggested
-  // command doesn't need a --profile flag.
+  // The deploy subprocess pins the VM's future profile explicitly; its
+  // lazy cluster bring-up creates and activates that profile.
   const profile = profileForVm(ctx.name);
   const deployCmd = 'appliance deploy';
   const deployable = isDeployableDir(process.cwd());

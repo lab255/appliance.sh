@@ -108,7 +108,7 @@ impl VmBackend for WslBackend {
         crate::bringup::set(&paths.dir, crate::bringup::Phase::Media, None);
         // The pinned k3s binary is copied into the distro over drvfs and
         // re-verified guest-side. Agent-only VMs run no k3s at all.
-        let k3s: Option<(PathBuf, &'static str)> = if spec.agent_only {
+        let k3s: Option<(PathBuf, &'static str)> = if spec.agent_only || !spec.cluster {
             None
         } else {
             Some(crate::guest::ensure_k3s()?)
@@ -131,7 +131,7 @@ impl VmBackend for WslBackend {
         };
         // CLI-staged api-server artifacts + the VM's bootstrap token
         // (generated once, persisted host-side for the CLI to mint keys).
-        let apiserver = if spec.agent_only {
+        let apiserver = if spec.agent_only || !spec.cluster {
             None
         } else {
             crate::guest::apiserver_assets()
@@ -156,6 +156,7 @@ impl VmBackend for WslBackend {
         std::fs::write(paths.console_log(), b"")?;
         let _ = std::fs::remove_file(paths.kubeconfig());
         let _ = std::fs::remove_file(paths.agent_ready());
+        let _ = std::fs::remove_file(paths.core_ready());
         let _ = std::fs::remove_file(paths.guest_ip());
         let _ = std::fs::remove_file(paths.gateway_ip());
         let _ = std::fs::remove_file(paths.stop_request());
@@ -643,18 +644,20 @@ fn build_bootstrap(
         .map(|p| crate::images::content_sha256_hex(p.as_bytes())[..16].to_string())
         .unwrap_or_default();
 
-    let k3s_block = match k3s {
-        // Agent-only: no k3s at all.
-        None => WSL_AGENT_HANDOFF.to_string(),
-        Some((path, sha)) => format!("{WSL_K3S_COPY}{}", crate::guest::K3S_COMMON)
+    let k3s_block = if spec.agent_only {
+        WSL_AGENT_HANDOFF.to_string()
+    } else if let Some((path, sha)) = k3s {
+        format!("{WSL_K3S_COPY}{}", crate::guest::K3S_COMMON)
             .replace("__K3S_WIN_PATH__", &shell_squote(strip_verbatim(&path.to_string_lossy())))
-            .replace("__K3S_SHA256__", sha),
+            .replace("__K3S_SHA256__", sha)
+    } else {
+        String::new()
     };
     // The api-server guest binary rides k3s VMs whose assets were
     // staged. Same substitution rules as the k3s block: injected before
     // the port markers so its nested markers expand too.
-    let apiserver_block = match (spec.agent_only, apiserver) {
-        (false, Some(assets)) => format!("{WSL_APISERVER_COPY}{}", crate::guest::APISERVER_COMMON)
+    let apiserver_block = match (spec.cluster, spec.agent_only, apiserver) {
+        (true, false, Some(assets)) => format!("{WSL_APISERVER_COPY}{}", crate::guest::APISERVER_COMMON)
             .replace(
                 "__APISERVER_WIN_PATH__",
                 &shell_squote(strip_verbatim(&assets.binary.to_string_lossy())),
@@ -722,7 +725,7 @@ fn build_bootstrap(
         // __REGISTRY_*__/__BUILDKITD_GUEST_PORT__ markers expand too.
         .replace(
             "__BUILDKIT_PROVISION__",
-            if spec.agent_only { "" } else { crate::guest::BUILDKIT_PROVISION },
+            if spec.cluster && !spec.agent_only { crate::guest::BUILDKIT_PROVISION } else { "" },
         )
         .replace("__EGRESS_CA__", &ca_block)
         // No virtio-blk media inside a WSL distro: leave the airgap
@@ -771,7 +774,7 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
         )
     };
 
-    if !spec.agent_only {
+    if spec.cluster && !spec.agent_only {
         crate::net::spawn_proxy(spec.api_port, SocketAddr::new(guest_ip, 6443))
             .map_err(|e| anyhow::anyhow!("{}\n{e:#}", bind_hint(spec.api_port, "kubernetes api")))?;
         crate::net::spawn_proxy(spec.host_port, SocketAddr::new(guest_ip, 80))
@@ -799,6 +802,23 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
             spec.buildkit_port,
             crate::guest::BUILDKITD_GUEST_PORT
         ));
+    }
+
+    let core_deadline = Instant::now() + Duration::from_secs(120);
+    loop {
+        if crate::guest_exec::run_wrapped(&spec.name, "true").is_ok() {
+            break;
+        }
+        if Instant::now() >= core_deadline {
+            bail!("guest core shell did not answer within 120s");
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    std::fs::write(vm_dir.join("core-ready"), b"core-ready\n")?;
+
+    if !spec.cluster && !spec.agent_only {
+        crate::bringup::set(vm_dir, crate::bringup::Phase::Ready, None);
+        return Ok(());
     }
 
     if spec.agent_only {

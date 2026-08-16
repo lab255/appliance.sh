@@ -86,6 +86,7 @@ impl VmBackend for VzBackend {
             spec.docker,
             spec.egress_port,
             spec.agent_only,
+            spec.cluster,
             spec.host_port,
         )?;
 
@@ -125,7 +126,7 @@ impl VmBackend for VzBackend {
         // keeps priming the shared cache in the background for the next
         // boot (its .partial→rename staging is already crash-atomic).
         // Cache-warm boots take the fast path through the same bound.
-        let platform_images: Option<std::path::PathBuf> = if spec.agent_only {
+        let platform_images: Option<std::path::PathBuf> = if spec.agent_only || !spec.cluster {
             None
         } else {
             if !crate::images::k3s_airgap_images_cached() {
@@ -170,6 +171,7 @@ impl VmBackend for VzBackend {
         // Quinn gap #4c: clear a prior boot's agent-ready marker too, so an
         // agent-only `up` never returns on a stale readiness file.
         let _ = std::fs::remove_file(paths.agent_ready());
+        let _ = std::fs::remove_file(paths.core_ready());
         let _ = std::fs::remove_file(paths.guest_ip());
 
         let built = build_configuration(

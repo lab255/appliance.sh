@@ -47,7 +47,7 @@ const MAX_MINT_ATTEMPTS: u32 = 3;
 /// VMs (no api-server) and hosts without staged api-server artifacts
 /// (the guest never started one).
 pub fn spawn_bringup_mint(spec: &VmSpec) {
-    if spec.agent_only || crate::guest::apiserver_assets().is_none() {
+    if spec.agent_only || !spec.cluster || crate::guest::apiserver_assets().is_none() {
         return;
     }
     let name = spec.name.clone();

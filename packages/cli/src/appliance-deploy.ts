@@ -3,11 +3,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createApplianceClient, DeploymentStatus } from '@appliance.sh/sdk';
 import { loadCredentials } from './utils/credentials.js';
+import { getActiveProfileOverride, setActiveProfileOverride } from './utils/credentials.js';
 import { attachProfileOption } from './utils/profile-flag.js';
 import { registerManifestOptions } from './utils/common.js';
 import { DEFAULT_BUILD_OUTPUT, isPrintedError, runDeploy } from './utils/deploy-core.js';
 import { printCliError } from './utils/errors.js';
 import chalk from 'chalk';
+import { ensureLocalRuntime, LEGACY_MICROVM_PROFILE, LOCAL_PROFILE } from './utils/microvm-up.js';
+import { readProfiles } from './utils/profile-store.js';
 
 // Thin commander wrapper around the shared deploy engine in
 // utils/deploy-core.ts. In a stack folder (appliance.stack.json) a
@@ -72,6 +75,17 @@ registerManifestOptions(program)
     if (opts.imageUri && opts.build !== DEFAULT_BUILD_OUTPUT) {
       console.error(chalk.red('Provide either --image-uri or --build, not both.'));
       process.exit(1);
+    }
+
+    // The local control plane is a lazy VM layer. A fresh deploy, or an
+    // explicitly selected local profile, promotes the core VM through a
+    // full --cluster re-up before any credential/client resolution.
+    // Explicit/active remote profiles remain untouched.
+    const profiles = readProfiles();
+    const selectedProfile = getActiveProfileOverride() ?? process.env.APPLIANCE_PROFILE ?? profiles.activeProfile;
+    if (!selectedProfile || selectedProfile === LOCAL_PROFILE || selectedProfile === LEGACY_MICROVM_PROFILE) {
+      await ensureLocalRuntime();
+      setActiveProfileOverride(LOCAL_PROFILE);
     }
 
     await maybeDeployStack({

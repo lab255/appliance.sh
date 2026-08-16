@@ -95,6 +95,14 @@ pub struct VmSpec {
     /// it false; one-way, like `dev`/`docker`.
     #[serde(default)]
     pub agent_only: bool,
+    /// Whether this VM's boot media provisions the lazy Kubernetes
+    /// platform layer (k3s, BuildKit, registry, and api-server). Fresh
+    /// VMs start core-only; `appliance-vm up --cluster` promotes this
+    /// one-way and performs a full reboot with newly assembled media.
+    /// Field-less legacy specs adopt the new core-first default too;
+    /// their first deploy performs the explicit one-way promotion.
+    #[serde(default)]
+    pub cluster: bool,
     /// Container ports published from the in-guest Docker engine, each
     /// mapped to a host loopback port drawn from this VM's allocated
     /// block (see `allocate_published_port`). `host_services` reads this
@@ -190,6 +198,7 @@ impl VmSpec {
             dev_mount: None,
             docker: false,
             agent_only: false,
+            cluster: false,
             published: Vec::new(),
             net_link: NetLink::Nat,
         }
@@ -354,6 +363,11 @@ impl VmPaths {
     pub fn kubeconfig(&self) -> PathBuf {
         self.dir.join("kubeconfig.yaml")
     }
+    /// The independent core-ready marker written once the guest's
+    /// k3s-independent vsock shell answers a trivial command.
+    pub fn core_ready(&self) -> PathBuf {
+        self.dir.join("core-ready")
+    }
     /// The readiness marker an agent-only VM writes once its agent
     /// runtime (vsock shell + Node) answers — the sibling of
     /// `kubeconfig()` that `up`/`status`/`list` poll on for an agent-only
@@ -408,6 +422,10 @@ pub struct VmStatus {
     /// coming up or has failed. Lets the UI tell "VM up, cluster
     /// starting" from "ready".
     pub cluster_ready: bool,
+    /// True once the k3s-independent vsock shell primitive answers.
+    pub core_ready: bool,
+    /// Whether the persisted spec includes the lazy cluster layer.
+    pub cluster: bool,
     /// The current bring-up stage while a VM is starting (media, booting,
     /// network, cluster + its sub-phases, ready, failed). `None` when not
     /// running.
@@ -649,5 +667,19 @@ mod tests {
         let paths = VmPaths::for_name("x");
         assert_eq!(paths.agent_ready().parent(), paths.kubeconfig().parent());
         assert_eq!(paths.agent_ready().file_name().unwrap(), "agent-ready");
+    }
+
+    #[test]
+    fn core_ready_marker_is_a_sibling_of_other_readiness_markers() {
+        let paths = VmPaths::for_name("marker-test");
+        assert_eq!(paths.core_ready(), paths.dir.join("core-ready"));
+    }
+
+    #[test]
+    fn fresh_and_fieldless_specs_default_to_core_only() {
+        assert!(!VmSpec::defaults("fresh").cluster);
+        let legacy = r#"{"name":"x","cpus":2,"memoryMib":4096,"diskGib":10,"image":"alpine-3.21.3","cmdline":"console=hvc0","mac":"02:00:00:00:00:01","hostPort":8081,"apiPort":6443}"#;
+        let parsed: VmSpec = serde_json::from_str(legacy).unwrap();
+        assert!(!parsed.cluster, "pre-field specs adopt the core-first default");
     }
 }

@@ -12,13 +12,11 @@ import { ensureApiServerArtifacts } from './api-server-artifact.js';
 
 // Shared microVM bring-up core.
 //
-// `runUp` stages the api-server guest artifacts, boots the microVM
-// (whose boot media embeds them — the control plane runs as a plain
-// binary inside the guest, no docker anywhere), waits for the
-// ingress-routed api-server, and adopts the VM's credential profile.
-// It is the single orchestration both `appliance vm up` (the
-// lower-level multi-VM command) and `appliance init` (the one-tap
-// onboarding front door) call, so the two can never drift. The
+// `runUp` boots the fast core sandbox by default. Its explicit cluster
+// mode stages the api-server artifacts before the engine performs a
+// full boot-media re-up, then waits for and adopts the local profile.
+// The lazy cluster mode is used by first deploy / `--cluster`; ordinary
+// `appliance vm up` and `appliance init` stop at core readiness. The
 // lower-level VM primitives it leans on — binary resolution, the
 // spec-derived ports, the per-VM profile name — live here too so
 // `appliance-vm.ts` and `appliance-init.ts` share one copy.
@@ -175,6 +173,8 @@ export interface EngineVmStatus {
   pid?: number;
   backend: string;
   clusterReady: boolean;
+  coreReady?: boolean;
+  cluster?: boolean;
   phase?: string;
   phaseDetail?: string;
   /** Backend availability error (WSL broken, no entitlement, …). */
@@ -210,6 +210,14 @@ export function renderVmStatus(s: EngineVmStatus): string[] {
   }
 
   const pid = s.pid !== undefined ? ` (pid ${s.pid})` : '';
+  if (s.cluster === false && s.coreReady) {
+    lines.push(title(`${chalk.green('running')}${pid} — core sandbox ready`));
+    lines.push(`  Shell: ${chalk.cyan('appliance vm shell')}`);
+    lines.push(`  ${chalk.dim('Next:')} appliance deploy — the cluster layer is provisioned lazily on first deploy.`);
+    if (s.dev) lines.push(`  Dev environment: yes (\`appliance vm shell\` lands in the persistent workspace)`);
+    if (s.message) lines.push(chalk.yellow(`  Warning: ${s.message.split('\n')[0]}`));
+    return lines;
+  }
   if (!s.clusterReady) {
     const phase = s.phase ? `${s.phase}${s.phaseDetail ? `: ${s.phaseDetail}` : ''}` : 'starting';
     lines.push(title(`${chalk.cyan('starting')}${pid} — ${phase}`));
@@ -306,7 +314,7 @@ export function deleteVmAndProfile(name: string): number {
 }
 
 /**
- * Boot (or reuse) the microVM and wait until its cluster endpoint and
+ * Promote, boot (or reuse) the microVM and wait until its cluster endpoint and
  * in-VM registry answer. Does NOT deliver or bootstrap the in-cluster
  * api-server — callers that run the control plane host-side
  * (`appliance server start`, `appliance dev`) stop here; `runUp`
@@ -333,7 +341,7 @@ export async function ensureVmRuntime(
   // survive restarts; omitting them keeps the VM's current sizing.
   // `--dev` provisions the VM as a development environment (persisted
   // one-way, so a later plain `up` keeps it a dev VM).
-  const upArgs = ['up', name, '--timeout', String(timeout)];
+  const upArgs = ['up', name, '--timeout', String(timeout), '--cluster'];
   if (resources.cpus !== undefined) upArgs.push('--cpus', String(resources.cpus));
   if (resources.memory !== undefined) upArgs.push('--memory', String(resources.memory));
   if (resources.dev) upArgs.push('--dev');
@@ -380,8 +388,30 @@ export async function runUp(
   // `showDeployHint` controls the banner's closing `Deploy:` line.
   // `appliance vm up` leaves it on; `appliance init` suppresses it so its
   // own hand-off prints the single, unambiguous next command.
-  opts: { showDeployHint?: boolean } = {}
+  opts: { showDeployHint?: boolean; cluster?: boolean } = {}
 ): Promise<void> {
+  if (!opts.cluster) {
+    if (imageOverride) {
+      console.log(chalk.yellow('--image is no longer used: the microVM boots its core sandbox directly.'));
+    }
+    const engineBin = resolveVmBinary();
+    if (engineBin) console.log(chalk.dim(`engine: ${engineBin}`));
+    const upArgs = ['up', name, '--timeout', String(timeout)];
+    if (resources.cpus !== undefined) upArgs.push('--cpus', String(resources.cpus));
+    if (resources.memory !== undefined) upArgs.push('--memory', String(resources.memory));
+    if (resources.dev) upArgs.push('--dev');
+    if (resources.mount) upArgs.push('--mount', path.resolve(resources.mount));
+    const status = runVm(upArgs);
+    if (status !== 0) {
+      throw new Error(`microVM '${name}' failed to bring up its core sandbox (appliance-vm exited ${status}).`);
+    }
+    console.log();
+    console.log(chalk.green(`MicroVM '${name}' core sandbox is ready.`));
+    console.log(`  Shell:       appliance vm shell${name === DEFAULT_VM_NAME ? '' : ` --name ${name}`}`);
+    console.log(`  Cluster:     lazy (first appliance deploy, or appliance vm up --cluster)`);
+    return;
+  }
+
   const profile = profileForVm(name);
   if (imageOverride) {
     console.log(
@@ -573,7 +603,7 @@ function persistVmCredentials(
 export async function ensureLocalRuntime(
   resources: { cpus?: number; memory?: number; dev?: boolean; mount?: string } = {}
 ): Promise<void> {
-  await runUp(DEFAULT_VM_NAME, undefined, 900, resources, { showDeployHint: false });
+  await runUp(DEFAULT_VM_NAME, undefined, 900, resources, { showDeployHint: false, cluster: true });
 }
 
 /**

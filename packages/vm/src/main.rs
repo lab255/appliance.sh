@@ -99,8 +99,8 @@ enum Cmd {
         name: String,
     },
     /// Start the VM and wait until its platform is actually ready:
-    /// kubeconfig fetched, the in-VM registry answering, and (when
-    /// staged) the api-server reachable through its ingress route.
+    /// the core vsock shell by default, or the full lazy platform with
+    /// --cluster.
     Up {
         #[arg(default_value = DEFAULT_VM)]
         name: String,
@@ -137,6 +137,11 @@ enum Cmd {
         /// Persisted; applies on the next boot; never silently turned off.
         #[arg(long, default_value_t = false)]
         docker: bool,
+        /// Provision the lazy k3s/BuildKit/registry/api-server layer.
+        /// Persisted one-way; promoting a running core VM performs a
+        /// full stop/re-up so current boot media is rebuilt.
+        #[arg(long, default_value_t = false, conflicts_with = "agent_only")]
+        cluster: bool,
         /// Provision this VM as an agent-only sandbox: skip the k3s control
         /// plane entirely and gate readiness on the agent runtime (the
         /// vsock shell + Node) instead of kubeconfig. Implies --dev (the
@@ -553,6 +558,7 @@ fn run() -> Result<()> {
             mount,
             no_mount,
             docker,
+            cluster,
             agent_only,
             time_budget,
         } => {
@@ -578,6 +584,17 @@ fn run() -> Result<()> {
             if docker {
                 spec.docker = true;
             }
+            // `--cluster` is a one-way promotion like `--docker`, but it
+            // must take effect immediately through a full re-up: the
+            // current CLI's staged api-server is part of boot media and
+            // must never be injected into a running guest.
+            let was_cluster = spec.cluster;
+            if cluster {
+                if spec.agent_only {
+                    bail!("an agent-only VM cannot be promoted to --cluster");
+                }
+                spec.cluster = true;
+            }
             // `--agent-only` is a one-way toggle as well, and it carries the
             // invariant `agent_only ⟹ dev`: the agent-handoff readiness gate
             // waits on the dev toolchain's .dev-ready, so force dev on too.
@@ -601,8 +618,9 @@ fn run() -> Result<()> {
             };
             let dev_enabled = spec.dev && !was_dev;
             let docker_enabled = spec.docker && !was_docker;
+            let cluster_enabled = spec.cluster && !was_cluster;
             let agent_only_enabled = spec.agent_only && !was_agent_only;
-            if resized || dev_enabled || mount_changed || docker_enabled || agent_only_enabled {
+            if resized || dev_enabled || mount_changed || docker_enabled || cluster_enabled || agent_only_enabled {
                 store::save_spec(&spec)?;
                 if store::read_live_pid(&name).is_some() {
                     if resized {
@@ -621,6 +639,9 @@ fn run() -> Result<()> {
                             "note: VM '{name}' is already running — docker provisioning applies on its next boot"
                         );
                     }
+                    if cluster_enabled {
+                        println!("promoting VM '{name}' to the lazy cluster layer — performing a full re-up");
+                    }
                     if agent_only_enabled {
                         println!(
                             "note: VM '{name}' is already running — agent-only mode applies on its next boot"
@@ -633,14 +654,28 @@ fn run() -> Result<()> {
                     }
                 }
             }
+            if cluster_enabled {
+                if let Some(pid) = store::read_live_pid(&name) {
+                    request_stop(&name, pid)?;
+                    let stop_deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                    while store::read_live_pid(&name).is_some() {
+                        if std::time::Instant::now() >= stop_deadline {
+                            bail!("timed out stopping VM '{name}' for the --cluster re-up");
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                    }
+                }
+            }
             let paths = VmPaths::for_name(&name);
             // The readiness marker `up` polls on is spec-keyed: an
             // agent-only VM has no k3s kubeconfig — it answers with the
             // agent-ready sentinel marker instead.
             let ready_marker = if spec.agent_only {
                 paths.agent_ready()
-            } else {
+            } else if spec.cluster {
                 paths.kubeconfig()
+            } else {
+                paths.core_ready()
             };
             if store::read_live_pid(&name).is_none() {
                 // Clear stale readiness markers from a previous boot
@@ -650,6 +685,7 @@ fn run() -> Result<()> {
                 // mode flip, must not leave a marker that fakes readiness.
                 let _ = std::fs::remove_file(paths.kubeconfig());
                 let _ = std::fs::remove_file(paths.agent_ready());
+                let _ = std::fs::remove_file(paths.core_ready());
                 let _ = std::fs::remove_file(paths.guest_ip());
                 bringup::clear(&paths.dir);
                 let child = spawn_host_process(&name, timeout)?;
@@ -755,6 +791,13 @@ fn run() -> Result<()> {
                 check_time_budget(time_budget)?;
                 return Ok(());
             }
+            if !spec.cluster {
+                println!("VM '{name}' is up (core sandbox ready)");
+                println!("  shell: appliance-vm shell {name}");
+                println!("  cluster: lazy (run again with --cluster, or deploy with the Appliance CLI)");
+                check_time_budget(time_budget)?;
+                return Ok(());
+            }
             net::wait_tcp(
                 std::net::SocketAddr::from(([127, 0, 0, 1], spec.api_port)),
                 std::time::Duration::from_secs(60),
@@ -833,9 +876,11 @@ fn run() -> Result<()> {
             // kubeconfig.
             let ready_marker = match spec.as_ref() {
                 Some(s) if s.agent_only => paths.agent_ready(),
-                _ => paths.kubeconfig(),
+                Some(s) if s.cluster => paths.kubeconfig(),
+                _ => paths.core_ready(),
             };
             let cluster_ready = pid.is_some() && ready_marker.exists();
+            let core_ready = pid.is_some() && paths.core_ready().exists();
             let bringup = if pid.is_some() { bringup::read(&paths.dir) } else { None };
             let status = VmStatus {
                 name: name.clone(),
@@ -844,6 +889,8 @@ fn run() -> Result<()> {
                 pid,
                 backend: backend.name(),
                 cluster_ready,
+                core_ready,
+                cluster: spec.as_ref().map(|s| s.cluster).unwrap_or(false),
                 phase: bringup.as_ref().map(|b| b.phase),
                 phase_detail: bringup.and_then(|b| b.detail),
                 message: backend.availability().err().map(|e| format!("{e:#}")),
@@ -867,6 +914,8 @@ fn run() -> Result<()> {
                 /// Cluster answers (kubeconfig present) while running —
                 /// lets the switcher show "starting" vs "ready" per VM.
                 cluster_ready: bool,
+                core_ready: bool,
+                cluster: bool,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 phase: Option<bringup::Phase>,
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -888,14 +937,19 @@ fn run() -> Result<()> {
                     // agent-ready, k3s VMs with kubeconfig.
                     let ready_marker = if spec.agent_only {
                         paths.agent_ready()
-                    } else {
+                    } else if spec.cluster {
                         paths.kubeconfig()
+                    } else {
+                        paths.core_ready()
                     };
                     let cluster_ready = pid.is_some() && ready_marker.exists();
+                    let core_ready = pid.is_some() && paths.core_ready().exists();
                     let bringup = if pid.is_some() { bringup::read(&paths.dir) } else { None };
                     VmEntry {
                         running: pid.is_some(),
                         cluster_ready,
+                        core_ready,
+                        cluster: spec.cluster,
                         phase: bringup.as_ref().map(|b| b.phase),
                         phase_detail: bringup.and_then(|b| b.detail),
                         pid,

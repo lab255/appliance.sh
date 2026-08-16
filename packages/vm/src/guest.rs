@@ -126,11 +126,10 @@ pub fn ensure_k3s() -> Result<(PathBuf, &'static str)> {
     Ok((k3s, k3s_sha))
 }
 
-/// Download (once) + verify the module loop + k3s binary the boot media
-/// embeds. Sasha #3: both are hash-pinned and verified before use, every
-/// boot — a cached/tampered artifact is rejected, not silently embedded.
+/// Download (once) + verify the module loop every boot. Core-only media
+/// deliberately does not resolve the lazy k3s artifact.
 #[cfg_attr(windows, allow(dead_code))]
-fn ensure_assets() -> Result<(PathBuf, PathBuf)> {
+fn ensure_modloop() -> Result<PathBuf> {
     let (alpine_arch, _) = arch_tuple()?;
     let modloop_sha = match std::env::consts::ARCH {
         "aarch64" => MODLOOP_SHA256_AARCH64,
@@ -149,9 +148,7 @@ fn ensure_assets() -> Result<(PathBuf, PathBuf)> {
         modloop_sha,
     )?;
 
-    let (k3s, _) = ensure_k3s()?;
-
-    Ok((modloop, k3s))
+    Ok(modloop)
 }
 
 /// Volume label of the platform-images media (the FAT wrapper around the
@@ -1302,6 +1299,7 @@ set -g destroy-unattached off
 /// runlevel wiring, networking config, the world file driving package
 /// installs at boot, and the appliance.start bootstrap.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn build_apkovl(
     registry_host_port: u16,
     egress_ca_pem: Option<&str>,
@@ -1325,6 +1323,37 @@ fn build_apkovl(
     // provision block is only injected when it does.
     apiserver: bool,
 ) -> Result<Vec<u8>> {
+    build_apkovl_for_readiness(
+        registry_host_port,
+        egress_ca_pem,
+        dev,
+        mount,
+        docker,
+        egress_port,
+        if agent_only { HostReadiness::Agent } else { HostReadiness::K3s },
+        project_id,
+        host_port,
+        bootstrap_token,
+        apiserver,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_apkovl_for_readiness(
+    registry_host_port: u16,
+    egress_ca_pem: Option<&str>,
+    dev: bool,
+    mount: bool,
+    docker: bool,
+    egress_port: u16,
+    readiness: HostReadiness,
+    project_id: &str,
+    host_port: u16,
+    bootstrap_token: &str,
+    apiserver: bool,
+) -> Result<Vec<u8>> {
+    let agent_only = readiness == HostReadiness::Agent;
+    let cluster = readiness == HostReadiness::K3s;
     let gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     let mut tar = tar::Builder::new(gz);
 
@@ -1401,10 +1430,10 @@ fn build_apkovl(
             // an injected __KUBECONFIG_PORT__ as a literal.
             .replace(
                 "__K3S_PROVISION__",
-                &if agent_only {
-                    AGENT_HANDOFF.to_string()
-                } else {
-                    format!("{K3S_MEDIA_COPY}{K3S_COMMON}")
+                &match readiness {
+                    HostReadiness::Core => String::new(),
+                    HostReadiness::Agent => AGENT_HANDOFF.to_string(),
+                    HostReadiness::K3s => format!("{K3S_MEDIA_COPY}{K3S_COMMON}"),
                 },
             )
             .replace(
@@ -1419,7 +1448,7 @@ fn build_apkovl(
             // the k3s branch).
             .replace(
                 "__BUILDKIT_PROVISION__",
-                if agent_only { "" } else { BUILDKIT_PROVISION },
+                if cluster { BUILDKIT_PROVISION } else { "" },
             )
             // The api-server guest binary rides k3s VMs whose media
             // carries the staged binary. Injected before the port
@@ -1428,7 +1457,7 @@ fn build_apkovl(
             // (Quinn gap #1, same as the k3s branch).
             .replace(
                 "__APISERVER_PROVISION__",
-                &if agent_only || !apiserver {
+                &if !cluster || !apiserver {
                     String::new()
                 } else {
                     format!("{APISERVER_MEDIA_COPY}{APISERVER_COMMON}")
@@ -1478,7 +1507,7 @@ fn build_apkovl(
     // requests against. Root-only, exactly like the host-side copy.
     // Gated like the provision block itself — agent-only VMs carry no
     // control plane and therefore no secret.
-    if !agent_only && apiserver && !bootstrap_token.is_empty() {
+    if cluster && apiserver && !bootstrap_token.is_empty() {
         file("etc/appliance/bootstrap-token", 0o600, bootstrap_token.as_bytes())?;
     }
 
@@ -1537,16 +1566,23 @@ pub fn build_boot_media(
     docker: bool,
     egress_port: u16,
     agent_only: bool,
+    cluster: bool,
     // Host ingress port (spec.host_port) — embedded in the guest
     // api-server's base config for deploy-result URLs.
     host_port: u16,
 ) -> Result<BootMedia> {
-    let (modloop, k3s) = ensure_assets()?;
+    let readiness = readiness_for(agent_only, cluster);
+    let modloop = ensure_modloop()?;
+    let k3s = if readiness == HostReadiness::K3s {
+        Some(ensure_k3s()?.0)
+    } else {
+        None
+    };
     // The CLI-staged api-server binary + console bundle (guest control
     // plane). Optional by contract: agent-only VMs never carry them,
     // and an engine invoked without the CLI simply boots without a
     // control plane (the guest logs that honestly).
-    let apiserver = if agent_only { None } else { apiserver_assets() };
+    let apiserver = if readiness == HostReadiness::K3s { apiserver_assets() } else { None };
     let bootstrap_token = if apiserver.is_some() {
         ensure_bootstrap_token(vm_dir)?
     } else {
@@ -1566,14 +1602,14 @@ pub fn build_boot_media(
     let project_id = mount_path
         .map(|p| crate::images::content_sha256_hex(p.as_bytes())[..16].to_string())
         .unwrap_or_default();
-    let apkovl = build_apkovl(
+    let apkovl = build_apkovl_for_readiness(
         registry_host_port,
         egress_ca_pem.as_deref(),
         dev,
         mount_path.is_some(),
         docker,
         egress_port,
-        agent_only,
+        readiness,
         &project_id,
         host_port,
         &bootstrap_token,
@@ -1581,7 +1617,7 @@ pub fn build_boot_media(
     )?;
 
     let modloop_data = fs::read(&modloop)?;
-    let k3s_data = fs::read(&k3s)?;
+    let k3s_data = k3s.as_ref().map(fs::read).transpose()?;
     let apiserver_data = apiserver
         .as_ref()
         .map(|a| fs::read(&a.binary))
@@ -1594,7 +1630,7 @@ pub fn build_boot_media(
 
     // Size the volume to fit contents + FAT overhead, rounded up.
     let content = modloop_data.len()
-        + k3s_data.len()
+        + k3s_data.as_ref().map_or(0, Vec::len)
         + apkovl.len()
         + apiserver_data.as_ref().map_or(0, Vec::len)
         + console_data.as_ref().map_or(0, Vec::len);
@@ -1626,8 +1662,10 @@ pub fn build_boot_media(
         f.write_all(&modloop_data)?;
         let mut f = root.create_file("appliance.apkovl.tar.gz")?;
         f.write_all(&apkovl)?;
-        let mut f = root.create_file("k3s")?;
-        f.write_all(&k3s_data)?;
+        if let Some(data) = &k3s_data {
+            let mut f = root.create_file("k3s")?;
+            f.write_all(data)?;
+        }
         if let Some(data) = &apiserver_data {
             let mut f = root.create_file("appliance-api-server")?;
             f.write_all(data)?;
@@ -1655,8 +1693,26 @@ pub fn guest_cmdline() -> String {
     )
 }
 
-/// What `host_services` should do for a spec, computed purely so the
-/// agent-only invariants are unit-testable without a live guest.
+/// Which independently observable guest layer `host_services` gates on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HostReadiness {
+    Core,
+    Agent,
+    K3s,
+}
+
+fn readiness_for(agent_only: bool, cluster: bool) -> HostReadiness {
+    if agent_only {
+        HostReadiness::Agent
+    } else if cluster {
+        HostReadiness::K3s
+    } else {
+        HostReadiness::Core
+    }
+}
+
+/// What `host_services` should do for a spec, computed purely so all
+/// three readiness modes are unit-testable without a live guest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct HostServicePlan {
     /// SASHA #1 (acceptance criterion): the guest-ip lease is persisted
@@ -1670,9 +1726,7 @@ struct HostServicePlan {
     /// not these); the KUBECONFIG_PORT handoff forward is separate and
     /// always retained.
     wire_k3s_forwards: bool,
-    /// Gate readiness on the `agent-ready` sentinel (agent-only) instead
-    /// of the k3s kubeconfig handoff.
-    agent_readiness: bool,
+    readiness: HostReadiness,
 }
 
 /// Decide the host-services plan for a spec. Pure — the invariants
@@ -1681,8 +1735,8 @@ struct HostServicePlan {
 fn plan_host_services(spec: &crate::spec::VmSpec) -> HostServicePlan {
     HostServicePlan {
         persist_guest_ip: true,
-        wire_k3s_forwards: !spec.agent_only,
-        agent_readiness: spec.agent_only,
+        wire_k3s_forwards: readiness_for(spec.agent_only, spec.cluster) == HostReadiness::K3s,
+        readiness: readiness_for(spec.agent_only, spec.cluster),
     }
 }
 
@@ -1794,7 +1848,29 @@ pub fn host_services(
     }
     crate::bringup::set(vm_dir, crate::bringup::Phase::Network, Some(guest_ip.to_string()));
 
-    if plan.agent_readiness {
+    // Core readiness is independent of both handoff HTTP paths: the
+    // shell agent is provisioned before k3s and DEV_PROVISION, so a
+    // successful trivial exec proves the usable sandbox primitive.
+    crate::bringup::hostlog("waiting for core vsock shell");
+    let core_deadline = std::time::Instant::now() + Duration::from_secs(120);
+    loop {
+        if crate::guest_exec::run_wrapped(&spec.name, "true").is_ok() {
+            break;
+        }
+        if std::time::Instant::now() >= core_deadline {
+            anyhow::bail!("guest core vsock shell did not answer within 120s");
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    fs::write(vm_dir.join("core-ready"), b"core-ready\n")?;
+    crate::bringup::hostlog("core vsock shell ready");
+
+    if plan.readiness == HostReadiness::Core {
+        crate::bringup::set(vm_dir, crate::bringup::Phase::Ready, None);
+        return Ok(());
+    }
+
+    if plan.readiness == HostReadiness::Agent {
         // Agent-only: no k3s control plane. Gate on the agent runtime — the
         // guest serves an `agent-ready` sentinel once the Node toolchain
         // (.dev-ready) is up (Quinn gap #2). Then write the host-side
@@ -2692,7 +2768,13 @@ mod tests {
     }
 
     #[test]
-    fn agent_only_still_persists_guest_ip_but_skips_k3s_forwards() {
+    fn core_agent_and_k3s_host_service_plans_preserve_network_invariants() {
+        let core = crate::spec::VmSpec::defaults("core");
+        let plan = plan_host_services(&core);
+        assert!(plan.persist_guest_ip, "core VMs write guest-ip");
+        assert!(!plan.wire_k3s_forwards, "core VMs skip k3s host forwards");
+        assert_eq!(plan.readiness, HostReadiness::Core);
+
         // SASHA #1 (acceptance criterion): the host-services plan persists
         // guest-ip for an agent-only VM exactly as for a k3s VM — the
         // broker peer-pin + the netstack lease attribution depend on it.
@@ -2702,14 +2784,39 @@ mod tests {
         let plan = plan_host_services(&agent);
         assert!(plan.persist_guest_ip, "agent-only MUST still write guest-ip (Sasha #1)");
         assert!(!plan.wire_k3s_forwards, "agent-only skips the k3s host forwards");
-        assert!(plan.agent_readiness, "agent-only gates on the agent-ready sentinel");
+        assert_eq!(plan.readiness, HostReadiness::Agent);
 
         // A normal (k3s) VM persists guest-ip AND wires the k3s forwards,
         // and gates on the kubeconfig handoff.
-        let k3s = crate::spec::VmSpec::defaults("appliance");
+        let mut k3s = crate::spec::VmSpec::defaults("appliance");
+        k3s.cluster = true;
         let plan = plan_host_services(&k3s);
         assert!(plan.persist_guest_ip, "k3s VMs write guest-ip too");
         assert!(plan.wire_k3s_forwards, "k3s VMs wire the api/ingress/registry forwards");
-        assert!(!plan.agent_readiness, "k3s VMs gate on kubeconfig, not agent-ready");
+        assert_eq!(plan.readiness, HostReadiness::K3s);
+    }
+
+    #[test]
+    fn core_overlay_omits_lazy_platform_without_reordering_shared_bootstrap() {
+        let core = build_apkovl_for_readiness(
+            5052,
+            None,
+            true,
+            false,
+            false,
+            5053,
+            HostReadiness::Core,
+            "",
+            8081,
+            "",
+            false,
+        )
+        .unwrap();
+        let start = apkovl_file(&core, "etc/local.d/appliance.start").unwrap();
+        assert!(start.contains("appliance-shell-agent"));
+        assert!(start.contains("appliance-dev: provisioning development environment"));
+        assert!(!start.contains("k3s server"));
+        assert!(!start.contains("appliance-buildkit: provisioning in-guest BuildKit"));
+        assert!(!start.contains("agent-ready"));
     }
 }

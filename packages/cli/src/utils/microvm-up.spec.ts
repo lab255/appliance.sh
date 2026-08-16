@@ -78,6 +78,14 @@ describe('renderVmStatus', () => {
     expect(out).toContain('appliance vm console -f');
   });
 
+  it('a core-ready VM is usable without promising cluster URLs', () => {
+    const out = text({ ...base, clusterReady: true, coreReady: true, cluster: false, phase: 'ready' });
+    expect(out).toContain('core sandbox ready');
+    expect(out).toContain('appliance vm shell');
+    expect(out).toContain('provisioned lazily on first deploy');
+    expect(out).not.toContain('appliance.localhost');
+  });
+
   it('surfaces a backend availability warning without throwing on minimal payloads', () => {
     const out = text({
       name: 'appliance',
