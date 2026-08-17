@@ -1,3 +1,18 @@
+## 1.55.0 (2026-08-17)
+
+### Features
+
+- **cloud:** CloudFormation AWS install target; retire 3-phase bootstrap ([90ffc07](https://github.com/lab255/appliance.sh/commit/90ffc07))
+- **vm:** core-ready default boot; k3s/buildkit/registry become a lazy layer ([064f162](https://github.com/lab255/appliance.sh/commit/064f162))
+
+### Refactoring
+
+- **infra:** remove dead Docker deployment runtime ([fe68cdc](https://github.com/lab255/appliance.sh/commit/fe68cdc))
+
+### ❤️ Thank You
+
+- Eliot Lim
+
 ## 1.54.2 (2026-08-06)
 
 ### Bug Fixes
