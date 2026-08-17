@@ -858,12 +858,11 @@ function TargetStep({
         await host.vm.install();
         st = await vm.status();
       }
-      if (!st.running) {
-        await vm.up((e) => append(e.message));
-      }
       if (!st.clusterProvisioned) {
         append('Provisioning deployment layer…');
         await vm.clusterUp((e) => append(e.message));
+      } else if (!st.running) {
+        await vm.up((e) => append(e.message));
       }
       // clusterUp synchronously adopts the profile. Do not let the wizard
       // proceed against an unbound SDK client if selection fails.

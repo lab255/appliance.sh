@@ -158,6 +158,7 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   // ready (sync_microvm_cluster). That can happen on a passive status poll
   // — nudge the host-config query once per ready transition so the freshly-
   // registered cluster becomes selectable without a desktop restart.
+  const vmRunning = Boolean(status?.running);
   const microVmReady = Boolean(status?.running && status?.kubeconfigReady);
   const refreshedForReady = React.useRef(false);
   React.useEffect(() => {
@@ -187,12 +188,13 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   });
   const clusterServing = microVmReady && healthzQuery.data === true;
 
-  // THE lifted egress-policy query — one observer for the whole detail,
-  // enabled only once the VM is ready (egress/creds are meaningless before
-  // then). The Egress tab reads `policy`; the Credentials tab reads `mitm`.
+  // THE lifted egress-policy query — one observer for the whole detail.
+  // Egress and the credential broker are core-layer services, so they are
+  // available as soon as the VM is running; they do not wait for k3s.
+  // The Egress tab reads `policy`; the Credentials tab reads `mitm`.
   const policyQuery = useQuery({
     queryKey: ['microvm', name, 'egress'],
-    enabled: microVmReady,
+    enabled: vmRunning,
     queryFn: () => vm.egress.get(),
     refetchInterval: 15_000,
   });
@@ -246,9 +248,9 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
 
   const tabs: Array<{ id: RuntimeTab; label: string; enabled: boolean }> = [
     { id: 'lifecycle', label: 'Lifecycle', enabled: true },
-    { id: 'egress', label: 'Egress', enabled: microVmReady },
-    { id: 'credentials', label: 'Credentials', enabled: microVmReady },
-    { id: 'facts', label: 'Facts', enabled: microVmReady },
+    { id: 'egress', label: 'Egress', enabled: vmRunning },
+    { id: 'credentials', label: 'Credentials', enabled: vmRunning },
+    { id: 'facts', label: 'Facts', enabled: vmRunning },
     { id: 'workloads', label: 'Workloads', enabled: clusterServing },
   ];
   // Don't strand the user on a tab that just became disabled (VM stopped).
@@ -287,7 +289,13 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
               aria-selected={active}
               disabled={!t.enabled}
               onClick={() => setTab(t.id)}
-              title={t.enabled ? undefined : 'Start the Dev Machine to use this tab'}
+              title={
+                t.enabled
+                  ? undefined
+                  : t.id === 'workloads' && vmRunning
+                    ? 'Provision the deployment layer to use this tab'
+                    : 'Start the Dev Machine to use this tab'
+              }
               className={cn(
                 '-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40',
                 active

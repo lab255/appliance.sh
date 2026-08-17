@@ -736,7 +736,10 @@ const microVms: Record<string, MockVm> = {
   appliance: {
     name: 'appliance',
     exists: true,
-    running: false,
+    // Default browser scenario: a fast core sandbox is already running,
+    // so Egress, Credentials, and Facts are visibly available while
+    // Workloads and deploy remain gated on cluster provisioning.
+    running: true,
     clusterProvisioned: false,
     dev: false,
     hostPort: 8081,
