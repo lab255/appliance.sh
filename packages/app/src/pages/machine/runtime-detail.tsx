@@ -76,12 +76,12 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   });
   const summary: MicroVmSummary | undefined = vmListQuery.data?.find((v) => v.name === name);
 
-  const [busy, setBusy] = React.useState<'install' | 'up' | 'stop' | 'delete' | null>(null);
+  const [busy, setBusy] = React.useState<'install' | 'up' | 'cluster' | 'stop' | 'delete' | null>(null);
   const [log, setLog] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   // Which lifecycle action produced `error` — picks the plain-language
   // headline ("couldn't start" vs "couldn't be installed" …).
-  const [errorAction, setErrorAction] = React.useState<'install' | 'up' | 'stop' | 'delete' | null>(null);
+  const [errorAction, setErrorAction] = React.useState<'install' | 'up' | 'cluster' | 'stop' | 'delete' | null>(null);
   // Whether the next Start should provision a dev environment. Forced on
   // once the VM is already a dev VM (the engine flag is one-way).
   const [devMode, setDevMode] = React.useState(false);
@@ -98,22 +98,26 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
     queryClient.invalidateQueries({ queryKey: ['microvm', 'list'] });
   };
 
-  const run = async (kind: 'install' | 'up' | 'stop' | 'delete', action: () => Promise<void>) => {
+  const run = async (
+    kind: 'install' | 'up' | 'cluster' | 'stop' | 'delete',
+    action: () => Promise<void>
+  ): Promise<boolean> => {
     setBusy(kind);
     setError(null);
     setErrorAction(null);
-    if (kind === 'up') setLog([]);
+    if (kind === 'up' || kind === 'cluster') setLog([]);
     try {
       await action();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setErrorAction(kind);
+      return false;
     } finally {
       setBusy(null);
       refresh();
-      // `up` registers the microVM cluster, `delete` removes it —
-      // nudge the cluster list (switcher, wizard target) either way.
-      if (kind === 'up' || kind === 'delete') {
+      // Cluster promotion registers the microVM cluster; delete removes it.
+      if (kind === 'cluster' || kind === 'delete') {
         queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
       }
     }
@@ -122,6 +126,11 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   // Deploy into this engine: make its cluster the selected one (the
   // wizard targets the selection), then open the wizard.
   const deployHere = async () => {
+    if (!status?.clusterProvisioned) {
+      const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
+      const provisioned = await run('cluster', () => vm.clusterUp(onLog));
+      if (!provisioned) return;
+    }
     try {
       const cfg = await host.getConfig();
       if (cfg.selectedClusterId !== clusterId) {
@@ -198,15 +207,19 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
           : 'unavailable'
       : busy === 'up'
         ? 'starting…'
-        : status.running
-          ? status.phase === 'failed'
-            ? 'failed'
-            : clusterServing
-              ? 'running'
-              : 'starting…'
-          : status.exists
-            ? 'stopped'
-            : 'not created';
+        : busy === 'cluster'
+          ? 'provisioning…'
+          : status.running
+            ? status.phase === 'failed'
+              ? 'failed'
+              : !status.clusterProvisioned
+                ? 'core ready'
+                : clusterServing
+                  ? 'running'
+                  : 'starting…'
+            : status.exists
+              ? 'stopped'
+              : 'not created';
 
   // Q4 (docs/desktop-ia.md §8): surface the prerequisite Doctor prominently
   // when the runtime can't start (failed / engine unavailable), otherwise
@@ -218,7 +231,7 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
     <span
       className={cn(
         'inline-flex shrink-0 items-center rounded-md px-2 py-1 text-xs font-medium',
-        state === 'running'
+        state === 'running' || state === 'core ready'
           ? 'border border-green-500/40 bg-green-500/15 text-green-300'
           : state === 'starting…'
             ? 'border border-cyan-500/40 bg-cyan-500/15 text-cyan-300'
@@ -292,7 +305,13 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
       {activeTab === 'lifecycle' ? (
         <div className="space-y-3">
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            Deploys use the <code className="font-mono">{clusterId}</code> profile.
+            {status?.clusterProvisioned ? (
+              <>
+                Deploys use the <code className="font-mono">{clusterId}</code> profile.
+              </>
+            ) : (
+              'Core sandbox boots stay fast; the deployment layer is added only when you need it.'
+            )}
           </p>
 
           {status && !status.available ? (
@@ -395,6 +414,28 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
             </div>
           )}
 
+          {status?.running && !status.clusterProvisioned ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-cyan-500/40 bg-cyan-500/5 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium text-cyan-200">Core sandbox ready</p>
+                <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
+                  The deployment layer is not provisioned. Adding it restarts this VM once and preserves dev mode.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
+                  void run('cluster', () => vm.clusterUp(onLog));
+                }}
+                disabled={busy !== null}
+              >
+                <Rocket className="h-4 w-4" />
+                {busy === 'cluster' ? 'Provisioning…' : 'Provision deployment layer'}
+              </Button>
+            </div>
+          ) : null}
+
           {error ? (
             <FriendlyError
               error={error}
@@ -405,17 +446,19 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
                     ? "The machine couldn't be stopped"
                     : errorAction === 'delete'
                       ? "The machine couldn't be deleted"
-                      : "The local machine couldn't start"
+                      : errorAction === 'cluster'
+                        ? "The deployment layer couldn't be provisioned"
+                        : "The local machine couldn't start"
               }
             />
           ) : null}
 
-          {busy === 'up' || log.length > 0 ? (
+          {busy === 'up' || busy === 'cluster' || log.length > 0 ? (
             <pre
               ref={logRef}
               className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 font-mono text-[11px] leading-relaxed"
             >
-              {log.join('\n') || 'Starting…'}
+              {log.join('\n') || (busy === 'cluster' ? 'Provisioning deployment layer…' : 'Starting…')}
             </pre>
           ) : null}
 

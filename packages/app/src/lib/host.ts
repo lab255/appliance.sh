@@ -465,6 +465,9 @@ export interface MicroVmStatus {
   installable: boolean;
   exists: boolean;
   running: boolean;
+  /** The lazily provisioned deployment layer is present. This remains
+   *  true while a provisioned VM is stopped. */
+  clusterProvisioned: boolean;
   /** kubeconfig fetched and the host process alive — the cluster
    *  answers. Gated on `running`, so a stopped VM doesn't read ready. */
   kubeconfigReady: boolean;
@@ -657,6 +660,8 @@ export interface MicroVmAgentHost {
 export interface MicroVmSummary {
   name: string;
   running: boolean;
+  /** Whether the persisted VM includes the deployment layer. */
+  clusterProvisioned: boolean;
   /** Cluster answers (kubeconfig fetched) while running — lets the
    *  switcher show "starting" vs "ready" per VM. */
   clusterReady: boolean;
@@ -683,6 +688,9 @@ export interface MicroVmInstanceHost {
    *  (`appliance vm dev up`): dev toolchain + persistent workspace.
    *  `opts.mount` shares a host folder into /persist/workspace. */
   devUp(onEvent: (event: { message: string }) => void, opts?: { mount?: string }): Promise<void>;
+  /** One-way promotion from a core sandbox to the deployment layer.
+   *  Stops and re-ups the VM while preserving its persisted dev mode. */
+  clusterUp(onEvent: (event: { message: string }) => void): Promise<void>;
   /** Sweep the debugger pods a dev/host shell leaves behind. Called
    *  when a shell terminal closes; best-effort. */
   cleanupShell(): Promise<void>;

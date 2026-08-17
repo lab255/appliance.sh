@@ -2997,6 +2997,10 @@ struct MicroVmStatus {
     installable: bool,
     exists: bool,
     running: bool,
+    /// The VM spec includes the lazily provisioned deployment layer
+    /// (k3s, registry, BuildKit, and api-server). This is independent of
+    /// readiness: a stopped cluster VM remains provisioned.
+    cluster_provisioned: bool,
     /// kubeconfig fetched and the host process alive — the cluster
     /// answers. Gated on `running` so a stopped VM (whose kubeconfig
     /// file lingers on disk) doesn't read as ready.
@@ -3056,6 +3060,28 @@ fn microvm_cluster_label(name: &str) -> String {
     }
 }
 
+/// New engines report the persisted `VmSpec.cluster` bit directly. For
+/// older engines, require both artifacts written by cluster bring-up: the
+/// CLI profile and the fetched kubeconfig. A stale profile alone must not
+/// turn a core-only VM into a deploy target.
+fn microvm_cluster_provisioned(status: &serde_json::Value, name: &str) -> bool {
+    if let Some(cluster) = status.get("cluster").and_then(|v| v.as_bool()) {
+        return cluster;
+    }
+    let has_profile = read_shared_profiles()
+        .is_some_and(|profiles| profiles.profiles.contains_key(&microvm_cluster_id(name)));
+    let has_kubeconfig = home_dir()
+        .map(|home| {
+            home.join(SHARED_PROFILES_DIR)
+                .join("vm")
+                .join(name)
+                .join("kubeconfig.yaml")
+                .is_file()
+        })
+        .unwrap_or(false);
+    has_profile && has_kubeconfig
+}
+
 /// One VM as reported by `appliance-vm list` — its allocated ports and
 /// running state, plus the desktop cluster id it registers under.
 #[derive(Serialize, Clone)]
@@ -3063,6 +3089,8 @@ fn microvm_cluster_label(name: &str) -> String {
 struct MicroVmSummary {
     name: String,
     running: bool,
+    /// Whether this VM's persisted spec includes the deployment layer.
+    cluster_provisioned: bool,
     /// Cluster answers (kubeconfig fetched) while running — lets the
     /// switcher show "starting" vs "ready" per VM. `false` for older
     /// engine binaries that don't report it.
@@ -3100,6 +3128,7 @@ async fn microvm_list() -> Result<Vec<MicroVmSummary>, String> {
             let cluster_id = microvm_cluster_id(&name);
             MicroVmSummary {
                 running: v.get("running").and_then(|r| r.as_bool()).unwrap_or(false),
+                cluster_provisioned: microvm_cluster_provisioned(&v, &name),
                 cluster_ready: v
                     .get("clusterReady")
                     .and_then(|r| r.as_bool())
@@ -3136,6 +3165,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             installable,
             exists: false,
             running: false,
+            cluster_provisioned: false,
             kubeconfig_ready: false,
             phase: None,
             phase_detail: None,
@@ -3161,6 +3191,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
                 installable: false,
                 exists: false,
                 running: false,
+                cluster_provisioned: false,
                 kubeconfig_ready: false,
                 phase: None,
                 phase_detail: None,
@@ -3177,6 +3208,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             installable: false,
             exists: false,
             running: false,
+            cluster_provisioned: false,
             kubeconfig_ready: false,
             phase: None,
             phase_detail: None,
@@ -3197,6 +3229,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
         .get("running")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let cluster_provisioned = microvm_cluster_provisioned(&parsed, &name);
     // The engine now reports `clusterReady` (kubeconfig fetched *and* the
     // host process alive) directly — prefer it. Fall back to the on-disk
     // kubeconfig check for older engine binaries that predate the field,
@@ -3241,6 +3274,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         running,
+        cluster_provisioned,
         kubeconfig_ready,
         phase,
         phase_detail,
@@ -3603,8 +3637,8 @@ async fn microvm_heal_credentials(
 }
 
 /// Run `appliance vm up` through the bundled CLI, streaming output
-/// lines to the frontend. Returns when the runtime is fully up
-/// (api-server bootstrapped + microvm profile registered).
+/// lines to the frontend. This intentionally stops at the fast core
+/// sandbox; the deployment layer and profile are provisioned lazily.
 #[tauri::command]
 async fn microvm_up(
     app: AppHandle,
@@ -3612,12 +3646,12 @@ async fn microvm_up(
     on_event: Channel<serde_json::Value>,
 ) -> Result<(), String> {
     let name = vm_name(name);
-    run_microvm_up(app, name, false, None, on_event).await
+    run_microvm_up(app, name, false, false, None, on_event).await
 }
 
 /// Boot a microVM as a development environment (`appliance vm dev up`):
-/// same full bring-up as `microvm_up`, plus the dev toolchain +
-/// persistent `/persist/workspace` you shell into.
+/// the same core-first bring-up as `microvm_up`, plus the dev toolchain
+/// and persistent `/persist/workspace` you shell into.
 #[tauri::command]
 async fn microvm_dev_up(
     app: AppHandle,
@@ -3626,18 +3660,33 @@ async fn microvm_dev_up(
     on_event: Channel<serde_json::Value>,
 ) -> Result<(), String> {
     let name = vm_name(name);
-    run_microvm_up(app, name, true, mount, on_event).await
+    run_microvm_up(app, name, true, false, mount, on_event).await
 }
 
-/// Shared bring-up for `microvm_up` / `microvm_dev_up`. `dev` selects
+/// Lazily add the deployment layer to an existing core sandbox. The CLI's
+/// one-way promotion preserves the persisted dev flag while stopping and
+/// fully bringing the VM back up with k3s, BuildKit, registry, and API server.
+#[tauri::command]
+async fn microvm_cluster_up(
+    app: AppHandle,
+    name: Option<String>,
+    on_event: Channel<serde_json::Value>,
+) -> Result<(), String> {
+    let name = vm_name(name);
+    run_microvm_up(app, name, false, true, None, on_event).await
+}
+
+/// Shared bring-up for core, dev, and lazy cluster promotion. `dev` selects
 /// the `vm dev up` subcommand (provisioned dev environment) over the
-/// plain `vm up`; `mount` (dev only) shares a host folder into the
-/// workspace. Everything else — engine self-heal, log streaming,
-/// cluster registration — is identical.
+/// plain `vm up`; `cluster` adds `--cluster` to that plain command;
+/// `mount` (dev only) shares a host folder into the workspace. Everything
+/// else — engine self-heal, log streaming, and best-effort/no-op profile
+/// adoption for core boots — is identical.
 async fn run_microvm_up(
     app: AppHandle,
     name: String,
     dev: bool,
+    cluster: bool,
     mount: Option<String>,
     on_event: Channel<serde_json::Value>,
 ) -> Result<(), String> {
@@ -3654,6 +3703,9 @@ async fn run_microvm_up(
     } else {
         vec!["vm", "up", "--name", &name]
     };
+    if cluster {
+        argv.push("--cluster");
+    }
     if let Some(m) = mount.as_deref() {
         argv.extend(["--mount", m]);
     }
@@ -3701,10 +3753,9 @@ async fn run_microvm_up(
     }
     match exit_code {
         Some(0) => {
-            // The CLI just wrote (or verified) the microvm profile —
-            // adopt it as a desktop cluster right away so the deploy
-            // wizard can target the engine without waiting for the
-            // next status poll.
+            // Cluster promotion writes/verifies the microVM profile and
+            // this adopts it immediately. Core boots intentionally write
+            // no profile, so sync_microvm_cluster quietly returns Ok(()).
             sync_microvm_cluster(&app, &name)
                 .map_err(|e| format!("register microVM cluster: {e}"))?;
             Ok(())
@@ -5844,6 +5895,7 @@ pub fn run() {
             microvm_install,
             microvm_up,
             microvm_dev_up,
+            microvm_cluster_up,
             microvm_dev_cleanup,
             microvm_agent_start,
             microvm_agent_list,

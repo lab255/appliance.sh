@@ -95,6 +95,9 @@ export function MachinePage() {
               <option key={n} value={n}>
                 {n}
                 {n === DEFAULT_MICROVM_NAME ? ' (default)' : ''}
+                {vms.find((vm) => vm.name === n)?.running && !vms.find((vm) => vm.name === n)?.clusterProvisioned
+                  ? ' — core ready'
+                  : ''}
               </option>
             ))}
           </select>

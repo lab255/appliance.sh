@@ -786,6 +786,9 @@ function TargetStep({
   const queryClient = useQueryClient();
   const showRuntimes = Boolean(host.vm);
   const { config } = useSelectedCluster();
+  // Core-only VMs have no profile to select yet. Preserve the clicked VM
+  // locally until clusterUp writes and the desktop adopts that profile.
+  const [pendingVmName, setPendingVmName] = React.useState<string | null>(null);
 
   const vmListQuery = useQuery({
     queryKey: ['microvm', 'list'],
@@ -803,6 +806,10 @@ function TargetStep({
   // to the `microvm*` twin, `selectedCluster.id` is always the canonical
   // id — the VM row's selected state needs no alias special case.
   const selectedLabel = selectedCluster ? (vmName ? devMachineLabel(vmName) : selectedCluster.name) : null;
+  const effectiveSelectedLabel = pendingVmName ? devMachineLabel(pendingVmName) : selectedLabel;
+  const effectiveReadyToDeploy = readyToDeploy && !pendingVmName;
+  const effectiveTargetIsAwsBase = targetIsAwsBase && !pendingVmName;
+  const effectiveBaseProbeLoading = baseProbeLoading && !pendingVmName;
   const { cloudClusters } = resolveDevMachineTargets(config?.clusters ?? [], vms);
   const runtimeNames = React.useMemo(() => {
     const seen = new Set<string>();
@@ -818,8 +825,10 @@ function TargetStep({
 
   const selectTarget = async (id: string) => {
     if (selectedCluster?.id === id) return;
+    setPendingVmName(microVmNameFromClusterId(id));
     try {
       await host.selectCluster(id);
+      setPendingVmName(null);
     } catch {
       // A never-started microVM has no registered cluster to select yet —
       // the inline Start below registers it, then selects it.
@@ -827,11 +836,10 @@ function TargetStep({
     queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
   };
 
-  // Inline start (Q5). Targets the SELECTED microVM, or the default
-  // `appliance` runtime when nothing is selected yet — one click installs
-  // the engine if needed and brings the VM up, then makes it the selection.
-  const startTargetName = vmName ?? (!selectedCluster && showRuntimes ? 'appliance' : null);
-  const needsStart = !readyToDeploy && Boolean(startTargetName);
+  // Inline prepare (Q5). Boot a stopped VM, lazily promote a core-only VM,
+  // then select the newly adopted profile for the SDK-backed deploy flow.
+  const startTargetName = vmName ?? pendingVmName ?? (!selectedCluster && showRuntimes ? 'appliance' : null);
+  const needsStart = !effectiveReadyToDeploy && Boolean(startTargetName);
   const [starting, setStarting] = React.useState(false);
   const [startLog, setStartLog] = React.useState<string[]>([]);
   const [startError, setStartError] = React.useState<string | null>(null);
@@ -844,19 +852,23 @@ function TargetStep({
     const append = (m: string) => setStartLog((p) => [...p.slice(-120), m]);
     try {
       const vm = host.vm.instance(startTargetName);
-      const st = await vm.status();
+      let st = await vm.status();
       if (!st.available && st.installable) {
         append('Installing engine…');
         await host.vm.install();
+        st = await vm.status();
       }
-      await vm.up((e) => append(e.message));
-      // `up` registers the microVM cluster — make it the selection so the
-      // SDK client + readiness gate track it for the deploy.
-      try {
-        await host.selectCluster(microVmClusterId(startTargetName));
-      } catch {
-        // best-effort; the status poll + invalidate below reconcile it
+      if (!st.running) {
+        await vm.up((e) => append(e.message));
       }
+      if (!st.clusterProvisioned) {
+        append('Provisioning deployment layer…');
+        await vm.clusterUp((e) => append(e.message));
+      }
+      // clusterUp synchronously adopts the profile. Do not let the wizard
+      // proceed against an unbound SDK client if selection fails.
+      await host.selectCluster(microVmClusterId(startTargetName));
+      setPendingVmName(null);
     } catch (e) {
       setStartError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -895,11 +907,13 @@ function TargetStep({
               const state = !summary
                 ? 'not created'
                 : summary.running
-                  ? summary.clusterReady
-                    ? 'running'
-                    : summary.phase === 'failed'
-                      ? 'failed'
-                      : 'starting…'
+                  ? !summary.clusterProvisioned
+                    ? 'core ready'
+                    : summary.clusterReady
+                      ? 'running'
+                      : summary.phase === 'failed'
+                        ? 'failed'
+                        : 'starting…'
                   : 'stopped';
               return (
                 <TargetRow
@@ -907,7 +921,7 @@ function TargetStep({
                   name={name}
                   sub={id}
                   kind="dev machine"
-                  selected={selectedCluster?.id === id}
+                  selected={selectedCluster?.id === id || pendingVmName === name}
                   stateLabel={state}
                   onSelect={() => void selectTarget(id)}
                 />
@@ -922,11 +936,11 @@ function TargetStep({
           <p className="text-xs text-amber-200">
             {targetLoading
               ? 'Checking the Dev Machine…'
-              : `The Dev Machine (${startTargetName}) isn’t serving yet — start it to finish the deploy. Your app / environment selection is kept.`}
+              : `The Dev Machine (${startTargetName}) needs its deployment layer ready before deploy. It will boot first if needed, then provision and adopt the cluster profile. Your app / environment selection is kept.`}
           </p>
           <Button size="sm" onClick={() => void startRuntime()} disabled={starting || targetLoading}>
             <Play className={cn('h-3.5 w-3.5', starting && 'animate-pulse')} />
-            {starting ? 'Starting…' : 'Start the Dev Machine'}
+            {starting ? 'Preparing deployment layer…' : 'Prepare Dev Machine for deploy'}
           </Button>
           {startError ? (
             <FriendlyError error={startError} fallbackHeadline="The local machine couldn't start" className="text-xs" />
@@ -946,7 +960,7 @@ function TargetStep({
           against the selected cloud's mirrored profile and streams the
           output into the run step. On a host that can't shell (web), fall
           back to the copyable snippet so the user can run it themselves. */}
-      {targetIsAwsBase ? (
+      {effectiveTargetIsAwsBase ? (
         <div className="space-y-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)]/30 p-3">
           {!aws.canShell ? (
             // Web / no-CLI host: explain + hand off the copyable snippet.
@@ -1056,28 +1070,33 @@ function TargetStep({
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-[var(--color-muted-foreground)]">
-          {!selectedCluster ? (
+          {!effectiveSelectedLabel ? (
             'No deploy target selected yet.'
-          ) : baseProbeLoading ? (
+          ) : effectiveBaseProbeLoading ? (
             <>
-              Checking how <span className="font-medium text-[var(--color-foreground)]">{selectedLabel}</span> deploys…
+              Checking how <span className="font-medium text-[var(--color-foreground)]">{effectiveSelectedLabel}</span>{' '}
+              deploys…
             </>
-          ) : targetIsAwsBase ? (
+          ) : effectiveTargetIsAwsBase ? (
             <>
-              Target <span className="font-medium text-[var(--color-foreground)]">{selectedLabel}</span> deploys{' '}
-              {aws.canShell ? 'with the button above' : 'via the CLI (see above)'}.
+              Target <span className="font-medium text-[var(--color-foreground)]">{effectiveSelectedLabel}</span>{' '}
+              deploys {aws.canShell ? 'with the button above' : 'via the CLI (see above)'}.
             </>
-          ) : readyToDeploy ? (
+          ) : effectiveReadyToDeploy ? (
             <>
-              Target <span className="font-medium text-[var(--color-foreground)]">{selectedLabel}</span> is ready.
+              Target <span className="font-medium text-[var(--color-foreground)]">{effectiveSelectedLabel}</span> is
+              ready.
             </>
           ) : (
             <>
-              Selected <span className="font-medium text-[var(--color-foreground)]">{selectedLabel}</span>.
+              Selected <span className="font-medium text-[var(--color-foreground)]">{effectiveSelectedLabel}</span>.
             </>
           )}
         </p>
-        <Button onClick={onNext} disabled={!readyToDeploy || targetIsAwsBase || baseProbeLoading}>
+        <Button
+          onClick={onNext}
+          disabled={!effectiveReadyToDeploy || effectiveTargetIsAwsBase || effectiveBaseProbeLoading}
+        >
           Next: pick folder <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

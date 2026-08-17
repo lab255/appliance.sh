@@ -448,7 +448,8 @@ export function createMockHost(): ConsoleHost {
         return Object.values(microVms).map((vm) => ({
           name: vm.name,
           running: vm.running,
-          clusterReady: vm.running,
+          clusterProvisioned: vm.clusterProvisioned,
+          clusterReady: vm.running && vm.clusterProvisioned,
           phase: vm.running ? ('ready' as const) : undefined,
           hostPort: vm.hostPort,
           apiPort: vm.apiPort,
@@ -471,7 +472,8 @@ export function createMockHost(): ConsoleHost {
               installable: false,
               exists: vm.exists,
               running: vm.running,
-              kubeconfigReady: vm.running,
+              clusterProvisioned: vm.clusterProvisioned,
+              kubeconfigReady: vm.running && vm.clusterProvisioned,
               phase: vm.running ? ('ready' as const) : undefined,
               dev: vm.dev,
               // Mock a shared workspace for dev VMs so the agent launcher
@@ -481,16 +483,11 @@ export function createMockHost(): ConsoleHost {
             };
           },
           async up(onEvent: (event: { message: string }) => void) {
-            const profile = vm.name === 'appliance' ? 'microvm' : `microvm-${vm.name}`;
             const lines = [
               `starting VM '${vm.name}' (host pid 4242)`,
-              'waiting for kubernetes endpoint......',
+              'waiting for core sandbox......',
               `VM '${vm.name}' is up`,
-              '» waiting for the in-VM registry',
-              '» pushing appliance-api-server:arm64 into the VM registry',
-              '» api-server applying api-server manifests',
-              `» api-server waiting for http://api.appliance.localhost:${vm.hostPort} to become reachable`,
-              `✓ api-server bootstrapped; credentials saved to profile ${profile}`,
+              '✓ core sandbox ready; deployment layer is lazy',
             ];
             for (const message of lines) {
               await sleep(400);
@@ -498,18 +495,15 @@ export function createMockHost(): ConsoleHost {
             }
             vm.exists = true;
             vm.running = true;
-            // Register + auto-select the VM's cluster, like the real engine.
-            registerMockMicroVmCluster(vm);
           },
           async devUp(onEvent: (event: { message: string }) => void, opts?: { mount?: string }) {
-            const profile = vm.name === 'appliance' ? 'microvm' : `microvm-${vm.name}`;
             const lines = [
               `starting VM '${vm.name}' as a dev environment (host pid 4242)`,
-              'waiting for kubernetes endpoint......',
+              'waiting for core sandbox......',
               `VM '${vm.name}' is up`,
               '» provisioning dev toolchain in the workspace',
               ...(opts?.mount ? [`» sharing host folder ${opts.mount} into /persist/workspace`] : []),
-              `✓ dev environment ready; credentials saved to profile ${profile}`,
+              '✓ core dev environment ready; deployment layer is lazy',
             ];
             for (const message of lines) {
               await sleep(400);
@@ -518,7 +512,23 @@ export function createMockHost(): ConsoleHost {
             vm.exists = true;
             vm.running = true;
             vm.dev = true;
-            // Register + auto-select the VM's cluster, like the real engine.
+          },
+          async clusterUp(onEvent: (event: { message: string }) => void) {
+            const profile = vm.name === 'appliance' ? 'microvm' : `microvm-${vm.name}`;
+            const lines = [
+              `promoting VM '${vm.name}' to the deployment layer`,
+              `stopping VM '${vm.name}' for one-way promotion`,
+              'waiting for kubernetes endpoint......',
+              '» provisioning registry, BuildKit, and api-server',
+              `✓ deployment layer ready; credentials saved to profile ${profile}`,
+            ];
+            for (const message of lines) {
+              await sleep(400);
+              onEvent({ message });
+            }
+            vm.exists = true;
+            vm.running = true;
+            vm.clusterProvisioned = true;
             registerMockMicroVmCluster(vm);
           },
           async cleanupShell() {
@@ -698,6 +708,7 @@ interface MockVm {
   name: string;
   exists: boolean;
   running: boolean;
+  clusterProvisioned: boolean;
   /** Provisioned as a development environment (`appliance vm dev up`). */
   dev: boolean;
   hostPort: number;
@@ -726,6 +737,7 @@ const microVms: Record<string, MockVm> = {
     name: 'appliance',
     exists: true,
     running: false,
+    clusterProvisioned: false,
     dev: false,
     hostPort: 8081,
     apiPort: 6443,
@@ -742,6 +754,7 @@ const microVms: Record<string, MockVm> = {
     name: 'traffic',
     exists: true,
     running: true,
+    clusterProvisioned: true,
     dev: false,
     hostPort: 8100,
     apiPort: 8101,
@@ -777,6 +790,7 @@ function mockVm(name: string): MockVm {
       name,
       exists: false,
       running: false,
+      clusterProvisioned: false,
       dev: false,
       hostPort: base,
       apiPort: base + 1,
