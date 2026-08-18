@@ -1,3 +1,14 @@
+## 1.55.1 (2026-08-18)
+
+### Bug Fixes
+
+- **desktop:** core-first boot with lazy deployment-layer provisioning ([e415c47](https://github.com/lab255/appliance.sh/commit/e415c47))
+- **desktop:** address lazy microVM review findings ([145a35f](https://github.com/lab255/appliance.sh/commit/145a35f))
+
+### ❤️ Thank You
+
+- Eliot Lim
+
 ## 1.55.0 (2026-08-17)
 
 ### Features

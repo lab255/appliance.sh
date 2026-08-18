@@ -1,6 +1,6 @@
 {
   "name": "@appliance.sh/cli",
-  "version": "1.55.0",
+  "version": "1.55.1",
   "description": "Shell for installing, running, and developing applications on the Appliance platform",
   "repository": {
     "type": "git",
