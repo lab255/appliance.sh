@@ -3,15 +3,19 @@ import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Rocket, Trash2 } from 'lucide-react';
 import { applianceBaseConfig, type ApplianceBaseConfig } from '@appliance.sh/sdk';
+import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { CommandSnippet } from '@/components/ui/command-snippet';
+import { FriendlyError } from '@/components/friendly-error';
+import { Input } from '@/components/ui/input';
+import { LongOperation } from '@/components/ui/long-operation';
+import { SectionCard } from '@/components/ui/section-card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import type { BootstrapEvent, Cluster, ConsoleHost } from '@/lib/host';
-import { cn } from '@/lib/utils';
 
 // Cloud installation detail — the lifecycle ops for one bootstrapped AWS
 // installation: update baseline, update api-server/worker, detach/reattach
@@ -80,31 +84,32 @@ function DeployToCloudCard({ cluster }: { cluster: Cluster }) {
   };
 
   return (
-    <div className="rounded-md border border-[var(--color-border)] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">Deploy an app to this cloud</div>
-          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            Build a local project and ship it to{' '}
-            <span className="font-medium text-[var(--color-foreground)]">{cluster.name}</span>
-            {canDeployInApp
-              ? ' — the wizard targets this cluster.'
-              : ' with the CLI (the in-app wizard is desktop-only).'}
-          </p>
-        </div>
-        {canDeployInApp ? (
+    <SectionCard
+      title="Deploy an app to this cloud"
+      description={
+        <>
+          Build a local project and ship it to{' '}
+          <span className="font-medium text-[var(--color-foreground)]">{cluster.name}</span>
+          {canDeployInApp
+            ? ' — the deploy flow starts with this target.'
+            : ' with the CLI (the in-app wizard is desktop-only).'}
+        </>
+      }
+      action={
+        canDeployInApp ? (
           <Button onClick={() => void deployHere()} disabled={busy}>
-            <Rocket className="h-4 w-4" /> {busy ? 'Opening…' : 'Deploy an app'}
+            <Rocket className="h-4 w-4" aria-hidden /> {busy ? 'Opening…' : 'Deploy an app'}
           </Button>
-        ) : null}
-      </div>
+        ) : undefined
+      }
+    >
       {canDeployInApp ? null : (
         <div className="mt-3 space-y-1.5">
           <p className="text-xs text-[var(--color-muted-foreground)]">Run this from your app folder:</p>
           <CommandSnippet command="appliance deploy" />
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 }
 
@@ -148,28 +153,29 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
 
   if (!isSelected) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--color-border)] px-3 py-3">
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Switch to this cluster to read its installer state and run lifecycle operations — they authenticate through
-          this cluster&apos;s api-server.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => selectMutation.mutate(cluster.id)}
-          disabled={selectMutation.isPending}
-        >
-          Switch to this cluster
-        </Button>
-      </div>
+      <Banner
+        tone="info"
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => selectMutation.mutate(cluster.id)}
+            disabled={selectMutation.isPending}
+          >
+            Switch target
+          </Button>
+        }
+      >
+        Select this cloud to read its installation details and run management actions.
+      </Banner>
     );
   }
 
   if (clusterInfoQuery.isPending && client) {
     return (
-      <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-muted-foreground)]">
-        Checking this cluster&apos;s installer type…
-      </p>
+      <Banner tone="info" role="status">
+        Checking installation details…
+      </Banner>
     );
   }
 
@@ -182,11 +188,9 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
     // here. Connect-added clusters are still usable for deploys; only the
     // installer-level operations are desktop-only.
     return (
-      <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-muted-foreground)]">
-        Cluster lifecycle operations (baseline / api-server updates, installer-state migration, destroy) run from the
-        desktop app — they need local AWS credentials and Pulumi. This shell can deploy to the cluster, but can&apos;t
-        manage its installer infrastructure.
-      </p>
+      <Banner tone="neutral">
+        Installation updates and recovery run from the desktop app. You can still deploy to this cloud here.
+      </Banner>
     );
   }
 
@@ -195,10 +199,10 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
       {/* The heavyweight installer panels, collapsed by default — deep
           Pulumi/AWS territory that most visits don't need. */}
       <details className="rounded-md border border-[var(--color-border)]">
-        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
-          Advanced
+        <summary className="cursor-pointer select-none rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          Technical details — installation updates and recovery
           <span className="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">
-            baseline / api-server updates · installer-state migration
+            versions · installation records
           </span>
         </summary>
         <div className="space-y-3 border-t border-[var(--color-border)] p-3">
@@ -221,24 +225,19 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
 function CloudFormationLifecycleHandoff() {
   return (
     <div className="space-y-3">
-      <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
-        <div>
-          <div className="text-sm font-medium">Update cloud installation</div>
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            This installation is managed by CloudFormation. Run updates with the Appliance CLI.
-          </p>
-        </div>
+      <SectionCard
+        title="Update cloud installation"
+        description="This installation is managed by CloudFormation. Run updates with the Appliance CLI."
+      >
         <CommandSnippet command="appliance cloud update" />
-      </div>
-      <div className="space-y-2 rounded-md border border-red-500/40 p-3">
-        <div>
-          <div className="text-sm font-medium text-red-400">Destroy cloud installation</div>
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            Teardown is destructive and is managed by the CloudFormation-aware CLI.
-          </p>
-        </div>
+      </SectionCard>
+      <SectionCard
+        tone="danger"
+        title="Destroy cloud installation"
+        description="CloudFormation must remove the AWS resources it created. This cannot be undone."
+      >
         <CommandSnippet command="appliance cloud teardown" />
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -322,14 +321,20 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
   };
 
   return (
-    <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+    <SectionCard className="space-y-2">
       <div>
-        <div className="text-sm font-medium">Update infra baseline</div>
+        <div className="text-sm font-medium">Update installation foundation</div>
         <div className="text-xs text-[var(--color-muted-foreground)]">
-          Re-run phase 1 against the cluster&apos;s installer stack to apply infra changes that ship with the bundled
-          @appliance.sh/infra package (state bucket policy, ECR, CloudFront, edge router, system roles, etc.). The
-          running api-server keeps its cached APPLIANCE_BASE_CONFIG until its next deploy — run an api-server update
-          afterwards to propagate any baseline value changes.
+          Apply the installation changes bundled with this version of Appliance.
+          <details className="mt-1">
+            <summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+              Technical details
+            </summary>
+            <p className="mt-1">
+              Updates the Pulumi foundation stack. The running service keeps its cached base configuration until the
+              next service update.
+            </p>
+          </details>
         </div>
       </div>
 
@@ -375,22 +380,21 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
             ))}
           </select>
         ) : (
-          <input
+          <Input
             type="text"
             value={awsProfile}
             onChange={(e) => setAwsProfile(e.target.value)}
             placeholder="leave empty to use shell env"
             disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono text-sm disabled:opacity-50"
+            mono
           />
         )}
       </label>
 
       {!cluster.lastBootstrapInput ? (
         <div className="rounded-md border border-dashed border-[var(--color-border)] p-2 text-xs text-[var(--color-muted-foreground)]">
-          No cached bootstrap input on this cluster — needed to preserve dns / vpc choices when re-running phase 1.
-          Re-run the bootstrap wizard (<code className="font-mono">/cloud/bootstrap</code>) from this device to cache
-          it, or operate via the CLI.
+          This computer does not have the setup record needed to preserve the cloud&rsquo;s network and DNS choices.
+          Create or manage the installation from the computer that set it up, or use the CLI.
         </div>
       ) : null}
 
@@ -398,23 +402,15 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
         <Button size="sm" onClick={onRun} disabled={status === 'running' || !canUpdate}>
           {status === 'running' ? 'Updating…' : `Update baseline to ${bundledVersion}`}
         </Button>
-        {status === 'succeeded' ? <span className="text-xs text-green-400">✓ Baseline updated</span> : null}
-        {status === 'failed' ? <span className="text-xs text-red-400">Failed</span> : null}
       </div>
-
-      {logs.length > 0 || error ? (
-        <div className="rounded-md border border-[var(--color-border)] bg-black/30">
-          <div className="max-h-48 overflow-auto px-2 py-1.5 font-mono text-xs leading-relaxed">
-            {logs.map((l, i) => (
-              <div key={i} className="whitespace-pre-wrap">
-                {l}
-              </div>
-            ))}
-            {error ? <div className={cn('whitespace-pre-wrap', 'text-red-400')}>{error}</div> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      <InstallerOperation
+        title="Updating installation baseline"
+        status={status}
+        logs={logs}
+        error={error}
+        onRetry={() => void onRun()}
+      />
+    </SectionCard>
   );
 }
 
@@ -538,13 +534,19 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
   };
 
   return (
-    <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+    <SectionCard className="space-y-2">
       <div>
-        <div className="text-sm font-medium">Update api-server / api-worker</div>
+        <div className="text-sm font-medium">Update Appliance service</div>
         <div className="text-xs text-[var(--color-muted-foreground)]">
-          Mirror a new <code className="font-mono">ghcr.io/appliance-sh/api-server</code> tag into this cluster&apos;s
-          ECR and redeploy the system Lambdas. Worker is updated first; the api-server&apos;s deploy goes through the
-          (now upgraded) worker.
+          Choose a service version and update the installation.
+          <details className="mt-1">
+            <summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+              Technical details
+            </summary>
+            <p className="mt-1">
+              Copies the selected registry image into ECR, then updates the worker and service Lambdas in order.
+            </p>
+          </details>
         </div>
       </div>
 
@@ -605,7 +607,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
             . Required only on first update from a pre-/cluster-info api-server.
           </span>
           {baseConfigJson.trim() && parsedOverride === null ? (
-            <span className="text-red-400">
+            <span className="text-[var(--color-destructive-foreground)]">
               Invalid JSON or schema mismatch — couldn&apos;t parse as ApplianceBaseConfig.
             </span>
           ) : null}
@@ -614,14 +616,14 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
 
       <label className="block space-y-1 text-xs">
         <span className="text-[var(--color-muted-foreground)]">Target version</span>
-        <input
+        <Input
           type="text"
           value={targetVersion}
           onChange={(e) => setTargetVersion(e.target.value)}
           placeholder="1.37.0"
           disabled={status === 'running'}
           spellCheck={false}
-          className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono text-sm disabled:opacity-50"
+          mono
         />
       </label>
 
@@ -643,13 +645,13 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
             ))}
           </select>
         ) : (
-          <input
+          <Input
             type="text"
             value={awsProfile}
             onChange={(e) => setAwsProfile(e.target.value)}
             placeholder="leave empty to use shell env"
             disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono text-sm disabled:opacity-50"
+            mono
           />
         )}
       </label>
@@ -658,28 +660,66 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
         <Button size="sm" onClick={onRun} disabled={status === 'running' || !targetValid || !overrideValid}>
           {status === 'running' ? 'Updating…' : `Update to ${targetVersion || '…'}`}
         </Button>
-        {status === 'succeeded' ? <span className="text-xs text-green-400">✓ Update complete</span> : null}
-        {status === 'failed' ? <span className="text-xs text-red-400">Failed</span> : null}
       </div>
-
-      {logs.length > 0 || error ? (
-        <div className="rounded-md border border-[var(--color-border)] bg-black/30">
-          <div className="max-h-48 overflow-auto px-2 py-1.5 font-mono text-xs leading-relaxed">
-            {logs.map((l, i) => (
-              <div key={i} className="whitespace-pre-wrap">
-                {l}
-              </div>
-            ))}
-            {error ? <div className={cn('whitespace-pre-wrap', 'text-red-400')}>{error}</div> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      <InstallerOperation
+        title="Updating Appliance service"
+        status={status}
+        logs={logs}
+        error={error}
+        onRetry={() => void onRun()}
+      />
+    </SectionCard>
   );
 }
 
 type RunStatus = 'idle' | 'running' | 'succeeded' | 'failed';
 type Direction = 'promote' | 'demote';
+
+function InstallerOperation({
+  title,
+  status,
+  logs,
+  error,
+  onRetry,
+}: {
+  title: string;
+  status: RunStatus;
+  logs: string[];
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const failureRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (status === 'failed') failureRef.current?.focus();
+  }, [status]);
+  if (status === 'idle') return null;
+  return (
+    <div ref={failureRef} tabIndex={status === 'failed' ? -1 : undefined} className="focus:outline-none">
+      <LongOperation
+        title={title}
+        status={status === 'succeeded' ? 'success' : status === 'failed' ? 'error' : 'running'}
+        timeClass="minutes"
+        estimate="Timing varies with the AWS changes in this run"
+        leaveSafety="keep-page"
+        log={logs.map((line, index) => (
+          <div key={`${index}:${line}`}>{line}</div>
+        ))}
+        logProps={{ label: `${title} technical details`, height: 'compact', live: 'polite', copyText: logs.join('\n') }}
+      />
+      {status === 'failed' ? (
+        <FriendlyError
+          error={error ?? 'The operation failed.'}
+          fallbackHeadline={`${title} failed`}
+          actions={
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
 
 const COPY: Record<
   Direction,
@@ -695,9 +735,8 @@ const COPY: Record<
     title: 'Detach state from this device',
     description: (
       <>
-        Move this cluster&apos;s installer Pulumi state from{' '}
-        <code className="font-mono">~/.appliance/pulumi-state</code> into the cluster&apos;s S3 state bucket so future
-        operations don&apos;t require this machine.
+        Move this cloud&apos;s installation records from <code className="font-mono">~/.appliance/pulumi-state</code>{' '}
+        into the cluster&apos;s S3 state bucket so future operations don&apos;t require this machine.
       </>
     ),
     runLabel: 'Detach state',
@@ -708,9 +747,9 @@ const COPY: Record<
     title: 'Reattach state to this device',
     description: (
       <>
-        Pull installer state from the cluster&apos;s S3 backend back to{' '}
-        <code className="font-mono">~/.appliance/pulumi-state</code>. Refuses to overwrite an existing local state dir —
-        archive or remove it first. The S3 stack is left in place as a backup.
+        Pull installation records from the cloud back to <code className="font-mono">~/.appliance/pulumi-state</code>.
+        Refuses to overwrite an existing local state dir — archive or remove it first. The S3 stack is left in place as
+        a backup.
       </>
     ),
     runLabel: 'Reattach state',
@@ -810,19 +849,19 @@ function StateMigrationPanel({ cluster, direction }: { cluster: Cluster; directi
   const copy = COPY[direction];
 
   return (
-    <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+    <SectionCard className="space-y-2">
       <div>
         <div className="text-sm font-medium">{copy.title}</div>
         <div className="text-xs text-[var(--color-muted-foreground)]">{copy.description}</div>
       </div>
 
       <div className="space-y-1 text-xs">
-        <span className="text-[var(--color-muted-foreground)]">State backend</span>
-        <div className="rounded-md border border-[var(--color-border)] bg-black/20 px-2 py-1.5 font-mono text-sm">
+        <span className="text-[var(--color-muted-foreground)]">Installation records</span>
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 font-mono text-sm">
           {clusterInfoQuery.isLoading ? (
-            <span className="text-[var(--color-muted-foreground)]">Loading from api-server…</span>
+            <span className="text-[var(--color-muted-foreground)]">Loading installation records…</span>
           ) : clusterInfoQuery.isError ? (
-            <span className="text-red-400">
+            <span className="text-[var(--color-destructive-foreground)]">
               Failed to read /api/v1/cluster-info:{' '}
               {clusterInfoQuery.error instanceof Error
                 ? clusterInfoQuery.error.message
@@ -858,13 +897,13 @@ function StateMigrationPanel({ cluster, direction }: { cluster: Cluster; directi
             ))}
           </select>
         ) : (
-          <input
+          <Input
             type="text"
             value={awsProfile}
             onChange={(e) => setAwsProfile(e.target.value)}
             placeholder="leave empty to use shell env"
             disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono text-sm disabled:opacity-50"
+            mono
           />
         )}
       </label>
@@ -873,23 +912,15 @@ function StateMigrationPanel({ cluster, direction }: { cluster: Cluster; directi
         <Button size="sm" onClick={onRun} disabled={status === 'running' || !stateBackendUrlValid}>
           {status === 'running' ? copy.runningLabel : copy.runLabel}
         </Button>
-        {status === 'succeeded' ? <span className="text-xs text-green-400">{copy.successLabel}</span> : null}
-        {status === 'failed' ? <span className="text-xs text-red-400">Failed</span> : null}
       </div>
-
-      {logs.length > 0 || error ? (
-        <div className="rounded-md border border-[var(--color-border)] bg-black/30">
-          <div className="max-h-48 overflow-auto px-2 py-1.5 font-mono text-xs leading-relaxed">
-            {logs.map((l, i) => (
-              <div key={i} className="whitespace-pre-wrap">
-                {l}
-              </div>
-            ))}
-            {error ? <div className={cn('whitespace-pre-wrap', 'text-red-400')}>{error}</div> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      <InstallerOperation
+        title={copy.runningLabel.replace('…', '')}
+        status={status}
+        logs={logs}
+        error={error}
+        onRetry={() => void onRun()}
+      />
+    </SectionCard>
   );
 }
 
@@ -958,13 +989,10 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
   const onRun = async () => {
     if (!host.bootstrap?.teardown) return;
     const ok = await confirm({
-      title: `Destroy cluster "${cluster.name}"?`,
+      title: `Destroy cloud installation "${cluster.name}"?`,
       description:
-        'This runs pulumi destroy against the installer stack and tears down every base AWS resource it created ' +
-        '(Route53 zone, CloudFront distribution, ACM certificate, edge router Lambda, S3 state + data buckets, ECR ' +
-        'repository, IAM roles). User-deployed appliances live in a separate project and are NOT destroyed — destroy ' +
-        'them first or their AWS resources will be orphaned. This cannot be undone.',
-      confirmLabel: 'Destroy cluster',
+        'The Pulumi installer will delete its network, DNS, certificate, edge routing, storage, registry, and access resources in AWS. Apps use separate AWS resources and are not deleted; remove them first or they may be left behind. This cannot be undone.',
+      confirmLabel: 'Destroy cloud installation',
     });
     if (!ok) return;
     setStatus('running');
@@ -976,7 +1004,7 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
         handleEvent
       );
       setStatus('succeeded');
-      toast(`Cluster "${cluster.name}" destroyed`);
+      toast(`Cloud installation "${cluster.name}" destroyed`);
       // The infra is gone, so the local (URL, key) registration is now
       // stale — forget it so the dead cluster drops off the list. Best
       // effort: a failure to forget doesn't undo the successful destroy.
@@ -993,19 +1021,11 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
   };
 
   return (
-    <div className="space-y-2 rounded-md border border-red-500/40 p-3">
-      <div>
-        <div className="text-sm font-medium text-red-400">Destroy cluster</div>
-        <div className="text-xs text-[var(--color-muted-foreground)]">
-          Run <code className="font-mono">pulumi destroy</code> against this cluster&apos;s installer stack using the
-          state on this device — it tears down the <span className="font-medium">real AWS infrastructure</span> it
-          created (Route53 zone, CloudFront, ACM cert, edge router Lambda, S3 state + data buckets, ECR, IAM roles).
-          Destroy any deployed appliances first — they live in a separate Pulumi project and would otherwise be
-          orphaned. <span className="font-medium text-red-300">This cannot be undone</span> — archived Pulumi state
-          can&apos;t restore deleted AWS resources.
-        </div>
-      </div>
-
+    <SectionCard
+      tone="danger"
+      title="Destroy cloud installation"
+      description="Deletes the AWS infrastructure created for this cloud. Apps use separate resources and must be removed first. This cannot be undone."
+    >
       <label className="block space-y-1 text-xs">
         <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
         {canEnumerateProfiles ? (
@@ -1024,13 +1044,13 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
             ))}
           </select>
         ) : (
-          <input
+          <Input
             type="text"
             value={awsProfile}
             onChange={(e) => setAwsProfile(e.target.value)}
             placeholder="leave empty to use shell env"
             disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono text-sm disabled:opacity-50"
+            mono
           />
         )}
       </label>
@@ -1039,7 +1059,7 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
         <span className="text-[var(--color-muted-foreground)]">
           Type <code className="font-mono text-[var(--color-foreground)]">{cluster.name}</code> to confirm
         </span>
-        <input
+        <Input
           type="text"
           value={confirmName}
           onChange={(e) => setConfirmName(e.target.value)}
@@ -1047,31 +1067,23 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
           autoComplete="off"
           spellCheck={false}
           disabled={status === 'running'}
-          className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono text-sm disabled:opacity-50"
+          mono
         />
       </label>
 
       <div className="flex items-center gap-2">
         <Button variant="destructive" size="sm" onClick={onRun} disabled={status === 'running' || !nameConfirmed}>
           <Trash2 className="h-4 w-4" />
-          {status === 'running' ? 'Destroying…' : 'Destroy cluster'}
+          {status === 'running' ? 'Destroying…' : 'Destroy cloud installation'}
         </Button>
-        {status === 'succeeded' ? <span className="text-xs text-green-400">✓ Cluster destroyed</span> : null}
-        {status === 'failed' ? <span className="text-xs text-red-400">Failed</span> : null}
       </div>
-
-      {logs.length > 0 || error ? (
-        <div className="rounded-md border border-[var(--color-border)] bg-black/30">
-          <div className="max-h-48 overflow-auto px-2 py-1.5 font-mono text-xs leading-relaxed">
-            {logs.map((l, i) => (
-              <div key={i} className="whitespace-pre-wrap">
-                {l}
-              </div>
-            ))}
-            {error ? <div className={cn('whitespace-pre-wrap', 'text-red-400')}>{error}</div> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      <InstallerOperation
+        title="Destroying cloud installation"
+        status={status}
+        logs={logs}
+        error={error}
+        onRetry={() => void onRun()}
+      />
+    </SectionCard>
   );
 }

@@ -1,5 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
+import { Banner } from '@/components/ui/banner';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { CloudClusterDetail } from './panels';
 
@@ -13,15 +15,19 @@ export function CloudDetailPage() {
   const cluster = config?.clusters.find((c) => c.id === id) ?? null;
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <PageShell rail="detail" className="space-y-5">
       <div>
         <Link
           to="/cloud"
-          className="inline-flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+          className="inline-flex items-center gap-1.5 rounded text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Cloud
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Cloud
         </Link>
-        <h1 className="mt-2 truncate text-xl font-semibold">{cluster?.name ?? id}</h1>
+        <PageHeader
+          className="mb-0 mt-2"
+          title={cluster?.name ?? id}
+          description="Cloud installation status, deployment, and management."
+        />
       </div>
 
       {isLoading ? (
@@ -29,14 +35,17 @@ export function CloudDetailPage() {
       ) : cluster ? (
         <CloudClusterDetail cluster={cluster} />
       ) : (
-        <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted-foreground)]">
+        <Banner tone="warning">
           No cloud installation with id <code className="font-mono">{id}</code> is connected.{' '}
-          <Link to="/cloud" className="underline">
+          <Link
+            to="/cloud"
+            className="rounded underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+          >
             Back to Cloud
           </Link>
           .
-        </p>
+        </Banner>
       )}
-    </div>
+    </PageShell>
   );
 }

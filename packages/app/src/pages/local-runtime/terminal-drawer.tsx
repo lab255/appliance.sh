@@ -1,14 +1,12 @@
 import * as React from 'react';
 import { useLocation } from 'react-router';
-import {
-  useTerminalSessions,
-  statusLabel,
-  statusDotClass,
-  type TerminalSessionMeta,
-} from '@/providers/terminal-sessions-provider';
+import { useTerminalSessions, statusLabel, type TerminalSessionMeta } from '@/providers/terminal-sessions-provider';
+import { AlertCircle, Circle, Radio } from 'lucide-react';
+import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { StatusPill } from '@/components/ui/status-pill';
+import type { StatusTone } from '@/components/ui/status-pill';
 import { useConfirm } from '@/components/ui/confirm-dialog';
-import { cn } from '@/lib/utils';
 
 // View over a provider-owned terminal session (E3.2).
 //
@@ -26,23 +24,23 @@ import { cn } from '@/lib/utils';
 // Status badge — mirrors `PodLogsDrawer`'s pulsing-dot badge so the two
 // live surfaces read the same: a pulsing green "Live" when connected,
 // plain-language states otherwise.
-function StatusPill({ status }: { status: TerminalSessionMeta['status'] }) {
+export function terminalStatusTone(status: TerminalSessionMeta['status']): StatusTone {
+  return status === 'open' || status === 'connecting' ? 'info' : status === 'error' ? 'error' : 'neutral';
+}
+
+function TerminalStatusPill({ status }: { status: TerminalSessionMeta['status'] }) {
+  const Icon = status === 'error' ? AlertCircle : status === 'open' ? Radio : Circle;
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium',
-        status === 'open'
-          ? 'bg-green-500/15 text-green-300'
-          : status === 'error'
-            ? 'bg-red-500/15 text-red-300'
-            : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
-      )}
-    >
-      {/* Label + dot come from the shared helpers so the dock tab (E3.3) and
-          this pill (E3.2) can't drift on the four-way status semantics. */}
-      <span className={cn('h-1.5 w-1.5 rounded-full', statusDotClass(status))} />
-      {statusLabel(status)}
-    </span>
+    <StatusPill
+      tone={terminalStatusTone(status)}
+      activity={status === 'connecting' ? 'spin' : status === 'open' ? 'pulse' : 'static'}
+      label={
+        <span className="inline-flex items-center gap-1">
+          <Icon className="h-3 w-3" aria-hidden />
+          {statusLabel(status)}
+        </span>
+      }
+    />
   );
 }
 
@@ -54,6 +52,7 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
   const { attachView, hide, closeSession, isFocused } = useTerminalSessions();
   const confirm = useConfirm();
   const mountRef = React.useRef<HTMLDivElement | null>(null);
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
   // The control that opened this shell — captured on mount (before xterm
   // grabs focus in its rAF) so dismissing can hand focus back to it.
   const openerRef = React.useRef<HTMLElement | null>(null);
@@ -64,7 +63,7 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
     return attachView(session.id, el);
   }, [attachView, session.id]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const el = document.activeElement;
     openerRef.current = el instanceof HTMLElement ? el : null;
   }, []);
@@ -72,8 +71,10 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
   // Hide the modal (the PTY keeps running) and return focus to the opener.
   const dismiss = React.useCallback(() => {
     hide();
-    openerRef.current?.focus();
-  }, [hide]);
+    const opener = openerRef.current;
+    if (opener?.isConnected) opener.focus();
+    else document.querySelector<HTMLButtonElement>(`[data-session-id="${session.id}"]`)?.focus();
+  }, [hide, session.id]);
 
   // End shell — the only path that destroys the PTY. Confirm first while
   // the process is still live; a closed/error session closes silently.
@@ -96,7 +97,8 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
       role="presentation"
     >
       <div
-        className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-md border border-[var(--color-border)] bg-[#0a0a0a]"
+        ref={dialogRef}
+        className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-background)]"
         onClick={(e) => e.stopPropagation()}
         // Capture phase so Esc reaches us before xterm — but only hijack it
         // when the terminal is NOT focused (e.g. focus on the Hide button).
@@ -106,6 +108,30 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
         // (E3.4 / Devon) without losing Esc-to-Hide. Scoped to the dialog
         // subtree, so an overlaid confirm dialog keeps its own Esc handling.
         onKeyDownCapture={(e) => {
+          if (e.key.toLowerCase() === 'h' && e.ctrlKey && e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            dismiss();
+            return;
+          }
+          if (e.key === 'Tab') {
+            const focusable = Array.from(
+              dialogRef.current?.querySelectorAll<HTMLElement>(
+                'button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+              ) ?? []
+            );
+            if (focusable.length) {
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+              } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+              }
+            }
+          }
           if (e.key !== 'Escape') return;
           if (isFocused(session.id)) return;
           e.preventDefault();
@@ -113,31 +139,46 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
           dismiss();
         }}
         role="dialog"
-        aria-label={`Terminal: ${session.subtitle}`}
+        aria-modal="true"
+        aria-labelledby={`terminal-title-${session.id}`}
+        aria-describedby={`terminal-description-${session.id}`}
       >
-        <header className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2">
+        <header className="flex flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold">{session.title}</div>
+            <div id={`terminal-title-${session.id}`} className="text-sm font-semibold">
+              {session.title}
+            </div>
             <div className="font-mono text-xs text-[var(--color-muted-foreground)]">{session.subtitle}</div>
+            <p
+              id={`terminal-description-${session.id}`}
+              className="text-xs leading-4 text-[var(--color-muted-foreground)]"
+            >
+              Hide keeps this shell running. End shell stops its process. Press Ctrl+Shift+H to hide from anywhere in
+              the terminal.
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <StatusPill status={session.status} />
+          <div className="flex flex-wrap items-center gap-3">
+            <span role="status" aria-live="polite" aria-atomic="true">
+              <TerminalStatusPill status={session.status} />
+            </span>
             {/* Hide is the primary, obvious action — it keeps the session
                 alive. End shell is destructive and confirmed: it's the only
                 control that kills the running process. */}
             <Button size="sm" onClick={dismiss}>
               Hide
             </Button>
-            <Button variant="destructive" size="sm" onClick={() => void end()}>
-              End shell
-            </Button>
+            <span className="border-l border-[var(--color-border)] pl-3">
+              <Button variant="destructive" size="sm" onClick={() => void end()}>
+                End shell
+              </Button>
+            </span>
           </div>
         </header>
 
         {session.error ? (
-          <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-2 font-mono text-xs text-red-300">
+          <Banner tone="error" className="rounded-none border-x-0 border-t-0 font-mono text-xs">
             {session.error}
-          </div>
+          </Banner>
         ) : null}
 
         <div ref={mountRef} className="min-h-0 flex-1 overflow-hidden p-2" />
