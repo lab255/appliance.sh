@@ -1,6 +1,9 @@
+import * as React from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { StatusDot } from '@/components/ui/status-dot';
+import { resolveStatusDot } from '@/components/ui/status-dot';
+import { StatusPill } from '@/components/ui/status-pill';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { EntityLabel } from '@/components/ui/entity-label';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FriendlyError } from '@/components/friendly-error';
@@ -24,33 +27,66 @@ export function DeploymentsPage() {
       if (!r.success) throw r.error;
       return r.data;
     },
-    refetchInterval: 5_000,
+    refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 5_000),
   });
+
+  const [statusFilter, setStatusFilter] = React.useState('all');
+  const [appFilter, setAppFilter] = React.useState('all');
+  const deployments = deploymentsQuery.data ?? [];
+  const appIds = [...new Set(deployments.map((d) => d.projectId))];
+  const visible = deployments.filter(
+    (d) => (statusFilter === 'all' || d.status === statusFilter) && (appFilter === 'all' || d.projectId === appFilter)
+  );
 
   if (!cluster) {
     return (
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold">Deployments</h1>
-          <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-            In-flight and recent deployment runs across all environments.
-          </p>
-        </div>
+      <PageShell rail="browse" className="space-y-4">
+        <PageHeader title="Deployments" description="Recent and running deploys for this target." />
         <div className="rounded-md border border-dashed border-[var(--color-border)] p-8 text-center text-sm text-[var(--color-muted-foreground)]">
           Connect to a cluster to see deployments.
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Deployments</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          In-flight and recent deployment runs across all environments.
-        </p>
-      </div>
+    <PageShell rail="browse" className="space-y-6">
+      <PageHeader title="Deployments" description="Recent and running deploys for this target." />
+
+      {deployments.length > 20 ? (
+        <div className="flex flex-wrap gap-2" aria-label="Deployment filters">
+          <label className="text-xs font-medium">
+            Status{' '}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="ml-1 h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+            >
+              <option value="all">All</option>
+              {[...new Set(deployments.map((d) => d.status))].map((s) => (
+                <option key={s} value={s}>
+                  {resolveStatusDot(s).label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-medium">
+            App{' '}
+            <select
+              value={appFilter}
+              onChange={(e) => setAppFilter(e.target.value)}
+              className="ml-1 h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+            >
+              <option value="all">All</option>
+              {appIds.map((appId) => (
+                <option key={appId} value={appId}>
+                  {projects.get(appId)?.name ?? appId}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
 
       {deploymentsQuery.error ? (
         <FriendlyError error={deploymentsQuery.error} fallbackHeadline="Couldn't load deployments" />
@@ -60,13 +96,14 @@ export function DeploymentsPage() {
         <EmptyState title="No deployments yet" description="Deploy an environment and its runs will show up here." />
       ) : (
         <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-          {deploymentsQuery.data.map((d) => (
+          {visible.map((d) => (
             <li key={d.id}>
               <Link
                 to={`/deployments/${d.id}`}
-                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 px-4 py-3 transition-colors hover:bg-[var(--color-accent)]"
+                aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${envs.get(d.environmentId)?.name ?? d.environmentId}, ${d.action}, ${resolveStatusDot(d.status).label}, ${durationOf(d) ?? 'in progress'}, ${relativeTime(d.startedAt)}`}
+                className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
               >
-                <StatusDot status={d.status} />
+                <StatusPill {...resolveStatusDot(d.status)} className="transition-colors" />
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
                     <EntityLabel id={d.projectId} name={projects.get(d.projectId)?.name} />
@@ -78,7 +115,9 @@ export function DeploymentsPage() {
                     <div className="truncate text-xs text-[var(--color-muted-foreground)]">{d.message}</div>
                   ) : null}
                 </div>
-                <div className="text-xs text-[var(--color-muted-foreground)]">{durationOf(d) ?? d.status}</div>
+                <div className="font-mono text-xs tabular-nums text-[var(--color-muted-foreground)]">
+                  {durationOf(d) ?? '—'}
+                </div>
                 <div className="w-16 text-right text-xs text-[var(--color-muted-foreground)]">
                   {relativeTime(d.startedAt)}
                 </div>
@@ -87,7 +126,7 @@ export function DeploymentsPage() {
           ))}
         </ul>
       )}
-    </div>
+    </PageShell>
   );
 }
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
-import { Plus, Rocket, Search, Trash2 } from 'lucide-react';
+import { Plus, Rocket, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CommandSnippet } from '@/components/ui/command-snippet';
 import { FriendlyError, classifyError } from '@/components/friendly-error';
@@ -9,7 +9,12 @@ import { StartMachineRecovery, useStartableDevMachine } from '@/components/start
 import { EntityLabel } from '@/components/ui/entity-label';
 import { LiveUrl } from '@/components/ui/live-url';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StatusDot } from '@/components/ui/status-dot';
+import { StatusDot, resolveStatusDot } from '@/components/ui/status-dot';
+import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
@@ -164,87 +169,103 @@ function Overview({
     : projects;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Apps</h1>
-          <p className="mt-0.5 text-sm text-[var(--color-muted-foreground)]">
+    <PageShell rail="browse" className="space-y-8">
+      <PageHeader
+        title="Apps"
+        description={
+          <>
             {clusterName} · <span className="font-mono text-xs">{serverUrl}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Search apps…"
-              className="h-9 w-56 rounded-md border border-[var(--color-border)] bg-transparent pl-8 pr-3 text-sm placeholder:text-[var(--color-muted-foreground)] focus:border-[var(--color-border-strong)] focus:outline-none"
-            />
-          </div>
-          {/* Deploy is the primary action — the wizard find-or-creates the
+          </>
+        }
+        action={
+          <>
+            <div className="relative">
+              <label htmlFor="app-search" className="sr-only">
+                Search apps
+              </label>
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
+              <Input
+                id="app-search"
+                type="search"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Search apps…"
+                className="w-56 pl-8 pr-8"
+              />
+              {filter ? (
+                <button
+                  type="button"
+                  aria-label="Clear app search"
+                  onClick={() => setFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              ) : null}
+            </div>
+            {/* Deploy is the primary action — the wizard find-or-creates the
               app + environment and deploys in one flow. "New app" (a bare
               app record, no deploy) stays as the secondary path. */}
-          {canManageApps ? (
-            <>
-              <Button asChild>
-                <Link to="/projects/deploy">
-                  <Rocket className="h-4 w-4" /> Deploy an app
-                </Link>
-              </Button>
-              {!creating ? (
-                <Button variant="outline" onClick={() => setCreating(true)}>
-                  <Plus className="h-4 w-4" /> New app
+            {canManageApps ? (
+              <>
+                <Button asChild>
+                  <Link to="/projects/deploy">
+                    <Rocket className="h-4 w-4" /> Deploy an app
+                  </Link>
                 </Button>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-      </div>
+                {!creating ? (
+                  <Button variant="ghost" onClick={() => setCreating(true)}>
+                    <Plus className="h-4 w-4" /> New app
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </>
+        }
+      />
 
       {canManageApps && creating ? (
-        <form onSubmit={onCreate} className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-          <h2 className="text-sm font-semibold">New app</h2>
-          <label className="block space-y-1 text-sm">
-            <span className="text-[var(--color-muted-foreground)]">Name</span>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              pattern="[a-z][a-z0-9\-]*"
-              required
-              autoFocus
-              placeholder="my-app"
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-            />
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span className="text-[var(--color-muted-foreground)]">Description (optional)</span>
-            <input
-              type="text"
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-            />
-          </label>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Creating…' : 'Create'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setCreating(false);
-                setNewName('');
-                setNewDescription('');
-                setMutationError(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
+        <SectionCard title="New app">
+          <form onSubmit={onCreate} className="space-y-3">
+            <Field label="Name" htmlFor="new-app-name">
+              <Input
+                id="new-app-name"
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                pattern="[a-z][a-z0-9\-]*"
+                required
+                autoFocus
+                placeholder="my-app"
+              />
+            </Field>
+            <Field label="Description" htmlFor="new-app-description" optional>
+              <Input
+                id="new-app-description"
+                type="text"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? 'Creating…' : 'Create'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCreating(false);
+                  setNewName('');
+                  setNewDescription('');
+                  setMutationError(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </SectionCard>
       ) : null}
 
       {mutationError ? (
@@ -284,7 +305,7 @@ function Overview({
               project={project}
               environments={envsByProject.get(project.id) ?? []}
               onDelete={canManageApps ? onDeleteProject : undefined}
-              deleting={deleteMutation.isPending}
+              deleting={deleteMutation.isPending && deleteMutation.variables?.id === project.id}
             />
           ))}
           {visible.length === 0 ? (
@@ -298,7 +319,7 @@ function Overview({
       {projects.length > 0 ? (
         <RecentActivity deployments={deploymentsQuery.data?.slice(0, 8)} loading={deploymentsQuery.isLoading} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -360,7 +381,7 @@ function AppCard({
           aria-label={`Delete ${project.name}`}
           disabled={deleting}
           onClick={() => onDelete(project)}
-          className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+          className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-60 transition-opacity hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:opacity-100 disabled:opacity-50"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -368,7 +389,7 @@ function AppCard({
       <Link to={`/projects/${project.id}`} className="flex flex-1 flex-col gap-3 p-5">
         <div className="flex items-center justify-between gap-2 pr-6">
           <span className="truncate font-medium">{project.name}</span>
-          <StatusDot status={status} />
+          <StatusPill {...statusPill(status)} />
         </div>
         <div className="min-h-5 text-sm">
           {live?.url ? (
@@ -455,8 +476,7 @@ function EmptyApps({ canManageApps }: { canManageApps: boolean }) {
     <div className="mx-auto max-w-md space-y-4 py-16 text-center">
       <h2 className="text-lg font-semibold">Deploy your first app</h2>
       <p className="text-sm text-[var(--color-muted-foreground)]">
-        Pick an application folder with an <code className="font-mono">appliance.json</code> — the wizard creates the
-        app, builds, and deploys in one step.
+        Choose your app folder. Appliance will create the app, build it, and deploy it in one flow.
       </p>
       <Button size="lg" onClick={() => navigate('/projects/deploy')}>
         Deploy your first app
@@ -498,7 +518,7 @@ function RecentActivity({
         </div>
       ) : !deployments || deployments.length === 0 ? (
         <p className="text-xs text-[var(--color-muted-foreground)]">
-          No deployments yet. Runs triggered from the CLI or this console show up here.
+          No deployments yet. Runs started from a terminal or this app show up here.
         </p>
       ) : (
         <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -509,9 +529,10 @@ function RecentActivity({
               <li key={d.id}>
                 <Link
                   to={`/deployments/${d.id}`}
-                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--color-accent)]"
+                  aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${env?.name ?? d.environmentId}, ${d.action}, ${statusPill(d.status).label}, ${relativeTime(d.startedAt)}`}
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                 >
-                  <StatusDot status={d.status} />
+                  <StatusPill {...statusPill(d.status)} />
                   <div className="min-w-0 text-sm">
                     <span className="font-medium">
                       <EntityLabel id={d.projectId} name={projects.get(d.projectId)?.name} />
@@ -539,4 +560,8 @@ function RecentActivity({
       )}
     </section>
   );
+}
+
+function statusPill(status: string): { tone: StatusTone; label: string; activity: 'static' | 'pulse' } {
+  return resolveStatusDot(status);
 }
