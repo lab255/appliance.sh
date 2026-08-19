@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Plug, Wand, Laptop, Stethoscope } from 'lucide-react';
+import { Bot, Plug, Rocket, Wand, Laptop, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
@@ -12,6 +14,7 @@ import {
   type LocalRuntimeCapabilities,
 } from '@/lib/local-runtime';
 import type { WizardValues } from '@/pages/bootstrap/wizard';
+import { durationEstimates } from '@/lib/duration-estimates';
 
 // ① Setup — the onboarding hub, extracted out of the old DashboardPage so
 // `/setup` and `/projects` stop sharing one adaptive component. Two modes:
@@ -55,40 +58,93 @@ export function SetupPage() {
 // GetStarted menu.
 function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () => void }) {
   const navigate = useNavigate();
-  const getStarted = () => {
-    // The Dev Machine is an isolated VM. /setup/bootstrap/run boots the
-    // default VM with live core phases (media → booting → network → ready).
-    const values: WizardValues = { mode: 'microvm' };
+  const getStarted = (intent: 'agent' | 'host') => {
+    const values: WizardValues = { mode: 'microvm', intent };
+    localStorage.setItem('appliance.firstRunIntent', intent);
     navigate('/setup/bootstrap/run', { state: values });
   };
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col justify-center space-y-7 text-center">
+    <PageShell rail="focused" className="flex min-h-[60vh] flex-col justify-center space-y-7 py-8 text-center">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <Laptop className="h-6 w-6 text-[var(--color-foreground)]" />
+        <Laptop className="h-6 w-6 text-[var(--color-foreground)]" aria-hidden />
       </div>
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Welcome to Appliance</h1>
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          Run your apps right on this computer — no cloud account needed. One click boots your isolated machine; the
-          app-deploy layer is added when you first deploy.
+          Your computer, with a safe machine-in-a-machine: run coding agents in a Sandbox or host apps with live local
+          URLs — no cloud account needed.
         </p>
       </div>
-      <div className="flex flex-col items-center gap-3">
-        <Button size="lg" className="w-full sm:w-auto sm:min-w-56" onClick={getStarted}>
-          Get started
-        </Button>
+      <div>
+        <h2 className="mb-3 text-sm font-semibold">What do you want to do first?</h2>
+        <div className="grid gap-3 text-left sm:grid-cols-2">
+          <IntentCard
+            icon={Bot}
+            title="Run a coding agent"
+            body="Claude Code and friends work in an isolated Sandbox. Your files stay yours and their internet access is guarded."
+            duration={`Ready in ${durationEstimates.coreBoot}`}
+            action="Start the Sandbox"
+            onClick={() => getStarted('agent')}
+          />
+          <IntentCard
+            icon={Rocket}
+            title="Host an app"
+            body="Deploy an app to this computer and get a live local URL. Free, private, and available while this computer is on."
+            duration="First-time setup takes a few minutes"
+            action="Set up hosting"
+            onClick={() => getStarted('host')}
+          />
+        </div>
+        <p className="mt-3 text-xs leading-4 text-[var(--color-muted-foreground)]">
+          Either way you get both — this just picks what we set up first.
+        </p>
+      </div>
+      <div className="flex items-center justify-center gap-2">
         <Button variant="ghost" onClick={onLater}>
           Set up later
         </Button>
+        <span aria-hidden className="text-[var(--color-muted-foreground)]">
+          ·
+        </span>
+        <Button variant="ghost" onClick={onMore}>
+          More options
+        </Button>
       </div>
-      <button
-        type="button"
-        onClick={onMore}
-        className="mx-auto text-xs text-[var(--color-muted-foreground)] underline-offset-4 hover:underline"
-      >
-        More options
-      </button>
-    </div>
+    </PageShell>
+  );
+}
+
+function IntentCard({
+  icon: Icon,
+  title,
+  body,
+  duration,
+  action,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  title: string;
+  body: string;
+  duration: string;
+  action: string;
+  onClick: () => void;
+}) {
+  return (
+    <SectionCard
+      className="flex h-full flex-col"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Icon className="h-4 w-4" aria-hidden />
+          {title}
+        </span>
+      }
+    >
+      <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">{body}</p>
+      <p className="mt-3 text-xs font-medium leading-4">{duration}</p>
+      <Button className="mt-4 w-full" onClick={onClick}>
+        {action}
+      </Button>
+    </SectionCard>
   );
 }
 
@@ -100,24 +156,33 @@ function GetStarted({ caps, canBootstrap }: { caps: LocalRuntimeCapabilities; ca
   // cost, no AWS credentials); on the web shell only Connect is available,
   // so it leads.
   return (
-    <div className="mx-auto max-w-3xl space-y-6 pt-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome to Appliance</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Pick where your apps should run: on this computer, on your own AWS account, or somewhere your team already set
-          up. Invited by a teammate? Just open the link they sent you — no setup needed here.
-        </p>
-      </div>
+    <PageShell rail="focused" className="space-y-6 pt-8">
+      <PageHeader
+        focused
+        title="Welcome to Appliance"
+        description="Choose what to set up first. You can run agents in a Sandbox, host apps on this computer, or pair a cloud."
+      />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {caps.any ? (
           <ActionCard
-            icon={Laptop}
-            title="On this computer"
-            body="The recommended start: everything runs in a safe, isolated space on this machine, and your apps get local web addresses. Free — no cloud account needed."
-            cta="Set up"
-            to="/cloud/bootstrap?mode=local"
+            icon={Rocket}
+            title="Host apps on this computer"
+            body="Start a Sandbox, turn on App hosting, and give apps private local web addresses. Free — no cloud account needed."
+            cta="Set up hosting"
+            to="/setup/bootstrap/run"
+            state={{ mode: 'microvm', intent: 'host' } satisfies WizardValues}
             primary
+          />
+        ) : null}
+        {caps.any ? (
+          <ActionCard
+            icon={Bot}
+            title="Run coding agents in a Sandbox"
+            body="Start an isolated workspace with guarded internet access, ready for agents and shells."
+            cta="Start the Sandbox"
+            to="/setup/bootstrap/run"
+            state={{ mode: 'microvm', intent: 'agent' } satisfies WizardValues}
           />
         ) : null}
         {canBootstrap ? (
@@ -151,7 +216,7 @@ function GetStarted({ caps, canBootstrap }: { caps: LocalRuntimeCapabilities; ca
           />
         ) : null}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
@@ -162,6 +227,7 @@ function ActionCard({
   cta,
   to,
   primary,
+  state,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
@@ -169,14 +235,23 @@ function ActionCard({
   cta: string;
   to: string;
   primary?: boolean;
+  state?: WizardValues;
 }) {
   return (
     <div className="flex flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <Icon className="h-5 w-5 text-[var(--color-muted-foreground)]" />
+      <Icon className="h-5 w-5 text-[var(--color-muted-foreground)]" aria-hidden />
       <h2 className="mt-3 text-sm font-semibold">{title}</h2>
       <p className="mt-1 flex-1 text-xs text-[var(--color-muted-foreground)]">{body}</p>
       <Button asChild variant={primary ? 'default' : 'outline'} className="mt-4 self-start">
-        <Link to={to}>{cta}</Link>
+        <Link
+          to={to}
+          state={state}
+          onClick={() =>
+            state?.mode === 'microvm' && state.intent && localStorage.setItem('appliance.firstRunIntent', state.intent)
+          }
+        >
+          {cta}
+        </Link>
       </Button>
     </div>
   );

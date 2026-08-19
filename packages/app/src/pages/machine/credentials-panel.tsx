@@ -2,6 +2,11 @@ import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { SectionCard } from '@/components/ui/section-card';
+import { Tag } from '@/components/ui/tag';
 import { FriendlyError } from '@/components/friendly-error';
 import type { MicroVmInstanceHost } from '@/lib/host';
 
@@ -28,6 +33,17 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
   const [inject, setInject] = React.useState(true);
   const [header, setHeader] = React.useState('authorization');
   const [helper, setHelper] = React.useState('');
+  const [formOpen, setFormOpen] = React.useState(false);
+  const [forgetConfirm, setForgetConfirm] = React.useState(false);
+  const [pendingRemoval, setPendingRemoval] = React.useState<string | null>(null);
+  const removalTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(
+    () => () => {
+      if (removalTimer.current) clearTimeout(removalTimer.current);
+    },
+    []
+  );
 
   const credsQuery = useQuery({
     queryKey: ['microvm', name, 'creds'],
@@ -42,123 +58,174 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
     setErr(null);
     try {
       await fn();
+      return true;
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setBusy(false);
       refresh();
     }
   };
 
-  const addRule = () => {
+  const addRule = async () => {
     const h = ruleHost.trim();
     if (!h) return;
     const helperCmd = helper.trim();
-    setRuleHost('');
-    setHelper('');
-    void act(() =>
+    const added = await act(() =>
       creds.add({ host: h, capture, inject, header: header.trim() || 'authorization', helper: helperCmd || undefined })
     );
+    if (added) {
+      setRuleHost('');
+      setHelper('');
+      setFormOpen(false);
+    }
+  };
+
+  const scheduleRemoval = (host: string) => {
+    if (removalTimer.current) clearTimeout(removalTimer.current);
+    setPendingRemoval(host);
+    removalTimer.current = setTimeout(() => {
+      setPendingRemoval(null);
+      void act(() => creds.remove(host));
+    }, 5_000);
+  };
+
+  const undoRemoval = () => {
+    if (removalTimer.current) clearTimeout(removalTimer.current);
+    removalTimer.current = null;
+    setPendingRemoval(null);
   };
 
   return (
-    <details className="rounded-md border border-[var(--color-border)] p-3" open>
-      <summary className="cursor-pointer text-xs font-medium">
-        Credentials
-        {data ? (
-          <span className="ml-2 text-[10px] text-[var(--color-muted-foreground)]">
-            {data.rules.length} rule{data.rules.length === 1 ? '' : 's'} · {data.secrets.length} stored
-          </span>
-        ) : null}
-      </summary>
-
-      <p className="mt-2 text-[10px] text-[var(--color-muted-foreground)]">
-        Per host, capture a credential header into a host-side store (outside the VM) and/or inject it onto outbound
-        requests — so workloads never hold the secret. Injection can source from a stored secret or an{' '}
-        <code className="font-mono">apiKeyHelper</code> command. Requires TLS interception.
+    <SectionCard
+      title="Credential rules"
+      description={
+        data
+          ? `${data.rules.length} rule${data.rules.length === 1 ? '' : 's'} · ${data.secrets.length} stored credential${data.secrets.length === 1 ? '' : 's'}`
+          : 'Loading…'
+      }
+      action={
+        !formOpen ? (
+          <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Add credential rule
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">
+        Keep app credentials outside the Sandbox and add them only for approved services.
       </p>
-
       {!mitmOn ? (
-        <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-200">
-          TLS interception is off — enable it under the Egress tab for capture/injection to take effect.
-        </p>
+        <Banner className="mt-3" tone="warning">
+          Turn on secure traffic inspection under Internet access before credential rules can work.
+        </Banner>
+      ) : null}
+      {pendingRemoval ? (
+        <Banner
+          className="mt-3"
+          action={
+            <Button size="sm" variant="outline" onClick={undoRemoval}>
+              Undo
+            </Button>
+          }
+        >
+          Rule for {pendingRemoval} will be removed in 5 seconds.
+        </Banner>
+      ) : null}
+
+      {formOpen ? (
+        <form
+          className="mt-3 space-y-3 rounded-md border border-[var(--color-border)] p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void addRule();
+          }}
+        >
+          <Field label="Approved service host" htmlFor="credential-host" hint="For example, api.openai.com.">
+            <Input
+              id="credential-host"
+              mono
+              value={ruleHost}
+              onChange={(e) => setRuleHost(e.target.value)}
+              aria-describedby={!mitmOn ? 'credential-tls-note' : undefined}
+            />
+          </Field>
+          <details className="rounded-md border border-[var(--color-border)] p-3">
+            <summary className="cursor-pointer text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+              Technical details
+            </summary>
+            <div className="mt-3 space-y-3" id={!mitmOn ? 'credential-tls-note' : undefined}>
+              <Field
+                label="Header override"
+                htmlFor="credential-header"
+                hint="The request header that carries the credential."
+              >
+                <Input id="credential-header" mono value={header} onChange={(e) => setHeader(e.target.value)} />
+              </Field>
+              <Field
+                label="Helper command"
+                htmlFor="credential-helper"
+                hint="Optional. Its standard output becomes the credential."
+              >
+                <Input id="credential-helper" mono value={helper} onChange={(e) => setHelper(e.target.value)} />
+              </Field>
+              <div className="flex flex-wrap gap-4">
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={capture} onChange={(e) => setCapture(e.target.checked)} />
+                  Save a credential seen in this header
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={inject} onChange={(e) => setInject(e.target.checked)} />
+                  Add the saved credential to requests
+                </label>
+              </div>
+              {!mitmOn ? (
+                <p className="text-xs leading-4 text-[var(--color-warning-foreground)]">
+                  Secure traffic inspection is required for these controls.
+                </p>
+              ) : null}
+            </div>
+          </details>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setFormOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={busy || !ruleHost.trim()}>
+              Add rule
+            </Button>
+          </div>
+        </form>
       ) : null}
 
       <div className="mt-3 space-y-3">
-        {/* Add-rule form */}
-        <div className="space-y-2 rounded-md border border-[var(--color-border)] p-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={ruleHost}
-              onChange={(e) => setRuleHost(e.target.value)}
-              placeholder="host, e.g. api.openai.com"
-              className="flex-1 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 font-mono text-xs"
-            />
-            <input
-              type="text"
-              value={header}
-              onChange={(e) => setHeader(e.target.value)}
-              placeholder="header"
-              className="w-28 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 font-mono text-xs"
-            />
-          </div>
-          <input
-            type="text"
-            value={helper}
-            onChange={(e) => setHelper(e.target.value)}
-            placeholder="apiKeyHelper command (optional) — stdout is the credential"
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 font-mono text-xs"
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex items-center gap-1.5 text-xs">
-              <input type="checkbox" checked={capture} onChange={(e) => setCapture(e.target.checked)} /> Capture
-            </label>
-            <label className="inline-flex items-center gap-1.5 text-xs">
-              <input type="checkbox" checked={inject} onChange={(e) => setInject(e.target.checked)} /> Inject
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto"
-              disabled={busy || !ruleHost.trim()}
-              onClick={addRule}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add rule
-            </Button>
-          </div>
-        </div>
-
         {/* Rules */}
         {data && data.rules.length > 0 ? (
           <ul className="space-y-1">
-            {data.rules.map((r) => (
-              <li
-                key={r.host}
-                className="flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px]"
-              >
-                <span className="min-w-0 flex-1 truncate font-mono">{r.host}</span>
-                <span className="shrink-0 font-mono text-[10px] text-[var(--color-muted-foreground)]">{r.header}</span>
-                {r.capture ? (
-                  <span className="shrink-0 rounded bg-cyan-500/15 px-1 text-[10px] text-cyan-300">capture</span>
-                ) : null}
-                {r.inject ? (
-                  <span className="shrink-0 rounded bg-green-500/15 px-1 text-[10px] text-green-300">inject</span>
-                ) : null}
-                {r.helper ? (
-                  <span className="shrink-0 rounded bg-[var(--color-muted)] px-1 text-[10px]">helper</span>
-                ) : null}
-                <button
-                  type="button"
-                  aria-label={`Remove ${r.host}`}
-                  disabled={busy}
-                  onClick={() => void act(() => creds.remove(r.host))}
-                  className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50"
+            {data.rules
+              .filter((r) => r.host !== pendingRemoval)
+              .map((r) => (
+                <li
+                  key={r.host}
+                  className="flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2 py-1 text-micro"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </li>
-            ))}
+                  <span className="min-w-0 flex-1 truncate font-mono">{r.host}</span>
+                  <span className="shrink-0 font-mono text-micro text-[var(--color-muted-foreground)]">{r.header}</span>
+                  {r.capture ? <Tag>save</Tag> : null}
+                  {r.inject ? <Tag>add to requests</Tag> : null}
+                  {r.helper ? <Tag>helper</Tag> : null}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${r.host}`}
+                    disabled={busy}
+                    onClick={() => scheduleRemoval(r.host)}
+                    className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
           </ul>
         ) : null}
 
@@ -166,24 +233,46 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
         {data && data.secrets.length > 0 ? (
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              <span className="text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
                 Stored secrets
               </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void act(() => creds.forget())}
-                className="text-[10px] text-[var(--color-muted-foreground)] hover:text-red-300"
-              >
-                Forget all
-              </button>
+              {forgetConfirm ? (
+                <div className="flex items-center gap-2 text-xs">
+                  <span>
+                    Forget {data.secrets.length} stored credential{data.secrets.length === 1 ? '' : 's'}? Future
+                    requests may ask you to sign in again. Rules stay in place.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      setForgetConfirm(false);
+                      void act(() => creds.forget());
+                    }}
+                  >
+                    Forget
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setForgetConfirm(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setForgetConfirm(true)}
+                  className="rounded text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                >
+                  Forget stored credentials
+                </button>
+              )}
             </div>
             <ul className="space-y-0.5">
               {data.secrets.map((s) => (
-                <li key={`${s.host}:${s.header}`} className="flex items-center gap-2 px-1 text-[11px]">
+                <li key={`${s.host}:${s.header}`} className="flex items-center gap-2 px-1 text-micro">
                   <span className="min-w-0 flex-1 truncate font-mono">{s.host}</span>
-                  <span className="font-mono text-[10px] text-[var(--color-muted-foreground)]">{s.header}</span>
-                  <span className="font-mono text-[10px] text-cyan-300">{s.masked}</span>
+                  <span className="font-mono text-micro text-[var(--color-muted-foreground)]">{s.header}</span>
+                  <span className="font-mono text-micro text-[var(--color-muted-foreground)]">{s.masked}</span>
                 </li>
               ))}
             </ul>
@@ -192,6 +281,6 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
       </div>
 
       {err ? <FriendlyError error={err} headline="That change didn't apply" className="mt-2 text-xs" /> : null}
-    </details>
+    </SectionCard>
   );
 }

@@ -1,4 +1,4 @@
-import type * as React from 'react';
+import * as React from 'react';
 import type { RouteObject } from 'react-router';
 import { Navigate, useLocation, useParams } from 'react-router';
 import { AppShell } from '@/components/layout/app-shell';
@@ -24,21 +24,81 @@ import { CloudDetailPage } from '@/pages/cloud/detail';
 import { DeployPage } from '@/pages/apps/deploy';
 import { BootstrapWizardPage } from '@/pages/bootstrap/wizard';
 import { BootstrapProgressPage } from '@/pages/bootstrap/progress';
+import { useHost } from '@/providers/host-provider';
+import { AGENT_ADAPTERS } from '@/lib/agents';
 
 // Default-landing resolver: Setup when the shell is unconfigured (no
 // selected cluster), else the Apps home. We hold (render nothing) until
 // the host config resolves so we never flash the wrong destination.
 function LandingRedirect() {
+  const host = useHost();
   const { config, cluster, isLoading } = useSelectedCluster();
   const devMachine = useDevMachineTargets(config?.clusters ?? []);
   const bootstrapOnly = isBootstrapOnlyConsole();
+  const intent = typeof localStorage === 'undefined' ? null : localStorage.getItem('appliance.firstRunIntent');
+  const runningMachineNames = devMachine.machines
+    .filter((item) => item.running)
+    .map((item) => item.name)
+    .sort()
+    .join(',');
+  const [agentSignal, setAgentSignal] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    if (bootstrapOnly || cluster || devMachine.state !== 'core-machine' || intent === 'agent') {
+      setAgentSignal(false);
+      return;
+    }
+    let active = true;
+    setAgentSignal(null);
+    const timer = window.setTimeout(() => active && setAgentSignal(false), 200);
+    const probes: Promise<boolean>[] = [];
+    if (host.agentAuth) {
+      probes.push(
+        Promise.all(AGENT_ADAPTERS.map((agent) => host.agentAuth!.status(agent.type).catch(() => null))).then((items) =>
+          items.some((item) => item?.configured)
+        )
+      );
+    }
+    if (host.vm) {
+      for (const machineName of runningMachineNames.split(',').filter(Boolean)) {
+        probes.push(
+          host.vm
+            .instance(machineName)
+            .agent.list()
+            .then((runs) => runs.length > 0)
+            .catch(() => false)
+        );
+      }
+    }
+    for (const probe of probes) {
+      void probe.then((result) => {
+        if (!active || !result) return;
+        window.clearTimeout(timer);
+        setAgentSignal(true);
+      });
+    }
+    void Promise.all(probes).then((results) => {
+      if (!active) return;
+      window.clearTimeout(timer);
+      setAgentSignal(results.some(Boolean));
+    });
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [bootstrapOnly, cluster, devMachine.state, runningMachineNames, host.agentAuth, host.vm, intent]);
+
   if (isLoading || (!bootstrapOnly && !cluster && devMachine.isLoading)) return null;
   // A bootstrap-only console (high-security deployments) never shows
   // the app: once connected, hand off to the hardened console.
   if (bootstrapOnly) {
     return <Navigate to={cluster ? '/setup-complete' : '/setup'} replace />;
   }
-  return <Navigate to={cluster ? '/projects' : devMachine.machines.length > 0 ? '/machine' : '/setup'} replace />;
+  if (cluster || devMachine.state === 'deploy-target') return <Navigate to="/projects" replace />;
+  if (devMachine.state === 'none') return <Navigate to="/setup" replace />;
+  if (intent === 'agent') return <Navigate to="/agents" replace />;
+  if (agentSignal === null) return null;
+  return <Navigate to={agentSignal ? '/agents' : '/machine'} replace />;
 }
 
 // Operator-only surfaces (machine, cloud, bootstrap, doctor, agents) are
