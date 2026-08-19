@@ -114,29 +114,37 @@ function DeployToCloudCard({ cluster }: { cluster: Cluster }) {
 // these panels are gated behind a "switch first" or "desktop only" note.
 function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   const host = useHost();
+  const client = useApplianceClient();
   const queryClient = useQueryClient();
   const { config } = useSelectedCluster();
   const canBootstrap = Boolean(host.bootstrap);
   const canTeardown = Boolean(host.bootstrap?.teardown);
   const isSelected = config?.selectedClusterId === cluster.id;
 
+  const clusterInfoQuery = useQuery({
+    queryKey: ['cluster-info', cluster.id],
+    enabled: isSelected && Boolean(client),
+    queryFn: async () => {
+      const r = await client!.getClusterInfo();
+      if (!r.success) throw r.error;
+      return r.data;
+    },
+    retry: false,
+  });
+
+  // The server is authoritative when reachable. Persisted install
+  // generation is deliberately only an offline fallback for clusters
+  // added by `appliance cloud install` and later connected here.
+  const provisioner = clusterInfoQuery.isSuccess
+    ? clusterInfoQuery.data.baseConfig.provisioner
+    : clusterInfoQuery.isError || !client
+      ? cluster.installGeneration
+      : undefined;
+
   const selectMutation = useMutation({
     mutationFn: async (id: string) => host.selectCluster(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['host', 'config'] }),
   });
-
-  if (!canBootstrap) {
-    // Web shell (no local Pulumi / AWS creds): the lifecycle ops can't run
-    // here. Connect-added clusters are still usable for deploys; only the
-    // installer-level operations are desktop-only.
-    return (
-      <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-muted-foreground)]">
-        Cluster lifecycle operations (baseline / api-server updates, installer-state migration, destroy) run from the
-        desktop app — they need local AWS credentials and Pulumi. This shell can deploy to the cluster, but can&apos;t
-        manage its installer infrastructure.
-      </p>
-    );
-  }
 
   if (!isSelected) {
     return (
@@ -154,6 +162,31 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
           Switch to this cluster
         </Button>
       </div>
+    );
+  }
+
+  if (clusterInfoQuery.isPending && client) {
+    return (
+      <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-muted-foreground)]">
+        Checking this cluster&apos;s installer type…
+      </p>
+    );
+  }
+
+  if (provisioner === 'cloudformation-v1') {
+    return <CloudFormationLifecycleHandoff />;
+  }
+
+  if (!canBootstrap) {
+    // Web shell (no local Pulumi / AWS creds): the lifecycle ops can't run
+    // here. Connect-added clusters are still usable for deploys; only the
+    // installer-level operations are desktop-only.
+    return (
+      <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-muted-foreground)]">
+        Cluster lifecycle operations (baseline / api-server updates, installer-state migration, destroy) run from the
+        desktop app — they need local AWS credentials and Pulumi. This shell can deploy to the cluster, but can&apos;t
+        manage its installer infrastructure.
+      </p>
     );
   }
 
@@ -180,9 +213,32 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
           (lastBootstrapInput is the signal). A Connect-added cluster has
           no local state to destroy. Kept visible (not under Advanced) but
           last. */}
-      {canTeardown && (cluster.lastBootstrapInput || cluster.installGeneration === 'cloudformation-v1') ? (
-        <DestroyClusterPanel cluster={cluster} />
-      ) : null}
+      {canTeardown && cluster.lastBootstrapInput ? <DestroyClusterPanel cluster={cluster} /> : null}
+    </div>
+  );
+}
+
+function CloudFormationLifecycleHandoff() {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+        <div>
+          <div className="text-sm font-medium">Update cloud installation</div>
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            This installation is managed by CloudFormation. Run updates with the Appliance CLI.
+          </p>
+        </div>
+        <CommandSnippet command="appliance cloud update" />
+      </div>
+      <div className="space-y-2 rounded-md border border-red-500/40 p-3">
+        <div>
+          <div className="text-sm font-medium text-red-400">Destroy cloud installation</div>
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            Teardown is destructive and is managed by the CloudFormation-aware CLI.
+          </p>
+        </div>
+        <CommandSnippet command="appliance cloud teardown" />
+      </div>
     </div>
   );
 }
@@ -239,13 +295,11 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
     }
   }, []);
 
-  const canUpdate = Boolean(
-    host.bootstrap?.updateBaseline && (cluster.lastBootstrapInput || cluster.installGeneration === 'cloudformation-v1')
-  );
+  const canUpdate = Boolean(host.bootstrap?.updateBaseline && cluster.lastBootstrapInput);
 
   const onRun = async () => {
     if (!host.bootstrap?.updateBaseline) return;
-    if (!cluster.lastBootstrapInput && cluster.installGeneration !== 'cloudformation-v1') return;
+    if (!cluster.lastBootstrapInput) return;
     setStatus('running');
     setLogs([]);
     setError(null);
@@ -256,19 +310,6 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
           stateBackendUrl: stateBackendUrl || undefined,
           awsProfile: awsProfile || undefined,
           cluster: apiKey ? { apiServerUrl: cluster.apiServerUrl, apiKey } : undefined,
-          ...(cluster.installGeneration === 'cloudformation-v1' &&
-          cluster.cloudFormationStackName &&
-          cluster.awsAccountId &&
-          cluster.awsRegion
-            ? {
-                installation: {
-                  installGeneration: cluster.installGeneration,
-                  cloudFormationStackName: cluster.cloudFormationStackName,
-                  awsAccountId: cluster.awsAccountId,
-                  awsRegion: cluster.awsRegion,
-                },
-              }
-            : {}),
         },
         undefined,
         handleEvent
@@ -345,7 +386,7 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
         )}
       </label>
 
-      {!cluster.lastBootstrapInput && cluster.installGeneration !== 'cloudformation-v1' ? (
+      {!cluster.lastBootstrapInput ? (
         <div className="rounded-md border border-dashed border-[var(--color-border)] p-2 text-xs text-[var(--color-muted-foreground)]">
           No cached bootstrap input on this cluster — needed to preserve dns / vpc choices when re-running phase 1.
           Re-run the bootstrap wizard (<code className="font-mono">/cloud/bootstrap</code>) from this device to cache
@@ -485,19 +526,6 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
           targetVersion,
           awsProfile: awsProfile || undefined,
           baseConfigOverride: clusterInfoUnavailable ? (parsedOverride ?? undefined) : undefined,
-          ...(cluster.installGeneration === 'cloudformation-v1' &&
-          cluster.cloudFormationStackName &&
-          cluster.awsAccountId &&
-          cluster.awsRegion
-            ? {
-                installation: {
-                  installGeneration: cluster.installGeneration,
-                  cloudFormationStackName: cluster.cloudFormationStackName,
-                  awsAccountId: cluster.awsAccountId,
-                  awsRegion: cluster.awsRegion,
-                },
-              }
-            : {}),
         },
         undefined,
         handleEvent

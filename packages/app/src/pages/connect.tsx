@@ -127,8 +127,8 @@ export function ConnectPage() {
               {' '}
               Setting up from scratch instead? Run{' '}
               <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance vm up</code> for a local
-              runtime, or <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance bootstrap</code> for
-              AWS.
+              runtime, or <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance cloud install</code>{' '}
+              for AWS.
             </>
           )}
         </p>
