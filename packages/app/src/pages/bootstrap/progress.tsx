@@ -31,6 +31,11 @@ interface LogLine {
 
 type HandoffState = 'idle' | 'saving' | 'saved' | 'failed' | 'skipped';
 
+const LEGACY_BOOTSTRAP_DEPRECATION =
+  'deprecated: legacy 3-phase bootstrap; new installs use appliance cloud install (CloudFormation). Supported for 2 releases.';
+const CLASSIC_INSTALLER_MESSAGE =
+  'Using the classic Pulumi installer (a CloudFormation-based install is available via `appliance cloud install`).';
+
 export function BootstrapProgressPage() {
   const { state } = useLocation();
   const values = state as WizardValues | undefined;
@@ -117,7 +122,7 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
           appendLog('info', `${e.op.padEnd(7)} ${e.resourceType}  ${e.name}`);
           break;
         case 'log':
-          appendLog(e.level, e.message);
+          appendLog(e.level, e.message === LEGACY_BOOTSTRAP_DEPRECATION ? CLASSIC_INSTALLER_MESSAGE : e.message);
           break;
       }
     },
@@ -303,8 +308,6 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
             ) : null}
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-            <dt className="text-[var(--color-muted-foreground)]">State backend</dt>
-            <dd className="font-mono">{result.stateBackendUrl}</dd>
             {result.apiServerUrl ? (
               <>
                 <dt className="text-[var(--color-muted-foreground)]">API server</dt>
@@ -317,13 +320,22 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
                 <dd className="font-mono">{result.apiKey.id}</dd>
               </>
             ) : null}
-            {result.statePromoted ? (
-              <>
-                <dt className="text-[var(--color-muted-foreground)]">State</dt>
-                <dd>promoted to S3</dd>
-              </>
-            ) : null}
           </dl>
+          <details className="text-sm">
+            <summary className="cursor-pointer select-none text-xs text-[var(--color-muted-foreground)]">
+              Advanced installation details
+            </summary>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+              <dt className="text-[var(--color-muted-foreground)]">State backend</dt>
+              <dd className="font-mono">{result.stateBackendUrl}</dd>
+              {result.statePromoted ? (
+                <>
+                  <dt className="text-[var(--color-muted-foreground)]">State</dt>
+                  <dd>promoted to S3</dd>
+                </>
+              ) : null}
+            </dl>
+          </details>
           {handoff === 'failed' && handoffError ? (
             <div className="rounded-md border border-red-500/50 bg-red-500/5 p-2 text-xs text-red-400">
               {handoffError} — connect manually under Cloud → Add cloud.

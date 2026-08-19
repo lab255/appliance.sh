@@ -90,8 +90,8 @@ export function BootstrapWizardPage() {
         <h1 className="text-2xl font-semibold">Bootstrap unavailable</h1>
         <p className="text-sm text-[var(--color-muted-foreground)]">
           This shell can&apos;t drive a bootstrap locally. Run{' '}
-          <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance bootstrap</code> from the CLI, then
-          connect to the resulting api-server URL.
+          <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance cloud install</code> from the CLI,
+          then connect to the resulting api-server URL.
         </p>
       </div>
     );
@@ -168,7 +168,7 @@ function ModePicker({
         <ModeCard
           icon={Cloud}
           title="AWS Cloud"
-          body="Provision CloudFront + Lambda + Route53 on your account. Three Pulumi phases. Requires AWS credentials."
+          body="Provision a cloud installation in your AWS account. Requires AWS credentials."
           available={awsAvailable}
           disabledReason="Bootstrap to AWS needs the desktop app or the CLI."
           onClick={() => onPick('aws')}
@@ -375,6 +375,10 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
           Provision the base AWS infrastructure for a new Appliance installation. AWS credentials are sourced from the
           selected profile (or your shell environment if none is selected).
         </p>
+        <p className="text-xs text-[var(--color-muted-foreground)]">
+          Prefer the CLI? <code className="font-mono">appliance cloud install</code> is the new CloudFormation-based
+          path.
+        </p>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
@@ -443,7 +447,7 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
         <div className="space-y-3 rounded-md border border-[var(--color-border)] p-3">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={deployApiServer} onChange={(e) => setDeployApiServer(e.target.checked)} />
-            <span>Also deploy api-server (phase 2)</span>
+            <span>Also deploy the API server</span>
           </label>
           {deployApiServer ? (
             <>
@@ -463,9 +467,7 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
                   onChange={(e) => setPromoteState(e.target.checked)}
                   className="mt-0.5"
                 />
-                <span>
-                  Promote installer state to S3 (phase 3) — recommended; you can re-bootstrap from any device.
-                </span>
+                <span>Make installer state available from other devices (recommended)</span>
               </label>
             </>
           ) : null}
