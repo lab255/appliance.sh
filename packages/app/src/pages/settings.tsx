@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
 import { useToast } from '@/components/ui/toast';
 import { useHost } from '@/providers/host-provider';
+import { useKeyRole } from '@/hooks/use-key-role';
 import { resetOnboarding } from '@/lib/local-runtime';
 import { TeamSection } from '@/pages/settings-team';
 import type { AvailableUpdate, UpdateProgress } from '@/lib/host';
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils';
 // redirect note so no one dead-ends here looking for the old surfaces.
 export function SettingsPage() {
   const host = useHost();
+  const { role } = useKeyRole();
   const canBootstrap = Boolean(host.bootstrap);
   const canSelfUpdate = Boolean(host.updater);
   // The first-run "replay setup" preference only has an effect where the
@@ -27,10 +29,15 @@ export function SettingsPage() {
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Shell info, updates, and app preferences. Manage the Dev Machine under{' '}
-          <span className="font-medium text-[var(--color-foreground)]">Machine</span>, cloud installations under{' '}
-          <span className="font-medium text-[var(--color-foreground)]">Cloud</span>, and sign in to coding agents under{' '}
-          <span className="font-medium text-[var(--color-foreground)]">Agents</span>.
+          Shell info, updates, and app preferences.
+          {role === 'admin' && host.vm ? (
+            <>
+              {' '}
+              Manage the Dev Machine under <span className="font-medium text-[var(--color-foreground)]">Machine</span>,
+              cloud installations under <span className="font-medium text-[var(--color-foreground)]">Cloud</span>, and
+              sign in to coding agents under <span className="font-medium text-[var(--color-foreground)]">Agents</span>.
+            </>
+          ) : null}
         </p>
       </div>
 

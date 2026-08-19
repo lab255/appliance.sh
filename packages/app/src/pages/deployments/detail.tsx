@@ -2,6 +2,7 @@ import { Link, Navigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FriendlyError } from '@/components/friendly-error';
 import { StatusDot } from '@/components/ui/status-dot';
 import { EntityLabel } from '@/components/ui/entity-label';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
@@ -67,12 +68,10 @@ export function DeploymentDetailPage() {
       </div>
 
       {deploymentQuery.error ? (
-        <div className="rounded-md border border-red-500/50 bg-red-500/5 p-3 text-xs text-red-400">
-          {deploymentQuery.error instanceof Error ? deploymentQuery.error.message : String(deploymentQuery.error)}
-        </div>
+        <FriendlyError error={deploymentQuery.error} fallbackHeadline="Couldn't load this deployment" />
       ) : null}
 
-      {!d && deploymentQuery.isLoading ? (
+      {deploymentQuery.error ? null : !d && deploymentQuery.isLoading ? (
         <div className="text-sm text-[var(--color-muted-foreground)]">Loading…</div>
       ) : !d ? (
         <div className="text-sm text-[var(--color-muted-foreground)]">Not found.</div>
@@ -91,7 +90,7 @@ export function DeploymentDetailPage() {
           </div>
 
           {(() => {
-            const url = extractDeploymentUrl(d.message);
+            const url = extractDeploymentUrl(d.message) ?? environmentQuery.data?.url;
             if (!url) return null;
             return (
               <a

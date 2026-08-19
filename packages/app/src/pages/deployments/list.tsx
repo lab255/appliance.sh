@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { StatusDot } from '@/components/ui/status-dot';
 import { EntityLabel } from '@/components/ui/entity-label';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FriendlyError } from '@/components/friendly-error';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
@@ -52,12 +53,8 @@ export function DeploymentsPage() {
       </div>
 
       {deploymentsQuery.error ? (
-        <div className="rounded-md border border-red-500/50 bg-red-500/5 p-3 text-xs text-red-400">
-          {deploymentsQuery.error instanceof Error ? deploymentsQuery.error.message : String(deploymentsQuery.error)}
-        </div>
-      ) : null}
-
-      {deploymentsQuery.isLoading && !deploymentsQuery.data ? (
+        <FriendlyError error={deploymentsQuery.error} fallbackHeadline="Couldn't load deployments" />
+      ) : deploymentsQuery.isLoading && !deploymentsQuery.data ? (
         <ListSkeleton />
       ) : !deploymentsQuery.data || deploymentsQuery.data.length === 0 ? (
         <EmptyState title="No deployments yet" description="Deploy an environment and its runs will show up here." />
