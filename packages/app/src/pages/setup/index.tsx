@@ -4,6 +4,7 @@ import { Plug, Wand, Laptop, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
+import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
 import {
   localRuntimeCapabilities,
   onboardingDismissed,
@@ -23,15 +24,16 @@ export function SetupPage() {
   const host = useHost();
   const caps = localRuntimeCapabilities(host);
   const canBootstrap = Boolean(host.bootstrap);
-  const { cluster, isLoading } = useSelectedCluster();
+  const { config, cluster, isLoading } = useSelectedCluster();
+  const devMachine = useDevMachineTargets(config?.clusters ?? []);
   // "More options" reveals the full first-run menu without dismissing
   // the simple welcome — that's what "Set up later" does (and persists).
   const [showAll, setShowAll] = React.useState(false);
 
-  if (isLoading) return null;
+  if (isLoading || (!cluster && devMachine.isLoading)) return null;
   // First launch on a shell that can run the Dev Machine: a single,
   // friendly setup step (Set up / Set up later) — no menu to parse.
-  if (!cluster && caps.any && !showAll && !onboardingDismissed()) {
+  if (!cluster && devMachine.state === 'none' && caps.any && !showAll && !onboardingDismissed()) {
     return (
       <FirstRunWelcome
         onLater={() => {
@@ -46,17 +48,16 @@ export function SetupPage() {
 }
 
 // The very first launch: one decision, one button. "Get started" boots the
-// Dev Machine and connects in a single press, routing straight into the live
+// Dev Machine in a single press, routing straight into the live
 // bring-up phase ladder (/setup/bootstrap/run) so a new operator watches the
-// machine boot through each stage and lands ready — no menu to read, no
+// core boot stages and lands ready — no menu to read, no
 // further clicks. "Set up later" and "More options" fall back to the full
 // GetStarted menu.
 function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () => void }) {
   const navigate = useNavigate();
   const getStarted = () => {
     // The Dev Machine is an isolated VM. /setup/bootstrap/run boots the
-    // default VM with live phases (media → booting → network → cluster →
-    // ready) and connects automatically once it's ready.
+    // default VM with live core phases (media → booting → network → ready).
     const values: WizardValues = { mode: 'microvm' };
     navigate('/setup/bootstrap/run', { state: values });
   };
@@ -68,8 +69,8 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Welcome to Appliance</h1>
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          Run your apps right on this computer — no cloud account needed. One click sets everything up in a safe,
-          isolated space, and you can watch it get ready. Nothing to install or configure by hand.
+          Run your apps right on this computer — no cloud account needed. One click boots your isolated machine; the
+          app-deploy layer is added when you first deploy.
         </p>
       </div>
       <div className="flex flex-col items-center gap-3">

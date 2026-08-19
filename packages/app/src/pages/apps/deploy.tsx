@@ -319,7 +319,7 @@ export function DeployPage() {
       setRunStatus('failed');
       setRunError({
         message:
-          'No deploy target is selected, so there are no credentials to deploy with. Start the Dev Machine (it registers itself automatically), then retry.',
+          "No deploy target is selected, so there are no credentials to deploy with. Start the Dev Machine and provision its deployment layer (use 'Prepare Dev Machine for deploy'), then retry.",
       });
       return;
     }

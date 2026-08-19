@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router';
 import { Navigate, useLocation, useParams } from 'react-router';
 import { AppShell } from '@/components/layout/app-shell';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
+import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
 import { useKeyRole } from '@/hooks/use-key-role';
 import { isBootstrapOnlyConsole } from '@/lib/runtime-config';
 import { isMicroVmClusterId, microVmNameFromClusterId, DEFAULT_MICROVM_NAME } from '@/lib/host';
@@ -28,14 +29,16 @@ import { BootstrapProgressPage } from '@/pages/bootstrap/progress';
 // selected cluster), else the Apps home. We hold (render nothing) until
 // the host config resolves so we never flash the wrong destination.
 function LandingRedirect() {
-  const { cluster, isLoading } = useSelectedCluster();
-  if (isLoading) return null;
+  const { config, cluster, isLoading } = useSelectedCluster();
+  const devMachine = useDevMachineTargets(config?.clusters ?? []);
+  const bootstrapOnly = isBootstrapOnlyConsole();
+  if (isLoading || (!bootstrapOnly && !cluster && devMachine.isLoading)) return null;
   // A bootstrap-only console (high-security deployments) never shows
   // the app: once connected, hand off to the hardened console.
-  if (isBootstrapOnlyConsole()) {
+  if (bootstrapOnly) {
     return <Navigate to={cluster ? '/setup-complete' : '/setup'} replace />;
   }
-  return <Navigate to={cluster ? '/projects' : '/setup'} replace />;
+  return <Navigate to={cluster ? '/projects' : devMachine.machines.length > 0 ? '/machine' : '/setup'} replace />;
 }
 
 // Operator-only surfaces (machine, cloud, bootstrap, doctor, agents) are

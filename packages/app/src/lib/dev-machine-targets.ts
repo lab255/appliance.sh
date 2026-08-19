@@ -4,7 +4,7 @@ import type { Cluster, MicroVmSummary } from './host';
 // One machine, two config entries: the CLI writes its own profiles (e.g.
 // `local`) whose URL is a local VM's forwarded api-server endpoint
 // (`http://api.appliance.localhost:<hostPort>`) — the same machine the VM
-// itself registers under a `microvm*` cluster id. A bare profile ingest
+// deployment layer registers under a `microvm*` cluster id. A bare profile ingest
 // surfaces both as separate clusters, so one machine reads as two targets
 // with the duplicate mislabeled "cloud".
 //
@@ -79,6 +79,15 @@ export interface DevMachineTargets {
   /** alias cluster id → the `microvm*` cluster id it resolves to. What
    *  useSelectedCluster rebinds a stored alias selection through. */
   aliasToMicroVm: Map<string, string>;
+  /** The VM inventory that establishes whether a local machine exists,
+   *  independent of deployment-layer registration. */
+  machines: readonly VmPortInfo[];
+  /** Local VMs that exist but do not yet have a real deploy-target
+   *  cluster record. The switcher renders these as navigation-only rows. */
+  coreMachines: VmPortInfo[];
+  /** Canonical local-machine lifecycle state. A cluster record wins over
+   *  the VM inventory because it represents the deploy-capable identity. */
+  state: 'none' | 'core-machine' | 'deploy-target';
 }
 
 /** Compute the canonical deploy-target view of the cluster registry.
@@ -97,5 +106,8 @@ export function resolveDevMachineTargets(clusters: Cluster[], vms: readonly VmPo
   }
   const visibleClusters = clusters.filter((c) => !aliasToMicroVm.has(c.id));
   const cloudClusters = visibleClusters.filter((c) => !isMicroVmClusterId(c.id));
-  return { visibleClusters, cloudClusters, aliasToMicroVm };
+  const devMachineClusterIds = new Set(visibleClusters.filter((c) => isMicroVmClusterId(c.id)).map((c) => c.id));
+  const coreMachines = vms.filter((vm) => !devMachineClusterIds.has(microVmClusterId(vm.name)));
+  const state = devMachineClusterIds.size > 0 ? 'deploy-target' : coreMachines.length > 0 ? 'core-machine' : 'none';
+  return { visibleClusters, cloudClusters, aliasToMicroVm, machines: vms, coreMachines, state };
 }

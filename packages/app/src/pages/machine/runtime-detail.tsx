@@ -233,13 +233,15 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
     <span
       className={cn(
         'inline-flex shrink-0 items-center rounded-md px-2 py-1 text-xs font-medium',
-        state === 'running' || state === 'core ready'
+        state === 'running'
           ? 'border border-green-500/40 bg-green-500/15 text-green-300'
-          : state === 'starting…'
+          : state === 'core ready'
             ? 'border border-cyan-500/40 bg-cyan-500/15 text-cyan-300'
-            : state === 'failed'
-              ? 'border border-red-500/40 bg-red-500/15 text-red-300'
-              : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
+            : state === 'starting…'
+              ? 'border border-cyan-500/40 bg-cyan-500/15 text-cyan-300'
+              : state === 'failed'
+                ? 'border border-red-500/40 bg-red-500/15 text-red-300'
+                : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
       )}
     >
       {state}
@@ -470,12 +472,17 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
             </pre>
           ) : null}
 
-          {status?.running && status.kubeconfigReady ? (
+          {status?.running ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-[var(--color-muted-foreground)]">
-                Available as <span className="font-medium text-[var(--color-foreground)]">{devMachineLabel(name)}</span>{' '}
-                in the target switcher
-              </p>
+              {status.kubeconfigReady ? (
+                <p className="text-xs text-[var(--color-muted-foreground)]">
+                  Available as{' '}
+                  <span className="font-medium text-[var(--color-foreground)]">{devMachineLabel(name)}</span> in the
+                  target switcher
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--color-muted-foreground)]">Core sandbox ready</p>
+              )}
               <div className="flex items-center gap-2">
                 {host.terminal ? (
                   <Button

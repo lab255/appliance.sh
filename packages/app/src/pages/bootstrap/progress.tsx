@@ -364,9 +364,9 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
 // CAPABLE (devUp) when the host supports it, so the freshly-booted
 // machine can run agents and dev shells without a second detour through
 // the Machine page. The engine already publishes structured bring-up
-// phases (media → booting → network → cluster → ready / failed, mirrored
-// by MicroVmStatus.phase), so instead of a single opaque node we render a
-// five-rung ladder driven by polled status().phase: each rung goes
+// phases (media → booting → network → ready / failed, plus cluster phases
+// for explicit provisioning, mirrored by MicroVmStatus.phase), so instead
+// of a single opaque node we render a ladder driven by status().phase. Each rung goes
 // pending → running (spinner) → completed (check). The streamed boot
 // lines live underneath as a collapsible detail, and a `failed` phase
 // fails fast — the in-flight rung turns red and the error is surfaced
@@ -378,17 +378,28 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
 // The bring-up ladder, mirroring Phase in packages/vm/src/bringup.rs.
 // `failed` is terminal but isn't a rung — it paints whichever rung was
 // in flight red rather than adding a sixth step.
-const MICROVM_LADDER: {
+type MicroVmRung = {
   phase: Exclude<MicroVmPhase, 'failed'>;
   label: string;
   // Shown while the rung is in flight, when the resting `label` would
   // read as a contradiction (e.g. "Cluster ready" next to a spinner).
   runningLabel?: string;
   detail: string;
-}[] = [
+};
+
+const CORE_MICROVM_LADDER: MicroVmRung[] = [
   { phase: 'media', label: 'Boot media', detail: 'Preparing the VM kernel and disk image.' },
   { phase: 'booting', label: 'Booting guest', detail: 'Starting the virtual machine.' },
   { phase: 'network', label: 'Guest network', detail: 'Connecting the VM to the network.' },
+  {
+    phase: 'ready',
+    label: 'Core sandbox ready',
+    detail: 'The isolated machine is ready; the deployment layer is added on your first deploy.',
+  },
+];
+
+const CLUSTER_MICROVM_LADDER: MicroVmRung[] = [
+  ...CORE_MICROVM_LADDER.slice(0, 3),
   {
     phase: 'cluster',
     label: 'Starting the app platform',
@@ -423,6 +434,10 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
   const queryClient = useQueryClient();
   const name = values.name?.trim() || 'appliance';
   const vmHost = host.vm;
+  // Today's express wizard is core-only. Keep the full provision ladder
+  // for callers that explicitly request a cluster boot in router state.
+  const clusterRequested = (values as MicroVmWizardValues & { cluster?: boolean }).cluster === true;
+  const ladder = clusterRequested ? CLUSTER_MICROVM_LADDER : CORE_MICROVM_LADDER;
 
   // `reached` is the high-water rung index the engine has reported;
   // `outcome` is the terminal verdict. The two together derive every
@@ -467,35 +482,39 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
   // choosing a rung — the rung in flight stays the one painted red.
   // Cluster sub-phases pin the cluster rung and update its live detail;
   // anything else unknown is ignored (older/newer engine tolerance).
-  const applyPhase = React.useCallback((phase: MicroVmPhase, detail?: string) => {
-    const sub = CLUSTER_SUB_PHASES[phase];
-    if (sub) {
-      const clusterIdx = MICROVM_LADDER.findIndex((r) => r.phase === 'cluster');
-      setReached((prev) => Math.max(prev, clusterIdx));
-      // Only a CHANGED sub-phase line counts as progress — the poll
-      // re-reports the same phase every 1.5s, which must not keep
-      // resetting the stall clock.
-      setClusterDetail((prev) => {
-        const next = detail ? `${sub} (${detail})` : sub;
-        if (next !== prev) {
-          lastActivityRef.current = Date.now();
-          setStalled(false);
-        }
-        return next;
-      });
-      return;
-    }
-    const idx = MICROVM_LADDER.findIndex((r) => r.phase === phase);
-    if (idx >= 0) {
-      setReached((prev) => {
-        if (idx > prev) {
-          lastActivityRef.current = Date.now();
-          setStalled(false);
-        }
-        return Math.max(prev, idx);
-      });
-    } else if (phase === 'failed') setOutcome((prev) => (prev === 'running' ? 'failed' : prev));
-  }, []);
+  const applyPhase = React.useCallback(
+    (phase: MicroVmPhase, detail?: string) => {
+      const sub = CLUSTER_SUB_PHASES[phase];
+      if (sub) {
+        if (!clusterRequested) return;
+        const clusterIdx = ladder.findIndex((r) => r.phase === 'cluster');
+        setReached((prev) => Math.max(prev, clusterIdx));
+        // Only a CHANGED sub-phase line counts as progress — the poll
+        // re-reports the same phase every 1.5s, which must not keep
+        // resetting the stall clock.
+        setClusterDetail((prev) => {
+          const next = detail ? `${sub} (${detail})` : sub;
+          if (next !== prev) {
+            lastActivityRef.current = Date.now();
+            setStalled(false);
+          }
+          return next;
+        });
+        return;
+      }
+      const idx = ladder.findIndex((r) => r.phase === phase);
+      if (idx >= 0) {
+        setReached((prev) => {
+          if (idx > prev) {
+            lastActivityRef.current = Date.now();
+            setStalled(false);
+          }
+          return Math.max(prev, idx);
+        });
+      } else if (phase === 'failed') setOutcome((prev) => (prev === 'running' ? 'failed' : prev));
+    },
+    [clusterRequested, ladder]
+  );
 
   // Watch for a quiet patch: no log line and no phase movement for a
   // couple of minutes. Real first boots go quiet during big image pulls,
@@ -557,22 +576,30 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     void poll();
 
     try {
-      appendLog('info', `Booting the "${name}" VM and bootstrapping its api-server…`);
+      appendLog('info', `Booting the "${name}" core sandbox…`);
       // The express boot provisions the VM DEV-CAPABLE (devUp: dev
       // toolchain + persistent workspace) so agents and dev shells work
       // right after onboarding — no second detour through the Machine
       // page. Falls back to a plain up() on hosts without devUp.
       const onLog = (e: { message: string }) => appendLog('info', e.message);
-      // Streams the same lines the CLI prints, installs the engine
-      // binary if missing, and registers the VM as a deploy target on
-      // success.
+      // Streams the same lines the CLI prints and installs the engine
+      // binary if missing. Express setup stops at the core sandbox.
       if (typeof instance.devUp === 'function') {
         await instance.devUp(onLog);
       } else {
         await instance.up(onLog);
       }
-      appendLog('info', `The "${name}" VM is up and registered as a deploy target.`);
-      setReached(MICROVM_LADDER.length - 1);
+      if (clusterRequested) {
+        setReached(ladder.findIndex((r) => r.phase === 'cluster'));
+        await instance.clusterUp(onLog);
+      }
+      appendLog(
+        'info',
+        clusterRequested
+          ? `The "${name}" VM is ready as a deploy target.`
+          : `The "${name}" core sandbox is ready; the deployment layer will be added on first deploy.`
+      );
+      setReached(ladder.length - 1);
       setOutcome('ready');
       // Collapse the bring-up log once we're green — the ladder tells the
       // success story, the raw lines are just there for failures.
@@ -590,7 +617,7 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
       timerRef.current = undefined;
       setRetrying(false);
     }
-  }, [vmHost, name, appendLog, applyPhase, queryClient]);
+  }, [vmHost, name, clusterRequested, ladder, appendLog, applyPhase, queryClient]);
 
   React.useEffect(() => {
     if (startedRef.current) return;
@@ -636,10 +663,10 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     if (outcome === 'ready') return 'Dev Machine ready.';
     if (outcome === 'failed') {
       // Mirror the visible header: don't name a stage we never reached.
-      return reached < 0 ? 'Start failed.' : `Start failed at the ${MICROVM_LADDER[cur].label} step.`;
+      return reached < 0 ? 'Start failed.' : `Start failed at the ${ladder[cur].label} step.`;
     }
     if (reached < 0) return 'Starting the Dev Machine…';
-    const rung = MICROVM_LADDER[cur];
+    const rung = ladder[cur];
     return `${rung.runningLabel ?? rung.label} in progress…`;
   })();
 
@@ -656,7 +683,7 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
       </div>
 
       <div className="space-y-2">
-        {MICROVM_LADDER.map((rung, i) => {
+        {ladder.map((rung, i) => {
           const st = rungState(i);
           // While a rung is in flight its resting label can read as a
           // contradiction next to a spinner — swap in the action-oriented
@@ -745,26 +772,29 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
       {outcome === 'ready' ? (
         <div className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-green-400">
-            <Check className="h-4 w-4" /> Dev Machine ready
+            <Check className="h-4 w-4" /> {clusterRequested ? 'Dev Machine ready' : 'Core sandbox ready'}
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-[var(--color-muted-foreground)]">Virtual machine</dt>
             <dd>{name}</dd>
           </dl>
-          {/* Engine jargon (profile id, deploy-target registration) demoted
-              behind a disclosure — the default success view stays plain. */}
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            {clusterRequested
+              ? 'The deployment layer is ready and this machine can receive app deployments.'
+              : 'Core sandbox ready — the deployment layer is added on your first deploy.'}
+          </p>
           <details>
             <summary className="cursor-pointer select-none text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
               Technical details
             </summary>
             <div className="mt-1 space-y-1 text-xs text-[var(--color-muted-foreground)]">
-              <div>
-                Profile: <code className="font-mono">{microVmClusterId(name)}</code>
-              </div>
-              <div>
-                The machine registers as <code className="font-mono">{microVmClusterId(name)}</code> and appears as a
-                deploy target in the target switcher.
-              </div>
+              {clusterRequested ? (
+                <div>
+                  Deploy-target profile: <code className="font-mono">{microVmClusterId(name)}</code>
+                </div>
+              ) : (
+                <div>The VM, network, egress controls, dev shell, and agent runtime are ready.</div>
+              )}
             </div>
           </details>
           {/* The machine being up is the middle, not the end — lead straight
@@ -795,7 +825,7 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
           fallbackHeadline={
             reached < 0
               ? "The local machine couldn't start"
-              : `The local machine couldn't start — stopped at "${MICROVM_LADDER[cur].label}"`
+              : `The local machine couldn't start — stopped at "${ladder[cur].label}"`
           }
           actions={
             <>

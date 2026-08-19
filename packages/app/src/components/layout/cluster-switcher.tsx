@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Check, Plus } from 'lucide-react';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { cn } from '@/lib/utils';
 import { devMachineLabel, isMicroVmClusterId, microVmNameFromClusterId } from '@/lib/host';
-import { resolveDevMachineTargets } from '@/lib/dev-machine-targets';
+import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
 import type { Cluster } from '@/lib/host';
 
 /** Display name for a deploy target: the local VM's own `microvm*`
@@ -34,16 +34,6 @@ export function ClusterSwitcher() {
   const { config, cluster, isLoading } = useSelectedCluster();
   const clusters = config?.clusters ?? [];
 
-  // Local VM inventory (ports) so profile-derived duplicates of the Dev
-  // Machine can be recognised by endpoint. Same query key the Machine
-  // page and deploy wizard poll — the cache is shared.
-  const vmListQuery = useQuery({
-    queryKey: ['microvm', 'list'],
-    enabled: Boolean(host.vm),
-    queryFn: () => host.vm!.list(),
-  });
-  const vms = vmListQuery.data ?? [];
-
   // Canonical dedupe (see lib/dev-machine-targets.ts): a CLI profile
   // whose URL points at a running local VM's forwarded api-server port
   // IS that VM — one machine must not list as two targets. The alias row
@@ -51,7 +41,7 @@ export function ClusterSwitcher() {
   // alias" special case because useSelectedCluster REBINDS an alias
   // selection to the twin, so the check mark always lands on the
   // surviving row and clicking it selects the working identity.
-  const { visibleClusters } = resolveDevMachineTargets(clusters, vms);
+  const { visibleClusters, coreMachines, isLoading: isMachineLoading } = useDevMachineTargets(clusters);
 
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -90,7 +80,10 @@ export function ClusterSwitcher() {
     },
   });
 
-  if (clusters.length === 0) {
+  if (clusters.length === 0 && coreMachines.length === 0 && isMachineLoading) {
+    return <div className="text-xs text-[var(--color-muted-foreground)]">…</div>;
+  }
+  if (clusters.length === 0 && coreMachines.length === 0) {
     return <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">Not connected</div>;
   }
 
@@ -113,6 +106,27 @@ export function ClusterSwitcher() {
       {open ? (
         <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] shadow-lg">
           <ul className="max-h-72 overflow-auto py-1">
+            {coreMachines.map((vm) => (
+              <li key={`core-${vm.name}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const suffix = vm.name === 'appliance' ? '' : `?vm=${encodeURIComponent(vm.name)}`;
+                    navigate(`/machine${suffix}`);
+                    setOpen(false);
+                  }}
+                  className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)]"
+                >
+                  <div className="w-4" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      {devMachineLabel(vm.name)} <EngineBadge local />
+                    </div>
+                    <div className="text-xs text-cyan-300">{vm.running ? 'core ready' : 'stopped'}</div>
+                  </div>
+                </button>
+              </li>
+            ))}
             {visibleClusters.map((c) => {
               const isSelected = c.id === cluster?.id;
               return (
