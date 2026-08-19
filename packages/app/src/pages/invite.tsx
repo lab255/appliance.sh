@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { createApplianceClient } from '@appliance.sh/sdk/client';
 import { Loader2, CheckCircle2, AlertTriangle, Server } from 'lucide-react';
+import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { PageShell } from '@/components/ui/page-shell';
 import { useHost } from '@/providers/host-provider';
 import { runtimeConfig } from '@/lib/runtime-config';
 
@@ -52,6 +54,11 @@ export function InvitePage() {
   const [phase, setPhase] = React.useState<Phase>('redeeming');
   const [error, setError] = React.useState<string | null>(null);
   const started = React.useRef(false);
+  const phaseHeadingRef = React.useRef<HTMLHeadingElement>(null);
+
+  React.useEffect(() => {
+    phaseHeadingRef.current?.focus();
+  }, [phase]);
 
   React.useEffect(() => {
     if (started.current) return;
@@ -88,7 +95,7 @@ export function InvitePage() {
       window.history.replaceState(null, '', window.location.pathname);
 
       setPhase('done');
-      navigate('/', { replace: true });
+      window.setTimeout(() => navigate('/', { replace: true }), 600);
     })().catch((err) => {
       setPhase('error');
       setError(err instanceof Error ? err.message : String(err));
@@ -97,46 +104,57 @@ export function InvitePage() {
 
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-6 text-center">
+      <PageShell rail="focused" className="max-w-md space-y-6 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-foreground)] text-[var(--color-background)]">
-          <Server className="h-6 w-6" />
+          <Server className="h-6 w-6" aria-hidden />
         </div>
 
         {phase === 'redeeming' ? (
-          <>
-            <h1 className="text-2xl font-semibold">Setting you up…</h1>
+          <div role="status" aria-live="polite" aria-atomic="true">
+            <h1 ref={phaseHeadingRef} tabIndex={-1} className="text-2xl font-semibold focus:outline-none">
+              Joining your team…
+            </h1>
             <p className="text-sm text-[var(--color-muted-foreground)]">
-              Your invite is being used to create your own sign-in for this team. This takes a moment — nothing to do on
-              your end.
+              Your invite is creating your own sign-in for this team. This usually takes a few seconds.
             </p>
-            <Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--color-muted-foreground)]" />
-          </>
+            <Loader2 className="mx-auto mt-4 h-6 w-6 animate-spin text-[var(--color-muted-foreground)]" aria-hidden />
+          </div>
         ) : null}
 
         {phase === 'done' ? (
-          <>
-            <h1 className="text-2xl font-semibold">You&apos;re in</h1>
+          <div role="status" aria-live="polite" aria-atomic="true">
+            <h1 ref={phaseHeadingRef} tabIndex={-1} className="text-2xl font-semibold focus:outline-none">
+              You&apos;re in
+            </h1>
             <p className="text-sm text-[var(--color-muted-foreground)]">Taking you to your team&apos;s apps…</p>
-            <CheckCircle2 className="mx-auto h-6 w-6 text-green-400" />
-          </>
+            <CheckCircle2 className="mx-auto mt-4 h-6 w-6 text-[var(--color-success-foreground)]" aria-hidden />
+          </div>
         ) : null}
 
         {phase === 'error' ? (
-          <>
-            <h1 className="text-2xl font-semibold">This invite didn&apos;t work</h1>
-            <div className="mx-auto flex items-start gap-2 rounded-md border border-red-500/50 bg-red-500/5 p-3 text-left text-sm text-red-400">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
+          <div>
+            <h1 ref={phaseHeadingRef} tabIndex={-1} className="text-2xl font-semibold focus:outline-none">
+              This invite didn&apos;t work
+            </h1>
+            <Banner tone="error" icon={AlertTriangle} className="mx-auto mt-4 text-left">
+              {error}
+            </Banner>
             <p className="text-sm text-[var(--color-muted-foreground)]">
-              Invite links work once and expire after a while. Ask the person who invited you to send a fresh link.
+              Invite links work once and expire after a while. Ask the person who invited you for a new invite.
             </p>
-            <Button variant="outline" onClick={() => navigate('/')}>
-              Go to the console
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => {
+                window.history.replaceState(null, '', window.location.pathname);
+                navigate('/');
+              }}
+            >
+              Back to Appliance
             </Button>
-          </>
+          </div>
         ) : null}
-      </div>
+      </PageShell>
     </div>
   );
 }

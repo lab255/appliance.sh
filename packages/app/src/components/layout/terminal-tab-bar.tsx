@@ -3,13 +3,14 @@ import { Check, CircleX, Loader2, Plus, Radio, X } from 'lucide-react';
 import {
   useTerminalSessions,
   statusLabel,
-  statusDotClass,
   type AgentTabMeta,
   type TerminalSessionMeta,
 } from '@/providers/terminal-sessions-provider';
+import { StatusDot } from '@/components/ui/status-dot';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { agentAdapter, agentLabel } from '@/lib/agents';
 import { cn } from '@/lib/utils';
+import { terminalStatusTone } from '@/pages/local-runtime/terminal-drawer';
 
 // Terminal tab strip (E3.3) — one tab per live session in the
 // `TerminalSessionsProvider`. Because the strip is rendered in
@@ -24,10 +25,6 @@ import { cn } from '@/lib/utils';
 // (shared `statusDotClass`) shrunk to a single dot so it fits a tab. The
 // status word is also folded into the tab button's accessible name (it is
 // not colour-only) — this dot is decorative for assistive tech.
-function StatusDot({ status }: { status: TerminalSessionMeta['status'] }) {
-  return <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusDotClass(status))} />;
-}
-
 /** Plain-language label for an agent's *run* status (distinct from the PTY
  *  connection status). Folded into the tab's accessible name so the badge —
  *  which is colour/glyph-only and aria-hidden — isn't the only signal. An
@@ -46,10 +43,12 @@ function agentStatusLabel(status: AgentTabMeta['status'], mode?: AgentTabMeta['m
  *  An interactive agent isn't "working on a task", so a perpetual spinner
  *  would mislead it as stuck (Devon). */
 function AgentStatusBadge({ status, mode }: { status: AgentTabMeta['status']; mode?: AgentTabMeta['mode'] }) {
-  if (status === 'done') return <Check aria-hidden className="h-3 w-3 shrink-0 text-green-400" />;
-  if (status === 'error') return <CircleX aria-hidden className="h-3 w-3 shrink-0 text-red-400" />;
-  if (mode === 'interactive') return <Radio aria-hidden className="h-3 w-3 shrink-0 text-cyan-300" />;
-  return <Loader2 aria-hidden className="h-3 w-3 shrink-0 animate-spin text-cyan-300" />;
+  if (status === 'done') return <Check aria-hidden className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />;
+  if (status === 'error')
+    return <CircleX aria-hidden className="h-3 w-3 shrink-0 text-[var(--color-destructive-foreground)]" />;
+  if (mode === 'interactive')
+    return <Radio aria-hidden className="h-3 w-3 shrink-0 text-[var(--color-info-foreground)]" />;
+  return <Loader2 aria-hidden className="h-3 w-3 shrink-0 animate-spin text-[var(--color-info-foreground)]" />;
 }
 
 function TerminalTab({
@@ -58,12 +57,14 @@ function TerminalTab({
   onSelect,
   onClose,
   onRename,
+  tabStop,
 }: {
   session: TerminalSessionMeta;
   active: boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
+  tabStop: boolean;
 }) {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(session.title);
@@ -112,6 +113,7 @@ function TerminalTab({
 
   return (
     <div
+      role="presentation"
       className={cn(
         'group flex h-7 max-w-[220px] items-center gap-2 rounded-md border px-2.5 text-xs',
         active
@@ -123,7 +125,7 @@ function TerminalTab({
         // the cascade to the active tab's `border-…-strong` (both would be
         // `border-color` utilities, and source order — not class order —
         // would decide the winner).
-        agent && !dead && 'ring-1 ring-inset ring-cyan-500/50',
+        agent && !dead && 'ring-1 ring-inset ring-[var(--color-info-border)]',
         dead && 'opacity-60'
       )}
       title={
@@ -135,11 +137,19 @@ function TerminalTab({
           : `${session.title} — ${session.subtitle} (${statusLabel(session.status)})`
       }
     >
-      <StatusDot status={session.status} />
+      <StatusDot
+        tone={terminalStatusTone(session.status)}
+        label={statusLabel(session.status)}
+        activity={session.status === 'open' || session.status === 'connecting' ? 'pulse' : 'static'}
+        size="sm"
+      />
       {agent && AgentIcon ? (
         <AgentIcon
           aria-hidden
-          className={cn('h-3.5 w-3.5 shrink-0', dead ? 'text-[var(--color-muted-foreground)]' : 'text-cyan-300')}
+          className={cn(
+            'h-3.5 w-3.5 shrink-0',
+            dead ? 'text-[var(--color-muted-foreground)]' : 'text-[var(--color-info-foreground)]'
+          )}
         />
       ) : null}
       {agent ? <AgentStatusBadge status={agent.status} mode={agent.mode} /> : null}
@@ -181,8 +191,12 @@ function TerminalTab({
               startEdit();
             }
           }}
-          className="min-w-0 flex-1 truncate text-left"
-          aria-pressed={active}
+          className="min-w-0 flex-1 truncate rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+          role="tab"
+          data-terminal-tab
+          data-session-id={session.id}
+          aria-selected={active}
+          tabIndex={tabStop ? 0 : -1}
           // Fold the status word (and agent label) into the accessible name
           // so a screen-reader / keyboard user can tell a live tab from a
           // dead one, and an agent from a shell — the dot + per-type glyph are
@@ -201,17 +215,23 @@ function TerminalTab({
           {session.title}
         </button>
       )}
+      <span className="text-micro text-[var(--color-muted-foreground)]" aria-hidden>
+        {statusLabel(session.status)}
+      </span>
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
-        className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-60 hover:bg-[var(--color-destructive)]/20 hover:text-red-400 group-hover:opacity-100"
+        className={cn(
+          'shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-destructive-background)] hover:text-[var(--color-destructive-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] group-hover:opacity-100 group-focus-within:opacity-100',
+          active ? 'opacity-100' : 'opacity-60'
+        )}
         aria-label={dead ? `Remove ${session.title}` : `End ${session.title}`}
         title={dead ? 'Remove ended tab' : agent ? 'End agent' : 'End shell'}
       >
-        <X className="h-3 w-3" />
+        <X className="h-3 w-3" aria-hidden />
       </button>
     </div>
   );
@@ -241,9 +261,16 @@ export function TerminalTabBar() {
         );
         if (!ok) return;
       }
+      const index = sessions.findIndex((candidate) => candidate.id === session.id);
+      const focusTarget = sessions[index + 1] ?? sessions[index - 1];
       closeSession(session.id);
+      requestAnimationFrame(() => {
+        const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-terminal-tab]'));
+        const next = focusTarget ? tabs.find((tab) => tab.dataset.sessionId === focusTarget.id) : null;
+        (next ?? document.querySelector<HTMLButtonElement>('[data-open-another-shell]'))?.focus();
+      });
     },
-    [confirm, closeSession]
+    [confirm, closeSession, sessions]
   );
 
   // The "+" forks a new concurrent shell from the active tab (or the most
@@ -260,15 +287,35 @@ export function TerminalTabBar() {
       {/* "Sessions" label and "+" sit OUTSIDE the scroll strip so they stay
           pinned when the tabs overflow horizontally. The strip now mixes
           plain shells and agent tabs, so it's labelled for both. */}
-      <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
+      <span className="shrink-0 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
         Sessions
       </span>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-        {sessions.map((session) => (
+      <div
+        role="tablist"
+        aria-label="Terminal sessions"
+        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto"
+        onKeyDown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+          const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+          if (current < 0) return;
+          event.preventDefault();
+          const next =
+            event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? tabs.length - 1
+                : (current + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length;
+          tabs[next]?.focus();
+          tabs[next]?.click();
+        }}
+      >
+        {sessions.map((session, index) => (
           <TerminalTab
             key={session.id}
             session={session}
             active={session.id === activeId}
+            tabStop={session.id === activeId || (activeId === null && index === 0)}
             onSelect={() => focusSession(session.id)}
             onClose={() => void handleClose(session)}
             onRename={(title) => renameSession(session.id, title)}
@@ -277,12 +324,13 @@ export function TerminalTabBar() {
       </div>
       <button
         type="button"
+        data-open-another-shell
         onClick={handleNew}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)]"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
         title="Open another shell on the same target"
         aria-label="Open another shell"
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-3.5 w-3.5" aria-hidden />
       </button>
     </div>
   );

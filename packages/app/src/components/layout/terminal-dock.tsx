@@ -15,7 +15,11 @@ export function TerminalDock() {
   const { sessions } = useTerminalSessions();
   if (sessions.length === 0) return null;
   return (
-    <div className="relative z-[45] col-start-2 row-start-3 border-t border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1.5">
+    <div
+      role="region"
+      aria-label="Terminal dock"
+      className="relative z-[45] col-start-2 row-start-3 border-t border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1.5"
+    >
       <TerminalTabBar />
     </div>
   );
