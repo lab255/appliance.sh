@@ -33,7 +33,7 @@ export function LiveUrl({ url, className }: { url: string; className?: string })
         target="_blank"
         rel="noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="inline-flex min-w-0 items-center gap-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
+        className="inline-flex min-w-0 items-center gap-1 rounded text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
       >
         <span className="truncate">{label}</span>
         <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/url:opacity-100" />
@@ -42,9 +42,9 @@ export function LiveUrl({ url, className }: { url: string; className?: string })
         type="button"
         onClick={onCopy}
         aria-label={copied ? 'Copied' : `Copy ${url}`}
-        className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-foreground)] group-hover/url:opacity-100"
+        className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-foreground)] focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] group-hover/url:opacity-100"
       >
-        {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+        {copied ? <Check className="h-3 w-3 text-[var(--color-success-foreground)]" /> : <Copy className="h-3 w-3" />}
       </button>
     </span>
   );

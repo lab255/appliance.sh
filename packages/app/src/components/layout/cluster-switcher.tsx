@@ -104,7 +104,7 @@ export function ClusterSwitcher() {
         <ChevronDown className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] shadow-lg">
+        <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] shadow-lg">
           <ul className="max-h-72 overflow-auto py-1">
             {coreMachines.map((vm) => (
               <li key={`core-${vm.name}`}>

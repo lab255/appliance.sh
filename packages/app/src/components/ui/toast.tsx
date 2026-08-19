@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { CheckCircle2, XCircle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, XCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type ToastVariant = 'success' | 'error';
+export type ToastVariant = 'success' | 'info' | 'warning' | 'error';
 
 interface ToastItem {
   id: number;
@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       const id = nextId.current++;
       const variant = opts?.variant ?? 'success';
       setToasts((prev) => [...prev, { id, message, variant }]);
-      // Errors linger longer; both are also manually dismissible.
+      // Errors linger longer; every toast is also manually dismissible.
       window.setTimeout(() => dismiss(id), variant === 'error' ? 8000 : 4000);
     },
     [dismiss]
@@ -50,31 +50,43 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            role={t.variant === 'error' ? 'alert' : 'status'}
-            className={cn(
-              'pointer-events-auto flex items-start gap-2 rounded-md border bg-[var(--color-background)] px-3 py-2.5 text-sm shadow-lg',
-              t.variant === 'error' ? 'border-red-500/50' : 'border-[var(--color-border)]'
-            )}
-          >
-            {t.variant === 'error' ? (
-              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            ) : (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-            )}
-            <div className="min-w-0 flex-1 break-words">{t.message}</div>
-            <button
-              type="button"
-              onClick={() => dismiss(t.id)}
-              aria-label="Dismiss notification"
-              className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+        {toasts.map((t) => {
+          const styles: Record<ToastVariant, string> = {
+            success: 'border-[var(--color-success-border)] text-[var(--color-success-foreground)]',
+            info: 'border-[var(--color-info-border)] text-[var(--color-info-foreground)]',
+            warning: 'border-[var(--color-warning-border)] text-[var(--color-warning-foreground)]',
+            error: 'border-[var(--color-destructive-border)] text-[var(--color-destructive-foreground)]',
+          };
+          const Icon =
+            t.variant === 'success'
+              ? CheckCircle2
+              : t.variant === 'info'
+                ? Info
+                : t.variant === 'warning'
+                  ? AlertTriangle
+                  : XCircle;
+          return (
+            <div
+              key={t.id}
+              role={t.variant === 'error' ? 'alert' : 'status'}
+              className={cn(
+                'pointer-events-auto flex items-start gap-2 rounded-md border bg-[var(--color-surface-raised)] px-3 py-2.5 text-sm shadow-lg',
+                styles[t.variant]
+              )}
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+              <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1 break-words text-[var(--color-foreground)]">{t.message}</div>
+              <button
+                type="button"
+                onClick={() => dismiss(t.id)}
+                aria-label="Dismiss notification"
+                className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Link } from 'react-router';
 import { AlertTriangle } from 'lucide-react';
 import { useClusterCompat } from '@/hooks/use-cluster-compat';
+import { Banner } from '@/components/ui/banner';
 
 // Cluster-level version-compat banner (generalized from the deploy
 // wizard's capability banner): one amber line at the top of the shell
@@ -51,17 +52,13 @@ export function ClusterCompatBanner() {
   if (!message && compat.warnings.length === 0) return null;
 
   return (
-    <div
-      role="status"
-      className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-200"
-    >
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <span className="flex flex-col gap-1">
+    <Banner tone="warning" role="status" icon={AlertTriangle} className="mb-4">
+      <span className="flex flex-col gap-1 text-xs leading-4">
         {message ? <span>{message}</span> : null}
         {compat.warnings.map((warning) => (
           <span key={warning}>{warning}</span>
         ))}
       </span>
-    </div>
+    </Banner>
   );
 }

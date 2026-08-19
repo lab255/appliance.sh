@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
-import { Wand, Server, Laptop, Cloud, Folder, Bot, Cog, X } from 'lucide-react';
+import { Wand, Server, Laptop, Cloud, Folder, Bot, Cog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
@@ -10,6 +10,7 @@ import { ClusterCompatBanner } from '@/components/cluster-compat-banner';
 import { TerminalLayer } from '@/pages/local-runtime/terminal-drawer';
 import { ClusterSwitcher } from './cluster-switcher';
 import { TerminalDock } from './terminal-dock';
+import { Banner } from '@/components/ui/banner';
 
 type NavItem = {
   to: string;
@@ -133,28 +134,22 @@ function AuthExpiredBanner() {
   const expired = useAuthExpired();
   if (!expired) return null;
   return (
-    <div
+    <Banner
+      tone="warning"
       role="alert"
-      className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2"
-    >
-      <span className="text-sm text-amber-200">Your connection to the server expired.</span>
-      <span className="flex shrink-0 items-center gap-1">
+      className="mb-4"
+      onDismiss={() => clearAuthFailure()}
+      action={
         <Link
           to="/setup/connect"
           onClick={() => clearAuthFailure()}
-          className="rounded-md border border-amber-500/40 px-2.5 py-1 text-xs font-medium text-amber-100 hover:bg-amber-500/10"
+          className="rounded-md border border-[var(--color-warning-border)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--color-warning-background)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
         >
           Reconnect
         </Link>
-        <button
-          type="button"
-          aria-label="Dismiss"
-          onClick={() => clearAuthFailure()}
-          className="rounded p-1 text-amber-200/70 hover:text-amber-100"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </span>
-    </div>
+      }
+    >
+      Your connection to the server expired.
+    </Banner>
   );
 }
