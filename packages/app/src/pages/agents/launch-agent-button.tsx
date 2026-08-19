@@ -57,6 +57,7 @@ export function LaunchAgentButton({
   agentType,
   onAgentTypeChange,
   disabledReason,
+  onAuthenticated,
 }: {
   name: string;
   // The agent to launch + authenticate (the `--type` key). CONTROLLED by ④
@@ -66,6 +67,7 @@ export function LaunchAgentButton({
   agentType: string;
   onAgentTypeChange: (type: string) => void;
   disabledReason?: string | null;
+  onAuthenticated?: () => void;
 }) {
   const host = useHost();
   const terminals = useTerminalSessions();
@@ -277,6 +279,7 @@ export function LaunchAgentButton({
             setReauthNudge(false);
             setErr(null);
             setAuthStatus(s);
+            onAuthenticated?.();
           }}
         />
         <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>

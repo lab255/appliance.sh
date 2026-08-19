@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ExternalLink, Play, Rocket, Trash2 } from 'lucide-react';
 import { LiveUrl } from '@/components/ui/live-url';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FriendlyError } from '@/components/friendly-error';
 import { CommandSnippet } from '@/components/ui/command-snippet';
 import { StatusDot } from '@/components/ui/status-dot';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -148,12 +150,10 @@ export function EnvironmentDetailPage() {
       </div>
 
       {envQuery.error ? (
-        <div className="rounded-md border border-red-500/50 bg-red-500/5 p-3 text-xs text-red-400">
-          {envQuery.error instanceof Error ? envQuery.error.message : String(envQuery.error)}
-        </div>
+        <FriendlyError error={envQuery.error} fallbackHeadline="Couldn't load this environment" />
       ) : null}
 
-      {!env ? (
+      {envQuery.error ? null : !env ? (
         <div className="text-sm text-[var(--color-muted-foreground)]">
           {envQuery.isLoading ? 'Loading…' : 'Not found.'}
         </div>
@@ -283,7 +283,9 @@ export function EnvironmentDetailPage() {
             {deploymentsQuery.isLoading && !deploymentsQuery.data ? (
               <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">Loading…</div>
             ) : !deploymentsQuery.data || deploymentsQuery.data.length === 0 ? (
-              <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">No deployments yet.</div>
+              <div className="p-4">
+                <EmptyState title="No deployments yet" />
+              </div>
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {deploymentsQuery.data.map((d) => (

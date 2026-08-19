@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, FileText, RefreshCw, Terminal as TerminalIcon } from 'lucide-react';
 import { type ApplianceClient } from '@appliance.sh/sdk/client';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useHost } from '@/providers/host-provider';
 import { useTerminalSessions } from '@/providers/terminal-sessions-provider';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
@@ -103,9 +104,10 @@ export function WorkloadsPanel({
         ) : workloadsQuery.isError ? (
           <p className="text-xs text-red-300">{(workloadsQuery.error as Error).message}</p>
         ) : empty ? (
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            No workloads yet. Deploy an app (Apps → Deploy your first app) to see it here.
-          </p>
+          <EmptyState
+            title="No workloads yet"
+            description="Deploy an app (Apps → Deploy your first app) to see it here."
+          />
         ) : data ? (
           <div className="space-y-5">
             <DeploymentsTable deployments={data.deployments} />

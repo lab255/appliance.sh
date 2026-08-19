@@ -3,7 +3,9 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ExternalLink, Rocket, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { StatusDot } from '@/components/ui/status-dot';
+import { FriendlyError } from '@/components/friendly-error';
 import { EntityLabel } from '@/components/ui/entity-label';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
@@ -112,12 +114,10 @@ export function ProjectDetailPage() {
       </div>
 
       {projectQuery.error ? (
-        <div className="rounded-md border border-red-500/50 bg-red-500/5 p-3 text-xs text-red-400">
-          {projectQuery.error instanceof Error ? projectQuery.error.message : String(projectQuery.error)}
-        </div>
+        <FriendlyError error={projectQuery.error} fallbackHeadline="Couldn't load this app" />
       ) : null}
 
-      {!project ? (
+      {projectQuery.error ? null : !project ? (
         <div className="text-sm text-[var(--color-muted-foreground)]">
           {projectQuery.isLoading ? 'Loading…' : 'Not found.'}
         </div>
@@ -169,7 +169,9 @@ export function ProjectDetailPage() {
             {environmentsQuery.isLoading && !environmentsQuery.data ? (
               <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">Loading…</div>
             ) : !environmentsQuery.data || environmentsQuery.data.length === 0 ? (
-              <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">No environments yet.</div>
+              <div className="p-4">
+                <EmptyState title="No environments yet" />
+              </div>
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {environmentsQuery.data.map((env) => {
@@ -220,7 +222,9 @@ export function ProjectDetailPage() {
             {deploymentsQuery.isLoading && !deploymentsQuery.data ? (
               <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">Loading…</div>
             ) : !deploymentsQuery.data || deploymentsQuery.data.length === 0 ? (
-              <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">No deployments yet.</div>
+              <div className="p-4">
+                <EmptyState title="No deployments yet" />
+              </div>
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {deploymentsQuery.data.map((d) => (

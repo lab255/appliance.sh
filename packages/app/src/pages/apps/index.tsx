@@ -13,6 +13,7 @@ import { StatusDot } from '@/components/ui/status-dot';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
+import { useKeyRole } from '@/hooks/use-key-role';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useEnvironmentsMap, useProjectsMap } from '@/hooks/use-lookups';
 import { relativeTime } from '@/lib/time';
@@ -52,6 +53,8 @@ function Overview({
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const { toast } = useToast();
+  const { role } = useKeyRole();
+  const canManageApps = role === 'admin';
   const [filter, setFilter] = React.useState('');
   // When the apps query fails because the local Dev Machine isn't running,
   // offer a one-click Start instead of a dead-end error (post-delete / stop
@@ -182,20 +185,24 @@ function Overview({
           {/* Deploy is the primary action — the wizard find-or-creates the
               app + environment and deploys in one flow. "New app" (a bare
               app record, no deploy) stays as the secondary path. */}
-          <Button asChild>
-            <Link to="/projects/deploy">
-              <Rocket className="h-4 w-4" /> Deploy an app
-            </Link>
-          </Button>
-          {!creating ? (
-            <Button variant="outline" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> New app
-            </Button>
+          {canManageApps ? (
+            <>
+              <Button asChild>
+                <Link to="/projects/deploy">
+                  <Rocket className="h-4 w-4" /> Deploy an app
+                </Link>
+              </Button>
+              {!creating ? (
+                <Button variant="outline" onClick={() => setCreating(true)}>
+                  <Plus className="h-4 w-4" /> New app
+                </Button>
+              ) : null}
+            </>
           ) : null}
         </div>
       </div>
 
-      {creating ? (
+      {canManageApps && creating ? (
         <form onSubmit={onCreate} className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
           <h2 className="text-sm font-semibold">New app</h2>
           <label className="block space-y-1 text-sm">
@@ -268,7 +275,7 @@ function Overview({
         // simply aren't connected to yet as an empty one.
         <p className="py-16 text-center text-sm text-[var(--color-muted-foreground)]">Connecting to {clusterName}…</p>
       ) : projects.length === 0 ? (
-        <EmptyApps />
+        <EmptyApps canManageApps={canManageApps} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((project) => (
@@ -276,7 +283,7 @@ function Overview({
               key={project.id}
               project={project}
               environments={envsByProject.get(project.id) ?? []}
-              onDelete={onDeleteProject}
+              onDelete={canManageApps ? onDeleteProject : undefined}
               deleting={deleteMutation.isPending}
             />
           ))}
@@ -303,7 +310,7 @@ function AppCard({
 }: {
   project: Project;
   environments: Environment[];
-  onDelete: (p: Project) => void;
+  onDelete?: (p: Project) => void;
   deleting: boolean;
 }) {
   const client = useApplianceClient();
@@ -347,15 +354,17 @@ function AppCard({
       {/* Per-card delete (folded from ConnectedProjects) — a sibling of the
           navigation Link, not nested inside it, so the markup stays valid.
           Revealed on hover / keyboard focus. */}
-      <button
-        type="button"
-        aria-label={`Delete ${project.name}`}
-        disabled={deleting}
-        onClick={() => onDelete(project)}
-        className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          aria-label={`Delete ${project.name}`}
+          disabled={deleting}
+          onClick={() => onDelete(project)}
+          className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
       <Link to={`/projects/${project.id}`} className="flex flex-1 flex-col gap-3 p-5">
         <div className="flex items-center justify-between gap-2 pr-6">
           <span className="truncate font-medium">{project.name}</span>
@@ -425,8 +434,18 @@ function summarizeHealth(
   return { status, ...(hasUsage ? { usage: { cpuMillicores, memoryBytes } } : {}) };
 }
 
-function EmptyApps() {
+function EmptyApps({ canManageApps }: { canManageApps: boolean }) {
   const navigate = useNavigate();
+  if (!canManageApps) {
+    return (
+      <div className="mx-auto max-w-md space-y-2 py-16 text-center">
+        <h2 className="text-lg font-semibold">No apps yet</h2>
+        <p className="text-sm text-[var(--color-muted-foreground)]">
+          Ask an operator to create or deploy an app to this cluster.
+        </p>
+      </div>
+    );
+  }
   // A freshly-onboarded user with no apps gets a button, not just a
   // command to copy. The deploy wizard (/projects/deploy) find-or-creates
   // the app + environment and writes the link itself, so there's no
@@ -462,7 +481,15 @@ function RecentActivity({
   const projects = useProjectsMap();
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold text-[var(--color-muted-foreground)]">Recent activity</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-[var(--color-muted-foreground)]">Recent activity</h2>
+        <Link
+          to="/deployments"
+          className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:underline"
+        >
+          View all
+        </Link>
+      </div>
       {loading && !deployments ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (

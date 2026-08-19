@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { Bot, Server, Terminal as TerminalIcon } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bot, Server, Square, Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FriendlyError } from '@/components/friendly-error';
 import { AgentLoginPanel, useAgentSignedIn } from '@/components/agent-login';
 import { AGENT_ADAPTERS, DEFAULT_AGENT_TYPE, agentAdapter, agentLabel } from '@/lib/agents';
 import { useHost } from '@/providers/host-provider';
@@ -82,7 +83,11 @@ export function AgentsPage() {
         />
       ) : null}
 
-      <LauncherSection agentType={agentType} onAgentTypeChange={setAgentType} />
+      <LauncherSection
+        agentType={agentType}
+        onAgentTypeChange={setAgentType}
+        onAuthenticated={() => setAuthBump((n) => n + 1)}
+      />
 
       <RunsList />
     </div>
@@ -172,9 +177,11 @@ function AgentSignIn({
 function LauncherSection({
   agentType,
   onAgentTypeChange,
+  onAuthenticated,
 }: {
   agentType: string;
   onAgentTypeChange: (type: string) => void;
+  onAuthenticated: () => void;
 }) {
   const host = useHost();
   const [searchParams] = useSearchParams();
@@ -210,6 +217,17 @@ function LauncherSection({
       <h2 className="text-sm font-semibold text-[var(--color-muted-foreground)]">Launch</h2>
       {vmListQuery.isLoading && runningVms.length === 0 ? (
         <p className="text-xs text-[var(--color-muted-foreground)]">Checking the Dev Machine…</p>
+      ) : vmListQuery.isError ? (
+        <EmptyState
+          icon={Server}
+          title="Couldn't reach the host"
+          description="The Dev Machine status couldn't be read. Check that the desktop host is available, then retry."
+          action={
+            <Button variant="outline" onClick={() => vmListQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        />
       ) : runningVms.length === 0 ? (
         <EmptyState
           icon={Server}
@@ -227,7 +245,12 @@ function LauncherSection({
         <div className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
           {runningVms.length > 1 ? <RuntimePicker vms={runningVms} selected={selected} onSelect={setSelected} /> : null}
           {selected ? (
-            <RuntimeLauncher name={selected} agentType={agentType} onAgentTypeChange={onAgentTypeChange} />
+            <RuntimeLauncher
+              name={selected}
+              agentType={agentType}
+              onAgentTypeChange={onAgentTypeChange}
+              onAuthenticated={onAuthenticated}
+            />
           ) : null}
         </div>
       )}
@@ -279,10 +302,12 @@ function RuntimeLauncher({
   name,
   agentType,
   onAgentTypeChange,
+  onAuthenticated,
 }: {
   name: string;
   agentType: string;
   onAgentTypeChange: (type: string) => void;
+  onAuthenticated: () => void;
 }) {
   const host = useHost();
   const statusQuery = useQuery({
@@ -297,13 +322,15 @@ function RuntimeLauncher({
   const status = statusQuery.data;
 
   const needsWorkspace = Boolean(status?.running) && !status?.devMount;
-  const disabledReason = !status
-    ? 'Checking the Dev Machine…'
-    : !status.running
-      ? 'Start the Dev Machine to run agents'
-      : status.devMount
-        ? null
-        : "This machine doesn't have a shared workspace folder yet. Agents work in that folder, so set one up first.";
+  const disabledReason = statusQuery.isError
+    ? "Couldn't read the Dev Machine — retry below."
+    : !status
+      ? 'Checking the Dev Machine…'
+      : !status.running
+        ? 'Start the Dev Machine to run agents'
+        : status.devMount
+          ? null
+          : "This machine doesn't have a shared workspace folder yet. Agents work in that folder, so set one up first.";
 
   return (
     <div className="space-y-2">
@@ -321,7 +348,19 @@ function RuntimeLauncher({
         agentType={agentType}
         onAgentTypeChange={onAgentTypeChange}
         disabledReason={disabledReason}
+        onAuthenticated={onAuthenticated}
       />
+      {statusQuery.isError ? (
+        <FriendlyError
+          error={statusQuery.error}
+          headline="Couldn't read the Dev Machine"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => statusQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
       {/* The fix lives on the Machine page (restart as a dev environment) —
           give it a button rather than describing the path in prose. */}
       {needsWorkspace ? (
@@ -358,10 +397,7 @@ function RunsList() {
     queryFn: async () => {
       const perVm = await Promise.all(
         vmNames.map(async (vmName) => {
-          const list = await host
-            .vm!.instance(vmName)
-            .agent.list()
-            .catch(() => [] as AgentInfo[]);
+          const list = await host.vm!.instance(vmName).agent.list();
           return list.map((a) => ({ ...a, vmName }));
         })
       );
@@ -392,6 +428,23 @@ function RunsList() {
       <h2 className="text-sm font-semibold text-[var(--color-muted-foreground)]">Runs</h2>
       {runsQuery.isLoading && runs.length === 0 ? (
         <p className="text-xs text-[var(--color-muted-foreground)]">Loading runs…</p>
+      ) : vmListQuery.isError || runsQuery.isError ? (
+        <EmptyState
+          icon={Bot}
+          title="Couldn't load agent runs"
+          description="The host didn't return the current agent sessions. Retry to check again."
+          action={
+            <Button
+              variant="outline"
+              onClick={() => {
+                void vmListQuery.refetch();
+                void runsQuery.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          }
+        />
       ) : runs.length === 0 ? (
         <NoRunsState hasRuntime={runningVms.length > 0} />
       ) : (
@@ -423,30 +476,56 @@ function NoRunsState({ hasRuntime }: { hasRuntime: boolean }) {
 }
 
 function RunRow({ run, onObserve }: { run: AgentInfo & { vmName: string }; onObserve: () => void }) {
+  const host = useHost();
+  const queryClient = useQueryClient();
   const adapter = agentAdapter(run.type);
   // An agent is observable while it is the live, attached TTY. A reconciled
   // `live: false` means the tmux session is gone, so reattaching would just
   // surface a dead shell — hide Observe then.
   const observable = run.status === 'running' && run.live !== false;
+  const stopMutation = useMutation({
+    mutationFn: () => host.vm!.instance(run.vmName).agent.stop(run.sessionId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents', 'runs'] }),
+  });
+  const stopLabel = observable ? 'Stop' : 'Remove';
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5">
-      <adapter.Icon className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{run.task ? run.task : agentLabel(run.type)}</span>
-          <span className="shrink-0 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">
-            {agentLabel(run.type)}
-          </span>
+    <li>
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <adapter.Icon className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium">{run.task ? run.task : agentLabel(run.type)}</span>
+            <span className="shrink-0 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">
+              {agentLabel(run.type)}
+            </span>
+          </div>
+          <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+            {run.vmName} · {run.mode ?? 'interactive'}
+          </div>
         </div>
-        <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
-          {run.vmName} · {run.mode ?? 'interactive'}
-        </div>
-      </div>
-      <RunStatusBadge status={run.status} />
-      {observable ? (
-        <Button variant="outline" size="sm" onClick={onObserve}>
-          <TerminalIcon className="h-3.5 w-3.5" /> Observe
+        <RunStatusBadge status={run.status} />
+        {observable ? (
+          <Button variant="outline" size="sm" onClick={onObserve}>
+            <TerminalIcon className="h-3.5 w-3.5" /> Observe
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => stopMutation.mutate()}
+          disabled={stopMutation.isPending}
+          aria-label={`${stopLabel} ${run.task || agentLabel(run.type)}`}
+        >
+          {observable ? <Square className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+          {stopMutation.isPending ? 'Stopping…' : stopLabel}
         </Button>
+      </div>
+      {stopMutation.error ? (
+        <FriendlyError
+          error={stopMutation.error}
+          fallbackHeadline={`Couldn't ${stopLabel.toLowerCase()} this agent`}
+          className="mx-3 mb-3"
+        />
       ) : null}
     </li>
   );
