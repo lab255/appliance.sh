@@ -276,12 +276,3 @@ function Section({ title, description, children }: { title: string; description?
     </SectionCard>
   );
 }
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[auto_1fr] items-baseline gap-4">
-      <dt className="text-xs text-[var(--color-muted-foreground)]">{label}</dt>
-      <dd className="text-sm">{value}</dd>
-    </div>
-  );
-}

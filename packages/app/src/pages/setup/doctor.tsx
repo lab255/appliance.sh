@@ -2,7 +2,6 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Copy, Download, Play, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Banner } from '@/components/ui/banner';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { SectionCard } from '@/components/ui/section-card';
 import { ListSkeleton } from '@/components/ui/skeleton';
