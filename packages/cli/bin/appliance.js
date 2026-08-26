@@ -26,7 +26,7 @@ if (!binary) {
   console.error('Reinstall to fetch the platform-matched binary:');
   console.error('  npm i -g @appliance.sh/cli');
   console.error('Or download manually from:');
-  console.error('  https://github.com/appliance-sh/appliance.sh/releases/latest');
+  console.error('  https://github.com/lab255/appliance.sh/releases/latest');
   process.exit(1);
 }
 

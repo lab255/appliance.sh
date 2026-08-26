@@ -34,6 +34,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Release from the TIP of main, not the SHA that triggered the
+          # run. The `release` environment approval can sit for hours;
+          # by approval time main may have moved (or a prior attempt may
+          # already have pushed its version commit), and a pinned-SHA
+          # release then dies with a non-fast-forward on push.
+          ref: main
           fetch-depth: 0
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -57,6 +63,10 @@ jobs:
         run: |
           git config --global user.email "eliot.lim@gmail.com"
           git config --global user.name "Eliot Lim"
+          # Close the approval-latency window: sync to the remote tip
+          # right before releasing so the atomic commit+tag push can't
+          # be rejected by commits that landed while the run waited.
+          git pull --rebase origin main
           pnpm run release:ci
 
       - name: Dispatch downstream release artifact builds
@@ -75,15 +85,20 @@ jobs:
           set -euo pipefail
           msg=$(git log -1 --pretty=%s)
           if echo "$msg" | grep -qE '^chore\(release\): publish'; then
+            # Dispatch at the release TAG, not main: the artifact builds
+            # must compile the exact released commit. Between tagging and
+            # dispatch (or during the builds) main can move, and a
+            # main-ref build would silently ship unreleased code as
+            # release assets.
             VERSION=$(node -p "require('./packages/api-server/package.json').version")
             echo "Dispatching api-server image build for v${VERSION}"
-            gh workflow run release-api-server-image.yml --ref main -f tag="${VERSION}"
+            gh workflow run release-api-server-image.yml --ref "v${VERSION}" -f tag="${VERSION}"
             CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
             echo "Dispatching CLI binaries build for v${CLI_VERSION}"
-            gh workflow run release-cli-binaries.yml --ref main -f tag="v${CLI_VERSION}"
+            gh workflow run release-cli-binaries.yml --ref "v${CLI_VERSION}" -f tag="v${CLI_VERSION}"
             DESKTOP_VERSION=$(node -p "require('./packages/desktop/package.json').version")
             echo "Dispatching desktop bundle build for v${DESKTOP_VERSION}"
-            gh workflow run release-desktop.yml --ref main -f tag="v${DESKTOP_VERSION}"
+            gh workflow run release-desktop.yml --ref "v${DESKTOP_VERSION}" -f tag="v${DESKTOP_VERSION}"
           else
             echo "HEAD ('${msg}') is not a release commit; skipping artifact dispatches."
           fi

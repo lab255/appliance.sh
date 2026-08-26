@@ -45,14 +45,14 @@ const triple = resolveHostTriple();
 if (!triple) {
   console.error(
     `appliance-cli: no prebuilt binary for ${process.platform}/${process.arch}. ` +
-      'Open an issue at https://github.com/appliance-sh/appliance.sh/issues.'
+      'Open an issue at https://github.com/lab255/appliance.sh/issues.'
   );
   process.exit(1);
 }
 const ext = process.platform === 'win32' ? '.exe' : '';
 const assetName = `appliance-${triple}${ext}`;
 const version = pkg.version;
-const url = `https://github.com/appliance-sh/appliance.sh/releases/download/v${version}/${assetName}`;
+const url = `https://github.com/lab255/appliance.sh/releases/download/v${version}/${assetName}`;
 const destBin = path.join(binDir, `appliance-bin${ext}`);
 
 // ---- download with retry ----------------------------------------------
@@ -115,7 +115,7 @@ async function downloadWithRetry(srcUrl, dest, opts) {
         }
         if (lastAttempt) {
           console.error('  After multiple retries — check your network and retry, or download manually:');
-          console.error('  https://github.com/appliance-sh/appliance.sh/releases');
+          console.error('  https://github.com/lab255/appliance.sh/releases');
           process.exit(1);
         }
       }

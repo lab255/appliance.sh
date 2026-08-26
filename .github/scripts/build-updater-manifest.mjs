@@ -12,7 +12,7 @@
 // Inputs (env, set by the workflow):
 //   TAG      release tag, e.g. v1.48.0
 //   VERSION  tag without the leading v, e.g. 1.48.0
-//   REPO     owner/name, e.g. appliance-sh/appliance.sh
+//   REPO     owner/name, e.g. lab255/appliance.sh
 //
 // Reads:  dist-artifacts/desktop-<arch>/Appliance_<arch>.app.tar.gz.sig
 // Writes: latest.json (cwd)

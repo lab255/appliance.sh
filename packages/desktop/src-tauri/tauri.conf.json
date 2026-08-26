@@ -37,7 +37,7 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/appliance-sh/appliance.sh/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/lab255/appliance.sh/releases/latest/download/latest.json"],
       "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY"
     }
   }

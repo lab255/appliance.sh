@@ -5,7 +5,7 @@
   "description": "Cross-platform dependency installer for the Appliance local runtime (docker / kubectl / crane)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/appliance-sh/appliance.sh.git",
+    "url": "https://github.com/lab255/appliance.sh.git",
     "directory": "packages/helper"
   },
   "license": "MIT",

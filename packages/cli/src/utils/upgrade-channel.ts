@@ -31,7 +31,7 @@ export function upgradeInstructions(channel: UpgradeChannel): string[] {
         'This CLI is bundled with the Appliance desktop app — it updates with the app:',
         '  1. Open the desktop app and accept the update prompt (or reinstall the latest DMG/installer).',
         '  2. Restart the Dev Machine so the guest control plane picks up the new version.',
-        '     https://github.com/appliance-sh/appliance.sh/releases',
+        '     https://github.com/lab255/appliance.sh/releases',
       ];
     case 'source':
       return [
@@ -44,7 +44,7 @@ export function upgradeInstructions(channel: UpgradeChannel): string[] {
         'This CLI is a standalone binary:',
         '  npm install -g @appliance.sh/cli@latest    (reinstalls the binary)',
         'or download the latest release binary:',
-        '  https://github.com/appliance-sh/appliance.sh/releases',
+        '  https://github.com/lab255/appliance.sh/releases',
       ];
   }
 }

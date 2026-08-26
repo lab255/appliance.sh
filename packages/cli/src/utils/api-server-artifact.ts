@@ -25,7 +25,7 @@ import { VERSION } from '@appliance.sh/sdk';
 //      versioned-artifact convention the ghcr image used to follow).
 
 const GUEST_ARCH: 'x64' | 'arm64' = process.arch === 'arm64' ? 'arm64' : 'x64';
-const RELEASE_BASE = 'https://github.com/appliance-sh/appliance.sh/releases/download';
+const RELEASE_BASE = 'https://github.com/lab255/appliance.sh/releases/download';
 
 export function guestAssetsDir(): string {
   return path.join(os.homedir(), '.appliance', 'vm', 'images', 'guest-assets');
