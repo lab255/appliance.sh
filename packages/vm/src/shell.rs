@@ -96,10 +96,19 @@ pub fn run_client(name: &str, command: Option<&str>, root: bool, session: Option
     let mut in_to_sock = stream;
 
     // stdin -> guest, on a detached thread (it may block in read until
-    // the process exits once the shell closes).
+    // the process exits once the shell closes). One-shot: NEVER forward
+    // stdin EOF as a half-close — the relay propagates it to the guest,
+    // and socat's default post-EOF grace (0.5s) then kills the login
+    // shell mid-command, so any one-shot slower than ~0.5s (an npm
+    // install, a build) dies with a partial result. The `exit` line the
+    // command write appended already ends the shell; the socket closes
+    // when this process exits after the sentinel.
+    let oneshot = command.is_some();
     std::thread::spawn(move || {
         let _ = std::io::copy(&mut in_, &mut in_to_sock);
-        let _ = in_to_sock.shutdown(Shutdown::Write);
+        if !oneshot {
+            let _ = in_to_sock.shutdown(Shutdown::Write);
+        }
     });
 
     // guest -> stdout, on this thread: it returns when the shell exits
@@ -126,9 +135,11 @@ pub fn run_captured(name: &str, command: &str, root: bool) -> Result<(i32, Strin
     let mut stream = connect(name)?;
     writeln!(stream, "rows 24 cols 80{}", if root { " root" } else { "" })?;
     writeln!(stream, "{}; printf '\\n{}%d__END__\\n' \"$?\"\nexit", command, RC_MARK)?;
-    // Half-close so the guest shell sees EOF on stdin once the command
-    // and `exit` are consumed; then drain its output to the sentinel.
-    stream.shutdown(Shutdown::Write)?;
+    // Do NOT half-close here: the relay forwards it to the guest, and
+    // socat's default post-EOF grace (0.5s) kills the login shell before
+    // a slower command (npm install, builds) can finish. The `exit` line
+    // above ends the shell once the command completes; drain to the
+    // sentinel and let dropping the stream close the socket.
     let mut out: Vec<u8> = Vec::new();
     let code = pump_until_sentinel(&mut stream, &mut out);
     Ok((code, String::from_utf8_lossy(&out).to_string()))
