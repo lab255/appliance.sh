@@ -6,7 +6,7 @@
   "author": "Eliot Lim",
   "repository": {
     "type": "git",
-    "url": "https://github.com/appliance-sh/appliance.sh.git",
+    "url": "https://github.com/lab255/appliance.sh.git",
     "directory": "packages/api-server"
   },
   "license": "MIT",

@@ -4,7 +4,7 @@
   "description": "SDK for installing, running, and developing applications for the Appliance platform",
   "repository": {
     "type": "git",
-    "url": "https://github.com/appliance-sh/appliance.sh.git",
+    "url": "https://github.com/lab255/appliance.sh.git",
     "directory": "packages/sdk"
   },
   "license": "MIT",

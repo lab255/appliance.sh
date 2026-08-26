@@ -14,7 +14,7 @@
   "description": "Install the Appliance platform on AWS",
   "repository": {
     "type": "git",
-    "url": "https://github.com/appliance-sh/appliance.sh.git",
+    "url": "https://github.com/lab255/appliance.sh.git",
     "directory": "packages/install-aws"
   },
   "license": "MIT",

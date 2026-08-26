@@ -4,7 +4,7 @@
   "description": "Install and run applications on the cloud. Alias for @appliance.sh/cli.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/appliance-sh/appliance.sh.git",
+    "url": "https://github.com/lab255/appliance.sh.git",
     "directory": "packages/appliance.sh"
   },
   "license": "MIT",

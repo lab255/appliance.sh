@@ -1,0 +1,44 @@
+{
+  "/appliance-installer/name": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "name"
+    }
+  ],
+  "/appliance-installer/domainName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "domainName"
+    }
+  ],
+  "/appliance-installer/state-bucket-arn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "statebucketarn"
+    }
+  ],
+  "/appliance-installer/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/appliance-installer/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/appliance-installer/state/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "stateEC29AD4A"
+    }
+  ],
+  "/appliance-installer/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ]
+}

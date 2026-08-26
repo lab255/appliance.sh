@@ -5,7 +5,7 @@
   "description": "Deploy the Appliance Infrastructure",
   "repository": {
     "type": "git",
-    "url": "https://github.com/appliance-sh/appliance.sh.git",
+    "url": "https://github.com/lab255/appliance.sh.git",
     "directory": "packages/infra"
   },
   "license": "MIT",

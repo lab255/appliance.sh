@@ -219,7 +219,7 @@ fn agent_image_filename() -> Result<String> {
 
 fn agent_image_url() -> Result<String> {
     Ok(format!(
-        "https://github.com/appliance-sh/appliance.sh/releases/download/agent-image-v{AGENT_IMAGE_VERSION}/{}",
+        "https://github.com/lab255/appliance.sh/releases/download/agent-image-v{AGENT_IMAGE_VERSION}/{}",
         agent_image_filename()?
     ))
 }
