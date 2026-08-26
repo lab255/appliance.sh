@@ -199,3 +199,4 @@ bun.lockb
 bun.lock
 .gstack/
 packages/vm/target/
+cdk.out/
