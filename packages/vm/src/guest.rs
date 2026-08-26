@@ -316,7 +316,10 @@ __APP_USER_PROVISION__
 # host's resident process bridges a local Unix socket to this; no SSH,
 # no TCP exposure, and it works before k3s is up. Runs on every VM.
 if command -v socat >/dev/null 2>&1; then
-  socat VSOCK-LISTEN:__SHELL_VSOCK_PORT__,reuseaddr,fork \
+  # -t 30: post-EOF grace. socat's default (0.5s) tears the PTY child
+  # down half a second after the client half-closes, killing any
+  # still-running one-shot command (npm installs, builds) mid-flight.
+  socat -t 30 VSOCK-LISTEN:__SHELL_VSOCK_PORT__,reuseaddr,fork \
     EXEC:/usr/local/bin/appliance-shell-agent,pty,setsid,ctty,stderr \
     >/var/log/appliance-shell.log 2>&1 &
   echo "appliance-shell: vsock shell agent listening on port __SHELL_VSOCK_PORT__"
