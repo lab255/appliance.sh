@@ -222,11 +222,11 @@ pub fn build_udp_ipv4(
 /// padded with zero), folded into a 32-bit accumulator.
 fn sum_words(data: &[u8]) -> u32 {
     let mut sum = 0u32;
-    let mut chunks = data.chunks_exact(2);
-    for c in &mut chunks {
-        sum += u16::from_be_bytes([c[0], c[1]]) as u32;
+    let (chunks, remainder) = data.as_chunks::<2>();
+    for c in chunks {
+        sum += u16::from_be_bytes(*c) as u32;
     }
-    if let [last] = chunks.remainder() {
+    if let [last] = remainder {
         sum += (*last as u32) << 8;
     }
     sum

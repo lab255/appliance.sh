@@ -1,8 +1,12 @@
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, FileText, RefreshCw, Terminal as TerminalIcon } from 'lucide-react';
+import { FileText, RefreshCw, Terminal as TerminalIcon } from 'lucide-react';
 import { type ApplianceClient } from '@appliance.sh/sdk/client';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Banner } from '@/components/ui/banner';
+import { LogPane } from '@/components/ui/log-pane';
+import { StatusPill } from '@/components/ui/status-pill';
 import { useHost } from '@/providers/host-provider';
 import { useTerminalSessions } from '@/providers/terminal-sessions-provider';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
@@ -69,7 +73,9 @@ export function WorkloadsPanel({
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-sm font-semibold">Workloads · {vmName ?? 'appliance'}</h2>
-            {scopeNote ? <p className="mt-0.5 text-[11px] text-[var(--color-muted-foreground)]">{scopeNote}</p> : null}
+            {scopeNote ? (
+              <p className="mt-0.5 text-xs leading-4 text-[var(--color-muted-foreground)]">{scopeNote}</p>
+            ) : null}
           </div>
           <Button
             variant="ghost"
@@ -85,7 +91,7 @@ export function WorkloadsPanel({
         {!isActive ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-[var(--color-muted-foreground)]">
-              Switch to this Dev Machine to read its workloads through the api-server.
+              Switch to this Dev Machine to load its workloads.
             </p>
             <Button
               variant="outline"
@@ -101,11 +107,12 @@ export function WorkloadsPanel({
         ) : workloadsQuery.isLoading ? (
           <p className="text-xs text-[var(--color-muted-foreground)]">Loading…</p>
         ) : workloadsQuery.isError ? (
-          <p className="text-xs text-red-300">{(workloadsQuery.error as Error).message}</p>
+          <Banner tone="error">{(workloadsQuery.error as Error).message}</Banner>
         ) : empty ? (
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            No workloads yet. Deploy an app (Apps → Deploy your first app) to see it here.
-          </p>
+          <EmptyState
+            title="No workloads yet"
+            description="Deploy an app (Apps → Deploy your first app) to see it here."
+          />
         ) : data ? (
           <div className="space-y-5">
             <DeploymentsTable deployments={data.deployments} />
@@ -133,26 +140,36 @@ export function WorkloadsPanel({
 function DeploymentsTable({ deployments }: { deployments: LocalDeploymentInfo[] }) {
   if (deployments.length === 0) return null;
   return (
-    <div>
+    <div className="overflow-x-auto">
       <div className="mb-1 text-xs font-medium text-[var(--color-muted-foreground)]">Deployments</div>
       <table className="w-full text-sm">
+        <caption className="sr-only">Deployments hosted on this Dev Machine</caption>
         <thead className="text-left text-xs text-[var(--color-muted-foreground)]">
           <tr>
-            <th className="py-1 pr-3">Name</th>
-            <th className="py-1 pr-3">Image</th>
-            <th className="py-1 pr-3">Replicas</th>
-            <th className="py-1 pr-3">Age</th>
+            <th scope="col" className="sticky left-0 bg-[var(--color-background)] py-1 pr-3">
+              Name
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Image
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Replicas
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Age
+            </th>
           </tr>
         </thead>
         <tbody>
           {deployments.map((d) => (
             <tr key={d.name} className="border-t border-[var(--color-border)]">
-              <td className="py-1.5 pr-3 font-medium">{d.name}</td>
+              <td className="sticky left-0 bg-[var(--color-background)] py-1.5 pr-3 font-medium">{d.name}</td>
               <td className="py-1.5 pr-3 font-mono text-xs">{d.image ?? <em>—</em>}</td>
               <td className="py-1.5 pr-3">
-                <span className={d.ready === d.desired ? 'text-green-300' : 'text-amber-300'}>
-                  {d.ready}/{d.desired}
-                </span>
+                <StatusPill
+                  tone={d.ready === d.desired ? 'success' : 'warning'}
+                  label={`${d.ready} of ${d.desired} ready`}
+                />
               </td>
               <td className="py-1.5 pr-3 text-xs text-[var(--color-muted-foreground)]">{relativeAge(d.createdAt)}</td>
             </tr>
@@ -174,27 +191,44 @@ function PodsTable({
 }) {
   if (pods.length === 0) return null;
   return (
-    <div>
+    <div className="overflow-x-auto">
       <div className="mb-1 text-xs font-medium text-[var(--color-muted-foreground)]">Pods</div>
       <table className="w-full text-sm">
+        <caption className="sr-only">Pods hosted on this Dev Machine</caption>
         <thead className="text-left text-xs text-[var(--color-muted-foreground)]">
           <tr>
-            <th className="py-1 pr-3">Name</th>
-            <th className="py-1 pr-3">Phase</th>
-            <th className="py-1 pr-3">Ready</th>
-            <th className="py-1 pr-3">Restarts</th>
-            <th className="py-1 pr-3">Age</th>
-            <th className="py-1 pr-3" />
+            <th scope="col" className="sticky left-0 bg-[var(--color-background)] py-1 pr-3">
+              Name
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Phase
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Ready
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Restarts
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Age
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {pods.map((p) => (
             <tr key={p.name} className="border-t border-[var(--color-border)]">
-              <td className="py-1.5 pr-3 font-medium">{p.name}</td>
+              <td className="sticky left-0 bg-[var(--color-background)] py-1.5 pr-3 font-medium">{p.name}</td>
               <td className="py-1.5 pr-3">
-                <span className={p.phase === 'Running' ? 'text-green-300' : 'text-amber-300'}>{p.phase}</span>
+                <StatusPill
+                  tone={p.phase === 'Running' ? 'info' : 'warning'}
+                  label={p.phase}
+                  activity={p.phase === 'Running' ? 'pulse' : 'static'}
+                />
               </td>
-              <td className="py-1.5 pr-3">{p.ready ? '✓' : '—'}</td>
+              <td className="py-1.5 pr-3">{p.ready ? 'Ready' : 'Not ready'}</td>
               <td className="py-1.5 pr-3">{p.restartCount}</td>
               <td className="py-1.5 pr-3 text-xs text-[var(--color-muted-foreground)]">{relativeAge(p.createdAt)}</td>
               <td className="py-1.5 pr-3 text-right">
@@ -220,16 +254,24 @@ function PodsTable({
 function ServicesTable({ services }: { services: LocalServiceInfo[] }) {
   if (services.length === 0) return null;
   return (
-    <div>
+    <div className="overflow-x-auto">
       <div className="mb-1 text-xs font-medium text-[var(--color-muted-foreground)]">Services</div>
       <table className="w-full text-sm">
+        <caption className="sr-only">Services hosted on this Dev Machine</caption>
         <thead className="text-left text-xs text-[var(--color-muted-foreground)]">
           <tr>
-            <th className="py-1 pr-3">Name</th>
-            <th className="py-1 pr-3">Type</th>
-            <th className="py-1 pr-3">Cluster IP</th>
-            <th className="py-1 pr-3">NodePort</th>
-            <th className="py-1 pr-3">URL</th>
+            <th scope="col" className="sticky left-0 bg-[var(--color-background)] py-1 pr-3">
+              Name
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              Local port
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              URL
+            </th>
+            <th scope="col" className="py-1 pr-3">
+              <span className="sr-only">Technical details</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -237,10 +279,8 @@ function ServicesTable({ services }: { services: LocalServiceInfo[] }) {
             const url = s.nodePort ? `http://localhost:${s.nodePort}` : null;
             return (
               <tr key={s.name} className="border-t border-[var(--color-border)]">
-                <td className="py-1.5 pr-3 font-medium">{s.name}</td>
-                <td className="py-1.5 pr-3 text-xs">{s.serviceType}</td>
-                <td className="py-1.5 pr-3 font-mono text-xs">{s.clusterIp ?? '—'}</td>
-                <td className="py-1.5 pr-3 font-mono text-xs">{s.nodePort ?? '—'}</td>
+                <td className="sticky left-0 bg-[var(--color-background)] py-1.5 pr-3 font-medium">{s.name}</td>
+                <td className="py-1.5 pr-3 font-mono text-xs tabular-nums">{s.nodePort ?? '—'}</td>
                 <td className="py-1.5 pr-3 font-mono text-xs">
                   {url ? (
                     <a
@@ -254,6 +294,21 @@ function ServicesTable({ services }: { services: LocalServiceInfo[] }) {
                   ) : (
                     '—'
                   )}
+                </td>
+                <td className="py-1.5 pr-3 text-xs">
+                  <details>
+                    <summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+                      Technical details
+                    </summary>
+                    <dl className="mt-1 grid grid-cols-[5rem_1fr] gap-x-2">
+                      <dt>Type</dt>
+                      <dd>{s.serviceType}</dd>
+                      <dt>Cluster IP</dt>
+                      <dd className="font-mono">{s.clusterIp ?? '—'}</dd>
+                      <dt>NodePort</dt>
+                      <dd className="font-mono">{s.nodePort ?? '—'}</dd>
+                    </dl>
+                  </details>
                 </td>
               </tr>
             );
@@ -274,7 +329,13 @@ function PodLogsDrawer({ pod, client, onClose }: { pod: LocalPodInfo; client: Ap
   const [lines, setLines] = React.useState<string[]>([]);
   const [phase, setPhase] = React.useState<'connecting' | 'live' | 'ended' | 'error'>('connecting');
   const [error, setError] = React.useState<string | null>(null);
-  const preRef = React.useRef<HTMLPreElement | null>(null);
+  const [announcedLineCount, setAnnouncedLineCount] = React.useState(0);
+  const logRef = React.useRef<HTMLDivElement | null>(null);
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
+  const closeRef = React.useRef<HTMLButtonElement | null>(null);
+  const returnFocusRef = React.useRef<HTMLElement | null>(
+    typeof document !== 'undefined' ? (document.activeElement as HTMLElement) : null
+  );
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -310,15 +371,56 @@ function PodLogsDrawer({ pod, client, onClose }: { pod: LocalPodInfo; client: Ap
 
   // Keep the newest lines in view as the stream appends.
   React.useEffect(() => {
-    if (preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [lines]);
 
+  React.useEffect(() => {
+    if (lines.length === announcedLineCount) return;
+    const timer = window.setTimeout(() => setAnnouncedLineCount(lines.length), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [announcedLineCount, lines.length]);
+
   const text = lines.join('\n');
-  const copy = async () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-    }
-  };
+  React.useEffect(() => {
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = [
+        ...dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        ),
+      ];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      returnFocusRef.current?.focus();
+    };
+  }, [onClose]);
+
+  const phaseMeta =
+    phase === 'live'
+      ? { tone: 'info' as const, label: 'Live', activity: 'pulse' as const }
+      : phase === 'connecting'
+        ? { tone: 'info' as const, label: 'Connecting…', activity: 'spin' as const }
+        : phase === 'error'
+          ? { tone: 'error' as const, label: 'Error', activity: 'static' as const }
+          : { tone: 'neutral' as const, label: 'Ended', activity: 'static' as const };
 
   return (
     <div
@@ -327,9 +429,11 @@ function PodLogsDrawer({ pod, client, onClose }: { pod: LocalPodInfo; client: Ap
       role="presentation"
     >
       <div
+        ref={dialogRef}
         className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-background)]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        aria-modal="true"
         aria-label={`Logs for ${pod.name}`}
       >
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2">
@@ -338,56 +442,31 @@ function PodLogsDrawer({ pod, client, onClose }: { pod: LocalPodInfo; client: Ap
             <div className="font-mono text-xs text-[var(--color-muted-foreground)]">{pod.name}</div>
           </div>
           <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium',
-                phase === 'live'
-                  ? 'bg-green-500/15 text-green-300'
-                  : phase === 'error'
-                    ? 'bg-red-500/15 text-red-300'
-                    : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
-              )}
-            >
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  phase === 'live'
-                    ? 'animate-pulse bg-green-400'
-                    : phase === 'error'
-                      ? 'bg-red-400'
-                      : 'bg-[var(--color-muted-foreground)]'
-                )}
-              />
-              {phase === 'live'
-                ? 'Live'
-                : phase === 'connecting'
-                  ? 'Connecting…'
-                  : phase === 'error'
-                    ? 'Error'
-                    : 'Ended'}
+            <div role="status" aria-live="polite" aria-atomic="true">
+              <StatusPill {...phaseMeta} />
+            </div>
+            <span className="sr-only" role="status" aria-live="polite" aria-relevant="additions text">
+              {announcedLineCount ? `${announcedLineCount} log lines received` : ''}
             </span>
-            <Button variant="outline" size="sm" onClick={copy}>
-              <Copy className="h-3.5 w-3.5" /> Copy
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button ref={closeRef} variant="ghost" size="sm" onClick={onClose}>
               Close
             </Button>
           </div>
         </header>
-        <pre
-          ref={preRef}
-          className="flex-1 overflow-auto whitespace-pre-wrap bg-black/40 p-3 font-mono text-xs leading-relaxed"
+        <LogPane
+          label="Log output"
+          height="fill"
+          open
+          copyText={text}
+          viewportRef={logRef}
+          empty={phase === 'connecting' ? 'Connecting…' : 'No log lines yet.'}
         >
           {phase === 'error' ? (
-            <span className="text-red-300">{error}</span>
-          ) : text ? (
-            text
-          ) : phase === 'connecting' ? (
-            'Connecting…'
+            <div className="text-[var(--color-destructive-foreground)]">{error}</div>
           ) : (
-            <span className="text-[var(--color-muted-foreground)]">No log lines yet.</span>
+            lines.map((line, index) => <div key={index}>{line}</div>)
           )}
-        </pre>
+        </LogPane>
       </div>
     </div>
   );

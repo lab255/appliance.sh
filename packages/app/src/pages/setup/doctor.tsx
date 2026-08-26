@@ -2,6 +2,9 @@ import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Copy, Download, Play, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
+import { ListSkeleton } from '@/components/ui/skeleton';
 import { useHost } from '@/providers/host-provider';
 import { cn } from '@/lib/utils';
 import type { LocalPreflightCheck } from '@/lib/host';
@@ -22,27 +25,20 @@ export function SetupDoctorPage() {
 
   if (!supported) {
     return (
-      <div className="max-w-2xl space-y-4">
-        <h1 className="text-xl font-semibold">Doctor</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          This shell can&rsquo;t run a Dev Machine — the prerequisite Doctor is only available in the desktop app.
-        </p>
-      </div>
+      <PageShell rail="focused">
+        <PageHeader title="Doctor" description="Checks for this computer are available in the desktop app." />
+      </PageShell>
     );
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">Doctor</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Prerequisite checks for the Dev Machine — kubectl for workload views and pod shells, with one-click installs.
-          Docker isn&rsquo;t required: images build server-side inside the Dev Machine, so it&rsquo;s only checked for
-          the deprecated host-Docker runtime.
-        </p>
-      </header>
+    <PageShell rail="focused" className="space-y-6">
+      <PageHeader
+        title="Doctor"
+        description="Check what this computer needs for workload views and shells. Appliance can install missing tools for you."
+      />
       <DoctorPanel />
-    </div>
+    </PageShell>
   );
 }
 
@@ -79,7 +75,7 @@ export function DoctorPanel() {
   return (
     <PreflightPanel
       checks={preflightChecks}
-      loading={preflightQuery.isLoading}
+      loading={preflightQuery.isFetching}
       onRefresh={() => preflightQuery.refetch()}
       canInstall={Boolean(local?.installPrereq)}
       onInstall={async (tool) => {
@@ -122,11 +118,15 @@ function PreflightPanel({
   canStartRuntime: boolean;
   onStartRuntime: () => Promise<void>;
 }) {
-  // While preflight is in flight (and we have no cached result), keep
-  // the panel out of the layout — the controls below already render a
-  // disabled Start button, and a flicker of "Checking…" before the
-  // first result tends to be more noisy than informative.
-  if (loading && checks.length === 0) return null;
+  if (loading && checks.length === 0)
+    return (
+      <div className="space-y-3">
+        <p role="status" className="text-sm">
+          Checking this computer…
+        </p>
+        <ListSkeleton rows={3} />
+      </div>
+    );
   if (checks.length === 0) return null;
   const notReady = checks.filter((c) => !checkReady(c));
   // When everything's installed and the only thing wrong is a stopped
@@ -136,37 +136,47 @@ function PreflightPanel({
   const onlyDaemonDown = notReady.length > 0 && notReady.every((c) => c.installed);
   if (notReady.length === 0) {
     return (
-      <section className="flex items-center justify-between gap-3 rounded-md border border-green-500/40 bg-green-500/10 px-3 py-2 text-xs text-green-300">
+      <SectionCard
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="flex items-center justify-between gap-3"
+      >
         <span className="inline-flex items-center gap-2">
-          <Check className="h-3.5 w-3.5" />
-          Prerequisites ready: {checks.map((c) => c.tool).join(', ')}
+          <Check className="h-3.5 w-3.5" aria-hidden />
+          {loading ? 'Re-checking this computer…' : `${checks.length} checks complete. This computer is ready.`}
         </span>
-        <Button variant="ghost" size="icon" aria-label="Re-check prerequisites" onClick={onRefresh}>
+        <Button variant="ghost" size="icon" aria-label="Re-check this computer" onClick={onRefresh} disabled={loading}>
           <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
         </Button>
-      </section>
+      </SectionCard>
     );
   }
   return (
-    <section className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-4">
+    <SectionCard className="space-y-3">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-300" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 text-[var(--color-warning-foreground)]" aria-hidden />
           <div>
-            <h2 className="text-sm font-semibold text-amber-200">
+            <h2 className="text-sm font-semibold">
               {onlyDaemonDown ? 'Container runtime not running' : 'Install missing tools'}
             </h2>
-            <p className="mt-0.5 text-xs text-amber-200/80">
+            <p className="mt-0.5 text-xs leading-4 text-[var(--color-muted-foreground)]">
               {onlyDaemonDown
                 ? 'Docker is installed but not running. The Dev Machine doesn’t need it — images build server-side — so start it only if you use the deprecated host-Docker runtime, then re-check.'
-                : 'Workload views and pod shells need kubectl. Docker is optional — the Dev Machine builds images server-side; only the deprecated host-Docker runtime uses it. Install what’s missing below, then re-check.'}
+                : 'Workload views and shells need one additional helper. Appliance can install it for you. Optional legacy runtime checks remain under Technical details.'}
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onRefresh}>
+        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
           <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} /> Re-check
         </Button>
       </header>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {loading
+          ? 'Re-checking this computer…'
+          : `${checks.length} checks complete, ${notReady.length} need attention.`}
+      </div>
       <ul className="space-y-2">
         {checks.map((c) => (
           <PreflightRow
@@ -179,7 +189,7 @@ function PreflightPanel({
           />
         ))}
       </ul>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -246,19 +256,20 @@ function PreflightRow({
   };
 
   return (
-    <li
-      className={cn(
-        'rounded-md border px-3 py-2 text-xs',
-        ready ? 'border-green-500/30 bg-green-500/5' : 'border-amber-500/30 bg-amber-500/10'
-      )}
-    >
+    <li className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 font-medium">
-            {ready ? <Check className="h-3.5 w-3.5 text-green-300" /> : <X className="h-3.5 w-3.5 text-amber-300" />}
-            <code className="font-mono">{check.tool}</code>
+            {ready ? (
+              <Check className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <X className="h-3.5 w-3.5 text-[var(--color-warning-foreground)]" aria-hidden />
+            )}
+            <span>{check.tool === 'kubectl' ? 'Workload command-line helper' : check.tool}</span>
+            <span className="text-[var(--color-muted-foreground)]">
+              — {ready ? 'Ready' : daemonDown ? 'Not running' : 'Needs attention'}
+            </span>
             {check.version ? <span className="text-[var(--color-muted-foreground)]">— {check.version}</span> : null}
-            {daemonDown ? <span className="text-amber-300">— not running</span> : null}
           </div>
           <p className="mt-1 text-[var(--color-muted-foreground)]">{check.purpose}</p>
           {daemonDown ? (
@@ -270,7 +281,11 @@ function PreflightRow({
                 </Button>
               ) : null}
               {check.error ? <p className="text-[var(--color-muted-foreground)]">{check.error}</p> : null}
-              {startError ? <p className="font-mono text-[10px] text-red-300">{startError}</p> : null}
+              {startError ? (
+                <p role="alert" className="font-mono text-xs text-[var(--color-destructive-foreground)]">
+                  {startError}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {!check.installed ? (
@@ -279,9 +294,9 @@ function PreflightRow({
                 <div>
                   <Button onClick={onClickInstall} disabled={installing} size="sm">
                     <Download className={cn('h-3.5 w-3.5', installing && 'animate-pulse')} />
-                    {installing ? 'Installing…' : `Install ${check.tool}`}
+                    {installing ? 'Installing…' : 'Install helper'}
                   </Button>
-                  <p className="mt-1 text-[10px] text-[var(--color-muted-foreground)]">
+                  <p className="mt-1 text-xs leading-4 text-[var(--color-muted-foreground)]">
                     Downloads from the upstream release into <code>~/.appliance/bin/</code>. No admin password needed.
                   </p>
                 </div>
@@ -289,12 +304,12 @@ function PreflightRow({
               {check.installHint ? (
                 <div>
                   {canInstall ? (
-                    <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">
+                    <p className="text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
                       Or install manually:
                     </p>
                   ) : null}
                   <div className="mt-1 flex items-center gap-2">
-                    <code className="block flex-1 overflow-x-auto rounded bg-black/40 px-2 py-1 font-mono text-[11px]">
+                    <code className="block flex-1 overflow-x-auto rounded bg-[var(--color-muted)] px-2 py-1 font-mono text-xs">
                       {check.installHint}
                     </code>
                     <Button
@@ -304,16 +319,26 @@ function PreflightRow({
                       aria-label={`Copy install command for ${check.tool}`}
                     >
                       <Copy className="h-3 w-3" />
-                      {copied ? 'Copied' : 'Copy'}
+                      <span role="status" aria-live="polite" aria-atomic="true">
+                        {copied ? 'Copied' : 'Copy'}
+                      </span>
                     </Button>
                   </div>
                 </div>
               ) : null}
               {installError ? (
-                <p className="font-mono text-[10px] text-red-300">{installError}</p>
+                <p role="alert" className="font-mono text-xs text-[var(--color-destructive-foreground)]">
+                  {installError}
+                </p>
               ) : check.error ? (
-                <p className="font-mono text-[10px] text-amber-200/80">{check.error}</p>
+                <p className="font-mono text-xs text-[var(--color-warning-foreground)]">{check.error}</p>
               ) : null}
+              <details>
+                <summary className="cursor-pointer text-xs font-medium text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+                  Technical details
+                </summary>
+                <p className="mt-1 font-mono text-xs">Tool: {check.tool}</p>
+              </details>
             </div>
           ) : null}
         </div>

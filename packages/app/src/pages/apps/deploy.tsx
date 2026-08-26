@@ -16,8 +16,16 @@ import {
 } from 'lucide-react';
 import { isKubernetesBase } from '@appliance.sh/sdk';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { KeyValueList } from '@/components/ui/key-value-list';
+import { LongOperation } from '@/components/ui/long-operation';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatusPill, type StatusPillProps } from '@/components/ui/status-pill';
+import { Tag } from '@/components/ui/tag';
 import { CommandSnippet } from '@/components/ui/command-snippet';
-import { FriendlyError } from '@/components/friendly-error';
 import { useHost } from '@/providers/host-provider';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
@@ -29,6 +37,7 @@ import { resolveDevMachineTargets } from '@/lib/dev-machine-targets';
 import type { Cluster, LocalApplianceManifest, LocalLogEvent } from '@/lib/host';
 import { extractDeploymentUrl } from '@/lib/deployment';
 import { parseStructuredHttpError } from '@/lib/http-error';
+import { durationEstimates } from '@/lib/duration-estimates';
 
 // Docker Desktop-style deploy wizard, the canonical ③ /projects/deploy.
 // It deploys into the *selected* target — the Dev Machine registers as a
@@ -228,7 +237,7 @@ export function DeployPage() {
   const [logs, setLogs] = React.useState<LogLine[]>([]);
   const [runError, setRunError] = React.useState<RunFailure | null>(null);
   const [resultUrl, setResultUrl] = React.useState<string | null>(null);
-  const { ref: logBoxRef, onScroll: onLogScroll } = useTailAutoscroll<HTMLPreElement>([logs]);
+  const { ref: logBoxRef, onScroll: onLogScroll } = useTailAutoscroll<HTMLDivElement>([logs]);
 
   // AWS / bundle cloud one-click deploy (W2). An AWS base deploys an
   // uploaded manifest zip, which the desktop can't build itself — so the
@@ -318,8 +327,7 @@ export function DeployPage() {
     if (!client) {
       setRunStatus('failed');
       setRunError({
-        message:
-          'No deploy target is selected, so there are no credentials to deploy with. Start the Dev Machine (it registers itself automatically), then retry.',
+        message: 'No deploy target is selected. Start the Sandbox and set up hosting, then retry.',
       });
       return;
     }
@@ -360,7 +368,7 @@ export function DeployPage() {
       if (!build.success) throw new Error(`createBuild: ${build.error.message}`);
       const { buildId, uploadUrl } = build.data;
       if (!uploadUrl) {
-        throw new Error('the api-server did not return an upload URL for this build — is its builder configured?');
+        throw new Error('The target could not accept this build. Its response did not include an upload address.');
       }
       await local.packageAndUploadBuild({ path: folderPath, uploadUrl, noLambdaPrep }, (event: LocalLogEvent) =>
         append({ stream: event.stream, message: event.message })
@@ -544,14 +552,13 @@ export function DeployPage() {
   // ============================================================
   if (!local?.packageAndUploadBuild) {
     return (
-      <div className="max-w-2xl space-y-4">
-        <h1 className="text-xl font-semibold">Deploy an app</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          The visual deploy wizard is only available in the desktop app. From a terminal, run this in your app folder —
-          it uploads the source and builds on the server:
-        </p>
+      <PageShell rail="focused" className="space-y-4">
+        <PageHeader
+          title="Deploy an app"
+          description="Deploy from the desktop app, or run this command from your app folder:"
+        />
         <CommandSnippet command="appliance deploy" />
-      </div>
+      </PageShell>
     );
   }
 
@@ -559,7 +566,7 @@ export function DeployPage() {
   const canRun = projectName.trim().length > 0 && envName.trim().length > 0;
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <PageShell rail="focused" className="space-y-6">
       <div>
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/projects">
@@ -568,12 +575,11 @@ export function DeployPage() {
         </Button>
       </div>
 
-      <header>
-        <h1 className="text-xl font-semibold">Deploy an app</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Pick a folder with an <code>appliance.json</code>, <code>.ts</code>, or <code>.js</code> manifest, configure
-          overrides, then upload the source — it builds and deploys on the selected target.
-        </p>
+      <PageHeader
+        title="Deploy an app"
+        description="Choose your app folder, review its settings, then build and deploy it to the selected target."
+      />
+      <div>
         {selectedCluster ? (
           <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
             Target:
@@ -583,23 +589,20 @@ export function DeployPage() {
             <span>· switch with the target menu in the top bar</span>
           </p>
         ) : null}
-      </header>
+      </div>
 
       {/* Once past the target step, if the runtime fell out of ready (e.g. it
           was stopped mid-flow), nudge back to the target step where it can be
           restarted inline — never a dead link off to another page (Q5). */}
       {phase !== 'target' && !readyToDeploy && !targetLoading ? (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            The {isMicroVmTarget ? 'Dev Machine' : 'deploy target'} isn&apos;t serving — builds deploy into it, so the
-            final step needs it up.{' '}
-            <button type="button" className="underline" onClick={() => setPhase('target')}>
-              Back to choose / start a target
-            </button>
-            . You can still pick a folder and configure in the meantime.
-          </span>
-        </div>
+        <Banner tone="warning" icon={AlertTriangle}>
+          The {isMicroVmTarget ? 'Dev Machine' : 'deploy target'} isn&apos;t serving — builds deploy into it, so the
+          final step needs it up.{' '}
+          <button type="button" className="underline" onClick={() => setPhase('target')}>
+            Back to choose / start a target
+          </button>
+          . You can still pick a folder and configure in the meantime.
+        </Banner>
       ) : null}
 
       {/* Capability preflight — the selected control plane said it can't
@@ -614,37 +617,36 @@ export function DeployPage() {
           the backstop). */}
       {(phase === 'configure' || phase === 'run') && sourceBuildsUnsupported ? (
         isMicroVmTarget ? (
-          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              The Dev Machine&apos;s control plane doesn&apos;t support source builds — it&apos;s likely older than this
-              app. Restart the Dev Machine from the{' '}
-              <Link to="/machine" className="underline">
-                Machine page
-              </Link>{' '}
-              to update it, then retry here.
-            </span>
-          </div>
+          <Banner tone="warning" icon={AlertTriangle}>
+            This Dev Machine can&apos;t build source yet — its Appliance service is likely older than this app. Restart
+            the Dev Machine from the{' '}
+            <Link to="/machine" className="underline">
+              Machine page
+            </Link>{' '}
+            to update it, then retry here.
+          </Banner>
         ) : (
-          <div className="space-y-2 rounded-md border border-cyan-500/40 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-200">
-            <p>
-              No build system is configured on this target, so it can&apos;t build the uploaded source into an image.
-              You can deploy a prebuilt image from a terminal instead:
-            </p>
-            <CommandSnippet command="appliance deploy --image-uri <registry>/<image>:<tag>" />
-          </div>
+          <Banner tone="info">
+            <div className="space-y-2">
+              <p>
+                No build system is configured on this target, so it can&apos;t build the uploaded source into an image.
+                You can deploy a prebuilt image from a terminal instead:
+              </p>
+              <CommandSnippet command="appliance deploy --image-uri <registry>/<image>:<tag>" />
+            </div>
+          </Banner>
         )
       ) : null}
 
       {presetProject || presetEnvironment ? (
-        <div className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200">
+        <Banner tone="info">
           Deploying to{' '}
           <code className="font-mono">
             {presetProject ?? projectName}
             {presetEnvironment ? ` / ${presetEnvironment}` : ''}
           </code>
           .
-        </div>
+        </Banner>
       ) : null}
 
       <Stepper phase={phase} />
@@ -684,6 +686,7 @@ export function DeployPage() {
           recent={recentFolders}
           onPickRecent={onPickRecent}
           onForgetRecent={forgetRecentFolder}
+          onRestoreRecent={(entry) => recordRecentFolder(entry)}
         />
       ) : null}
 
@@ -727,7 +730,7 @@ export function DeployPage() {
           onDone={() => navigate('/projects')}
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -839,6 +842,8 @@ function TargetStep({
   // Inline prepare (Q5). Boot a stopped VM, lazily promote a core-only VM,
   // then select the newly adopted profile for the SDK-backed deploy flow.
   const startTargetName = vmName ?? pendingVmName ?? (!selectedCluster && showRuntimes ? 'appliance' : null);
+  const startSummary = vms.find((vm) => vm.name === startTargetName);
+  const sandboxOnly = Boolean(startSummary?.running && !startSummary.clusterProvisioned);
   const needsStart = !effectiveReadyToDeploy && Boolean(startTargetName);
   const [starting, setStarting] = React.useState(false);
   const [startLog, setStartLog] = React.useState<string[]>([]);
@@ -859,7 +864,7 @@ function TargetStep({
         st = await vm.status();
       }
       if (!st.clusterProvisioned) {
-        append('Provisioning deployment layer…');
+        append('Setting up App hosting…');
         await vm.clusterUp((e) => append(e.message));
       } else if (!st.running) {
         await vm.up((e) => append(e.message));
@@ -868,6 +873,7 @@ function TargetStep({
       // proceed against an unbound SDK client if selection fails.
       await host.selectCluster(microVmClusterId(startTargetName));
       setPendingVmName(null);
+      onNext();
     } catch (e) {
       setStartError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -878,15 +884,16 @@ function TargetStep({
   };
 
   return (
-    <section className="space-y-4 rounded-md border border-[var(--color-border)] p-4">
-      <div>
-        <h2 className="text-sm font-semibold">Choose a deploy target</h2>
-        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+    <SectionCard
+      title="Choose a deploy target"
+      description={
+        <>
           Builds deploy into the selected target. Pick where this app should run — you can also switch from the target
           menu in the top bar.
-        </p>
-      </div>
-
+        </>
+      }
+      className="space-y-4"
+    >
       <ul className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
         {cloudClusters.map((c) => (
           <TargetRow
@@ -895,7 +902,7 @@ function TargetStep({
             sub={c.apiServerUrl}
             kind="cloud"
             selected={selectedCluster?.id === c.id}
-            stateLabel="ready"
+            status="hosting-ready"
             onSelect={() => void selectTarget(c.id)}
           />
         ))}
@@ -907,7 +914,7 @@ function TargetStep({
                 ? 'not created'
                 : summary.running
                   ? !summary.clusterProvisioned
-                    ? 'core ready'
+                    ? 'sandbox'
                     : summary.clusterReady
                       ? 'running'
                       : summary.phase === 'failed'
@@ -921,7 +928,7 @@ function TargetStep({
                   sub={id}
                   kind="dev machine"
                   selected={selectedCluster?.id === id || pendingVmName === name}
-                  stateLabel={state}
+                  status={state}
                   onSelect={() => void selectTarget(id)}
                 />
               );
@@ -931,23 +938,44 @@ function TargetStep({
 
       {/* Selected target isn't serving — start it here, don't dead-end. */}
       {needsStart ? (
-        <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
-          <p className="text-xs text-amber-200">
+        <div className="space-y-3">
+          <Banner
+            tone="warning"
+            title={targetLoading ? 'Checking the Dev Machine…' : `${startTargetName} needs App hosting`}
+          >
             {targetLoading
-              ? 'Checking the Dev Machine…'
-              : `The Dev Machine (${startTargetName}) needs its deployment layer ready before deploy. It will boot first if needed, then provision and adopt the cluster profile. Your app / environment selection is kept.`}
-          </p>
+              ? 'Checking whether this Sandbox can host apps.'
+              : sandboxOnly
+                ? `${startTargetName} is running as a Sandbox, but hosting isn't set up yet. Setting it up takes 2–4 minutes (one-time) and restarts the machine; your folder and settings here are kept.`
+                : `${startTargetName} needs a Sandbox with App hosting before it can deploy. Setup usually takes 2–4 minutes; your folder and settings here are kept.`}
+          </Banner>
           <Button size="sm" onClick={() => void startRuntime()} disabled={starting || targetLoading}>
             <Play className={cn('h-3.5 w-3.5', starting && 'animate-pulse')} />
-            {starting ? 'Preparing deployment layer…' : 'Prepare Dev Machine for deploy'}
+            {starting ? 'Setting up hosting…' : 'Set up hosting & continue'}
           </Button>
-          {startError ? (
-            <FriendlyError error={startError} fallbackHeadline="The local machine couldn't start" className="text-xs" />
-          ) : null}
-          {starting || startLog.length > 0 ? (
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-black/40 p-2 font-mono text-[10px] leading-relaxed">
-              {startLog.join('\n') || 'Starting…'}
-            </pre>
+          {starting || startLog.length > 0 || startError ? (
+            <LongOperation
+              title="Set up hosting"
+              status={startError ? 'error' : starting ? 'running' : 'success'}
+              steps={[
+                { key: 'restart', label: 'Restarting with hosting' },
+                { key: 'platform', label: 'Starting the app platform' },
+                { key: 'ready', label: 'Ready for deploys' },
+              ]}
+              activeStep={
+                startError ? Math.min(1, startLog.length ? 1 : 0) : starting ? Math.min(1, startLog.length ? 1 : 0) : 2
+              }
+              nowLine={startLog.at(-1)}
+              timeClass="minutes"
+              estimate={durationEstimates.hostingSetup}
+              leaveSafety="keep-page"
+              failure={startError}
+              successTone="success"
+              log={startLog.map((line, index) => (
+                <div key={index}>{line}</div>
+              ))}
+              logProps={{ height: 'compact', label: 'Technical details' }}
+            />
           ) : null}
         </div>
       ) : null}
@@ -966,9 +994,8 @@ function TargetStep({
             <>
               <p className="text-xs text-[var(--color-muted-foreground)]">
                 <span className="font-medium text-[var(--color-foreground)]">{selectedCluster?.name}</span> runs on an
-                AWS base, which deploys an uploaded bundle rather than a container image. The desktop builds container
-                images (for Kubernetes / local-runtime targets), so deploy to this cloud with the CLI — it builds and
-                uploads the bundle for you. Run this from your app folder:
+                cloud accepts an app bundle rather than a container image. Run this from your app folder to build and
+                upload that bundle:
               </p>
               <CommandSnippet command="appliance deploy" />
             </>
@@ -1006,7 +1033,7 @@ function TargetStep({
                     ))}
                   </datalist>
                 ) : null}
-                <span className="block text-[10px] text-[var(--color-muted-foreground)]">
+                <span className="block text-xs leading-4 text-[var(--color-muted-foreground)]">
                   Created if it doesn&rsquo;t exist. Deploys to{' '}
                   <code className="font-mono">
                     {aws.pending.project}/{aws.env.trim() || 'production'}
@@ -1023,7 +1050,7 @@ function TargetStep({
                       aria-pressed={aws.env.trim() === e}
                       onClick={() => aws.setEnv(e)}
                       className={cn(
-                        'rounded-md border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-[11px]',
+                        'rounded-md border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-micro',
                         aws.env.trim() === e
                           ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
                           : 'hover:text-[var(--color-accent)]'
@@ -1052,14 +1079,14 @@ function TargetStep({
             <>
               <p className="text-xs text-[var(--color-muted-foreground)]">
                 <span className="font-medium text-[var(--color-foreground)]">{selectedCluster?.name}</span> runs on an
-                AWS base, which deploys an uploaded bundle rather than a container image. Pick your app folder — the
-                bundled CLI builds and uploads the bundle for you.
+                cloud accepts an app bundle rather than a container image. Pick your app folder and Appliance will build
+                and upload the bundle for you.
               </p>
               <Button size="sm" onClick={aws.onPickFolder} disabled={aws.busy || baseProbeLoading}>
                 <Rocket className={cn('h-3.5 w-3.5', aws.busy && 'animate-pulse')} />
                 {aws.busy ? 'Opening folder…' : `Deploy to ${selectedCluster?.name ?? 'cloud'}`}
               </Button>
-              <p className="text-[10px] text-[var(--color-muted-foreground)]">
+              <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
                 Prefer the terminal? Run <code className="font-mono">appliance deploy</code> from your app folder.
               </p>
             </>
@@ -1079,7 +1106,7 @@ function TargetStep({
           ) : effectiveTargetIsAwsBase ? (
             <>
               Target <span className="font-medium text-[var(--color-foreground)]">{effectiveSelectedLabel}</span>{' '}
-              deploys {aws.canShell ? 'with the button above' : 'via the CLI (see above)'}.
+              deploys {aws.canShell ? 'with the button above' : 'with the terminal command above'}.
             </>
           ) : effectiveReadyToDeploy ? (
             <>
@@ -1099,7 +1126,7 @@ function TargetStep({
           Next: pick folder <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -1108,14 +1135,14 @@ function TargetRow({
   sub,
   kind,
   selected,
-  stateLabel,
+  status,
   onSelect,
 }: {
   name: string;
   sub: string;
   kind: 'cloud' | 'dev machine';
   selected: boolean;
-  stateLabel: string;
+  status: string;
   onSelect: () => void;
 }) {
   return (
@@ -1124,20 +1151,13 @@ function TargetRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={cn('truncate text-sm font-medium', kind === 'dev machine' && 'font-mono')}>{name}</span>
-          <span
-            className={cn(
-              'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
-              kind === 'dev machine'
-                ? 'bg-cyan-500/15 text-cyan-300'
-                : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
-            )}
-          >
-            {kind === 'dev machine' ? 'Dev Machine' : 'cloud'}
-          </span>
+          <Tag emphasis={kind === 'dev machine' ? 'sandbox' : 'quiet'}>
+            {kind === 'dev machine' ? 'This computer' : 'cloud'}
+          </Tag>
         </div>
         <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">{sub}</div>
       </div>
-      <span className="shrink-0 text-xs text-[var(--color-muted-foreground)]">{stateLabel}</span>
+      <StatusPill {...targetStatus(status)} />
       {!selected ? (
         <Button variant="outline" size="sm" onClick={onSelect}>
           Select
@@ -1145,6 +1165,16 @@ function TargetRow({
       ) : null}
     </li>
   );
+}
+
+function targetStatus(status: string): Pick<StatusPillProps, 'tone' | 'label' | 'activity'> {
+  if (status === 'hosting-ready' || status === 'running')
+    return { tone: 'success', label: 'Hosting ready', activity: 'static' };
+  if (status === 'sandbox') return { tone: 'sandbox', label: 'Sandbox · hosting not set up', activity: 'static' };
+  if (status.includes('starting')) return { tone: 'sandbox', label: 'Starting…', activity: 'spin' };
+  if (status === 'failed') return { tone: 'error', label: 'Failed', activity: 'static' };
+  if (status === 'stopped') return { tone: 'neutral', label: 'Stopped', activity: 'static' };
+  return { tone: 'neutral', label: 'Not created', activity: 'static' };
 }
 
 function Stepper({ phase }: { phase: Phase }) {
@@ -1162,16 +1192,23 @@ function Stepper({ phase }: { phase: Phase }) {
         return (
           <React.Fragment key={s.id}>
             <li
+              aria-current={state === 'active' ? 'step' : undefined}
               className={cn(
                 'rounded-md px-2 py-1',
                 state === 'active' && 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)] font-medium',
-                state === 'done' && 'text-green-300',
+                state === 'done' && 'text-[var(--color-foreground)]',
                 state === 'upcoming' && 'text-[var(--color-muted-foreground)]'
               )}
             >
               {s.label}
+              <span className="sr-only">
+                {' '}
+                ({state === 'done' ? 'complete' : state === 'active' ? 'current' : 'upcoming'})
+              </span>
             </li>
-            {i < steps.length - 1 ? <ChevronRight className="h-3 w-3 text-[var(--color-muted-foreground)]" /> : null}
+            {i < steps.length - 1 ? (
+              <ChevronRight aria-hidden className="h-3 w-3 text-[var(--color-muted-foreground)]" />
+            ) : null}
           </React.Fragment>
         );
       })}
@@ -1190,6 +1227,7 @@ function PickStep({
   recent,
   onPickRecent,
   onForgetRecent,
+  onRestoreRecent,
 }: {
   folderPath: string | null;
   manifest: LocalApplianceManifest | null;
@@ -1201,16 +1239,29 @@ function PickStep({
   recent: RecentFolder[];
   onPickRecent: (entry: RecentFolder) => void;
   onForgetRecent: (path: string) => void;
+  onRestoreRecent: (entry: RecentFolder) => void;
 }) {
+  const [forgotten, setForgotten] = React.useState<RecentFolder | null>(null);
+  React.useEffect(() => {
+    if (!forgotten) return;
+    const timer = window.setTimeout(() => setForgotten(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [forgotten]);
   return (
-    <section className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-      <h2 className="text-sm font-semibold">Source folder</h2>
+    <SectionCard title="Source folder" className="space-y-3">
       <p className="text-xs text-[var(--color-muted-foreground)]">
-        The folder must contain an <code>appliance.json</code>, <code>appliance.ts</code>, or <code>appliance.js</code>{' '}
-        manifest (container apps also ship their <code>Dockerfile</code>; framework apps need none — the server
-        generates one). Programmatic manifests run inside a QuickJS sandbox — no host filesystem, process, or network
-        access; only <code>@appliance.sh/sdk</code> imports resolve.
+        Choose your app folder. Appliance will read its settings before anything is deployed.
       </p>
+      <details className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+        <summary className="cursor-pointer font-medium text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          Technical details
+        </summary>
+        <p className="mt-1">
+          Supported settings files are <code>appliance.json</code>, <code>appliance.ts</code>, and{' '}
+          <code>appliance.js</code>. Container apps can include a <code>Dockerfile</code>. Programmatic settings run in
+          an isolated QuickJS environment with only <code>@appliance.sh/sdk</code> imports.
+        </p>
+      </details>
       <div className="flex items-center gap-2">
         <Button onClick={onPick} disabled={pickBusy}>
           <FolderOpen className="h-4 w-4" />{' '}
@@ -1221,7 +1272,7 @@ function PickStep({
 
       {recent.length > 0 && !folderPath ? (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">
+          <div className="flex items-center gap-1.5 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
             <History className="h-3 w-3" /> Recent
           </div>
           <ul className="flex flex-wrap gap-1.5">
@@ -1232,7 +1283,7 @@ function PickStep({
                     type="button"
                     onClick={() => onPickRecent(entry)}
                     disabled={pickBusy}
-                    className="font-mono text-[11px] hover:text-[var(--color-accent)] disabled:opacity-50"
+                    className="rounded font-mono text-xs hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     title={entry.path}
                   >
                     {entry.projectName ?? basename(entry.path)}
@@ -1240,8 +1291,21 @@ function PickStep({
                   <button
                     type="button"
                     aria-label={`Forget ${entry.path}`}
-                    onClick={() => onForgetRecent(entry.path)}
-                    className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+                    onClick={(event) => {
+                      onForgetRecent(entry.path);
+                      setForgotten(entry);
+                      const item = event.currentTarget.closest('li');
+                      window.setTimeout(
+                        () =>
+                          (
+                            item?.nextElementSibling?.querySelector('button') ??
+                            item?.previousElementSibling?.querySelector('button')
+                          )?.focus(),
+                        0
+                      );
+                    }}
+                    title="Forget recent folder"
+                    className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1252,39 +1316,63 @@ function PickStep({
         </div>
       ) : null}
 
-      {pickError ? (
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300">{pickError}</div>
+      {forgotten ? (
+        <Banner
+          tone="neutral"
+          role="status"
+          action={
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onRestoreRecent(forgotten);
+                setForgotten(null);
+              }}
+            >
+              Undo
+            </Button>
+          }
+        >
+          Removed {forgotten.projectName ?? basename(forgotten.path)} from recent folders.
+        </Banner>
       ) : null}
+
+      {pickError ? <Banner tone="error">{pickError}</Banner> : null}
 
       {/* Multi-service stacks (appliance.stack.json): the manifest reader
           rejects them — the wizard deploys ONE app. Point at the CLI's
           stack-aware flow instead of leaving a bare parse error. */}
       {pickError && /stack/i.test(pickError) ? (
-        <div className="space-y-2 rounded-md border border-cyan-500/40 bg-cyan-500/5 p-3 text-xs text-cyan-200">
-          <p>
-            This folder looks like a multi-service stack. The wizard deploys a single app — for stacks, run this from a
-            terminal in that folder instead:
-          </p>
-          <CommandSnippet command="appliance dev" />
-        </div>
+        <Banner tone="info">
+          <div className="space-y-2">
+            <p>
+              This folder looks like a multi-service stack. The wizard deploys a single app — for stacks, run this from
+              a terminal in that folder instead:
+            </p>
+            <CommandSnippet command="appliance dev" />
+          </div>
+        </Banner>
       ) : null}
 
       {manifest ? (
-        <dl className="grid grid-cols-[7rem_1fr] gap-y-1 rounded-md border border-[var(--color-border)] p-3 text-sm">
-          <Row label="Name" value={<code className="font-mono text-xs">{manifest.name}</code>} />
-          <Row label="Type" value={<code className="font-mono text-xs">{manifest.type ?? '—'}</code>} />
-          <Row label="Port" value={<code className="font-mono text-xs">{manifest.port ?? '—'}</code>} />
-          <Row label="Platform" value={<code className="font-mono text-xs">{manifest.platform ?? 'host'}</code>} />
-          <Row label="Manifest" value={<code className="truncate font-mono text-xs">{manifest.manifestPath}</code>} />
-        </dl>
+        <KeyValueList
+          items={[
+            { key: 'name', label: 'Name', value: manifest.name, mono: true },
+            { key: 'type', label: 'Type', value: manifest.type ?? '—', mono: true },
+            { key: 'port', label: 'Port', value: manifest.port ?? '—', mono: true },
+            { key: 'platform', label: 'Platform', value: manifest.platform ?? 'host', mono: true },
+            { key: 'manifest', label: 'Manifest', value: manifest.manifestPath, mono: true },
+          ]}
+          className="rounded-md border border-[var(--color-border)] p-3"
+        />
       ) : null}
 
       <div className="flex justify-end">
         <Button onClick={onNext} disabled={!canNext}>
-          Next: configure <ChevronRight className="h-4 w-4" />
+          Next: review settings <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -1333,15 +1421,23 @@ function ConfigureStep({
     setEnvEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
 
   return (
-    <section className="space-y-5 rounded-md border border-[var(--color-border)] p-4">
-      <h2 className="text-sm font-semibold">Configure deploy</h2>
-
+    <SectionCard title="Review settings" className="space-y-5">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="App name" hint={`Default from manifest: ${manifest.name}`}>
-          <TextInput value={projectName} onChange={setProjectName} placeholder={manifest.name} />
+        <Field label="App name" htmlFor="deploy-app-name" hint={`Default from manifest: ${manifest.name}`}>
+          <Input
+            id="deploy-app-name"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            placeholder={manifest.name}
+          />
         </Field>
-        <Field label="Environment name" hint="Created if absent.">
-          <TextInput value={envName} onChange={setEnvName} placeholder="local" />
+        <Field label="Environment name" htmlFor="deploy-environment-name" hint="Created if absent.">
+          <Input
+            id="deploy-environment-name"
+            value={envName}
+            onChange={(e) => setEnvName(e.target.value)}
+            placeholder="local"
+          />
         </Field>
       </div>
 
@@ -1349,8 +1445,8 @@ function ConfigureStep({
         <div className="mb-2 flex items-center justify-between">
           <div>
             <h3 className="text-xs font-medium">Environment variables</h3>
-            <p className="text-[10px] text-[var(--color-muted-foreground)]">
-              Forwarded as container env. <code>PORT</code> also drives the Service&rsquo;s port + NodePort target.
+            <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+              Forwarded to the app. <code>PORT</code> is also used as the app&rsquo;s local listening port.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={addEnv}>
@@ -1365,8 +1461,20 @@ function ConfigureStep({
           <ul className="space-y-1.5">
             {envEntries.map((entry, idx) => (
               <li key={idx} className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
-                <TextInput value={entry.key} onChange={(v) => setEnv(idx, { key: v })} placeholder="KEY" mono />
-                <TextInput value={entry.value} onChange={(v) => setEnv(idx, { value: v })} placeholder="value" mono />
+                <Input
+                  aria-label={`Environment variable ${idx + 1} name`}
+                  value={entry.key}
+                  onChange={(e) => setEnv(idx, { key: e.target.value })}
+                  placeholder="KEY"
+                  mono
+                />
+                <Input
+                  aria-label={`Environment variable ${idx + 1} value`}
+                  value={entry.value}
+                  onChange={(e) => setEnv(idx, { value: e.target.value })}
+                  placeholder="value"
+                  mono
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1386,18 +1494,36 @@ function ConfigureStep({
       {isCloudTarget ? (
         <details className="rounded-md border border-[var(--color-border)] p-3">
           <summary className="cursor-pointer text-xs font-medium">Cloud options (optional)</summary>
-          <p className="mt-1 text-[10px] text-[var(--color-muted-foreground)]">
+          <p className="mt-1 text-xs leading-4 text-[var(--color-muted-foreground)]">
             Runtime limits applied by the cloud installation this app deploys into.
           </p>
           <div className="mt-2 grid grid-cols-3 gap-3">
-            <Field label="Memory (MB)">
-              <TextInput value={memory} onChange={setMemory} placeholder="1024" mono />
+            <Field label="Memory (MB)" htmlFor="deploy-memory">
+              <Input
+                id="deploy-memory"
+                value={memory}
+                onChange={(e) => setMemory(e.target.value)}
+                placeholder="1024"
+                mono
+              />
             </Field>
-            <Field label="Timeout (s)">
-              <TextInput value={timeout} onChange={setTimeout} placeholder="30" mono />
+            <Field label="Timeout (s)" htmlFor="deploy-timeout">
+              <Input
+                id="deploy-timeout"
+                value={timeout}
+                onChange={(e) => setTimeout(e.target.value)}
+                placeholder="30"
+                mono
+              />
             </Field>
-            <Field label="Storage (MB)">
-              <TextInput value={storage} onChange={setStorage} placeholder="512" mono />
+            <Field label="Storage (MB)" htmlFor="deploy-storage">
+              <Input
+                id="deploy-storage"
+                value={storage}
+                onChange={(e) => setStorage(e.target.value)}
+                placeholder="512"
+                mono
+              />
             </Field>
           </div>
         </details>
@@ -1411,7 +1537,7 @@ function ConfigureStep({
           <Rocket className="h-4 w-4" /> Build & deploy
         </Button>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -1427,81 +1553,104 @@ function RunStep({
 }: {
   runStatus: RunStatus;
   logs: LogLine[];
-  logBoxRef: React.RefObject<HTMLPreElement | null>;
-  onLogScroll: (event: React.UIEvent<HTMLPreElement>) => void;
+  logBoxRef: React.RefObject<HTMLDivElement | null>;
+  onLogScroll: (event: React.UIEvent<HTMLDivElement>) => void;
   error: RunFailure | null;
   resultUrl: string | null;
   onRetry: () => void;
   onDone: () => void;
 }) {
+  const operationStatus = runStatus === 'failed' ? 'error' : runStatus === 'succeeded' ? 'success' : 'running';
+  const activeStep = logs.some((line) => /dispatching deploy|status:/i.test(line.message))
+    ? 2
+    : logs.some((line) => /upload|build/i.test(line.message))
+      ? 1
+      : 0;
   return (
-    <section className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Build & deploy</h2>
-        <StatusBadge status={runStatus} />
-      </div>
+    <SectionCard>
+      <LongOperation
+        title="Build & deploy"
+        status={operationStatus}
+        steps={[
+          { key: 'package', label: 'Preparing source' },
+          { key: 'build', label: 'Building the app' },
+          { key: 'deploy', label: 'Deploying to the target' },
+        ]}
+        activeStep={activeStep}
+        nowLine={operationStatus === 'running' ? 'Working on the current step…' : undefined}
+        timeClass="minutes"
+        estimate={durationEstimates.deployRun}
+        leaveSafety="keep-page"
+        failure={error?.serverError ?? error?.message ?? "The deploy didn't finish"}
+        retry={
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        }
+        successTone="success"
+        log={logs.map((line, i) => (
+          <div
+            key={i}
+            className={cn(
+              line.stream === 'stderr' && 'text-[var(--color-destructive-foreground)]',
+              line.stream === 'meta' && 'text-[var(--color-info-foreground)]'
+            )}
+          >
+            {line.message}
+          </div>
+        ))}
+        logProps={{
+          label: 'Build log',
+          defaultOpen: true,
+          viewportRef: logBoxRef,
+          onViewportScroll: onLogScroll,
+          empty: 'Starting…',
+        }}
+        primaryAction={
+          resultUrl ? (
+            <Button asChild>
+              <a href={resultUrl} target="_blank" rel="noreferrer">
+                View app
+              </a>
+            </Button>
+          ) : (
+            <Button onClick={onDone}>Back to Apps</Button>
+          )
+        }
+        secondaryAction={
+          resultUrl ? (
+            <Button variant="outline" onClick={onDone}>
+              Back to Apps
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <pre
-        ref={logBoxRef}
-        onScroll={onLogScroll}
-        className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-md border border-[var(--color-border)] bg-black/40 p-3 font-mono text-[11px] leading-relaxed"
-      >
-        {logs.length === 0 ? (
-          <span className="text-[var(--color-muted-foreground)]">Starting…</span>
-        ) : (
-          logs.map((line, i) => (
-            <div
-              key={i}
-              className={cn(line.stream === 'stderr' && 'text-red-300', line.stream === 'meta' && 'text-cyan-300')}
-            >
-              {line.message}
-            </div>
-          ))
-        )}
-      </pre>
-
-      {/* Structured failures put the server's own error (+ detail) up
-          front as the headline — the raw message stays in the log pane
-          and the Details disclosure — with the requestId alongside so a
-          user can correlate the failure with the server logs. */}
-      {error ? (
-        <div className="space-y-1">
-          <FriendlyError
-            error={error.message}
-            headline={error.serverError}
-            fallbackHeadline="The deploy didn't finish"
-          />
-          {error.requestId ? (
-            <p className="text-[10px] text-[var(--color-muted-foreground)]">
-              request id <code className="font-mono">{error.requestId}</code> — quote it to find this failure in the
-              server logs
-            </p>
-          ) : null}
-        </div>
+      {error?.requestId ? (
+        <details className="mt-3 text-xs leading-4 text-[var(--color-muted-foreground)]">
+          <summary className="cursor-pointer font-medium text-[var(--color-foreground)]">Technical details</summary>
+          <p className="mt-1">
+            Support code: <code className="font-mono">{error.requestId}</code>
+          </p>
+        </details>
       ) : null}
 
       {resultUrl ? (
-        <div className="rounded-md border border-green-500/40 bg-green-500/10 p-3 text-xs text-green-300">
+        <Banner tone="success" className="mt-3">
           Deployed at{' '}
           <a className="underline" href={resultUrl} target="_blank" rel="noreferrer">
             {resultUrl}
           </a>
-        </div>
+        </Banner>
       ) : null}
 
-      <div className="flex justify-between">
-        {runStatus === 'failed' ? (
-          <Button variant="outline" onClick={onRetry}>
-            Retry
-          </Button>
-        ) : (
-          <span />
-        )}
-        <Button onClick={onDone} disabled={runStatus === 'running'}>
-          {runStatus === 'succeeded' ? 'Done' : 'Close'}
-        </Button>
-      </div>
-    </section>
+      {runStatus === 'running' ? (
+        <div className="mt-3 flex items-center justify-end gap-3">
+          <span className="text-xs text-[var(--color-muted-foreground)]">Keep this page open</span>
+          <Button disabled>Deploying…</Button>
+        </div>
+      ) : null}
+    </SectionCard>
   );
 }
 
@@ -1537,60 +1686,12 @@ function parseStructuredFailure(message: string): { serverError: string; request
   };
 }
 
-function StatusBadge({ status }: { status: RunStatus }) {
-  const meta: Record<RunStatus, { label: string; tone: string }> = {
-    idle: { label: 'Idle', tone: 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]' },
-    running: { label: 'Running', tone: 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40' },
-    succeeded: { label: 'Succeeded', tone: 'bg-green-500/15 text-green-300 border border-green-500/40' },
-    failed: { label: 'Failed', tone: 'bg-red-500/15 text-red-300 border border-red-500/40' },
-  };
-  const m = meta[status];
-  return (
-    <span className={cn('inline-flex items-center rounded-md px-2 py-1 text-xs font-medium', m.tone)}>{m.label}</span>
-  );
-}
-
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <>
       <dt className="text-xs text-[var(--color-muted-foreground)]">{label}</dt>
       <dd className="text-sm">{value}</dd>
     </>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="block text-xs font-medium">{label}</span>
-      {children}
-      {hint ? <span className="block text-[10px] text-[var(--color-muted-foreground)]">{hint}</span> : null}
-    </label>
-  );
-}
-
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-  mono,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  mono?: boolean;
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={cn(
-        'w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm',
-        mono && 'font-mono text-xs'
-      )}
-    />
   );
 }
 
@@ -1646,5 +1747,7 @@ async function pollDeploymentUntilDone(client: Client, deploymentId: string, onP
       return r.data;
     }
   }
-  throw new Error('deployment polling timed out after 5 minutes');
+  throw new Error(
+    'This deploy is taking longer than expected. It may still be running on the target; check Deployments before retrying.'
+  );
 }

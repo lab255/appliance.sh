@@ -4,6 +4,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createApplianceClient } from '@appliance.sh/sdk/client';
 import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
 import { clearAuthFailure } from '@/lib/auth-signal';
 import { useHost } from '@/providers/host-provider';
 
@@ -23,6 +27,8 @@ export function ConnectPage() {
   const [secret, setSecret] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const errorRef = React.useRef<HTMLDivElement>(null);
+  const [connectedMessage, setConnectedMessage] = React.useState('');
 
   // Auto-name the cluster from the URL hostname unless the user has
   // typed something. Stops once they edit the name field.
@@ -62,12 +68,17 @@ export function ConnectPage() {
       });
       await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
       clearAuthFailure();
-      navigate('/');
+      setConnectedMessage(`Connected to ${name.trim()}`);
+      window.setTimeout(() => navigate('/'), 800);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
     }
   };
+
+  React.useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   // Probe the unauthenticated bootstrap/status endpoint to confirm
   // we're actually talking to an Appliance api-server before
@@ -117,43 +128,39 @@ export function ConnectPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-6 pt-16">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Connect to your team&apos;s server</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Invited by a teammate? Just open the invite link they sent you and you&apos;re in — nothing to fill in here.
-          {canBootstrap ? null : (
-            <>
-              {' '}
-              Setting up from scratch instead? Run{' '}
-              <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance vm up</code> for a local
-              runtime, or <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5">appliance bootstrap</code> for
-              AWS.
-            </>
-          )}
-        </p>
-      </div>
+    <PageShell rail="focused" className="space-y-6 pt-16">
+      <PageHeader
+        focused
+        title="Connect to your team&rsquo;s cloud"
+        description={
+          <>Invited by a teammate? Open the invite link they sent you. It signs you in without anything to type here.</>
+        }
+      />
 
       {/* The manual form is the exception, not the lead — collapsed by
           default so invite-link users aren't confronted with key fields. */}
-      <details className="rounded-md border border-[var(--color-border)] p-4">
-        <summary className="cursor-pointer select-none text-sm font-medium">Advanced: connect manually</summary>
+      <details className="max-w-lg rounded-md border border-[var(--color-border)] p-4">
+        <summary className="cursor-pointer select-none rounded text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+          Connect manually
+        </summary>
         <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
           For connecting with a server address and access key an admin gave you.
         </p>
         <form onSubmit={onSubmit} className="mt-3 space-y-4">
-          <Field label="API server URL" hint="e.g. https://api.example.appliance.sh">
-            <input
+          <Field label="Server address" htmlFor="connect-server-url">
+            <Input
+              id="connect-server-url"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://api.example.appliance.sh"
-              className={inputCls}
+              disabled={submitting}
             />
           </Field>
 
-          <Field label="Cluster name" hint="how this cluster appears in the sidebar">
-            <input
+          <Field label="Name on this computer" htmlFor="connect-name">
+            <Input
+              id="connect-name"
               type="text"
               value={name}
               onChange={(e) => {
@@ -161,52 +168,82 @@ export function ConnectPage() {
                 setName(e.target.value);
               }}
               placeholder="production"
-              className={inputCls}
+              disabled={submitting}
             />
           </Field>
 
-          <Field label="Access key ID" hint="apikey_…">
-            <input
+          <Field label="Access key" htmlFor="connect-key-id">
+            <Input
+              id="connect-key-id"
               type="text"
               value={keyId}
               onChange={(e) => setKeyId(e.target.value)}
               placeholder="apikey_…"
-              className={`${inputCls} font-mono`}
+              mono
+              disabled={submitting}
             />
           </Field>
 
-          <Field label="Secret access key" hint="sk_…">
-            <input
+          <Field label="Secret" htmlFor="connect-secret">
+            <Input
+              id="connect-secret"
               type="password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
               placeholder="sk_…"
-              className={`${inputCls} font-mono`}
+              mono
+              disabled={submitting}
             />
           </Field>
 
+          <details className="text-xs text-[var(--color-muted-foreground)]">
+            <summary className="cursor-pointer rounded font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+              Technical details
+            </summary>
+            <p className="mt-1">
+              Server addresses normally use HTTPS. Access keys commonly begin with{' '}
+              <code className="font-mono">apikey_</code> and secrets with <code className="font-mono">sk_</code>, but
+              Appliance validates them by connecting rather than by prefix.
+            </p>
+          </details>
+
           {error ? (
-            <FriendlyError error={error} fallbackHeadline="Couldn't connect to that server" hideReconnect />
+            <div ref={errorRef} tabIndex={-1} className="focus:outline-none">
+              <FriendlyError error={error} fallbackHeadline="Couldn't connect to that server" hideReconnect />
+            </div>
           ) : null}
 
-          <Button type="submit" disabled={!canSubmit} className="w-full">
-            {submitting ? 'Connecting…' : 'Add cluster'}
+          <Button
+            type="submit"
+            disabled={!canSubmit}
+            className="w-full"
+            aria-describedby={error ? 'connect-error-link' : undefined}
+          >
+            {submitting ? 'Connecting…' : 'Connect'}
           </Button>
+          {error ? (
+            <span id="connect-error-link" className="sr-only">
+              The connection error is shown above this button.
+            </span>
+          ) : null}
+          <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {connectedMessage || (submitting ? 'Connecting' : '')}
+          </span>
         </form>
       </details>
 
       {canBootstrap ? (
-        <div className="rounded-md border border-[var(--color-border)] p-4">
-          <div className="text-sm">Nothing to connect to yet?</div>
-          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            Provision a new installation from this machine — uses your current AWS credentials.
-          </p>
+        <SectionCard
+          className="max-w-lg"
+          title="Nothing to connect to yet?"
+          description="Create an Appliance cloud installation in your AWS account."
+        >
           <Button asChild variant="outline" className="mt-3">
-            <Link to="/cloud/bootstrap">Bootstrap new installation</Link>
+            <Link to="/cloud/bootstrap">Create in AWS</Link>
           </Button>
-        </div>
+        </SectionCard>
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -219,18 +256,3 @@ function deriveNameFromUrl(url: string): string {
     return '';
   }
 }
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1 text-sm">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[var(--color-muted-foreground)]">{label}</span>
-        {hint ? <span className="text-xs text-[var(--color-muted-foreground)]">{hint}</span> : null}
-      </div>
-      {children}
-    </label>
-  );
-}
-
-const inputCls =
-  'w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]';

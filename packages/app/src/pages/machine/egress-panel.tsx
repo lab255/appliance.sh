@@ -1,6 +1,12 @@
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatusPill } from '@/components/ui/status-pill';
+import { Tag } from '@/components/ui/tag';
 import { FriendlyError } from '@/components/friendly-error';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -41,6 +47,18 @@ export function EgressPanel({
   const [host_, setHost] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [resetConfirm, setResetConfirm] = React.useState(false);
+  const [clearPending, setClearPending] = React.useState(false);
+  const clearTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [trafficAnnouncement, setTrafficAnnouncement] = React.useState('');
+  const announcedCount = React.useRef(0);
+
+  React.useEffect(
+    () => () => {
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+    },
+    []
+  );
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['microvm', name, 'egress'] });
 
@@ -52,6 +70,18 @@ export function EgressPanel({
     refetchInterval: 4_000,
   });
   const events = trafficQuery.data ?? [];
+
+  React.useEffect(() => {
+    if (events.length <= announcedCount.current) return;
+    const added = events.slice(announcedCount.current);
+    const timer = window.setTimeout(() => {
+      setTrafficAnnouncement(
+        `${added.length} new request${added.length === 1 ? '' : 's'}, ${added.filter((item) => item.decision === 'deny').length} blocked`
+      );
+      announcedCount.current = events.length;
+    }, 2_000);
+    return () => window.clearTimeout(timer);
+  }, [events]);
 
   const enforced = !!policy?.enforced;
   // For a Netstack VM the effective `allow` merges the baked allowlist with
@@ -113,173 +143,200 @@ export function EgressPanel({
   // summary so a hung install (everything blocked) self-advertises.
   const deniedCount = React.useMemo(() => aggregateDenied(events).length, [events]);
 
+  const scheduleClear = () => {
+    setClearPending(true);
+    clearTimer.current = setTimeout(() => {
+      setClearPending(false);
+      void egress
+        .clearLog()
+        .then(() => queryClient.invalidateQueries({ queryKey: ['microvm', name, 'egress', 'log'] }));
+    }, 5_000);
+  };
+
+  const undoClear = () => {
+    if (clearTimer.current) clearTimeout(clearTimer.current);
+    clearTimer.current = null;
+    setClearPending(false);
+  };
+
   return (
-    <details className="rounded-md border border-[var(--color-border)] p-3" open>
-      <summary className="cursor-pointer text-xs font-medium">
-        Egress firewall
-        {policy ? (
-          <span className="ml-2 text-[10px] text-[var(--color-muted-foreground)]">
-            {enforced ? 'enforced · default DENY' : `cooperative · default ${policy.default}`}
-            {policy.mitm ? ' · TLS interception on' : ''}
-          </span>
-        ) : null}
-        {deniedCount > 0 ? (
-          <span className="ml-1.5 text-[10px] font-medium text-red-300">· {deniedCount} denied</span>
-        ) : null}
-      </summary>
-
+    <div className="space-y-4">
       {policy ? (
-        <div className="mt-3 space-y-3">
-          {/* Firewall status: is the host netstack the enforced boundary
-              (net_link=Netstack), or the cooperative NAT proxy? */}
-          <div
-            className={cn(
-              'rounded-md border px-2.5 py-2 text-[11px]',
-              enforced ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'
-            )}
+        <>
+          <SectionCard
+            title="Internet access"
+            description={`${deniedCount} blocked destination${deniedCount === 1 ? '' : 's'} in recent traffic`}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={cn('font-medium', enforced ? 'text-emerald-200' : 'text-amber-200')}>
-                {enforced ? 'Enforced boundary' : 'Cooperative proxy'}
-              </span>
-              <span className="font-mono text-[10px] text-[var(--color-muted-foreground)]">
-                net_link={policy.netLink ?? (enforced ? 'netstack' : 'nat')}
-              </span>
-            </div>
-            <p className="mt-1 text-[10px] leading-relaxed text-[var(--color-muted-foreground)]">
-              {enforced ? (
-                <>
-                  The host netstack is the only path off-box: egress is{' '}
-                  <span className="text-emerald-200">default-DENY</span> plus an allowlist, enforced even for a rooted
-                  guest that drops the proxy env or dials a raw IP. The rules below are the effective policy. Deny wins
-                  over allow.
-                  <br />
-                  <span className="text-amber-200">It controls where traffic goes, not what leaves</span> — trim the
-                  allowlist (e.g. drop <code className="font-mono">github.com</code>) for untrusted code.
-                </>
-              ) : (
-                <>
-                  Egress is unconfined at the link — this policy is a{' '}
-                  <span className="text-amber-200">cooperative</span> proxy a workload can bypass (raw IP, dropped{' '}
-                  <code className="font-mono">HTTPS_PROXY</code>). Recreate the VM on{' '}
-                  <code className="font-mono">net_link=Netstack</code> to make it the enforced boundary. Deny wins over
-                  allow.
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* Controls. A Netstack VM's default is host-enforced DENY, so we
-              show it read-only (toggling it would persist into the file and
-              mis-enforce under NAT); a NAT VM keeps the allow/deny toggle. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs">Default:</span>
-            {enforced ? (
-              <span className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-200">
-                deny <span className="text-[10px] text-[var(--color-muted-foreground)]">host-enforced</span>
-              </span>
-            ) : (
-              <div className="inline-flex overflow-hidden rounded-md border border-[var(--color-border)]">
-                {(['allow', 'deny'] as const).map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => policy.default !== a && void act(() => egress.setDefault(a))}
-                    className={cn(
-                      'px-2 py-1 text-xs',
-                      policy.default === a
-                        ? a === 'deny'
-                          ? 'bg-red-500/20 text-red-200'
-                          : 'bg-green-500/20 text-green-200'
-                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
-                    )}
-                  >
-                    {a}
-                  </button>
-                ))}
+            <Banner tone={enforced ? 'info' : 'warning'} title={enforced ? 'Protection enforced' : 'Monitoring only'}>
+              {enforced
+                ? 'The Sandbox can reach only approved services. Block rules take priority.'
+                : 'Rules are applied through a proxy, but software inside the Sandbox may bypass them.'}
+            </Banner>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-medium text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+                Technical details
+              </summary>
+              <div className="mt-2 space-y-2 text-xs leading-4 text-[var(--color-muted-foreground)]">
+                <p>
+                  Network mode: <code className="font-mono">{policy.netLink ?? (enforced ? 'netstack' : 'nat')}</code>.
+                  Default: <code className="font-mono">{policy.default}</code>. Secure inspection:{' '}
+                  {policy.mitm ? 'on' : 'off'}.
+                </p>
+                {policy.mitm && policy.caPath ? (
+                  <Banner tone="info">
+                    Certificate path: <code className="font-mono">{policy.caPath}</code>
+                  </Banner>
+                ) : null}
               </div>
-            )}
-            <label className="ml-2 inline-flex items-center gap-1.5 text-xs">
-              <input
-                type="checkbox"
-                checked={policy.mitm}
-                disabled={busy}
-                onChange={(e) => void act(() => egress.setMitm(e.target.checked))}
+            </details>
+          </SectionCard>
+
+          <SectionCard title="Rules">
+            <div className="space-y-3">
+              <div role="radiogroup" aria-label="Default internet access" className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium">Default</span>
+                {enforced ? (
+                  <StatusPill tone="warning" label="Block · enforced by host" />
+                ) : (
+                  (['allow', 'deny'] as const).map((value) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant={policy.default === value ? 'default' : 'outline'}
+                      role="radio"
+                      aria-checked={policy.default === value}
+                      disabled={busy}
+                      onClick={() => policy.default !== value && void act(() => egress.setDefault(value))}
+                    >
+                      {value === 'allow' ? 'Allow' : 'Block'}
+                    </Button>
+                  ))
+                )}
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={policy.mitm}
+                  disabled={busy}
+                  onChange={(e) => void act(() => egress.setMitm(e.target.checked))}
+                />
+                Inspect secure traffic for credential rules
+              </label>
+              <Field
+                label="Host suffix"
+                htmlFor="egress-host"
+                hint="For example, github.com also matches api.github.com."
+              >
+                <div className="flex gap-2">
+                  <Input
+                    id="egress-host"
+                    mono
+                    value={host_}
+                    onChange={(e) => setHost(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addRule('allow');
+                    }}
+                  />
+                  <Button variant="outline" size="sm" disabled={busy || !host_.trim()} onClick={() => addRule('allow')}>
+                    Allow
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={busy || !host_.trim()} onClick={() => addRule('deny')}>
+                    Block
+                  </Button>
+                </div>
+              </Field>
+              {enforced ? <BakedAllowlist deny={policy.deny} /> : null}
+              <RuleList
+                label={enforced ? 'Your allow rules' : 'Allowed'}
+                hosts={operatorAllow}
+                tone="allow"
+                busy={busy}
+                onRemove={removeHost}
               />
-              TLS interception
-            </label>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => egress.reset())}>
-              Reset rules
-            </Button>
-          </div>
+              <RuleList
+                label={enforced ? 'Your block rules' : 'Blocked'}
+                hosts={policy.deny}
+                tone="block"
+                busy={busy}
+                onRemove={removeHost}
+              />
+              {resetConfirm ? (
+                <Banner
+                  tone="warning"
+                  action={
+                    <>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          setResetConfirm(false);
+                          void act(() => egress.reset());
+                        }}
+                      >
+                        Reset
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setResetConfirm(false)}>
+                        Cancel
+                      </Button>
+                    </>
+                  }
+                >
+                  Remove {operatorAllow.length + policy.deny.length} custom rule
+                  {operatorAllow.length + policy.deny.length === 1 ? '' : 's'}? The default remains{' '}
+                  {enforced ? 'Block (host enforced)' : policy.default}.
+                </Banner>
+              ) : (
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setResetConfirm(true)}>
+                  Reset rules
+                </Button>
+              )}
+            </div>
+          </SectionCard>
 
-          {policy.mitm && policy.caPath ? (
-            <p className="rounded-md border border-cyan-500/30 bg-cyan-500/5 px-2 py-1 font-mono text-[10px] text-cyan-200">
-              CA: {policy.caPath} — inject into workloads to trust the interceptor
-            </p>
-          ) : null}
-
-          {/* Add a rule. Both Allow and Deny go through the incremental
-              addRule bridge → `egress allow|deny <host>` (load→add→save on
-              the PERSISTED policy); never a whole effective-policy write-back. */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={host_}
-              onChange={(e) => setHost(e.target.value)}
-              placeholder="host suffix, e.g. github.com"
-              className="flex-1 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 font-mono text-xs"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') addRule('allow');
-              }}
-            />
-            <Button variant="outline" size="sm" disabled={busy || !host_.trim()} onClick={() => addRule('allow')}>
-              Allow
-            </Button>
-            <Button variant="outline" size="sm" disabled={busy || !host_.trim()} onClick={() => addRule('deny')}>
-              Deny
-            </Button>
-          </div>
-
-          {/* Effective policy. For a Netstack VM the baked allowlist is
-              always-on; operator rules are shown apart so it's clear what's
-              inherited vs what you added. */}
-          {enforced ? <BakedAllowlist deny={policy.deny} /> : null}
-          <RuleList
-            label={enforced ? 'Operator allow' : 'Allowed'}
-            hosts={operatorAllow}
-            tone="green"
-            busy={busy}
-            onRemove={removeHost}
-          />
-          <RuleList
-            label={enforced ? 'Operator deny (wins over allow)' : 'Denied'}
-            hosts={policy.deny}
-            tone="red"
-            busy={busy}
-            onRemove={removeHost}
-          />
-
-          {trafficQuery.isError ? (
-            <p className="text-[11px] text-red-300">Failed to load traffic: {errMessage(trafficQuery.error)}</p>
-          ) : null}
-
-          <DeniedAttempts events={events} policy={policy} busy={busy} onAllow={allowHost} />
-
-          <TrafficView
-            events={events}
-            policy={policy}
-            busy={busy}
-            onAllow={allowHost}
-            onBlock={(h) => void act(() => egress.addRule('deny', h))}
-            onClear={() =>
-              void egress
-                .clearLog()
-                .then(() => queryClient.invalidateQueries({ queryKey: ['microvm', name, 'egress', 'log'] }))
+          <SectionCard title="Blocked requests">
+            <DeniedAttempts events={events} policy={policy} busy={busy} onAllow={allowHost} />
+          </SectionCard>
+          <SectionCard
+            title="Recent traffic"
+            action={
+              events.length > 0 && !clearPending ? (
+                <Button size="sm" variant="ghost" onClick={scheduleClear}>
+                  Clear
+                </Button>
+              ) : undefined
             }
-          />
-        </div>
+          >
+            <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {trafficAnnouncement}
+            </div>
+            {clearPending ? (
+              <Banner
+                className="mb-3"
+                action={
+                  <Button size="sm" variant="outline" onClick={undoClear}>
+                    Undo
+                  </Button>
+                }
+              >
+                Visible traffic will be cleared in 5 seconds.
+              </Banner>
+            ) : null}
+            {trafficQuery.isError ? (
+              <Banner tone="error">Failed to load traffic: {errMessage(trafficQuery.error)}</Banner>
+            ) : (
+              <TrafficView
+                events={events}
+                policy={policy}
+                busy={busy}
+                onAllow={allowHost}
+                onBlock={(h) => void act(() => egress.addRule('deny', h))}
+                onClear={scheduleClear}
+                hideClear
+              />
+            )}
+          </SectionCard>
+        </>
       ) : policyError ? (
         // Don't spin on "Loading policy…" forever when egress.get() rejects.
         <FriendlyError error={policyError} headline="Couldn't load the egress policy" className="mt-2 text-xs" />
@@ -288,7 +345,7 @@ export function EgressPanel({
       )}
 
       {err ? <FriendlyError error={err} headline="That change didn't apply" className="mt-2 text-xs" /> : null}
-    </details>
+    </div>
   );
 }
 
@@ -306,25 +363,20 @@ function BakedAllowlist({ deny }: { deny: string[] }) {
   const overridden = (h: string) => deny.some((d) => hostMatches(h, d));
   return (
     <div>
-      <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">
-        Baked allowlist <span className="normal-case opacity-70">(always-on for Netstack VMs)</span>
+      <div className="mb-1 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
+        Built-in allowlist <span className="normal-case opacity-70">(always on with enforced protection)</span>
       </div>
       <ul className="flex flex-wrap gap-1.5">
         {NETSTACK_BAKED_ALLOWLIST.map((h) => {
           const off = overridden(h);
           return (
-            <li
-              key={h}
-              title={off ? 'overridden by an operator deny rule' : undefined}
-              className={cn(
-                'rounded-md border px-1.5 py-0.5 font-mono text-[11px]',
-                off ? 'border-red-500/30 text-red-300 line-through' : 'border-emerald-500/30 text-emerald-200'
-              )}
-            >
-              {h}
-              {/* The strikethrough is visual-only; spell the state out for
+            <li key={h} title={off ? 'overridden by your block rule' : undefined}>
+              <Tag className={cn('font-mono', off && 'line-through')}>
+                {h}
+                {/* The strikethrough is visual-only; spell the state out for
                   screen readers (CSS line-through isn't announced). */}
-              {off ? <span className="sr-only"> (overridden by an operator deny rule)</span> : null}
+                {off ? <span className="sr-only"> (overridden by your block rule)</span> : null}
+              </Tag>
             </li>
           );
         })}
@@ -381,9 +433,8 @@ function DeniedAttempts({
   const denied = aggregateDenied(events);
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">Denied attempts</div>
       {denied.length === 0 ? (
-        <p className="rounded-md border border-dashed border-[var(--color-border)] px-2 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
+        <p className="rounded-md border border-dashed border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-muted-foreground)]">
           Nothing blocked yet. Traffic the boundary denies will show up here — allow a host in one click.
         </p>
       ) : (
@@ -395,22 +446,24 @@ function DeniedAttempts({
             // affordance (a still-denied row must not read as allowed).
             const status = ruledStatus(policy, d.host);
             return (
-              <li key={`${d.host}:${d.port}`} className="flex items-center gap-2 px-1 py-0.5 text-[11px]">
-                <span className="w-8 shrink-0 text-right font-mono text-[10px] text-[var(--color-muted-foreground)]">
+              <li key={`${d.host}:${d.port}`} className="flex items-center gap-2 px-1 py-0.5 text-micro">
+                <span className="w-8 shrink-0 text-right font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
                   {relativeAge(new Date(d.lastSeen).toISOString())}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-mono text-red-200">
+                <span className="min-w-0 flex-1 truncate font-mono">
                   {d.host}
                   <span className="text-[var(--color-muted-foreground)]">:{d.port}</span>
                 </span>
-                <span className="shrink-0 font-mono text-[10px] text-[var(--color-muted-foreground)]">×{d.count}</span>
+                <span className="shrink-0 font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
+                  ×{d.count}
+                </span>
                 {status === 'allowed' ? (
-                  <span className="shrink-0 text-[10px] text-green-300">allowed</span>
+                  <StatusPill tone="neutral" label="Allowed" />
                 ) : (
                   <>
                     {status === 'denied' ? (
                       <span
-                        className="shrink-0 text-[10px] text-red-300"
+                        className="shrink-0 text-micro text-[var(--color-destructive-foreground)]"
                         title="A deny rule still blocks this host — remove it below to allow"
                       >
                         deny rule
@@ -421,7 +474,7 @@ function DeniedAttempts({
                       disabled={busy}
                       aria-label={`Allow egress to ${d.host}:${d.port}`}
                       onClick={() => onAllow(d.host)}
-                      className="shrink-0 rounded border border-green-500/40 px-1.5 text-[10px] text-green-200 hover:bg-green-500/10 disabled:opacity-50"
+                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Allow
                     </button>
@@ -446,6 +499,7 @@ function TrafficView({
   onAllow,
   onBlock,
   onClear,
+  hideClear = false,
 }: {
   events: EgressEvent[];
   policy: EgressPolicy;
@@ -453,29 +507,32 @@ function TrafficView({
   onAllow: (host: string) => void;
   onBlock: (host: string) => void;
   onClear: () => void;
+  hideClear?: boolean;
 }) {
   // Newest first, capped so the panel stays compact.
   const rows = [...events].reverse().slice(0, 40);
-  const tone = (d: EgressEvent['decision']) =>
-    d === 'deny' ? 'text-red-300' : d === 'mitm' ? 'text-cyan-300' : 'text-green-300';
+  const decisionLabel = (d: EgressEvent['decision']) =>
+    d === 'deny' ? 'Blocked' : d === 'mitm' ? 'Inspected' : 'Allowed';
   const ruled = (host: string) => ruledStatus(policy, host);
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">Live traffic</div>
-        {events.length > 0 ? (
+        <div className="text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
+          Requests
+        </div>
+        {events.length > 0 && !hideClear ? (
           <button
             type="button"
             onClick={onClear}
-            className="text-[10px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+            className="rounded text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
           >
             Clear
           </button>
         ) : null}
       </div>
       {rows.length === 0 ? (
-        <p className="rounded-md border border-dashed border-[var(--color-border)] px-2 py-1.5 text-[11px] text-[var(--color-muted-foreground)]">
+        <p className="rounded-md border border-dashed border-[var(--color-border)] px-2 py-1.5 text-xs text-[var(--color-muted-foreground)]">
           No traffic yet. Requests appear here as workloads make them.
         </p>
       ) : (
@@ -483,11 +540,11 @@ function TrafficView({
           {rows.map((e, i) => {
             const status = ruled(e.host);
             return (
-              <li key={`${e.ts}-${i}`} className="flex items-center gap-2 px-1 py-0.5 text-[11px]">
-                <span className="w-8 shrink-0 text-right font-mono text-[10px] text-[var(--color-muted-foreground)]">
+              <li key={`${e.ts}-${i}`} className="flex items-center gap-2 px-1 py-0.5 text-micro">
+                <span className="w-8 shrink-0 text-right font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
                   {relativeAge(new Date(e.ts).toISOString())}
                 </span>
-                <span className={cn('w-9 shrink-0 font-mono uppercase', tone(e.decision))}>{e.decision}</span>
+                <span className="w-14 shrink-0">{decisionLabel(e.decision)}</span>
                 <span className="min-w-0 flex-1 truncate font-mono">
                   <span className="text-[var(--color-muted-foreground)]">{e.method} </span>
                   {e.host}
@@ -499,7 +556,7 @@ function TrafficView({
                     disabled={busy}
                     aria-label={`Block egress to ${e.host}:${e.port}`}
                     onClick={() => onBlock(e.host)}
-                    className="shrink-0 rounded border border-red-500/40 px-1.5 text-[10px] text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                   >
                     Block
                   </button>
@@ -509,7 +566,7 @@ function TrafficView({
                     disabled={busy}
                     aria-label={`Allow egress to ${e.host}:${e.port}`}
                     onClick={() => onAllow(e.host)}
-                    className="shrink-0 rounded border border-green-500/40 px-1.5 text-[10px] text-green-200 hover:bg-green-500/10 disabled:opacity-50"
+                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                   >
                     Allow
                   </button>
@@ -520,7 +577,7 @@ function TrafficView({
                       disabled={busy}
                       aria-label={`Allow egress to ${e.host}:${e.port}`}
                       onClick={() => onAllow(e.host)}
-                      className="rounded border border-green-500/40 px-1.5 text-[10px] text-green-200 hover:bg-green-500/10 disabled:opacity-50"
+                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Allow
                     </button>
@@ -529,7 +586,7 @@ function TrafficView({
                       disabled={busy}
                       aria-label={`Block egress to ${e.host}:${e.port}`}
                       onClick={() => onBlock(e.host)}
-                      className="rounded border border-red-500/40 px-1.5 text-[10px] text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Block
                     </button>
@@ -580,36 +637,34 @@ function RuleList({
 }: {
   label: string;
   hosts: string[];
-  tone: 'green' | 'red';
+  tone: 'allow' | 'block';
   busy?: boolean;
   onRemove?: (host: string) => void;
 }) {
   if (hosts.length === 0) return null;
   return (
     <div>
-      <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-muted-foreground)]">{label}</div>
+      <div className="mb-1 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
+        {label}
+      </div>
       <ul className="flex flex-wrap gap-1.5">
         {hosts.map((h) => (
-          <li
-            key={h}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px]',
-              tone === 'green' ? 'border-green-500/30 text-green-200' : 'border-red-500/30 text-red-200'
-            )}
-          >
-            {h}
-            {onRemove ? (
-              <button
-                type="button"
-                disabled={busy}
-                aria-label={`Remove ${tone === 'green' ? 'allow' : 'deny'} rule ${h}`}
-                title="Remove this rule"
-                onClick={() => onRemove(h)}
-                className="rounded text-[10px] leading-none text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] disabled:opacity-50"
-              >
-                ×
-              </button>
-            ) : null}
+          <li key={h} className="inline-flex items-center gap-1">
+            <Tag className="font-mono">
+              {h}
+              {onRemove ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-label={`Remove ${tone === 'allow' ? 'allow' : 'block'} rule ${h}`}
+                  title="Remove this rule"
+                  onClick={() => onRemove(h)}
+                  className="rounded text-micro leading-none text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                >
+                  ×
+                </button>
+              ) : null}
+            </Tag>
           </li>
         ))}
       </ul>

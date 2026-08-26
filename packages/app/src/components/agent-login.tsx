@@ -2,7 +2,9 @@ import * as React from 'react';
 import { Check, ExternalLink, Github, KeyRound, Loader2, Sparkles, TerminalSquare } from 'lucide-react';
 import { useHost } from '@/providers/host-provider';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
 import { CommandSnippet } from '@/components/ui/command-snippet';
+import { Input } from '@/components/ui/input';
 import type { AgentAuthKind, AgentAuthStatus } from '@/lib/host';
 import {
   AGENT_ADAPTERS,
@@ -116,6 +118,9 @@ export function AgentLoginPanel({
   // even on macOS, where `status()` deliberately doesn't read the secret to
   // discover the kind (that would pop a Keychain prompt).
   const [lastKind, setLastKind] = React.useState<AgentAuthKind | null>(null);
+  const [showForm, setShowForm] = React.useState(false);
+  const [confirmSignOut, setConfirmSignOut] = React.useState(false);
+  const [announcement, setAnnouncement] = React.useState('');
 
   const refreshStatus = React.useCallback(async (): Promise<AgentAuthStatus | null> => {
     if (!auth) return null;
@@ -135,6 +140,8 @@ export function AgentLoginPanel({
     setStatus(null);
     setLastKind(null);
     setErr(null);
+    setShowForm(false);
+    setConfirmSignOut(false);
     void refreshStatus();
   }, [refreshStatus]);
 
@@ -142,6 +149,8 @@ export function AgentLoginPanel({
 
   const finish = (kind: AgentAuthKind, s: AgentAuthStatus | null) => {
     setLastKind(kind);
+    setShowForm(false);
+    setAnnouncement(`Signed in to ${adapter.label}`);
     onAuthenticated?.(s ?? { configured: true, kind });
   };
 
@@ -168,7 +177,10 @@ export function AgentLoginPanel({
     try {
       await auth.logout(adapter.type);
       setLastKind(null);
-      await refreshStatus();
+      const next = await refreshStatus();
+      setConfirmSignOut(false);
+      setAnnouncement(`Signed out of ${adapter.label}`);
+      onAuthenticated?.(next ?? { configured: false, kind: null });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -183,36 +195,67 @@ export function AgentLoginPanel({
       {status?.configured ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-2">
           <span className="flex items-center gap-2">
-            <Check className="h-3.5 w-3.5 text-green-400" />
+            <Check className="h-3.5 w-3.5" aria-hidden />
             Signed in to {adapter.label}
             {displayKind ? (
               <span className="text-[var(--color-muted-foreground)]"> · {kindLabel(displayKind)}</span>
             ) : null}
           </span>
-          <Button variant="ghost" size="sm" onClick={() => void signOut()} disabled={busy}>
-            Sign out
-          </Button>
+          <span className="flex items-center gap-1">
+            <Button variant="outline" size="sm" onClick={() => setShowForm((value) => !value)} disabled={busy}>
+              {showForm ? 'Keep current sign-in' : 'Change sign-in'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmSignOut(true)} disabled={busy}>
+              Sign out
+            </Button>
+          </span>
         </div>
       ) : null}
 
-      {adapter.login === 'claude' ? (
-        <ClaudeLogin auth={auth} busy={busy} setErr={setErr} store={store} />
-      ) : adapter.login === 'github-pat' ? (
-        <CopilotPatLogin busy={busy} setErr={setErr} store={store} />
-      ) : (
-        <OpenAiKeyLogin busy={busy} setErr={setErr} store={store} />
-      )}
-
-      {err ? (
-        <p role="alert" className="font-mono text-[10px] text-red-300">
-          {err}
-        </p>
+      {confirmSignOut ? (
+        <Banner
+          tone="warning"
+          title={`Sign out of ${adapter.label} on this computer?`}
+          action={
+            <>
+              <Button variant="outline" size="sm" onClick={() => setConfirmSignOut(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => void signOut()} disabled={busy}>
+                {busy ? 'Signing out…' : 'Sign out'}
+              </Button>
+            </>
+          }
+        >
+          New sessions will need you to sign in again.
+        </Banner>
       ) : null}
 
-      <p className="text-[10px] text-[var(--color-muted-foreground)]">
-        Stored in your login keychain on this machine, per agent. Brokered into agents at request time — it never enters
-        the VM.
+      {!status?.configured || showForm ? (
+        adapter.login === 'claude' ? (
+          <ClaudeLogin auth={auth} busy={busy} setErr={setErr} store={store} />
+        ) : adapter.login === 'github-pat' ? (
+          <CopilotPatLogin busy={busy} setErr={setErr} store={store} />
+        ) : (
+          <OpenAiKeyLogin busy={busy} setErr={setErr} store={store} />
+        )
+      ) : null}
+
+      {err ? <Banner tone="error">{err}</Banner> : null}
+
+      <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+        Saved securely on this computer and used only when this agent connects.
       </p>
+      {announcement ? (
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="text-xs leading-4 text-[var(--color-muted-foreground)]"
+        >
+          {announcement}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -313,9 +356,17 @@ function ClaudeLogin({
       {/* Mode toggle: lead with the subscription path, API key as the
           alternative. */}
       <div
-        role="group"
+        role="tablist"
         aria-label="Authentication method"
         className="inline-flex rounded-md border border-[var(--color-border)] p-0.5"
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+          const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+          event.preventDefault();
+          tabs[(current + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length]?.click();
+          tabs[(current + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length]?.focus();
+        }}
       >
         <ModeTab active={mode === 'oauth'} onClick={() => setMode('oauth')}>
           <Sparkles className="h-3.5 w-3.5" /> Sign in with Claude
@@ -355,12 +406,17 @@ function ClaudeLogin({
                 disabled={busy || hasClaude === null}
               >
                 <TerminalSquare className="h-3.5 w-3.5" />
-                {terminalLaunched ? 'Terminal opened — start again?' : 'Start sign-in'}
+                {terminalLaunched ? 'Start sign-in again' : 'Start sign-in'}
               </Button>
               {hasClaude === null ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-muted-foreground)]" />
               ) : null}
             </div>
+            {terminalLaunched ? (
+              <p role="status" aria-live="polite" aria-atomic="true">
+                Terminal opened
+              </p>
+            ) : null}
             {/* Auto-open only exists on macOS today (the host's runSetupToken
                 resolves false elsewhere) — surface the manual command instead
                 of a silent no-op. */}
@@ -380,7 +436,7 @@ function ClaudeLogin({
               <span className="font-medium text-[var(--color-foreground)]">
                 Paste the token that appears after you approve in your browser
               </span>
-              <input
+              <Input
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
@@ -391,9 +447,9 @@ function ClaudeLogin({
                 }}
                 placeholder="sk-ant-oat01-…"
                 disabled={busy}
-                className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono disabled:opacity-50"
+                mono
               />
-              <span className="block text-[10px] text-[var(--color-muted-foreground)]">
+              <span className="block text-xs leading-4 text-[var(--color-muted-foreground)]">
                 It starts with <code className="font-mono">sk-ant-oat01-</code>. Pasting the whole line the terminal
                 printed works too.
               </span>
@@ -411,7 +467,8 @@ function ClaudeLogin({
           </p>
           <label className="block space-y-1">
             <span className="text-[var(--color-muted-foreground)]">API key</span>
-            <input
+            <Input
+              id="claude-api-key"
               type="password"
               autoComplete="off"
               spellCheck={false}
@@ -422,11 +479,12 @@ function ClaudeLogin({
               }}
               placeholder="sk-ant-…"
               disabled={busy}
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono disabled:opacity-50"
+              mono
+              aria-describedby={apiKeyShapeWarn ? 'claude-api-key-warning' : undefined}
             />
           </label>
           {apiKeyShapeWarn ? (
-            <p className="text-amber-300/90">
+            <p id="claude-api-key-warning" className="text-[var(--color-warning-foreground)]">
               That doesn&rsquo;t look like an Anthropic key — they start with <code className="font-mono">sk-ant-</code>
               . You can still save it.
             </p>
@@ -478,36 +536,44 @@ function CopilotPatLogin({
     <div className="space-y-2">
       <p className="text-[var(--color-muted-foreground)]">
         GitHub Copilot signs in with a <span className="text-[var(--color-foreground)]">fine-grained GitHub PAT</span>.
-        The token is brokered onto Copilot&rsquo;s <code className="font-mono">api.github.com</code> leg and never
-        enters the VM.
+        It stays on this computer and is used only when Copilot connects.
       </p>
 
       {/* Security bound (Sasha's pre-ship guard): the fine-grained PAT's narrow
           scope is the ENTIRE bound on host-keyed injection, so make the
           single-scope requirement impossible to miss. */}
-      <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-2 text-amber-200">
-        <p className="font-semibold">
-          Grant ONLY the <code className="font-mono">Copilot Requests</code> permission.
-        </p>
-        <p className="mt-1 text-[10px] leading-relaxed text-amber-200/80">
-          That single scope is the security bound: the PAT is injected on ALL guest&nbsp;&rarr;&nbsp;
-          <code className="font-mono">api.github.com</code> traffic, so a broader scope would let the sandbox act beyond
-          Copilot requests. Classic <code className="font-mono">ghp_</code> tokens are rejected — they carry your full
-          account scope.
-        </p>
+      <Banner
+        tone="warning"
+        title={
+          <>
+            Grant only the <code className="font-mono">Copilot Requests</code> permission.
+          </>
+        }
+      >
+        <details>
+          <summary className="cursor-pointer rounded text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+            Technical details
+          </summary>
+          <p className="mt-1 text-xs leading-4">
+            The PAT is added to <code className="font-mono">api.github.com</code> requests from the Sandbox. Broader
+            scopes could allow access beyond Copilot requests. Classic <code className="font-mono">ghp_</code> tokens
+            are rejected.
+          </p>
+        </details>
         <a
           href={GITHUB_FINE_GRAINED_PAT_SETTINGS_URL}
           target="_blank"
           rel="noreferrer"
-          className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-amber-100 underline hover:text-white"
+          className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
         >
-          <ExternalLink className="h-3 w-3" /> Create a fine-grained token on GitHub
+          <ExternalLink className="h-3 w-3" aria-hidden /> Create a fine-grained token on GitHub
         </a>
-      </div>
+      </Banner>
 
       <label className="block space-y-1">
         <span className="text-[var(--color-muted-foreground)]">Fine-grained PAT</span>
-        <input
+        <Input
+          id="copilot-pat"
           type="password"
           autoComplete="off"
           spellCheck={false}
@@ -518,16 +584,18 @@ function CopilotPatLogin({
           }}
           placeholder="github_pat_…"
           disabled={busy}
-          className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono disabled:opacity-50"
+          mono
+          invalid={isClassic}
+          aria-describedby={isClassic || wrongShape ? 'copilot-pat-warning' : undefined}
         />
       </label>
       {isClassic ? (
-        <p className="text-red-300">
+        <p id="copilot-pat-warning" className="text-[var(--color-destructive-foreground)]">
           That&rsquo;s a classic <code className="font-mono">ghp_</code> token — rejected. Use a fine-grained{' '}
           <code className="font-mono">github_pat_</code> token scoped to Copilot Requests only.
         </p>
       ) : wrongShape ? (
-        <p className="text-amber-300/90">
+        <p id="copilot-pat-warning" className="text-[var(--color-warning-foreground)]">
           A fine-grained PAT starts with <code className="font-mono">github_pat_</code>.
         </p>
       ) : null}
@@ -568,19 +636,19 @@ function OpenAiKeyLogin({
   return (
     <div className="space-y-2">
       <p className="text-[var(--color-muted-foreground)]">
-        Paste an OpenAI API key (<code className="font-mono">sk-…</code>). It&rsquo;s brokered onto Codex&rsquo;s{' '}
-        <code className="font-mono">api.openai.com</code> calls and never enters the VM. Get one from the OpenAI
-        platform dashboard.
+        Paste an OpenAI API key (<code className="font-mono">sk-…</code>). It stays on this computer and is used only
+        when Codex connects. Get one from the OpenAI platform dashboard.
       </p>
       {/* Acknowledge the deferred ChatGPT-subscription path (docs §7): it
           writes a durable refresh_token into the guest, so it isn't brokered
           here yet — set the expectation rather than leaving a silent gap. */}
-      <p className="text-[10px] text-[var(--color-muted-foreground)]">
+      <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
         ChatGPT subscription login isn&rsquo;t supported here yet — use an API key.
       </p>
       <label className="block space-y-1">
         <span className="text-[var(--color-muted-foreground)]">API key</span>
-        <input
+        <Input
+          id="openai-api-key"
           type="password"
           autoComplete="off"
           spellCheck={false}
@@ -591,11 +659,12 @@ function OpenAiKeyLogin({
           }}
           placeholder="sk-…"
           disabled={busy}
-          className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 font-mono disabled:opacity-50"
+          mono
+          aria-describedby={shapeWarn ? 'openai-api-key-warning' : undefined}
         />
       </label>
       {shapeWarn ? (
-        <p className="text-amber-300/90">
+        <p id="openai-api-key-warning" className="text-[var(--color-warning-foreground)]">
           That doesn&rsquo;t look like an OpenAI key — they start with <code className="font-mono">sk-</code>. You can
           still save it.
         </p>
@@ -612,9 +681,11 @@ function ModeTab({ active, onClick, children }: { active: boolean; onClick: () =
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active}
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors',
+        'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
         active
           ? 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
           : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'

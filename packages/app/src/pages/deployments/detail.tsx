@@ -2,7 +2,12 @@ import { Link, Navigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { StatusDot } from '@/components/ui/status-dot';
+import { FriendlyError } from '@/components/friendly-error';
+import { resolveStatusDot } from '@/components/ui/status-dot';
+import { StatusPill } from '@/components/ui/status-pill';
+import { Banner } from '@/components/ui/banner';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { KeyValueList } from '@/components/ui/key-value-list';
 import { EntityLabel } from '@/components/ui/entity-label';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import { durationMs, relativeTime } from '@/lib/time';
@@ -57,7 +62,7 @@ export function DeploymentDetailPage() {
   if (!id) return <Navigate to="/deployments" replace />;
 
   return (
-    <div className="space-y-6">
+    <PageShell rail="detail" className="space-y-6">
       <div>
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link to="/deployments">
@@ -67,44 +72,48 @@ export function DeploymentDetailPage() {
       </div>
 
       {deploymentQuery.error ? (
-        <div className="rounded-md border border-red-500/50 bg-red-500/5 p-3 text-xs text-red-400">
-          {deploymentQuery.error instanceof Error ? deploymentQuery.error.message : String(deploymentQuery.error)}
-        </div>
+        <FriendlyError error={deploymentQuery.error} fallbackHeadline="Couldn't load this deployment" />
       ) : null}
 
-      {!d && deploymentQuery.isLoading ? (
+      {deploymentQuery.error ? null : !d && deploymentQuery.isLoading ? (
         <div className="text-sm text-[var(--color-muted-foreground)]">Loading…</div>
       ) : !d ? (
         <div className="text-sm text-[var(--color-muted-foreground)]">Not found.</div>
       ) : (
         <>
-          <div className="flex items-center gap-3">
-            <StatusDot status={d.status} size="md" />
-            <div>
-              <h1 className="text-xl font-semibold">
-                {d.action} · <EntityLabel id={d.environmentId} name={environmentQuery.data?.name} />
-              </h1>
-              <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
-                <code className="font-mono">{d.id}</code>
-              </p>
-            </div>
-          </div>
+          <PageHeader
+            title={
+              <>
+                <EntityLabel id={d.projectId} name={projectQuery.data?.name} /> /{' '}
+                <EntityLabel id={d.environmentId} name={environmentQuery.data?.name} />
+              </>
+            }
+            description={`${d.action} deploy`}
+            action={
+              <div role="status" aria-live="polite" aria-atomic="true">
+                <StatusPill {...resolveStatusDot(d.status)} />
+              </div>
+            }
+          />
 
           {(() => {
-            const url = extractDeploymentUrl(d.message);
+            const url = extractDeploymentUrl(d.message) ?? environmentQuery.data?.url;
             if (!url) return null;
             return (
-              <a
-                href={url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between gap-3 rounded-md border border-green-500/40 bg-green-500/10 px-3 py-2 text-sm text-green-300 hover:bg-green-500/15"
+              <Banner
+                tone="success"
+                title="Deployed at"
+                action={
+                  <Button asChild size="sm">
+                    <a href={url} target="_blank" rel="noreferrer">
+                      Open app <ExternalLink className="h-4 w-4" aria-hidden />
+                      <span className="sr-only"> (opens in a new window)</span>
+                    </a>
+                  </Button>
+                }
               >
-                <span>
-                  <span className="font-semibold">Deployed at</span> <code className="font-mono text-xs">{url}</code>
-                </span>
-                <ExternalLink className="h-4 w-4" />
-              </a>
+                <code className="font-mono text-xs">{url}</code>
+              </Banner>
             );
           })()}
 
@@ -144,8 +153,6 @@ export function DeploymentDetailPage() {
                 )
               }
             />
-            {d.buildId ? <Row label="Build" value={<code className="font-mono text-xs">{d.buildId}</code>} /> : null}
-            {d.idempotentNoop ? <Row label="Idempotent" value="yes (no-op)" /> : null}
             <Row
               label="Started"
               value={
@@ -169,12 +176,26 @@ export function DeploymentDetailPage() {
             <Row label="Duration" value={durationMs(d.startedAt, d.completedAt) ?? '—'} />
           </section>
 
+          <details className="rounded-md border border-[var(--color-border)] p-4">
+            <summary className="cursor-pointer text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+              Technical details
+            </summary>
+            <KeyValueList
+              className="mt-3"
+              items={[
+                { key: 'deployment', label: 'Deployment ID', value: d.id, mono: true },
+                ...(d.buildId ? [{ key: 'build', label: 'Build ID', value: d.buildId, mono: true }] : []),
+                ...(d.idempotentNoop ? [{ key: 'changes', label: 'Changes', value: 'No changes were needed.' }] : []),
+              ]}
+            />
+          </details>
+
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            {TERMINAL.has(d.status) ? 'Run complete.' : 'Polling every 3s until the run reaches a terminal status.'}
+            {TERMINAL.has(d.status) ? 'Run complete.' : 'Updating automatically while this deploy runs.'}
           </p>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
 

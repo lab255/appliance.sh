@@ -2,9 +2,12 @@ import * as React from 'react';
 import { RefreshCw, Download, ArrowUpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
-import { useToast } from '@/components/ui/toast';
+import { KeyValueList } from '@/components/ui/key-value-list';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatusPill } from '@/components/ui/status-pill';
 import { useHost } from '@/providers/host-provider';
-import { resetOnboarding } from '@/lib/local-runtime';
+import { dismissOnboarding, resetOnboarding } from '@/lib/local-runtime';
 import { TeamSection } from '@/pages/settings-team';
 import type { AvailableUpdate, UpdateProgress } from '@/lib/host';
 import { cn } from '@/lib/utils';
@@ -23,16 +26,8 @@ export function SettingsPage() {
   const canReplaySetup = Boolean(host.vm);
 
   return (
-    <div className="max-w-2xl space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Shell info, updates, and app preferences. Manage the Dev Machine under{' '}
-          <span className="font-medium text-[var(--color-foreground)]">Machine</span>, cloud installations under{' '}
-          <span className="font-medium text-[var(--color-foreground)]">Cloud</span>, and sign in to coding agents under{' '}
-          <span className="font-medium text-[var(--color-foreground)]">Agents</span>.
-        </p>
-      </div>
+    <PageShell rail="detail" className="space-y-6">
+      <PageHeader title="Settings" description="Updates, team access, and preferences for this desktop app." />
 
       <TeamSection />
 
@@ -40,24 +35,19 @@ export function SettingsPage() {
 
       {canReplaySetup ? <PreferencesSection /> : null}
 
-      <Section title="About">
-        <Row label="Version" value={<code className="font-mono text-xs">{__APPLIANCE_VERSION__}</code>} />
-        <Row
-          label="Built"
-          value={
-            <span className="text-[var(--color-muted-foreground)]" title={__APPLIANCE_BUILD_TIME__}>
-              {new Date(__APPLIANCE_BUILD_TIME__).toLocaleString()}
-            </span>
-          }
+      <section aria-labelledby="about-heading" className="px-1">
+        <h2 id="about-heading" className="mb-2 text-sm font-semibold">
+          About
+        </h2>
+        <KeyValueList
+          items={[
+            { key: 'version', label: 'Version', value: __APPLIANCE_VERSION__, mono: true },
+            { key: 'built', label: 'Built', value: new Date(__APPLIANCE_BUILD_TIME__).toLocaleString() },
+            { key: 'shell', label: 'App', value: canBootstrap ? 'Desktop' : 'Web' },
+          ]}
         />
-        <Row
-          label="Shell"
-          value={
-            <span className="text-[var(--color-muted-foreground)]">{canBootstrap ? 'Desktop (Tauri)' : 'Web'}</span>
-          }
-        />
-      </Section>
-    </div>
+      </section>
+    </PageShell>
   );
 }
 
@@ -71,7 +61,6 @@ type UpdatePhase = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloadi
  */
 function UpdatesSection() {
   const host = useHost();
-  const { toast } = useToast();
   const [phase, setPhase] = React.useState<UpdatePhase>('idle');
   const [update, setUpdate] = React.useState<AvailableUpdate | null>(null);
   const [progress, setProgress] = React.useState<UpdateProgress | null>(null);
@@ -110,7 +99,6 @@ function UpdatesSection() {
     try {
       await host.updater.downloadAndInstall((p) => setProgress(p));
       setPhase('ready');
-      toast(`Update ${update?.version ?? ''} installed — restart to apply`.trim());
     } catch (err) {
       setPhase('failed');
       setError(err instanceof Error ? err.message : String(err));
@@ -128,7 +116,6 @@ function UpdatesSection() {
       // the "ready" state so the user can retry or quit themselves.
       setError(err instanceof Error ? err.message : String(err));
       setErrorStep('relaunch');
-      toast('Could not restart automatically — quit and reopen to finish updating', { variant: 'error' });
     }
   };
 
@@ -162,14 +149,22 @@ function UpdatesSection() {
         ) : null}
 
         {phase === 'available' && update?.notes ? (
-          <div className="rounded-md border border-[var(--color-border)] bg-black/20 px-3 py-2 text-xs whitespace-pre-wrap text-[var(--color-muted-foreground)]">
+          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs whitespace-pre-wrap text-[var(--color-muted-foreground)]">
             {update.notes}
           </div>
         ) : null}
 
         {phase === 'downloading' ? (
           <div className="space-y-1">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
+            <div
+              role="progressbar"
+              aria-label="Update download"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={pct ?? undefined}
+              aria-valuetext={pct === null ? 'Downloading' : `${pct}%`}
+              className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]"
+            >
               <div
                 className={cn('h-full bg-[var(--color-accent)] transition-all', pct === null && 'animate-pulse w-1/3')}
                 style={pct === null ? undefined : { width: `${pct}%` }}
@@ -202,11 +197,14 @@ function UpdatesSection() {
             </Button>
           )}
 
-          {phase === 'up-to-date' ? (
-            <span className="text-xs text-green-400">✓ You&apos;re on the latest version</span>
-          ) : null}
-          {phase === 'ready' ? <span className="text-xs text-green-400">✓ Installed</span> : null}
-          {phase === 'failed' ? <span className="text-xs text-red-400">Update failed</span> : null}
+          <span role="status" aria-live="polite" aria-atomic="true">
+            {phase === 'up-to-date' ? <StatusPill tone="neutral" label="Up to date" /> : null}
+            {phase === 'available' ? <span className="sr-only">Update {update?.version} is available</span> : null}
+            {phase === 'ready' ? <StatusPill tone="neutral" label="Installed — restart ready" /> : null}
+            {phase === 'checking' ? <span className="sr-only">Checking for updates</span> : null}
+            {phase === 'downloading' ? <span className="sr-only">Downloading update</span> : null}
+            {phase === 'failed' ? <StatusPill tone="error" label="Update failed" /> : null}
+          </span>
         </div>
 
         {error ? (
@@ -233,23 +231,39 @@ function UpdatesSection() {
  * Only rendered on the desktop shell, where the first-run welcome exists.
  */
 function PreferencesSection() {
-  const { toast } = useToast();
+  const [willShow, setWillShow] = React.useState(false);
   const onReplay = () => {
     resetOnboarding();
-    toast('First-run setup will show again the next time nothing is connected');
+    setWillShow(true);
   };
   return (
-    <Section title="Preferences" description="App-level preferences for this shell.">
+    <Section title="Preferences" description="Preferences for this desktop app.">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <div className="text-sm">Replay first-run setup</div>
+          <div className="text-sm">Show welcome again</div>
           <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
-            Re-show the welcome + get-started prompt the next time this shell has nothing connected.
+            Show the welcome screen on the next launch when nothing is set up.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onReplay}>
-          <RefreshCw className="h-3.5 w-3.5" /> Reset
-        </Button>
+        {willShow ? (
+          <span className="flex items-center gap-2">
+            <StatusPill tone="neutral" label="Will show when nothing is set up" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                dismissOnboarding();
+                setWillShow(false);
+              }}
+            >
+              Undo
+            </Button>
+          </span>
+        ) : (
+          <Button variant="outline" size="sm" onClick={onReplay}>
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Show on next launch
+          </Button>
+        )}
       </div>
     </Section>
   );
@@ -257,21 +271,8 @@ function PreferencesSection() {
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-      <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {description ? <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">{description}</p> : null}
-      </div>
+    <SectionCard title={title} description={description}>
       <dl className="space-y-2">{children}</dl>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[auto_1fr] items-baseline gap-4">
-      <dt className="text-xs text-[var(--color-muted-foreground)]">{label}</dt>
-      <dd className="text-sm">{value}</dd>
-    </div>
+    </SectionCard>
   );
 }

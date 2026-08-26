@@ -42,9 +42,13 @@ export function CommandSnippet({ command, className }: { command: string; classN
         type="button"
         onClick={onCopy}
         aria-label={copied ? 'Copied' : 'Copy command'}
-        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
       >
-        {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-[var(--color-success-foreground)]" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
       </button>
     </div>
   );

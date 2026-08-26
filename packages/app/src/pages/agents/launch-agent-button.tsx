@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { Bot, Loader2 } from 'lucide-react';
+import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { FriendlyError } from '@/components/friendly-error';
 import { AgentLoginPanel, useAgentSignedIn } from '@/components/agent-login';
 import { AGENT_ADAPTERS, agentAdapter, agentLabel } from '@/lib/agents';
@@ -57,6 +60,7 @@ export function LaunchAgentButton({
   agentType,
   onAgentTypeChange,
   disabledReason,
+  onAuthenticated,
 }: {
   name: string;
   // The agent to launch + authenticate (the `--type` key). CONTROLLED by ④
@@ -66,6 +70,7 @@ export function LaunchAgentButton({
   agentType: string;
   onAgentTypeChange: (type: string) => void;
   disabledReason?: string | null;
+  onAuthenticated?: () => void;
 }) {
   const host = useHost();
   const terminals = useTerminalSessions();
@@ -90,6 +95,9 @@ export function LaunchAgentButton({
   // launches before the first re-render disables the input. The ref flips
   // before any await, so the second Enter is dropped.
   const launchingRef = React.useRef(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const launcherRef = React.useRef<HTMLDivElement>(null);
+  const wasOpen = React.useRef(false);
 
   // Per-agent "signed in" dots on the picker (Devon nit): probe every agent's
   // host store while the launcher is open, re-running after a login (keyed on
@@ -121,6 +129,21 @@ export function LaunchAgentButton({
   // Brief loading gate (avoids a one-frame flash of the task input before the
   // login panel): the host has the capability but the status hasn't resolved.
   const authLoading = Boolean(agentAuth) && authStatus === null;
+
+  React.useEffect(() => {
+    if (open && !authLoading) {
+      requestAnimationFrame(() => {
+        const launcher = launcherRef.current;
+        (
+          launcher?.querySelector<HTMLElement>('[data-launch-task]') ??
+          launcher?.querySelector<HTMLElement>('input, button:not([disabled])')
+        )?.focus();
+      });
+    } else if (!open && wasOpen.current) {
+      triggerRef.current?.focus();
+    }
+    wasOpen.current = open;
+  }, [open, authLoading]);
 
   const launch = async () => {
     if (launchingRef.current) return;
@@ -194,6 +217,7 @@ export function LaunchAgentButton({
     }
     return (
       <Button
+        ref={triggerRef}
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
@@ -211,31 +235,49 @@ export function LaunchAgentButton({
   // launch + authenticate (each agent has its own host store, so switching
   // re-resolves the sign-in status).
   const picker = (
-    <div role="group" aria-label="Agent type" className="flex flex-wrap gap-1">
+    <div
+      role="radiogroup"
+      aria-label="Agent type"
+      className="flex flex-wrap gap-1"
+      onKeyDown={(event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const buttons = Array.from(
+          event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)')
+        );
+        event.preventDefault();
+        const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next =
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? buttons.length - 1
+              : (current + (event.key === 'ArrowLeft' ? -1 : 1) + buttons.length) % buttons.length;
+        buttons[next]?.focus();
+        buttons[next]?.click();
+      }}
+    >
       {AGENT_ADAPTERS.map((a) => {
         const active = a.type === agentType;
         return (
           <button
             key={a.type}
             type="button"
-            aria-pressed={active}
-            title={signedIn[a.type] ? `${a.blurb} — signed in` : a.blurb}
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
             disabled={busy}
             onClick={() => onAgentTypeChange(a.type)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors disabled:opacity-50',
+              'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
               active
-                ? 'border-cyan-500/50 bg-cyan-500/10 text-[var(--color-foreground)]'
+                ? 'border-[var(--color-border-strong)] bg-[var(--color-accent)] text-[var(--color-foreground)]'
                 : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
             )}
           >
-            <a.Icon className="h-3.5 w-3.5" /> {a.label}
-            {/* A green dot marks an agent that already has a stored credential
-                (decorative; the "— signed in" suffix on the button title is
-                the accessible signal). */}
-            {signedIn[a.type] ? (
-              <span aria-hidden className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
-            ) : null}
+            <a.Icon className="h-3.5 w-3.5" aria-hidden /> {a.label}
+            <span className="text-micro text-[var(--color-muted-foreground)]">
+              {signedIn[a.type] ? 'Signed in' : 'Signed out'}
+            </span>
           </button>
         );
       })}
@@ -246,9 +288,21 @@ export function LaunchAgentButton({
   // input doesn't render for one frame and then swap to the login panel.
   if (authLoading) {
     return (
-      <div className="flex flex-col items-start gap-2">
+      <div
+        ref={launcherRef}
+        className="flex flex-col items-start gap-2"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setOpen(false);
+        }}
+      >
+        <h3 className="text-sm font-semibold">Run {selectedLabel}</h3>
         {picker}
-        <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]"
+        >
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking {selectedLabel} sign-in…
           <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
             Cancel
@@ -264,12 +318,24 @@ export function LaunchAgentButton({
   // rejected upstream (likely an expired token / bad key).
   if (needsLogin || reauthNudge) {
     return (
-      <div className="flex max-w-md flex-col items-start gap-2">
+      <div
+        ref={launcherRef}
+        className="flex max-w-md flex-col items-start gap-2"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setOpen(false);
+        }}
+      >
+        <h3 className="text-sm font-semibold">Run {selectedLabel}</h3>
         {picker}
-        <p className={cn('text-xs', reauthNudge ? 'text-amber-300' : 'text-[var(--color-muted-foreground)]')}>
+        <p
+          className={cn(
+            'text-xs',
+            reauthNudge ? 'text-[var(--color-warning-foreground)]' : 'text-[var(--color-muted-foreground)]'
+          )}
+        >
           {reauthNudge
-            ? `Your ${selectedLabel} credential may be rejected — sign in again. It's stored on this machine and brokered in; it never enters the VM.`
-            : `Sign in to run ${selectedLabel} — its credential is stored on this machine and brokered in; it never enters the VM.`}
+            ? `Your ${selectedLabel} sign-in may have expired. Sign in again; the details stay on this computer.`
+            : `Sign in to run ${selectedLabel}. Your sign-in details stay on this computer.`}
         </p>
         <AgentLoginPanel
           agentType={agentType}
@@ -277,6 +343,7 @@ export function LaunchAgentButton({
             setReauthNudge(false);
             setErr(null);
             setAuthStatus(s);
+            onAuthenticated?.();
           }}
         />
         <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
@@ -286,35 +353,52 @@ export function LaunchAgentButton({
     );
   }
   return (
-    <div className="flex flex-col items-start gap-2">
+    <div
+      ref={launcherRef}
+      className="flex flex-col items-start gap-2"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setOpen(false);
+      }}
+    >
+      <h3 className="text-sm font-semibold">Run {selectedLabel}</h3>
       {picker}
-      <div className="flex items-center gap-2">
-        <input
-          autoFocus
-          type="text"
-          value={task}
-          onChange={(e) => setTask(e.target.value)}
-          placeholder="task (optional) — e.g. fix the failing test"
-          className="w-64 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs"
-          disabled={busy}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void launch();
-            if (e.key === 'Escape') setOpen(false);
-          }}
-        />
-        <Button size="sm" onClick={() => void launch()} disabled={busy}>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Task" htmlFor={`agent-task-${name}`} optional className="w-64">
+          <Input
+            data-launch-task
+            id={`agent-task-${name}`}
+            type="text"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            placeholder="e.g. Fix the failing test"
+            disabled={busy}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void launch();
+              if (e.key === 'Escape') setOpen(false);
+            }}
+          />
+        </Field>
+        <Button size="sm" onClick={() => void launch()} disabled={busy} aria-describedby="agent-launch-status">
           <Bot className={cn('h-3.5 w-3.5', busy && 'animate-pulse')} /> {busy ? 'Starting…' : 'Run'}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={busy}>
-          Cancel
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          {busy ? 'Close after start' : 'Cancel'}
         </Button>
       </div>
+      <span id="agent-launch-status" role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {busy ? `Starting ${selectedLabel}` : ''}
+      </span>
+      {busy ? (
+        <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+          Starting continues if you close this form.
+        </p>
+      ) : null}
       {/* Task-box honesty (Parker): claude + codex seed the typed task as the
           interactive TUI's first prompt; Copilot's interactive seeding is
           unverified, so its task box only LABELS the tab — say so rather than
           imply it runs. */}
       {agentType === 'copilot' ? (
-        <p className="text-[10px] text-[var(--color-muted-foreground)]">
+        <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
           Copilot opens a fresh interactive session — a task here only labels the tab; it isn&rsquo;t run automatically.
         </p>
       ) : null}
@@ -330,9 +414,9 @@ export function LaunchAgentButton({
           className="max-w-[28rem] text-xs"
         />
       ) : null}
-      <p className="text-[10px] text-[var(--color-muted-foreground)]">
-        Runs <code className="font-mono">{selectedBin}</code> in the shared workspace — your {selectedLabel} credential
-        is brokered in and never enters the VM.{' '}
+      <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+        Runs <code className="font-mono">{selectedBin}</code> in the shared workspace. Your {selectedLabel} sign-in
+        details stay on this computer and are used only when the agent connects.{' '}
         {agentAuth ? (
           authStatus?.configured ? (
             <>
@@ -352,10 +436,10 @@ export function LaunchAgentButton({
       {/* Honest-limits caveat (Parker): the key is brokered, but the
           workspace is not. Surface the blast radius where the user launches —
           calm plain language, same honest content. */}
-      <p className="text-[10px] text-amber-300/90">
+      <Banner tone="warning">
         The agent can read and change files in the shared workspace folder. Don&rsquo;t point it at folders you
         don&rsquo;t want modified.
-      </p>
+      </Banner>
     </div>
   );
 }

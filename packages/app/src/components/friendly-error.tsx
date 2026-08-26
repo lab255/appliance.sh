@@ -2,7 +2,8 @@ import * as React from 'react';
 import { Link } from 'react-router';
 import type { AuthFailureCause } from '@appliance.sh/sdk';
 import { parseStructuredHttpError } from '@/lib/http-error';
-import { cn } from '@/lib/utils';
+import { Banner } from '@/components/ui/banner';
+import { LogPane } from '@/components/ui/log-pane';
 
 // The friendly error layer: every surface that used to dump a raw
 // `err.message` in red monospace renders this instead — a plain-language
@@ -141,23 +142,21 @@ export function FriendlyError({
   const fix = FIX_LINES[kind];
 
   return (
-    <div role="alert" className={cn('rounded-md border border-red-500/40 bg-red-500/5 p-3 text-sm', className)}>
-      <div className="font-medium text-red-300">{line}</div>
-      {fix ? <div className="mt-1 text-xs text-red-200/90">{fix}</div> : null}
+    <Banner tone="error" title={line} className={className} action={actions}>
+      {fix ? <div>{fix}</div> : null}
       {kind === 'auth' && !hideReconnect ? (
-        <Link to="/setup/connect" className="mt-1 inline-block text-xs text-red-200 underline hover:text-red-100">
+        <Link
+          to="/setup/connect"
+          className="mt-1 inline-block rounded text-xs underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+        >
           Reconnect
         </Link>
       ) : null}
-      {actions ? <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div> : null}
       {raw && raw !== line ? (
-        <details className="mt-2">
-          <summary className="cursor-pointer select-none text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
-            Details
-          </summary>
-          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-red-300/90">{raw}</pre>
-        </details>
+        <LogPane className="mt-2" height="compact" label="Technical details">
+          {raw}
+        </LogPane>
       ) : null}
-    </div>
+    </Banner>
   );
 }

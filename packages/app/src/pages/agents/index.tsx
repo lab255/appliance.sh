@@ -1,9 +1,15 @@
 import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { Bot, Server, Terminal as TerminalIcon } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bot, Check, Circle, Server, Square, Terminal as TerminalIcon, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatusPill } from '@/components/ui/status-pill';
+import { Tag } from '@/components/ui/tag';
+import { FriendlyError } from '@/components/friendly-error';
 import { AgentLoginPanel, useAgentSignedIn } from '@/components/agent-login';
 import { AGENT_ADAPTERS, DEFAULT_AGENT_TYPE, agentAdapter, agentLabel } from '@/lib/agents';
 import { useHost } from '@/providers/host-provider';
@@ -41,12 +47,9 @@ export function AgentsPage() {
 
   if (!supported) {
     return (
-      <div className="max-w-2xl space-y-4">
-        <h1 className="text-xl font-semibold">Agents</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Coding agents run inside the Dev Machine — only available in the desktop app.
-        </p>
-      </div>
+      <PageShell rail="detail">
+        <PageHeader title="Agents" description="Coding agents run in a Sandbox in the Appliance desktop app." />
+      </PageShell>
     );
   }
 
@@ -59,14 +62,11 @@ export function AgentsPage() {
   const noAgentSignedIn = canAgentAuth && authResolved && !anySignedIn;
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header>
-        <h1 className="text-xl font-semibold">Agents</h1>
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-          Sign in to a coding agent, launch it into the Dev Machine&rsquo;s shared workspace, and observe it in the
-          terminal dock. Credentials are brokered host-side and never enter the VM.
-        </p>
-      </header>
+    <PageShell rail="detail" className="space-y-6">
+      <PageHeader
+        title="Agents"
+        description="Sign in, run a coding agent in your Sandbox workspace, and follow its session below. Sign-in details stay on this computer."
+      />
 
       {/* Cold-start, "no signed-in agent" state (named): lead with a clear
           "sign in, then launch" call rather than dropping the user straight
@@ -82,10 +82,14 @@ export function AgentsPage() {
         />
       ) : null}
 
-      <LauncherSection agentType={agentType} onAgentTypeChange={setAgentType} />
+      <LauncherSection
+        agentType={agentType}
+        onAgentTypeChange={setAgentType}
+        onAuthenticated={() => setAuthBump((n) => n + 1)}
+      />
 
       <RunsList />
-    </div>
+    </PageShell>
   );
 }
 
@@ -94,14 +98,27 @@ export function AgentsPage() {
 // sign-in section that immediately follows.
 function NoSignedInAgentBanner() {
   return (
-    <div className="rounded-md border border-cyan-500/40 bg-cyan-500/5 px-4 py-3">
-      <h2 className="text-sm font-semibold text-cyan-200">Sign in to get started</h2>
-      <p className="mt-1 text-xs text-cyan-100/80">
-        No coding agent is signed in yet. Pick an agent below and store its credential, then launch it into the running
-        Dev Machine. The credential stays on this computer — it never enters the VM.
-      </p>
-    </div>
+    <Banner tone="info" title="Sign in to get started">
+      Choose an agent and sign in. Your sign-in details stay on this computer.
+    </Banner>
   );
+}
+
+function onRadioGroupKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+  const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)'));
+  if (!buttons.length) return;
+  event.preventDefault();
+  const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  const delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+  const next =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? buttons.length - 1
+        : (current + delta + buttons.length) % buttons.length;
+  buttons[next]?.focus();
+  buttons[next]?.click();
 }
 
 // Per-agent sign-in (moved out of ⑤ Settings — docs/desktop-ia.md move-map 4b).
@@ -121,45 +138,57 @@ function AgentSignIn({
   onAgentTypeChange: (type: string) => void;
   onAuthenticated: () => void;
 }) {
+  const [manageSignIn, setManageSignIn] = React.useState(false);
+  const selectedSignedIn = Boolean(signedIn[agentType]);
+  React.useEffect(() => setManageSignIn(false), [agentType]);
+
   return (
-    <section className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-      <div>
-        <h2 className="text-sm font-semibold">Agent sign-in</h2>
-        <p className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
-          Sign in so coding agents can reach their providers. Each agent stores its own credential on this computer,
-          brokered in at request time; it never enters the VM.
-        </p>
-      </div>
-      <div role="group" aria-label="Agent type" className="flex flex-wrap gap-1">
+    <SectionCard
+      title="Agent sign-in"
+      description="Choose the agent you want to run. Sign-in details are saved securely on this computer."
+      action={
+        <StatusPill
+          tone={selectedSignedIn ? 'neutral' : 'warning'}
+          label={selectedSignedIn ? 'Signed in' : 'Signed out'}
+        />
+      }
+    >
+      <div role="radiogroup" aria-label="Agent type" onKeyDown={onRadioGroupKeyDown} className="flex flex-wrap gap-1">
         {AGENT_ADAPTERS.map((a) => {
           const active = a.type === agentType;
           return (
             <button
               key={a.type}
               type="button"
-              aria-pressed={active}
-              title={signedIn[a.type] ? `${a.blurb} — signed in` : a.blurb}
+              role="radio"
+              aria-checked={active}
+              tabIndex={active ? 0 : -1}
               onClick={() => onAgentTypeChange(a.type)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors',
+                'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                 active
-                  ? 'border-cyan-500/50 bg-cyan-500/10 text-[var(--color-foreground)]'
+                  ? 'border-[var(--color-border-strong)] bg-[var(--color-accent)] text-[var(--color-foreground)]'
                   : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
               )}
             >
-              <a.Icon className="h-3.5 w-3.5" /> {a.label}
-              {/* Green dot = a credential is already stored for this agent
-                  (decorative; the "— signed in" title suffix is the a11y
-                  signal). */}
-              {signedIn[a.type] ? (
-                <span aria-hidden className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
-              ) : null}
+              <a.Icon className="h-3.5 w-3.5" aria-hidden /> {a.label}
+              <span className="text-micro text-[var(--color-muted-foreground)]">
+                {signedIn[a.type] ? 'Signed in' : 'Signed out'}
+              </span>
             </button>
           );
         })}
       </div>
-      <AgentLoginPanel agentType={agentType} onAuthenticated={onAuthenticated} />
-    </section>
+      <div className="mt-3">
+        {selectedSignedIn && !manageSignIn ? (
+          <Button variant="outline" size="sm" onClick={() => setManageSignIn(true)}>
+            Manage sign-in
+          </Button>
+        ) : (
+          <AgentLoginPanel agentType={agentType} onAuthenticated={onAuthenticated} />
+        )}
+      </div>
+    </SectionCard>
   );
 }
 
@@ -172,9 +201,11 @@ function AgentSignIn({
 function LauncherSection({
   agentType,
   onAgentTypeChange,
+  onAuthenticated,
 }: {
   agentType: string;
   onAgentTypeChange: (type: string) => void;
+  onAuthenticated: () => void;
 }) {
   const host = useHost();
   const [searchParams] = useSearchParams();
@@ -206,15 +237,28 @@ function LauncherSection({
   }, [runningVms, selected, preferred]);
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-[var(--color-muted-foreground)]">Launch</h2>
+    <section className="space-y-3" aria-labelledby="launch-agent-heading">
+      <h2 id="launch-agent-heading" className="text-sm font-semibold">
+        Run an agent
+      </h2>
       {vmListQuery.isLoading && runningVms.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]">Checking the Dev Machine…</p>
+        <p className="text-xs text-[var(--color-muted-foreground)]">Checking the Sandbox…</p>
+      ) : vmListQuery.isError ? (
+        <EmptyState
+          icon={Server}
+          title="Couldn't reach the host"
+          description="The Sandbox status couldn't be read. Check that the desktop app is available, then retry."
+          action={
+            <Button variant="outline" onClick={() => vmListQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        />
       ) : runningVms.length === 0 ? (
         <EmptyState
           icon={Server}
-          title="Dev Machine not running"
-          description="Start the Dev Machine as a dev environment to launch coding agents into its shared workspace."
+          title="Sandbox not running"
+          description="Start the Sandbox to run coding agents in its shared workspace."
           action={
             <Button asChild>
               <Link to="/machine">
@@ -227,7 +271,12 @@ function LauncherSection({
         <div className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
           {runningVms.length > 1 ? <RuntimePicker vms={runningVms} selected={selected} onSelect={setSelected} /> : null}
           {selected ? (
-            <RuntimeLauncher name={selected} agentType={agentType} onAgentTypeChange={onAgentTypeChange} />
+            <RuntimeLauncher
+              name={selected}
+              agentType={agentType}
+              onAgentTypeChange={onAgentTypeChange}
+              onAuthenticated={onAuthenticated}
+            />
           ) : null}
         </div>
       )}
@@ -246,19 +295,21 @@ function RuntimePicker({
   onSelect: (name: string) => void;
 }) {
   return (
-    <div role="group" aria-label="Runtime" className="flex flex-wrap gap-1">
+    <div role="radiogroup" aria-label="Sandbox" onKeyDown={onRadioGroupKeyDown} className="flex flex-wrap gap-1">
       {vms.map((v) => {
         const active = v.name === selected;
         return (
           <button
             key={v.name}
             type="button"
-            aria-pressed={active}
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
             onClick={() => onSelect(v.name)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[11px] transition-colors',
+              'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
               active
-                ? 'border-cyan-500/50 bg-cyan-500/10 text-[var(--color-foreground)]'
+                ? 'border-[var(--color-sandbox-border)] bg-[var(--color-sandbox-background)] text-[var(--color-sandbox-foreground)]'
                 : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
             )}
           >
@@ -279,10 +330,12 @@ function RuntimeLauncher({
   name,
   agentType,
   onAgentTypeChange,
+  onAuthenticated,
 }: {
   name: string;
   agentType: string;
   onAgentTypeChange: (type: string) => void;
+  onAuthenticated: () => void;
 }) {
   const host = useHost();
   const statusQuery = useQuery({
@@ -297,18 +350,20 @@ function RuntimeLauncher({
   const status = statusQuery.data;
 
   const needsWorkspace = Boolean(status?.running) && !status?.devMount;
-  const disabledReason = !status
-    ? 'Checking the Dev Machine…'
-    : !status.running
-      ? 'Start the Dev Machine to run agents'
-      : status.devMount
-        ? null
-        : "This machine doesn't have a shared workspace folder yet. Agents work in that folder, so set one up first.";
+  const disabledReason = statusQuery.isError
+    ? "Couldn't read the Sandbox — retry below."
+    : !status
+      ? 'Checking the Sandbox…'
+      : !status.running
+        ? 'Start the Sandbox to run agents'
+        : status.devMount
+          ? null
+          : "This machine doesn't have a shared workspace folder yet. Agents work in that folder, so set one up first.";
 
   return (
     <div className="space-y-2">
       <p className="text-xs text-[var(--color-muted-foreground)]">
-        Launch into <code className="font-mono">{name}</code>
+        Sandbox <code className="font-mono">{name}</code>
         {status?.devMount ? (
           <>
             {' '}
@@ -321,7 +376,19 @@ function RuntimeLauncher({
         agentType={agentType}
         onAgentTypeChange={onAgentTypeChange}
         disabledReason={disabledReason}
+        onAuthenticated={onAuthenticated}
       />
+      {statusQuery.isError ? (
+        <FriendlyError
+          error={statusQuery.error}
+          headline="Couldn't read the Sandbox"
+          actions={
+            <Button variant="outline" size="sm" onClick={() => statusQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
       {/* The fix lives on the Machine page (restart as a dev environment) —
           give it a button rather than describing the path in prose. */}
       {needsWorkspace ? (
@@ -358,10 +425,7 @@ function RunsList() {
     queryFn: async () => {
       const perVm = await Promise.all(
         vmNames.map(async (vmName) => {
-          const list = await host
-            .vm!.instance(vmName)
-            .agent.list()
-            .catch(() => [] as AgentInfo[]);
+          const list = await host.vm!.instance(vmName).agent.list();
           return list.map((a) => ({ ...a, vmName }));
         })
       );
@@ -389,9 +453,26 @@ function RunsList() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-[var(--color-muted-foreground)]">Runs</h2>
+      <h2 className="text-sm font-semibold">Runs</h2>
       {runsQuery.isLoading && runs.length === 0 ? (
         <p className="text-xs text-[var(--color-muted-foreground)]">Loading runs…</p>
+      ) : vmListQuery.isError || runsQuery.isError ? (
+        <EmptyState
+          icon={Bot}
+          title="Couldn't load agent runs"
+          description="The host didn't return the current agent sessions. Retry to check again."
+          action={
+            <Button
+              variant="outline"
+              onClick={() => {
+                void vmListQuery.refetch();
+                void runsQuery.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          }
+        />
       ) : runs.length === 0 ? (
         <NoRunsState hasRuntime={runningVms.length > 0} />
       ) : (
@@ -416,37 +497,78 @@ function NoRunsState({ hasRuntime }: { hasRuntime: boolean }) {
       description={
         hasRuntime
           ? 'Launch a coding agent above and it appears here with its live status; its observe tab opens in the terminal dock.'
-          : 'Start the Dev Machine, then launch a coding agent — runs show up here with their live status.'
+          : 'Start the Sandbox, then launch a coding agent — runs show up here with their live status.'
       }
     />
   );
 }
 
 function RunRow({ run, onObserve }: { run: AgentInfo & { vmName: string }; onObserve: () => void }) {
+  const host = useHost();
+  const queryClient = useQueryClient();
   const adapter = agentAdapter(run.type);
   // An agent is observable while it is the live, attached TTY. A reconciled
   // `live: false` means the tmux session is gone, so reattaching would just
   // surface a dead shell — hide Observe then.
   const observable = run.status === 'running' && run.live !== false;
+  const stopMutation = useMutation({
+    mutationFn: () => host.vm!.instance(run.vmName).agent.stop(run.sessionId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents', 'runs'] }),
+  });
+  const stopLabel = observable ? 'Stop' : 'Remove';
+  const statusLabel =
+    run.status === 'running'
+      ? run.mode === 'interactive'
+        ? 'Attached'
+        : 'Running'
+      : run.status === 'error'
+        ? 'Failed'
+        : run.status === 'done'
+          ? 'Finished'
+          : 'Ended';
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5">
-      <adapter.Icon className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{run.task ? run.task : agentLabel(run.type)}</span>
-          <span className="shrink-0 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">
-            {agentLabel(run.type)}
-          </span>
+    <li
+      aria-label={`${agentLabel(run.type)}, ${run.task || 'no task'}, Sandbox ${run.vmName}, ${run.mode ?? 'interactive'} mode, ${statusLabel}`}
+    >
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <adapter.Icon className="h-4 w-4 shrink-0 text-[var(--color-muted-foreground)]" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium">{run.task ? run.task : agentLabel(run.type)}</span>
+            <Tag>{agentLabel(run.type)}</Tag>
+          </div>
+          <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+            {run.vmName} · {run.mode ?? 'interactive'}
+          </div>
         </div>
-        <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
-          {run.vmName} · {run.mode ?? 'interactive'}
-        </div>
-      </div>
-      <RunStatusBadge status={run.status} />
-      {observable ? (
-        <Button variant="outline" size="sm" onClick={onObserve}>
-          <TerminalIcon className="h-3.5 w-3.5" /> Observe
+        <RunStatusPill status={run.status} mode={run.mode} />
+        {observable ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onObserve}
+            aria-label={`Open session for ${run.task || agentLabel(run.type)}`}
+          >
+            <TerminalIcon className="h-3.5 w-3.5" /> Open session
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => stopMutation.mutate()}
+          disabled={stopMutation.isPending}
+          aria-label={`${stopLabel} ${run.task || agentLabel(run.type)}`}
+        >
+          {observable ? <Square className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+          {stopMutation.isPending ? 'Stopping…' : stopLabel}
         </Button>
+      </div>
+      {stopMutation.error ? (
+        <FriendlyError
+          error={stopMutation.error}
+          fallbackHeadline={`Couldn't ${stopLabel.toLowerCase()} this agent`}
+          className="mx-3 mb-3"
+        />
       ) : null}
     </li>
   );
@@ -455,19 +577,30 @@ function RunRow({ run, onObserve }: { run: AgentInfo & { vmName: string }; onObs
 // Registry status badge — the four-way `agent.list` status (running / done /
 // error / exited), shown verbatim. `exited`/`done` read as muted (terminal),
 // `error` red, `running` green.
-function RunStatusBadge({ status }: { status: AgentInfo['status'] }) {
+function RunStatusPill({ status, mode }: { status: AgentInfo['status']; mode?: AgentInfo['mode'] }) {
+  const running = status === 'running';
+  const label = running
+    ? mode === 'interactive'
+      ? 'Attached'
+      : 'Running'
+    : status === 'error'
+      ? 'Failed'
+      : status === 'done'
+        ? 'Finished'
+        : 'Ended';
+  const Icon = running ? Circle : status === 'error' ? X : Check;
   return (
-    <span
-      className={cn(
-        'shrink-0 rounded-md px-2 py-1 text-xs font-medium',
-        status === 'running'
-          ? 'border border-green-500/40 bg-green-500/15 text-green-300'
-          : status === 'error'
-            ? 'border border-red-500/40 bg-red-500/15 text-red-300'
-            : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
-      )}
-    >
-      {status}
+    <span role="status" aria-live="polite" aria-atomic="true">
+      <StatusPill
+        tone={running ? 'info' : status === 'error' ? 'error' : 'neutral'}
+        activity={running && mode !== 'interactive' ? 'pulse' : 'static'}
+        label={
+          <span className="inline-flex items-center gap-1">
+            <Icon className="h-3 w-3" aria-hidden />
+            {label}
+          </span>
+        }
+      />
     </span>
   );
 }

@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { useHost } from '@/providers/host-provider';
 import { DEFAULT_MICROVM_NAME, microVmClusterId } from '@/lib/host';
 import { RuntimeDetail } from './runtime-detail';
@@ -53,39 +55,36 @@ export function MachinePage() {
 
   if (!supported) {
     return (
-      <div className="max-w-2xl space-y-4">
-        <h1 className="text-xl font-semibold">Dev Machine</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          The Dev Machine — an isolated virtual machine that runs your apps, dev shells, and agents on this computer —
-          is only available in the desktop app.
-        </p>
-      </div>
+      <PageShell rail="detail">
+        <PageHeader
+          title="Dev Machine"
+          description="The Sandbox runs coding agents and shells on this computer. It is available in the desktop app."
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="max-w-3xl space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Dev Machine</h1>
-          <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-            An isolated virtual machine on this computer that runs your apps, dev shells, and coding agents.
-          </p>
-        </div>
-        <NewVmButton
-          existing={names}
-          onAdd={(n) => {
-            setPending((p) => [...p, n]);
-            // The VM doesn't exist on the engine until its Start boots it;
-            // the detail below handles a not-yet-created VM.
-            selectVm(n);
-          }}
-        />
-      </div>
+    <PageShell rail="detail" className="space-y-5">
+      <PageHeader
+        title="Dev Machine"
+        description="A private Sandbox for coding agents and shells. Turn on App hosting when apps need live local URLs."
+        action={
+          <NewVmButton
+            existing={names}
+            onAdd={(n) => {
+              setPending((p) => [...p, n]);
+              // The VM doesn't exist on the engine until its Start boots it;
+              // the detail below handles a not-yet-created VM.
+              selectVm(n);
+            }}
+          />
+        }
+      />
 
       {names.length > 1 ? (
         <label className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-          Virtual machine
+          Sandbox
           <select
             value={selected}
             onChange={(e) => selectVm(e.target.value)}
@@ -96,7 +95,7 @@ export function MachinePage() {
                 {n}
                 {n === DEFAULT_MICROVM_NAME ? ' (default)' : ''}
                 {vms.find((vm) => vm.name === n)?.running && !vms.find((vm) => vm.name === n)?.clusterProvisioned
-                  ? ' — core ready'
+                  ? ' — Sandbox ready'
                   : ''}
               </option>
             ))}
@@ -105,7 +104,7 @@ export function MachinePage() {
       ) : null}
 
       <RuntimeDetail key={selected} name={selected} clusterId={microVmClusterId(selected)} />
-    </div>
+    </PageShell>
   );
 }
 
@@ -124,7 +123,7 @@ function NewVmButton({ existing, onAdd }: { existing: string[]; onAdd: (name: st
       return;
     }
     if (existing.includes(n)) {
-      setErr(`A VM named "${n}" already exists.`);
+      setErr(`A Sandbox named "${n}" already exists.`);
       return;
     }
     onAdd(n);
@@ -136,14 +135,14 @@ function NewVmButton({ existing, onAdd }: { existing: string[]; onAdd: (name: st
   if (!open) {
     return (
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" /> New VM
+        <Plus className="h-4 w-4" aria-hidden /> New Sandbox
       </Button>
     );
   }
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
-        <input
+        <Input
           autoFocus
           type="text"
           autoCapitalize="none"
@@ -154,8 +153,11 @@ function NewVmButton({ existing, onAdd }: { existing: string[]; onAdd: (name: st
             setName(e.target.value.toLowerCase());
             setErr(null);
           }}
-          placeholder="vm name, e.g. traffic"
-          className="w-40 rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 font-mono text-xs"
+          aria-label="Sandbox name"
+          placeholder="name, e.g. traffic"
+          className="w-40"
+          mono
+          invalid={Boolean(err)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') submit();
             if (e.key === 'Escape') setOpen(false);
@@ -168,7 +170,11 @@ function NewVmButton({ existing, onAdd }: { existing: string[]; onAdd: (name: st
           Cancel
         </Button>
       </div>
-      {err ? <p className="text-[10px] text-red-300">{err}</p> : null}
+      {err ? (
+        <p role="alert" className="text-xs leading-4 text-[var(--color-destructive-foreground)]">
+          {err}
+        </p>
+      ) : null}
     </div>
   );
 }

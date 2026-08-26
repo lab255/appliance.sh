@@ -1,13 +1,16 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Check, Plus } from 'lucide-react';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { cn } from '@/lib/utils';
 import { devMachineLabel, isMicroVmClusterId, microVmNameFromClusterId } from '@/lib/host';
-import { resolveDevMachineTargets } from '@/lib/dev-machine-targets';
+import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
 import type { Cluster } from '@/lib/host';
+import { Tag } from '@/components/ui/tag';
+import { Banner } from '@/components/ui/banner';
+import { StatusDot } from '@/components/ui/status-dot';
 
 /** Display name for a deploy target: the local VM's own `microvm*`
  *  cluster shows as the Dev Machine; everything else keeps its given
@@ -20,11 +23,7 @@ function targetName(cluster: Cluster): string {
 
 function EngineBadge({ local }: { local: boolean }) {
   if (!local) return null;
-  return (
-    <span className="shrink-0 rounded bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-medium text-cyan-300">
-      this computer
-    </span>
-  );
+  return <Tag emphasis="sandbox">this computer</Tag>;
 }
 
 export function ClusterSwitcher() {
@@ -34,16 +33,6 @@ export function ClusterSwitcher() {
   const { config, cluster, isLoading } = useSelectedCluster();
   const clusters = config?.clusters ?? [];
 
-  // Local VM inventory (ports) so profile-derived duplicates of the Dev
-  // Machine can be recognised by endpoint. Same query key the Machine
-  // page and deploy wizard poll — the cache is shared.
-  const vmListQuery = useQuery({
-    queryKey: ['microvm', 'list'],
-    enabled: Boolean(host.vm),
-    queryFn: () => host.vm!.list(),
-  });
-  const vms = vmListQuery.data ?? [];
-
   // Canonical dedupe (see lib/dev-machine-targets.ts): a CLI profile
   // whose URL points at a running local VM's forwarded api-server port
   // IS that VM — one machine must not list as two targets. The alias row
@@ -51,10 +40,29 @@ export function ClusterSwitcher() {
   // alias" special case because useSelectedCluster REBINDS an alias
   // selection to the twin, so the check mark always lands on the
   // surviving row and clicking it selects the working identity.
-  const { visibleClusters } = resolveDevMachineTargets(clusters, vms);
+  const { visibleClusters, coreMachines, isLoading: isMachineLoading } = useDevMachineTargets(clusters);
+  const orderedClusters = React.useMemo(
+    () => [
+      ...visibleClusters.filter((item) => isMicroVmClusterId(item.id)),
+      ...visibleClusters.filter((item) => !isMicroVmClusterId(item.id)),
+    ],
+    [visibleClusters]
+  );
+  const orderedClusterIds = orderedClusters.map((item) => item.id).join(',');
 
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const [activeIndex, setActiveIndex] = React.useState(0);
+
+  const focusItem = React.useCallback((index: number) => {
+    const count = itemRefs.current.length;
+    if (!count) return;
+    const next = ((index % count) + count) % count;
+    setActiveIndex(next);
+    itemRefs.current[next]?.focus();
+  }, []);
 
   React.useEffect(() => {
     if (!open) return;
@@ -62,7 +70,10 @@ export function ClusterSwitcher() {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKey);
@@ -71,6 +82,12 @@ export function ClusterSwitcher() {
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const selectedIndex = orderedClusters.findIndex((item) => item.id === cluster?.id);
+    window.requestAnimationFrame(() => focusItem(selectedIndex >= 0 ? coreMachines.length + selectedIndex : 0));
+  }, [open, cluster?.id, coreMachines.length, orderedClusterIds, focusItem]);
 
   const selectMutation = useMutation({
     mutationFn: async (id: string) => host.selectCluster(id),
@@ -87,18 +104,32 @@ export function ClusterSwitcher() {
         navigate('/');
       }
       setOpen(false);
+      triggerRef.current?.focus();
+    },
+    onError: () => {
+      setOpen(true);
+      const failedIndex =
+        coreMachines.length + orderedClusters.findIndex((item) => item.id === selectMutation.variables);
+      window.requestAnimationFrame(() => focusItem(Math.max(0, failedIndex)));
     },
   });
 
-  if (clusters.length === 0) {
+  if (clusters.length === 0 && coreMachines.length === 0 && isMachineLoading) {
+    return <div className="text-xs text-[var(--color-muted-foreground)]">…</div>;
+  }
+  if (clusters.length === 0 && coreMachines.length === 0) {
     return <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">Not connected</div>;
   }
 
   return (
     <div className="relative" ref={ref}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls="target-switcher-menu"
         className={cn(
           'flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-muted)]',
           open && 'bg-[var(--color-muted)]'
@@ -108,42 +139,158 @@ export function ClusterSwitcher() {
             inventory, show a quiet ellipsis — never the alias identity. */}
         <span className="font-medium">{cluster ? targetName(cluster) : isLoading ? '…' : 'Select target'}</span>
         {cluster ? <EngineBadge local={isMicroVmClusterId(cluster.id)} /> : null}
-        <ChevronDown className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" />
+        <ChevronDown className="h-3.5 w-3.5 text-[var(--color-muted-foreground)]" aria-hidden />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] shadow-lg">
-          <ul className="max-h-72 overflow-auto py-1">
-            {visibleClusters.map((c) => {
-              const isSelected = c.id === cluster?.id;
-              return (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isSelected) selectMutation.mutate(c.id);
-                      else setOpen(false);
-                    }}
-                    disabled={selectMutation.isPending}
-                    className={cn(
-                      'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)]',
-                      isSelected && 'bg-[var(--color-muted)]'
-                    )}
-                  >
-                    <div className="w-4">
-                      {isSelected ? <Check className="h-4 w-4 text-[var(--color-accent)]" /> : null}
+        <div
+          id="target-switcher-menu"
+          role="menu"
+          aria-label="Deployment targets"
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              focusItem(activeIndex + 1);
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              focusItem(activeIndex - 1);
+            } else if (event.key === 'Home') {
+              event.preventDefault();
+              focusItem(0);
+            } else if (event.key === 'End') {
+              event.preventDefault();
+              focusItem(itemRefs.current.length - 1);
+            }
+          }}
+          className="absolute left-0 top-full z-10 mt-1 w-80 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] shadow-lg"
+        >
+          {selectMutation.isError ? (
+            <Banner tone="error" className="m-2" title="Couldn't switch target">
+              Try again. Your current target has not changed.
+            </Banner>
+          ) : null}
+          <ul className="max-h-80 overflow-auto py-1">
+            <li className="px-3 py-1 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
+              This computer
+            </li>
+            {coreMachines.map((vm) => (
+              <li key={`core-${vm.name}`}>
+                <button
+                  ref={(node) => {
+                    itemRefs.current[coreMachines.indexOf(vm)] = node;
+                  }}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={activeIndex === coreMachines.indexOf(vm) ? 0 : -1}
+                  onClick={() => {
+                    const suffix = vm.name === 'appliance' ? '' : `?vm=${encodeURIComponent(vm.name)}`;
+                    navigate(`/machine${suffix}`);
+                    setOpen(false);
+                  }}
+                  className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                >
+                  <StatusDot
+                    tone={vm.running ? 'sandbox' : 'neutral'}
+                    label={vm.running ? 'Sandbox ready' : 'Stopped'}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      {devMachineLabel(vm.name)} <EngineBadge local />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 font-medium">
-                        {targetName(c)} <EngineBadge local={isMicroVmClusterId(c.id)} />
-                      </div>
-                      <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
-                        {c.apiServerUrl}
-                      </div>
+                    <div className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+                      {vm.running ? "Sandbox — can't deploy yet · Set up hosting" : 'Stopped · open Machine to start'}
                     </div>
-                  </button>
-                </li>
-              );
-            })}
+                  </div>
+                </button>
+              </li>
+            ))}
+            {orderedClusters
+              .filter((item) => isMicroVmClusterId(item.id))
+              .map((c) => {
+                const isSelected = c.id === cluster?.id;
+                const index = coreMachines.length + orderedClusters.indexOf(c);
+                const pending = selectMutation.isPending && selectMutation.variables === c.id;
+                return (
+                  <li key={c.id}>
+                    <button
+                      ref={(node) => {
+                        itemRefs.current[index] = node;
+                      }}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
+                      aria-current={isSelected ? 'true' : undefined}
+                      tabIndex={activeIndex === index ? 0 : -1}
+                      onClick={() => {
+                        if (!isSelected) selectMutation.mutate(c.id);
+                        else setOpen(false);
+                      }}
+                      disabled={selectMutation.isPending && !pending}
+                      className={cn(
+                        'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
+                        isSelected && 'bg-[var(--color-muted)]'
+                      )}
+                    >
+                      <div className="w-4">{isSelected ? <Check className="h-4 w-4" aria-hidden /> : null}</div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {pending ? 'Switching…' : targetName(c)} <EngineBadge local />
+                        </div>
+                        <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+                          Sandbox + hosting · {c.apiServerUrl}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            <li className="mt-1 border-t border-[var(--color-border)] px-3 py-1 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
+              Cloud
+            </li>
+            {visibleClusters.filter((item) => !isMicroVmClusterId(item.id)).length === 0 ? (
+              <li className="px-3 py-2 text-xs text-[var(--color-muted-foreground)]">None paired yet</li>
+            ) : null}
+            {orderedClusters
+              .filter((item) => !isMicroVmClusterId(item.id))
+              .map((c) => {
+                const isSelected = c.id === cluster?.id;
+                const index = coreMachines.length + orderedClusters.indexOf(c);
+                const pending = selectMutation.isPending && selectMutation.variables === c.id;
+                return (
+                  <li key={c.id}>
+                    <button
+                      ref={(node) => {
+                        itemRefs.current[index] = node;
+                      }}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
+                      aria-current={isSelected ? 'true' : undefined}
+                      tabIndex={activeIndex === index ? 0 : -1}
+                      onClick={() => {
+                        if (!isSelected) selectMutation.mutate(c.id);
+                        else setOpen(false);
+                      }}
+                      disabled={selectMutation.isPending && !pending}
+                      className={cn(
+                        'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
+                        isSelected && 'bg-[var(--color-muted)]'
+                      )}
+                    >
+                      <div className="w-4">
+                        {isSelected ? <Check className="h-4 w-4 text-[var(--color-accent)]" /> : null}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {pending ? 'Switching…' : targetName(c)} <EngineBadge local={isMicroVmClusterId(c.id)} />
+                        </div>
+                        <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+                          {c.apiServerUrl}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
           </ul>
           <div className="border-t border-[var(--color-border)] p-1">
             <Link
@@ -154,7 +301,7 @@ export function ClusterSwitcher() {
               className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-[var(--color-muted)]"
             >
               <Plus className="h-4 w-4" />
-              Add cloud
+              Pair a cloud
             </Link>
           </div>
         </div>
