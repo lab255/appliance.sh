@@ -1,3 +1,17 @@
+## 1.56.0 (2026-08-26)
+
+### Features
+
+- desktop journey audit fixes + design-system/UX overhaul ([#66](https://github.com/lab255/appliance.sh/pull/66))
+
+### Bug Fixes
+
+- **ci:** unwedge the release train after the lab255 repo move ([#67](https://github.com/lab255/appliance.sh/pull/67))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.55.1 (2026-08-18)
 
 ### Bug Fixes
