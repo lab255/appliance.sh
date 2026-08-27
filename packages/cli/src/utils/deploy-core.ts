@@ -10,7 +10,7 @@ import { buildApplianceZip } from './build-package.js';
 import { readLink, writeLink } from './link.js';
 import { pollDeploymentUntilDone, extractDeploymentUrl } from './deploy-poll.js';
 import { startProgressLine, BRAND } from './progress.js';
-import { readBundleManifest } from './bundle-read.js';
+import { readBundleManifestForDeploy } from './bundle-read.js';
 import chalk from 'chalk';
 
 // The deploy engine, shared by `appliance deploy` (single app in cwd)
@@ -33,9 +33,12 @@ export function isPrintedError(err: unknown): err is PrintedError {
 
 /** Bounded pre-upload discriminator. Existing v1 bytes remain untouched. */
 export function assertSourceBundleForDeploy(buildPath: string): void {
-  const bundle = readBundleManifest(buildPath);
+  const bundle = readBundleManifestForDeploy(buildPath);
   if (bundle.classification === 'runnable') {
-    throw new Error('runnable bundles deploy via the runtime; use appliance runtime run/install');
+    throw new Error(
+      'deploy currently accepts manifest v1 source bundles only; ' +
+        'runnable bundles will be handled by appliance runtime in a later release.'
+    );
   }
 }
 

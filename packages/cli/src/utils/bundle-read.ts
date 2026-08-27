@@ -82,12 +82,21 @@ const UTF8 = new TextDecoder('utf-8', { fatal: true });
 const CRC_TABLE = makeCrcTable();
 
 export function readBundleManifest(filePath: string, limits: Partial<BundleLimits> = {}): ReadBundleManifestResult {
-  const zip = inspectZip(filePath, limits);
+  const zip = inspectZip(filePath, limits, 'strict');
+  return readManifestFromZip(zip);
+}
+
+/** @internal Minimal discriminator used only to preserve legacy source deploy behaviour. */
+export function readBundleManifestForDeploy(
+  filePath: string,
+  limits: Partial<BundleLimits> = {}
+): ReadBundleManifestResult {
+  const zip = inspectZip(filePath, limits, 'source');
   return readManifestFromZip(zip);
 }
 
 export function unpackBundle(filePath: string, destination: string, limits: Partial<BundleLimits> = {}): void {
-  const zip = inspectZip(filePath, limits);
+  const zip = inspectZip(filePath, limits, 'strict');
   fs.mkdirSync(path.resolve(destination), { recursive: true });
   const root = fs.realpathSync(path.resolve(destination));
   for (const entry of zip.entries) {
@@ -106,7 +115,7 @@ export function unpackBundle(filePath: string, destination: string, limits: Part
 }
 
 export function verifyBundle(filePath: string, options: VerifyBundleOptions = {}): VerifyBundleResult {
-  const zip = inspectZip(filePath, options.limits);
+  const zip = inspectZip(filePath, options.limits, 'strict');
   const bounded = readManifestFromZip(zip);
   if (bounded.classification !== 'runnable') throw new Error('Expected a manifest v2 runnable bundle.');
 
@@ -177,7 +186,13 @@ export function classifyBundleManifest(manifest: unknown): BundleClassification 
   throw new Error('Invalid bundle discriminator: expected manifest "v1" source or manifest "v2" runnable.');
 }
 
-function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): InspectedZip {
+type ZipInspectionMode = 'strict' | 'source';
+
+function inspectZip(
+  filePath: string,
+  overrides: Partial<BundleLimits> = {},
+  mode: ZipInspectionMode = 'strict'
+): InspectedZip {
   const limits = { ...DEFAULT_BUNDLE_LIMITS, ...overrides };
   const absolute = path.resolve(filePath);
   const stat = fs.statSync(absolute);
@@ -201,7 +216,9 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
     const entryCount = tail.readUInt16LE(eocdOffsetInTail + 10);
     if (diskEntries !== entryCount) throw new Error('Invalid ZIP entry count.');
     if (entryCount === 0xffff) throw new Error('ZIP64 entry counts are not supported.');
-    if (entryCount > limits.maxEntries) throw new Error(`Bundle exceeds the ${limits.maxEntries}-entry limit.`);
+    if (mode === 'strict' && entryCount > limits.maxEntries) {
+      throw new Error(`Bundle exceeds the ${limits.maxEntries}-entry limit.`);
+    }
     const centralSize = tail.readUInt32LE(eocdOffsetInTail + 12);
     const centralOffset = tail.readUInt32LE(eocdOffsetInTail + 16);
     const absoluteEocdOffset = stat.size - tail.length + eocdOffsetInTail;
@@ -220,9 +237,11 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
         throw new Error('Invalid ZIP central directory entry.');
       }
       const flags = central.readUInt16LE(cursor + 8);
-      if ((flags & 0x1) !== 0) throw new Error('Encrypted ZIP entries are not allowed.');
+      if (mode === 'strict' && (flags & 0x1) !== 0) throw new Error('Encrypted ZIP entries are not allowed.');
       const compression = central.readUInt16LE(cursor + 10);
-      if (compression !== 0 && compression !== 8) throw new Error('ZIP entries must use store or deflate compression.');
+      if (mode === 'strict' && compression !== 0 && compression !== 8) {
+        throw new Error('ZIP entries must use store or deflate compression.');
+      }
       const compressedSize = central.readUInt32LE(cursor + 20);
       const uncompressedSize = central.readUInt32LE(cursor + 24);
       const nameLength = central.readUInt16LE(cursor + 28);
@@ -230,32 +249,36 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
       const commentSize = central.readUInt16LE(cursor + 32);
       const recordLength = 46 + nameLength + extraLength + commentSize;
       if (cursor + recordLength > central.length) throw new Error('Truncated ZIP central directory entry.');
-      if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff) {
+      if (mode === 'strict' && (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff)) {
         throw new Error('ZIP64 expanded entries are not supported.');
       }
       const nameBytes = central.subarray(cursor + 46, cursor + 46 + nameLength);
       const name = decodeUtf8(nameBytes, 'ZIP entry name');
-      validateEntryPath(name, limits.maxPathBytes);
+      if (mode === 'strict') validateEntryPath(name, limits.maxPathBytes);
       const folded = name.toLocaleLowerCase('en-US');
-      if (byName.has(name)) throw new Error(`Duplicate ZIP entry: ${name}`);
-      if (caseFolded.has(folded)) throw new Error(`Case-colliding ZIP entry: ${name}`);
+      if (mode === 'strict' && byName.has(name)) throw new Error(`Duplicate ZIP entry: ${name}`);
+      if (mode === 'strict' && caseFolded.has(folded)) throw new Error(`Case-colliding ZIP entry: ${name}`);
       caseFolded.add(folded);
 
       const madeBy = central.readUInt16LE(cursor + 4) >>> 8;
       const externalAttributes = central.readUInt32LE(cursor + 38);
-      const mode = madeBy === 3 ? externalAttributes >>> 16 : 0;
-      const kind = mode & 0o170000;
+      const unixMode = madeBy === 3 ? externalAttributes >>> 16 : 0;
+      const kind = unixMode & 0o170000;
       const isDirectory = name.endsWith('/');
-      if (kind !== 0 && kind !== 0o100000 && kind !== 0o040000) {
+      if (mode === 'strict' && kind !== 0 && kind !== 0o100000 && kind !== 0o040000) {
         throw new Error(`ZIP entry is not a regular file or directory: ${name}`);
       }
-      if ((kind === 0o040000) !== isDirectory && kind !== 0) {
+      if (mode === 'strict' && (kind === 0o040000) !== isDirectory && kind !== 0) {
         throw new Error(`ZIP entry type disagrees with its path: ${name}`);
       }
-      if (uncompressedSize > limits.maxEntryBytes) throw new Error(`ZIP entry exceeds expanded limit: ${name}`);
+      if (mode === 'strict' && uncompressedSize > limits.maxEntryBytes) {
+        throw new Error(`ZIP entry exceeds expanded limit: ${name}`);
+      }
       expandedTotal += uncompressedSize;
       compressedTotal += compressedSize;
-      if (expandedTotal > limits.maxExpandedBytes) throw new Error('Bundle exceeds the total expanded size limit.');
+      if (mode === 'strict' && expandedTotal > limits.maxExpandedBytes) {
+        throw new Error('Bundle exceeds the total expanded size limit.');
+      }
 
       const entry: ZipEntry = {
         name,
@@ -266,7 +289,10 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
         localHeaderOffset: central.readUInt32LE(cursor + 42),
         isDirectory,
       };
-      if (entry.localHeaderOffset === 0xffffffff || entry.localHeaderOffset + 30 > centralOffset) {
+      if (
+        mode === 'strict' &&
+        (entry.localHeaderOffset === 0xffffffff || entry.localHeaderOffset + 30 > centralOffset)
+      ) {
         throw new Error(`Invalid local ZIP header offset: ${name}`);
       }
       entries.push(entry);
@@ -275,6 +301,7 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
     }
     if (entries.length !== entryCount) throw new Error('ZIP central directory entry count mismatch.');
     if (
+      mode === 'strict' &&
       expandedTotal > limits.expansionRatioThresholdBytes &&
       expandedTotal / Math.max(1, compressedTotal) > limits.maxExpansionRatio
     ) {

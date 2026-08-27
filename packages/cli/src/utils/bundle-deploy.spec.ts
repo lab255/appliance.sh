@@ -33,6 +33,30 @@ describe('deploy bundle discrimination', () => {
     expect(fs.readFileSync(bundle)).toEqual(before);
   });
 
+  it('preserves v1 deploy behaviour for symlinks and more than 4096 source entries', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-large-source-'));
+    dirs.push(dir);
+    const bundle = path.join(dir, 'source.zip');
+    const output = fs.createWriteStream(bundle);
+    const archive = archiver('zip');
+    const closed = new Promise<void>((resolve, reject) => {
+      output.on('close', resolve);
+      archive.on('error', reject);
+    });
+    archive.pipe(output);
+    archive.append(JSON.stringify({ manifest: 'v1', type: 'container', name: 'source' }), {
+      name: 'appliance.json',
+    });
+    archive.symlink('linked-source', 'source-target');
+    for (let index = 0; index < 5000; index += 1) {
+      archive.append('', { name: `node_modules/fixture-${index}/index.js` });
+    }
+    await archive.finalize();
+    await closed;
+
+    expect(() => assertSourceBundleForDeploy(bundle)).not.toThrow();
+  });
+
   it.each(['container', 'binary', 'compound'] as const)(
     'rejects a v2 %s runnable before the upload path',
     async (type) => {
@@ -80,7 +104,8 @@ describe('deploy bundle discrimination', () => {
             : [{ path: 'payload/bin/app', data: Buffer.from('binary') }],
       });
       expect(() => assertSourceBundleForDeploy(bundle)).toThrow(
-        'runnable bundles deploy via the runtime; use appliance runtime run/install'
+        'deploy currently accepts manifest v1 source bundles only; ' +
+          'runnable bundles will be handled by appliance runtime in a later release.'
       );
     }
   );
