@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import type { ApplianceV2 } from '@appliance.sh/sdk';
+import type { ApplianceV2, ApplianceV2Service } from '@appliance.sh/sdk';
 import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
@@ -32,19 +32,58 @@ interface RuntimePlanBase {
   resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
 }
 
+type RuntimeHealth =
+  | {
+      type: 'http';
+      port: number;
+      path: string;
+      intervalSeconds: number;
+      timeoutSeconds: number;
+      failureThreshold: number;
+    }
+  | {
+      type: 'tcp';
+      port: number;
+      intervalSeconds: number;
+      timeoutSeconds: number;
+      failureThreshold: number;
+    }
+  | {
+      type: 'exec';
+      command: string[];
+      intervalSeconds: number;
+      timeoutSeconds: number;
+      failureThreshold: number;
+    };
+
+type RuntimeLeafWorkload =
+  | { kind: 'container'; imagePath: string; env: Record<string, string> }
+  | {
+      kind: 'binary';
+      target: {
+        path: string;
+        entrypoint: string;
+        args: string[];
+        env: Record<string, string>;
+        cwd: string;
+      };
+    };
+
+export type RuntimeServicePlan = RuntimeLeafWorkload & {
+  name: string;
+  path: string[];
+  dependsOn: string[];
+  required: boolean;
+  health?: RuntimeHealth;
+  restart: { policy: 'never' | 'on-failure' | 'always'; maxAttempts: number; backoffSeconds: number };
+  ports: Array<{ name: string; guest: number; protocol: 'tcp' | 'udp'; primary: boolean }>;
+  resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
+};
+
 export type RuntimePlan = RuntimePlanBase &
   (
-    | { kind: 'container'; imagePath: string; env: Record<string, string> }
-    | {
-        kind: 'binary';
-        target: {
-          path: string;
-          entrypoint: string;
-          args: string[];
-          env: Record<string, string>;
-          cwd: string;
-        };
-      }
+    | RuntimeLeafWorkload
+    | { kind: 'compound'; services: RuntimeServicePlan[] }
   );
 
 type LoadedRuntimeBundle = VerifyBundleResult;
@@ -61,7 +100,11 @@ export interface EffectiveRuntimePolicy {
 
 export function manifestToRuntimePolicy(manifest: ApplianceV2, principalIp: string): EffectiveRuntimePolicy {
   const allowed = new Map<string, Set<number>>();
-  for (const rule of manifest.network?.egress ?? []) {
+  const rules =
+    manifest.type === 'compound'
+      ? [...(manifest.network?.egress ?? []), ...compoundLeaves(manifest).flatMap(({ service }) => service.network?.egress ?? [])]
+      : (manifest.network?.egress ?? []);
+  for (const rule of rules) {
     const host = rule.host.startsWith('*.') ? rule.host.slice(2) : rule.host;
     const ports = allowed.get(host) ?? new Set<number>();
     for (const port of rule.ports) ports.add(port);
@@ -87,32 +130,98 @@ export function manifestToRuntimePlan(
   hostPorts: RuntimeHostPort[],
   runtimeArch: NodeJS.Architecture = process.arch
 ): RuntimePlan {
-  if (manifest.type === 'compound') throw new Error('compound runnable bundles are not yet supported');
   const platform = runtimeLinuxPlatform(runtimeArch);
-  const payload =
-    manifest.type === 'container'
+  const workloadFor = (service: Exclude<ApplianceV2, { type: 'compound' }> | Exclude<ApplianceV2Service, { type: 'compound' }>, env: Record<string, string>): RuntimeLeafWorkload =>
+    service.type === 'container'
       ? (() => {
-          const image = manifest.payload.images[platform];
-          if (!image) throw missingRuntimeTarget(manifest, platform, 'images');
-          return { kind: 'container' as const, imagePath: image.path, env: manifest.env };
+          const image = service.payload.images[platform];
+          if (!image) throw missingRuntimeTarget(manifest.name, platform, 'images');
+          return { kind: 'container' as const, imagePath: image.path, env };
         })()
       : (() => {
-          const target = manifest.payload.targets[platform];
-          if (!target) throw missingRuntimeTarget(manifest, platform, 'targets');
+          const target = service.payload.targets[platform];
+          if (!target) throw missingRuntimeTarget(manifest.name, platform, 'targets');
           return {
             kind: 'binary' as const,
             target: {
               path: target.root,
               entrypoint: target.entrypoint,
               args: target.args,
-              env: manifest.env,
+              env,
               cwd: '.',
             },
           };
         })();
-  const requested = manifest.resources ?? {};
-  const ports = manifest.ports ?? [];
-  const published = ports.filter((port) => port.expose === 'host');
+  let workload: RuntimeLeafWorkload | { kind: 'compound'; services: RuntimeServicePlan[] };
+  let requested: { cpus?: number; memoryMib?: number; diskGib?: number };
+  let published: Array<{ name: string; guest: number; protocol: 'tcp' | 'udp' }>;
+  if (manifest.type === 'compound') {
+    const leaves = compoundLeaves(manifest);
+    const isolated = leaves.find(({ isolation }) => isolation === 'vm');
+    if (isolated) throw new Error(`service '${isolated.name}' requests isolation: vm, which is not yet supported`);
+    const discovery = Object.fromEntries(
+      leaves.flatMap(({ name, service }) => {
+        const ports = service.ports ?? [];
+        const primary = ports.find((port) => port.primary);
+        const prefix = `APPLIANCE_SVC_${name.replace(/-/g, '_').toUpperCase()}`;
+        return [
+          ...(primary ? [[`${prefix}_URL`, `http://127.0.0.1:${primary.guest}`] as const] : []),
+          ...ports.map((port) => [
+            `${prefix}_${port.name.replace(/-/g, '_').toUpperCase()}_URL`,
+            `http://127.0.0.1:${port.guest}`,
+          ] as const),
+        ];
+      })
+    );
+    const services = leaves.map(({ name, path: servicePath, service }) => {
+      const ports = service.ports ?? [];
+      const healthConfig = service.health;
+      const health =
+        healthConfig?.type === 'http' || healthConfig?.type === 'tcp'
+          ? {
+              ...healthConfig,
+              port: ports.find((port) => port.name === healthConfig.port)?.guest ?? 0,
+            }
+          : healthConfig;
+      const serviceResources = service.resources ?? {};
+      return {
+        name,
+        path: servicePath,
+        dependsOn: [...service.dependsOn],
+        required: service.required,
+        health,
+        restart: service.restart,
+        ports: ports.map((port) => ({
+          name: port.name,
+          guest: port.guest,
+          protocol: port.protocol,
+          primary: port.primary ?? false,
+        })),
+        resources: {
+          cpus: serviceResources.cpus ?? 1,
+          memoryMib: serviceResources.memoryMib ?? 512,
+          diskGib: serviceResources.diskGib ?? 2,
+          pids: 256,
+        },
+        ...workloadFor(service, { ...service.env, ...discovery }),
+      } satisfies RuntimeServicePlan;
+    });
+    workload = { kind: 'compound', services };
+    requested = {
+      cpus: services.reduce((sum, service) => sum + service.resources.cpus, 0),
+      memoryMib: services.reduce((sum, service) => sum + service.resources.memoryMib, 0),
+      diskGib: services.reduce((sum, service) => sum + service.resources.diskGib, 0),
+    };
+    published = leaves.flatMap(({ name, service }) =>
+      (service.ports ?? [])
+        .filter((port) => port.expose === 'host' && port.primary)
+        .map((port) => ({ ...port, name: `${name}.${port.name}` }))
+    );
+  } else {
+    workload = workloadFor(manifest, manifest.env);
+    requested = manifest.resources ?? {};
+    published = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+  }
   if (published.some((port) => port.protocol !== 'tcp')) throw new Error('UDP published ports are not yet supported');
   if (published.length > 16) throw new Error('runtime apps may publish at most 16 ports');
   if (hostPorts.length !== published.length) throw new Error('host port allocation does not match manifest');
@@ -123,7 +232,7 @@ export function manifestToRuntimePlan(
     principalIp,
     uid,
     share: { tag: shareTag, hostPath: installDir, readOnly: true },
-    ...payload,
+    ...workload,
     ports: published.map((port, index) => ({
       ...hostPorts[index],
       relay: 22000 + (uid - 20000) * 16 + index,
@@ -138,6 +247,32 @@ export function manifestToRuntimePlan(
   };
 }
 
+function compoundLeaves(manifest: Extract<ApplianceV2, { type: 'compound' }>): Array<{
+  name: string;
+  path: string[];
+  isolation: 'shared' | 'vm';
+  service: Exclude<ApplianceV2Service, { type: 'compound' }>;
+}> {
+  const leaves: Array<{
+    name: string;
+    path: string[];
+    isolation: 'shared' | 'vm';
+    service: Exclude<ApplianceV2Service, { type: 'compound' }>;
+  }> = [];
+  for (const [name, service] of Object.entries(manifest.services)) {
+    const isolation = service.isolation ?? 'shared';
+    if (service.type === 'compound') {
+      for (const [childName, child] of Object.entries(service.services)) {
+        if (child.type === 'compound') throw new Error(`service containment exceeds depth two at '${name}/${childName}'`);
+        leaves.push({ name: childName, path: [name, childName], isolation, service: child });
+      }
+    } else {
+      leaves.push({ name, path: [name], isolation, service });
+    }
+  }
+  return leaves.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function runtimeLinuxPlatform(arch: NodeJS.Architecture): 'linux/amd64' | 'linux/arm64' {
   if (arch === 'arm64') return 'linux/arm64';
   if (arch === 'x64') return 'linux/amd64';
@@ -147,15 +282,13 @@ function runtimeLinuxPlatform(arch: NodeJS.Architecture): 'linux/amd64' | 'linux
 }
 
 function missingRuntimeTarget(
-  manifest: Exclude<ApplianceV2, { type: 'compound' }>,
+  appName: string,
   platform: 'linux/amd64' | 'linux/arm64',
   branch: 'images' | 'targets'
 ): Error {
-  const nativeOnly =
-    manifest.type === 'binary' && manifest.native?.macos ? ' macOS native targets are out of scope.' : '';
   return new Error(
-    `bundle '${manifest.name}' has no payload for host runtime platform ${platform}; ` +
-      `add payload.${branch}["${platform}"] and repackage.${nativeOnly}`
+    `bundle '${appName}' has no payload for host runtime platform ${platform}; ` +
+      `add payload.${branch}["${platform}"] and repackage.`
   );
 }
 
@@ -201,9 +334,6 @@ async function runtimeRun(args: string[]): Promise<void> {
     loaded = verifyBundle(bundlePath);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error), 2);
-  }
-  if (loaded.manifest.type === 'compound') {
-    fail(`${loaded.manifest.type} runnable bundle '${loaded.manifest.name}' is not yet supported`, 2);
   }
   const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
   if (existing && (existing.state === 'starting' || existing.state === 'running')) {
@@ -259,7 +389,7 @@ async function runtimeRun(args: string[]): Promise<void> {
     // Binary payloads must not race the asynchronous VZ shutdown: their
     // custom-rootfs share has to be attached at the very next boot. Keep the
     // established container reconciliation path unchanged in this stacked PR.
-    if (loaded.manifest.type === 'binary') await waitForRuntimePoolStop();
+    if (planContainsBinary(plan)) await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
@@ -496,7 +626,6 @@ function removePreviousRuntimeInstalls(destination: string): void {
 function persistedRuntimeAllocation(
   manifest: ApplianceV2
 ): { principalIp: string; uid: number; hostPorts: RuntimeHostPort[] } | undefined {
-  if (manifest.type === 'compound') return undefined;
   try {
     const spec = JSON.parse(fs.readFileSync(path.join(vmDir(RUNTIME_POOL_VM), 'vm.json'), 'utf8')) as {
       published?: Array<{
@@ -505,7 +634,7 @@ function persistedRuntimeAllocation(
         runtimeTarget?: { principal?: string; address?: string };
       }>;
     };
-    const expected = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+    const expected = publishedManifestPorts(manifest);
     const published = (spec.published ?? []).filter((port) => port.runtimeTarget?.principal === manifest.name);
     if (published.length !== expected.length || published.some((port) => !port.runtimeTarget?.address))
       return undefined;
@@ -541,8 +670,7 @@ function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): void {
 }
 
 async function allocatePublishedPorts(manifest: ApplianceV2, records: RuntimeRecord[]): Promise<RuntimeHostPort[]> {
-  if (manifest.type === 'compound') return [];
-  const requested = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+  const requested = publishedManifestPorts(manifest);
   const used = new Set(records.flatMap((record) => record.hostPorts.map((port) => port.host)));
   const result: RuntimeHostPort[] = [];
   for (const port of requested) {
@@ -559,6 +687,21 @@ async function allocatePublishedPorts(manifest: ApplianceV2, records: RuntimeRec
     result.push({ name: port.name, host: selected, guest: port.guest, protocol: 'tcp' });
   }
   return result;
+}
+
+function publishedManifestPorts(
+  manifest: ApplianceV2
+): Array<{ name: string; guest: number; protocol: 'tcp' | 'udp' }> {
+  if (manifest.type !== 'compound') return (manifest.ports ?? []).filter((port) => port.expose === 'host');
+  return compoundLeaves(manifest).flatMap(({ name, service }) =>
+    (service.ports ?? [])
+      .filter((port) => port.expose === 'host' && port.primary)
+      .map((port) => ({ ...port, name: `${name}.${port.name}` }))
+  );
+}
+
+function planContainsBinary(plan: RuntimePlan): boolean {
+  return plan.kind === 'binary' || (plan.kind === 'compound' && plan.services.some((service) => service.kind === 'binary'));
 }
 
 function portIsFree(port: number): Promise<boolean> {

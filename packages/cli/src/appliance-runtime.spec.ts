@@ -45,6 +45,46 @@ function binaryManifest(platform: 'linux/amd64' | 'linux/arm64' = 'linux/amd64')
   });
 }
 
+function compoundManifest(isolation: 'shared' | 'vm' = 'shared') {
+  return applianceV2Input.parse({
+    manifest: 'v2',
+    kind: 'runnable',
+    type: 'compound',
+    name: 'notes-suite',
+    version: '2.0.0',
+    license: 'MIT',
+    publisher: { name: 'Lab 255' },
+    ui: { type: 'web', service: 'web', port: 'http', path: '/' },
+    services: {
+      web: {
+        type: 'container',
+        isolation,
+        payload: {
+          images: {
+            'linux/amd64': { path: 'payload/web/web-amd64.oci.tar' },
+            'linux/arm64': { path: 'payload/web/web-arm64.oci.tar' },
+          },
+        },
+        dependsOn: ['api'],
+        ports: [{ name: 'http', guest: 3000, protocol: 'tcp', expose: 'host' }],
+        health: { type: 'http', port: 'http', path: '/healthz' },
+      },
+      api: {
+        type: 'binary',
+        payload: {
+          targets: {
+            'linux/amd64': { root: 'payload/api/amd64', entrypoint: 'bin/api' },
+            'linux/arm64': { root: 'payload/api/arm64', entrypoint: 'bin/api' },
+          },
+        },
+        ports: [{ name: 'api', guest: 9000, protocol: 'tcp', expose: 'internal', primary: true }],
+        health: { type: 'tcp', port: 'api', intervalSeconds: 1, timeoutSeconds: 1, failureThreshold: 2 },
+        restart: { policy: 'always', maxAttempts: 7, backoffSeconds: 3 },
+      },
+    },
+  });
+}
+
 describe('manifest to pooled runtime plan', () => {
   it('targets published ports at the principal /32 and maps resources to cgroup hints', () => {
     const plan = manifestToRuntimePlan(
@@ -122,6 +162,36 @@ describe('manifest to pooled runtime plan', () => {
     expect(() =>
       manifestToRuntimePlan(binaryManifest('linux/arm64'), '/tmp/dashboard', '192.168.127.10', 20000, [], 'x64')
     ).toThrow('add payload.targets["linux/amd64"] and repackage');
+  });
+
+  it('flattens a compound graph, resolves health ports, injects discovery, and publishes only the primary host port', () => {
+    const plan = manifestToRuntimePlan(
+      compoundManifest(),
+      '/tmp/notes-suite',
+      '192.168.127.10',
+      20000,
+      [{ name: 'web.http', host: 20000, guest: 3000, protocol: 'tcp' }],
+      'x64'
+    );
+    expect(plan.kind).toBe('compound');
+    if (plan.kind !== 'compound') throw new Error('expected compound plan');
+    expect(plan.services.map((service) => service.name)).toEqual(['api', 'web']);
+    expect(plan.services.find((service) => service.name === 'web')).toMatchObject({
+      dependsOn: ['api'],
+      health: { type: 'http', port: 3000, path: '/healthz' },
+      env: {
+        APPLIANCE_SVC_API_URL: 'http://127.0.0.1:9000',
+        APPLIANCE_SVC_API_API_URL: 'http://127.0.0.1:9000',
+        APPLIANCE_SVC_WEB_URL: 'http://127.0.0.1:3000',
+      },
+    });
+    expect(plan.ports).toMatchObject([{ name: 'web.http', guest: 3000, host: 20000 }]);
+  });
+
+  it('rejects dedicated-VM placement before Runtime preparation', () => {
+    expect(() =>
+      manifestToRuntimePlan(compoundManifest('vm'), '/tmp/notes-suite', '192.168.127.10', 20000, [], 'x64')
+    ).toThrow('isolation: vm, which is not yet supported');
   });
 });
 
