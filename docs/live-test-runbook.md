@@ -744,6 +744,13 @@ increments its restart count and returns it to healthy; stop removes the whole
 app while the pool remains running. Record bundle build, pool boot, supervisor
 start, curl, ps, restart recovery, and stop timings.
 
+Observed on the final macOS VZ proof (2026-08-28): cached source bundle build
+`2.85s`; rebuilt-media cold pool boot `10.34s`; the API began listening in the
+same one-second timestamp bucket as the app registry start; host curl `0.04s`
+with HTTP 200; `runtime ps` `0.33s`; forced API recovery was healthy with
+`restarts=1` within `9s`; reverse unit stop `10.61s`. Pool PID `92499` remained
+running after the app and both service rows disappeared.
+
 The shared-VM controls default for this increment is explicit: payload,
 environment, task, cgroup, health, restart, state, and logs are leaf-scoped.
 All leaves retain one app principal `/32` and netns, so host-enforced egress is
@@ -751,3 +758,8 @@ the sorted app-level union of leaf grants. Host publication is narrower: only
 compound leaf ports marked both `expose: "host"` and `primary: true` receive a
 host listener. `isolation: "vm"` is rejected as `not yet supported`; dedicated
 placement and upgrades remain follow-ups.
+
+**NOTE:** v1 starts the deterministic topological sequence serially, with
+lexical service-name tie-breaking for simultaneously ready leaves. Parallel
+launch of independent leaves is intentionally deferred; dependency ordering
+and failure semantics do not depend on scheduler timing.
