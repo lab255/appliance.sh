@@ -46,13 +46,30 @@ pub fn name_allowed(name: &Option<String>, policy: &EgressPolicy) -> bool {
 /// `false` (⇒ drop the whole answer) if **any** A/AAAA record points at a
 /// private/internal/host-LAN target; otherwise records the public answers
 /// in the back-reference set and returns `true`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn answer_ok_and_record(resp: &[u8], resolved: &Resolved) -> bool {
+    answer_ok_and_record_for(resp, resolved, "vm", None)
+}
+
+pub fn answer_ok_and_record_for(
+    resp: &[u8],
+    resolved: &Resolved,
+    principal: &str,
+    ports: Option<&[u16]>,
+) -> bool {
     let ips = answer_ips(resp);
     if ips.iter().any(|ip| guard::is_forbidden_target(*ip)) {
         return false;
     }
     for ip in ips {
-        resolved.insert(ip);
+        match ports {
+            Some(ports) => {
+                for port in ports {
+                    resolved.insert_for_port(principal, ip, Some(*port));
+                }
+            }
+            None => resolved.insert_for(principal, ip),
+        }
     }
     true
 }
@@ -95,7 +112,12 @@ pub fn answer_ips(resp: &[u8]) -> Vec<IpAddr> {
             _ => return ips,
         };
         match (rtype, rdlen) {
-            (1, 4) => ips.push(IpAddr::V4(Ipv4Addr::new(resp[rd], resp[rd + 1], resp[rd + 2], resp[rd + 3]))),
+            (1, 4) => ips.push(IpAddr::V4(Ipv4Addr::new(
+                resp[rd],
+                resp[rd + 1],
+                resp[rd + 2],
+                resp[rd + 3],
+            ))),
             (28, 16) => {
                 let mut o = [0u8; 16];
                 o.copy_from_slice(&resp[rd..end]);
@@ -341,7 +363,10 @@ mod tests {
         assert!(!resolved.contains_fresh("10.0.0.5".parse().unwrap()));
 
         // A mixed answer with even one forbidden record is rejected.
-        let mixed = response_with(&["93.184.216.34".parse().unwrap(), "192.168.1.9".parse().unwrap()]);
+        let mixed = response_with(&[
+            "93.184.216.34".parse().unwrap(),
+            "192.168.1.9".parse().unwrap(),
+        ]);
         assert!(!answer_ok_and_record(&mixed, &resolved));
         assert!(!resolved.contains_fresh("93.184.216.34".parse().unwrap()));
     }
@@ -383,7 +408,10 @@ mod tests {
         assert!(!name_allowed(&Some("evil.test".into()), &policy));
         assert!(!name_allowed(&None, &policy));
         // Cluster/loopback names are excluded from policing.
-        assert!(name_allowed(&Some("kubernetes.default.svc".into()), &policy));
+        assert!(name_allowed(
+            &Some("kubernetes.default.svc".into()),
+            &policy
+        ));
     }
 
     #[test]
@@ -398,6 +426,9 @@ mod tests {
         // never hang.
         let out = forward(&example_query(), &[addr], Duration::from_millis(150));
         assert!(out.is_none());
-        assert!(started.elapsed() < Duration::from_secs(2), "forward must respect the timeout");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "forward must respect the timeout"
+        );
     }
 }

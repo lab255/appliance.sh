@@ -232,7 +232,10 @@ impl Read for BridgeStream {
                     return Ok(n);
                 }
                 if b.aborted {
-                    return Err(io::Error::new(io::ErrorKind::ConnectionReset, "netstack flow aborted"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::ConnectionReset,
+                        "netstack flow aborted",
+                    ));
                 }
                 if b.guest_fin {
                     return Ok(0); // clean EOF
@@ -249,7 +252,10 @@ impl Write for BridgeStream {
             {
                 let mut b = self.inner.lock().map_err(poisoned)?;
                 if b.aborted {
-                    return Err(io::Error::new(io::ErrorKind::BrokenPipe, "netstack flow aborted"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "netstack flow aborted",
+                    ));
                 }
                 if b.ext_to_guest.len() < EXT_TO_GUEST_HIGH_WATER {
                     b.ext_to_guest.extend(buf.iter().copied());
@@ -308,6 +314,7 @@ pub fn bridge_pump(bridge: BridgeStream, tcp: std::net::TcpStream) {
 /// A request from a forward thread to the engine to originate a TCP
 /// connection *to the guest* (inbound published ports).
 struct ConnectRequest {
+    target_ip: Ipv4Addr,
     port: u16,
     bridge: Arc<Mutex<Bridge>>,
 }
@@ -332,9 +339,19 @@ impl Netstack {
     /// host-side stream — the inbound (published-port) path. Blocks until
     /// the guest accepts or a short timeout elapses.
     pub fn connect(&self, port: u16) -> io::Result<BridgeStream> {
+        self.connect_to(self.guest_ip, port)
+    }
+
+    /// Originate an inbound published-port connection to a selected runtime
+    /// principal `/32`, rather than the VM root lease.
+    pub fn connect_to(&self, target_ip: Ipv4Addr, port: u16) -> io::Result<BridgeStream> {
         let inner = Arc::new(Mutex::new(Bridge::default()));
         self.connect_tx
-            .send(ConnectRequest { port, bridge: inner.clone() })
+            .send(ConnectRequest {
+                target_ip,
+                port,
+                bridge: inner.clone(),
+            })
             .map_err(|_| io::Error::new(io::ErrorKind::NotConnected, "netstack engine is down"))?;
 
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -345,11 +362,17 @@ impl Netstack {
                     return Ok(BridgeStream::new(inner.clone()));
                 }
                 if b.aborted {
-                    return Err(io::Error::new(io::ErrorKind::ConnectionRefused, "guest refused connection"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::ConnectionRefused,
+                        "guest refused connection",
+                    ));
                 }
             }
             if Instant::now() >= deadline {
-                return Err(io::Error::new(io::ErrorKind::TimedOut, "guest did not accept in time"));
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "guest did not accept in time",
+                ));
             }
             std::thread::sleep(Duration::from_millis(2));
         }
@@ -380,6 +403,17 @@ pub(crate) mod testkit {
         pub fn aborted(&self) -> bool {
             self.0.lock().map(|b| b.aborted).unwrap_or(false)
         }
+
+        pub fn ext_finished(&self) -> bool {
+            self.0.lock().map(|b| b.ext_fin).unwrap_or(false)
+        }
+
+        pub fn ext_bytes(&self) -> Vec<u8> {
+            self.0
+                .lock()
+                .map(|b| b.ext_to_guest.iter().copied().collect())
+                .unwrap_or_default()
+        }
     }
 
     /// A `(probe, ext)` pair for an established terminated flow carrying
@@ -404,7 +438,10 @@ mod tests {
     #[test]
     fn parse_mac_round_trips_and_rejects_garbage() {
         assert_eq!(parse_mac("02:00:00:00:00:01"), Some([2, 0, 0, 0, 0, 1]));
-        assert_eq!(parse_mac("aa:bb:cc:dd:ee:ff"), Some([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]));
+        assert_eq!(
+            parse_mac("aa:bb:cc:dd:ee:ff"),
+            Some([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])
+        );
         assert_eq!(parse_mac("not-a-mac"), None);
         assert_eq!(parse_mac("02:00:00:00:00"), None); // too short
         assert_eq!(parse_mac("02:00:00:00:00:01:02"), None); // too long
@@ -450,7 +487,11 @@ mod tests {
         assert_eq!(inner.lock().unwrap().ext_to_guest.len(), 8);
 
         // Engine delivers guest bytes: ext reads them back.
-        inner.lock().unwrap().guest_to_ext.extend(b"from-guest".iter().copied());
+        inner
+            .lock()
+            .unwrap()
+            .guest_to_ext
+            .extend(b"from-guest".iter().copied());
         let mut buf = [0u8; 32];
         let n = ext.read(&mut buf).unwrap();
         assert_eq!(&buf[..n], b"from-guest");
@@ -494,8 +535,14 @@ mod tests {
 
         let b = inner.lock().unwrap();
         let echoed: Vec<u8> = b.ext_to_guest.iter().copied().collect();
-        assert_eq!(echoed, b"GET / forwarded", "upstream response reached the guest side");
-        assert!(b.ext_fin, "upstream EOF was marked so the engine closes the guest socket");
+        assert_eq!(
+            echoed, b"GET / forwarded",
+            "upstream response reached the guest side"
+        );
+        assert!(
+            b.ext_fin,
+            "upstream EOF was marked so the engine closes the guest socket"
+        );
     }
 
     #[test]

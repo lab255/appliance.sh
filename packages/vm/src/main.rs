@@ -27,7 +27,7 @@ mod traffic;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use spec::{NetLink, PublishedPort, RuntimeShare, VmPaths, VmSpec, VmStatus};
+use spec::{runtime_mount_tag, NetLink, PublishedPort, RuntimeMount, VmPaths, VmSpec, VmStatus};
 use std::io::Read;
 use std::net::SocketAddr;
 use std::process::Command;
@@ -234,6 +234,11 @@ enum Cmd {
         #[command(subcommand)]
         action: EgressCmd,
     },
+    /// Load or inspect one app-scoped runtime policy context.
+    RuntimePolicy {
+        #[command(subcommand)]
+        action: RuntimePolicyCmd,
+    },
     /// Manage per-host credential capture/injection (apiKeyHelper).
     Creds {
         #[command(subcommand)]
@@ -302,6 +307,14 @@ struct RuntimePlanResources {
     memory_mib: u64,
     disk_gib: u64,
     pids: u32,
+}
+
+#[derive(Subcommand)]
+enum RuntimePolicyCmd {
+    /// Validate effective-policy JSON from stdin and atomically install it.
+    Set { vm: String, principal: String },
+    /// Print the installed effective policy for a principal.
+    Get { vm: String, principal: String },
 }
 
 #[derive(Subcommand)]
@@ -1159,6 +1172,8 @@ fn run() -> Result<()> {
 
         Cmd::Egress { action } => run_egress(action),
 
+        Cmd::RuntimePolicy { action } => run_runtime_policy(action),
+
         Cmd::Creds { action } => run_creds(action),
     }
 }
@@ -1207,16 +1222,26 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
             spec.image = images::RUNTIME_IMAGE.to_string();
             spec.cmdline = guest::runtime_guest_cmdline();
 
-            spec.runtime_shares.retain(|share| share.app_id != plan.app_id);
-            spec.runtime_shares.push(RuntimeShare {
-                app_id: plan.app_id.clone(),
-                tag: plan.share.tag,
-                host_path: host_path.to_string_lossy().into_owned(),
-                read_only: true,
-            });
-            spec.runtime_shares.sort_by(|a, b| a.app_id.cmp(&b.app_id));
+            let expected_tag = runtime_mount_tag(&plan.app_id, "payload")?;
+            if plan.share.tag != expected_tag {
+                bail!("runtime share tag does not match the principal/slot mount identity");
+            }
+            let guest_path = format!("/run/appliance/shares/{expected_tag}");
+            spec.runtime_mounts.retain(|mount| mount.principal != plan.app_id);
+            spec.runtime_mounts.push(RuntimeMount::granted(
+                &plan.app_id,
+                "payload",
+                &host_path.to_string_lossy(),
+                &guest_path,
+                false,
+                false,
+            )?);
+            spec.runtime_mounts.sort_by(|a, b| a.principal.cmp(&b.principal));
             spec.published
-                .retain(|published| published.principal.as_deref() != Some(plan.app_id.as_str()));
+                .retain(|published| {
+                    published.runtime_target.as_ref().map(|target| target.principal.as_str())
+                        != Some(plan.app_id.as_str())
+                });
             for port in plan.ports {
                 if !(20000..=29999).contains(&port.host) {
                     bail!("runtime host port {} is outside 20000-29999", port.host);
@@ -1226,18 +1251,16 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
                 if octets[..3] != [192, 168, 127] || !(10..=239).contains(&octets[3]) {
                     bail!("runtime principal target must be an allocated 192.168.127.10-239 /32");
                 }
-                spec.published.push(PublishedPort {
-                    host: port.host,
-                    container: port.relay,
-                    name: Some(port.name),
-                    principal: Some(plan.app_id.clone()),
-                    target: Some(port.target),
-                    guest: Some(port.guest),
-                });
+                spec.published.push(PublishedPort::for_runtime(
+                    port.host,
+                    port.guest,
+                    &plan.app_id,
+                    target,
+                )?);
             }
             spec.published.sort_by_key(|published| published.host);
             let restart_required = store::read_live_pid(&name).is_some()
-                && prior.as_ref().is_some_and(|old| old.runtime_shares != spec.runtime_shares);
+                && prior.as_ref().is_some_and(|old| old.runtime_mounts != spec.runtime_mounts);
             store::save_spec(&spec)?;
             store::ensure_disk(&spec)?;
             println!(
@@ -1265,20 +1288,23 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
             validate_runtime_plan_against_spec(&name, &plan)?;
             let mut bound = Vec::new();
             for port in &plan.ports {
-                if let Err(error) = runtime_forward_request(&name, "bind", port.host, port.relay) {
-                    for (host, guest) in bound {
-                        let _ = runtime_forward_request(&name, "unbind", host, guest);
+                let target = port.target.parse().context("parse runtime principal target")?;
+                if let Err(error) = runtime_forward_request(&name, "bind", port.host, target, port.guest) {
+                    for (host, target, guest) in bound {
+                        let _ = runtime_forward_request(&name, "unbind", host, target, guest);
                     }
                     return Err(error);
                 }
-                bound.push((port.host, port.relay));
+                bound.push((port.host, target, port.guest));
             }
             let request = serde_json::json!({ "action": "start", "appId": plan.app_id, "plan": plan });
             let response = match guest_exec::runtime_request(&name, &request.to_string()) {
                 Ok(response) => response,
                 Err(error) => {
                     for port in &plan.ports {
-                        let _ = runtime_forward_request(&name, "unbind", port.host, port.relay);
+                        if let Ok(target) = port.target.parse() {
+                            let _ = runtime_forward_request(&name, "unbind", port.host, target, port.guest);
+                        }
                     }
                     return Err(anyhow::anyhow!("runtime start RPC: {error}"));
                 }
@@ -1289,7 +1315,9 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
                 .is_some_and(|state| state == "running");
             if !started {
                 for port in &plan.ports {
-                    let _ = runtime_forward_request(&name, "unbind", port.host, port.relay);
+                    if let Ok(target) = port.target.parse() {
+                        let _ = runtime_forward_request(&name, "unbind", port.host, target, port.guest);
+                    }
                 }
             }
             println!("{response}");
@@ -1383,15 +1411,16 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
         bail!("VM '{name}' is not an Appliance Runtime pool");
     }
     let share = spec
-        .runtime_shares
+        .runtime_mounts
         .iter()
-        .find(|share| share.app_id == plan.app_id)
+        .find(|share| share.principal == plan.app_id && share.slot == "payload")
         .with_context(|| format!("runtime share for '{}' is not persisted", plan.app_id))?;
     let host_path = std::fs::canonicalize(&plan.share.host_path)
         .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
     if share.tag != plan.share.tag
-        || share.host_path != host_path.to_string_lossy()
-        || !share.read_only
+        || share.host != host_path.to_string_lossy()
+        || share.guest != format!("/run/appliance/shares/{}", plan.share.tag)
+        || share.writable
         || !plan.share.read_only
     {
         bail!("runtime start share does not match the persisted pool spec");
@@ -1399,7 +1428,10 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
     let published: Vec<_> = spec
         .published
         .iter()
-        .filter(|published| published.principal.as_deref() == Some(plan.app_id.as_str()))
+        .filter(|published| {
+            published.runtime_target.as_ref().map(|target| target.principal.as_str())
+                == Some(plan.app_id.as_str())
+        })
         .collect();
     if published.len() != plan.ports.len() {
         bail!("runtime start ports do not match the persisted pool spec");
@@ -1407,10 +1439,10 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
     for port in &plan.ports {
         let matches = published.iter().any(|persisted| {
             persisted.host == port.host
-                && persisted.container == port.relay
-                && persisted.name.as_deref() == Some(port.name.as_str())
-                && persisted.target.as_deref() == Some(port.target.as_str())
-                && persisted.guest == Some(port.guest)
+                && persisted.container == port.guest
+                && persisted.runtime_target.as_ref().is_some_and(|target| {
+                    target.principal == plan.app_id && target.address.to_string() == port.target
+                })
         });
         if !matches {
             bail!("runtime start port '{}' does not match the persisted pool spec", port.name);
@@ -1431,7 +1463,13 @@ fn ensure_runtime_running(name: &str) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn runtime_forward_request(name: &str, action: &str, host: u16, guest: u16) -> Result<()> {
+fn runtime_forward_request(
+    name: &str,
+    action: &str,
+    host: u16,
+    target: std::net::Ipv4Addr,
+    guest: u16,
+) -> Result<()> {
     use std::io::{Read, Write};
     use std::net::Shutdown;
     use std::os::unix::net::UnixStream;
@@ -1439,7 +1477,7 @@ fn runtime_forward_request(name: &str, action: &str, host: u16, guest: u16) -> R
     let paths = VmPaths::for_name(name);
     let mut stream = UnixStream::connect(paths.runtime_forward_sock())
         .with_context(|| format!("connect Runtime forward control for '{name}'"))?;
-    let request = serde_json::json!({ "action": action, "host": host, "guest": guest });
+    let request = serde_json::json!({ "action": action, "host": host, "target": target, "guest": guest });
     stream.write_all(request.to_string().as_bytes())?;
     stream.shutdown(Shutdown::Write)?;
     let mut response = String::new();
@@ -1458,7 +1496,13 @@ fn runtime_forward_request(name: &str, action: &str, host: u16, guest: u16) -> R
 }
 
 #[cfg(not(unix))]
-fn runtime_forward_request(_name: &str, _action: &str, _host: u16, _guest: u16) -> Result<()> {
+fn runtime_forward_request(
+    _name: &str,
+    _action: &str,
+    _host: u16,
+    _target: std::net::Ipv4Addr,
+    _guest: u16,
+) -> Result<()> {
     bail!("dynamic Runtime forwards are not implemented on this host backend")
 }
 
@@ -1471,19 +1515,23 @@ fn runtime_lifecycle_request(name: &str, app: &str, action: &str) -> Result<Stri
     Ok(response)
 }
 
-fn runtime_app_forwards(name: &str, app: &str) -> Result<Vec<(u16, u16)>> {
+fn runtime_app_forwards(name: &str, app: &str) -> Result<Vec<(u16, std::net::Ipv4Addr, u16)>> {
     let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
     Ok(spec
         .published
         .iter()
-        .filter(|port| port.principal.as_deref() == Some(app))
-        .map(|port| (port.host, port.container))
+        .filter_map(|port| {
+            port.runtime_target
+                .as_ref()
+                .filter(|target| target.principal == app)
+                .map(|target| (port.host, target.address, port.container))
+        })
         .collect())
 }
 
 fn runtime_unbind_app_forwards(name: &str, app: &str) -> Result<()> {
-    for (host, guest) in runtime_app_forwards(name, app)? {
-        runtime_forward_request(name, "unbind", host, guest)?;
+    for (host, target, guest) in runtime_app_forwards(name, app)? {
+        runtime_forward_request(name, "unbind", host, target, guest)?;
     }
     Ok(())
 }
@@ -1516,6 +1564,32 @@ fn runtime_logs_request(name: &str, app: &str, offset: u64) -> Result<()> {
         .map_err(|error| anyhow::anyhow!("runtime logs RPC: {error}"))?;
     println!("{response}");
     Ok(())
+}
+
+fn run_runtime_policy(action: RuntimePolicyCmd) -> Result<()> {
+    match action {
+        RuntimePolicyCmd::Set { vm, principal } => {
+            let mut raw = String::new();
+            std::io::stdin().read_to_string(&mut raw)?;
+            let runtime = egress::parse_runtime_policy(&raw)?;
+            if runtime.vm != vm || runtime.principal != principal {
+                bail!(
+                    "stdin policy identity ({}/{}) does not match command ({vm}/{principal})",
+                    runtime.vm,
+                    runtime.principal
+                );
+            }
+            egress::save_runtime_policy(&runtime)?;
+            println!("{}", serde_json::to_string_pretty(&runtime)?);
+            Ok(())
+        }
+        RuntimePolicyCmd::Get { vm, principal } => {
+            let runtime = egress::runtime_policy_for_principal(&vm, &principal)
+                .ok_or_else(|| anyhow::anyhow!("no runtime policy for {vm}/{principal}"))?;
+            println!("{}", serde_json::to_string_pretty(&runtime)?);
+            Ok(())
+        }
+    }
 }
 
 fn run_sessions(action: SessionsCmd) -> Result<()> {

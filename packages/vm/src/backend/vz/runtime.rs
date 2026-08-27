@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{Ipv4Addr, TcpListener};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
@@ -19,6 +19,7 @@ use std::time::Duration;
 struct ForwardRequest {
     action: ForwardAction,
     host: u16,
+    target: Ipv4Addr,
     guest: u16,
 }
 
@@ -30,6 +31,7 @@ enum ForwardAction {
 }
 
 struct ForwardHandle {
+    target: Ipv4Addr,
     guest: u16,
     running: Arc<AtomicBool>,
 }
@@ -77,8 +79,8 @@ fn handle_request(
     stream.take(16 * 1024).read_to_end(&mut input)?;
     let request: ForwardRequest = serde_json::from_slice(&input).context("parse Runtime forward request")?;
     match request.action {
-        ForwardAction::Bind => bind_forward(netstack, bound, request.host, request.guest),
-        ForwardAction::Unbind => unbind_forward(bound, request.host, request.guest),
+        ForwardAction::Bind => bind_forward(netstack, bound, request.host, request.target, request.guest),
+        ForwardAction::Unbind => unbind_forward(bound, request.host, request.target, request.guest),
     }
 }
 
@@ -86,16 +88,26 @@ fn bind_forward(
     netstack: &Netstack,
     bound: &mut BTreeMap<u16, ForwardHandle>,
     host: u16,
+    target: Ipv4Addr,
     guest: u16,
 ) -> Result<()> {
-    if !(20_000..=29_999).contains(&host) || guest == 0 {
-        bail!("invalid Runtime forward {host}->{guest}");
+    let octets = target.octets();
+    if !(20_000..=29_999).contains(&host)
+        || guest == 0
+        || octets[..3] != [192, 168, 127]
+        || !(10..=239).contains(&octets[3])
+    {
+        bail!("invalid Runtime forward {host}->{target}:{guest}");
     }
     if let Some(existing) = bound.get(&host) {
-        if existing.guest == guest {
+        if existing.target == target && existing.guest == guest {
             return Ok(());
         }
-        bail!("Runtime host port {host} is already mapped to guest port {}", existing.guest);
+        bail!(
+            "Runtime host port {host} is already mapped to {}:{}",
+            existing.target,
+            existing.guest
+        );
     }
     let listener = TcpListener::bind(("127.0.0.1", host))
         .with_context(|| format!("bind Runtime forward 127.0.0.1:{host}->{guest}"))?;
@@ -108,7 +120,7 @@ fn bind_forward(
             match listener.accept() {
                 Ok((stream, _)) => {
                     let connection_netstack = thread_netstack.clone();
-                    std::thread::spawn(move || match connection_netstack.connect(guest) {
+                    std::thread::spawn(move || match connection_netstack.connect_to(target, guest) {
                         Ok(bridge) => crate::netstack::bridge_pump(bridge, stream),
                         Err(_) => drop(stream),
                     });
@@ -120,14 +132,23 @@ fn bind_forward(
             }
         }
     });
-    bound.insert(host, ForwardHandle { guest, running });
+    bound.insert(host, ForwardHandle { target, guest, running });
     Ok(())
 }
 
-fn unbind_forward(bound: &mut BTreeMap<u16, ForwardHandle>, host: u16, guest: u16) -> Result<()> {
+fn unbind_forward(
+    bound: &mut BTreeMap<u16, ForwardHandle>,
+    host: u16,
+    target: Ipv4Addr,
+    guest: u16,
+) -> Result<()> {
     let Some(existing) = bound.get(&host) else { return Ok(()) };
-    if existing.guest != guest {
-        bail!("Runtime host port {host} is mapped to guest port {}, not {guest}", existing.guest);
+    if existing.target != target || existing.guest != guest {
+        bail!(
+            "Runtime host port {host} is mapped to {}:{}, not {target}:{guest}",
+            existing.target,
+            existing.guest
+        );
     }
     let existing = bound.remove(&host).expect("checked Runtime forward");
     existing.running.store(false, Ordering::Release);
@@ -159,11 +180,12 @@ mod tests {
         let mut bound = BTreeMap::from([(
             20_000,
             ForwardHandle {
+                target: Ipv4Addr::new(192, 168, 127, 10),
                 guest: 22_000,
                 running: running.clone(),
             },
         )]);
-        unbind_forward(&mut bound, 20_000, 22_000).unwrap();
+        unbind_forward(&mut bound, 20_000, Ipv4Addr::new(192, 168, 127, 10), 22_000).unwrap();
         assert!(bound.is_empty());
         assert!(!running.load(Ordering::Acquire));
     }

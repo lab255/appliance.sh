@@ -174,6 +174,30 @@ pub fn spawn_proxy_netstack(
     Ok(())
 }
 
+/// Runtime published-port forward: the host listener targets the principal's
+/// stable namespace address, so two apps may safely publish the same guest
+/// port from one pooled VM.
+#[allow(dead_code)]
+pub fn spawn_proxy_netstack_principal(
+    listen_port: u16,
+    target_ip: std::net::Ipv4Addr,
+    guest_port: u16,
+    netstack: crate::netstack::Netstack,
+) -> Result<()> {
+    let listener = TcpListener::bind(("127.0.0.1", listen_port))
+        .with_context(|| format!("bind 127.0.0.1:{listen_port}"))?;
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let netstack = netstack.clone();
+            std::thread::spawn(move || match netstack.connect_to(target_ip, guest_port) {
+                Ok(bridge) => crate::netstack::bridge_pump(bridge, stream),
+                Err(_) => drop(stream),
+            });
+        }
+    });
+    Ok(())
+}
+
 /// Like [`spawn_proxy_netstack`] but on an OS-chosen loopback port,
 /// returned to the caller. Used for the one-shot kubeconfig handoff,
 /// which under the netstack must also be reached through the stack
@@ -183,7 +207,10 @@ pub fn spawn_proxy_netstack_ephemeral(
     netstack: crate::netstack::Netstack,
 ) -> Result<u16> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).context("bind 127.0.0.1:0")?;
-    let port = listener.local_addr().context("ephemeral local addr")?.port();
+    let port = listener
+        .local_addr()
+        .context("ephemeral local addr")?
+        .port();
     spawn_netstack_accept_loop(listener, guest_port, netstack);
     Ok(port)
 }

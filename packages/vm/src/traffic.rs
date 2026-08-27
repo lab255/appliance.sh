@@ -6,12 +6,13 @@
 //! each host can be allowed or blocked. Recording is best-effort: a
 //! logging failure must never affect proxying.
 
-use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::egress::RuntimePolicy;
 use crate::spec::VmPaths;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -31,10 +32,53 @@ pub struct TrafficEvent {
     /// `allow` (blind tunnel / forwarded), `deny` (refused by policy),
     /// or `mitm` (allowed + TLS-intercepted).
     pub decision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default = "default_transport")]
+    pub transport: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sni: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes_in: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes_out: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+}
+
+fn default_transport() -> String {
+    "tcp".to_string()
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TrafficDetails<'a> {
+    pub reason: Option<&'a str>,
+    pub tls_version: Option<&'a str>,
+    pub sni: Option<&'a str>,
+    pub status: Option<u16>,
+    pub bytes_in: Option<u64>,
+    pub bytes_out: Option<u64>,
+    pub duration_ms: Option<u64>,
 }
 
 fn events_path(name: &str) -> PathBuf {
     VmPaths::for_name(name).dir.join("egress-events.jsonl")
+}
+
+fn runtime_events_path(app: &str) -> PathBuf {
+    crate::egress::runtime_root()
+        .join(app)
+        .join("egress-events.jsonl")
 }
 
 /// Keep the log bounded: when it grows past this, the oldest half is
@@ -56,36 +100,214 @@ pub fn record(name: &str, host: &str, port: u16, method: &str, path: Option<&str
         host: host.to_string(),
         port,
         method: method.to_string(),
-        path: path.map(|p| p.to_string()),
+        path: path.map(sanitize_path),
         decision: decision.to_string(),
+        app: None,
+        service: None,
+        principal: None,
+        reason: None,
+        transport: default_transport(),
+        tls_version: None,
+        sni: None,
+        status: None,
+        bytes_in: None,
+        bytes_out: None,
+        duration_ms: None,
     };
-    let path_buf = events_path(name);
-    if let Ok(meta) = std::fs::metadata(&path_buf) {
-        if meta.len() > MAX_EVENTS_BYTES {
-            trim(&path_buf);
-        }
+    append_legacy_event(&events_path(name), &ev);
+}
+
+/// Record an app-scoped decision. Runtime records never share the VM log and
+/// never persist query/fragment values, headers, cookies, or bodies.
+pub fn record_runtime(
+    runtime: &RuntimePolicy,
+    host: &str,
+    port: u16,
+    method: &str,
+    path: Option<&str>,
+    decision: &str,
+    details: TrafficDetails<'_>,
+) {
+    let ev = TrafficEvent {
+        ts: now_millis(),
+        host: host.to_string(),
+        port,
+        method: method.to_string(),
+        path: path.map(sanitize_path),
+        decision: decision.to_string(),
+        app: Some(runtime.app.clone()),
+        service: runtime.service.clone(),
+        principal: Some(runtime.principal.clone()),
+        reason: details.reason.map(str::to_string),
+        transport: default_transport(),
+        tls_version: details.tls_version.map(str::to_string),
+        sni: details.sni.map(str::to_string),
+        status: details.status,
+        bytes_in: details.bytes_in,
+        bytes_out: details.bytes_out,
+        duration_ms: details.duration_ms,
+    };
+    append_runtime_event(&runtime_events_path(&runtime.app), &ev);
+}
+
+pub fn record_unknown(
+    name: &str,
+    principal: &str,
+    host: &str,
+    port: u16,
+    method: &str,
+    reason: &str,
+) {
+    let ev = TrafficEvent {
+        ts: now_millis(),
+        host: host.to_string(),
+        port,
+        method: method.to_string(),
+        path: None,
+        decision: "deny".to_string(),
+        app: None,
+        service: None,
+        principal: Some(principal.to_string()),
+        reason: Some(reason.to_string()),
+        transport: default_transport(),
+        tls_version: None,
+        sni: None,
+        status: None,
+        bytes_in: None,
+        bytes_out: None,
+        duration_ms: None,
+    };
+    append_legacy_event(&events_path(name), &ev);
+}
+
+pub fn sanitize_path(target: &str) -> String {
+    let without_sensitive = target.split(['?', '#']).next().unwrap_or("/");
+    if let Some(scheme) = without_sensitive.find("://") {
+        let after_authority = &without_sensitive[scheme + 3..];
+        return after_authority
+            .find('/')
+            .map_or_else(|| "/".to_string(), |at| after_authority[at..].to_string());
     }
-    let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path_buf) else {
-        return;
-    };
-    if let Ok(line) = serde_json::to_string(&ev) {
-        let _ = writeln!(file, "{line}");
+    if without_sensitive.is_empty() {
+        "/".to_string()
+    } else {
+        without_sensitive.to_string()
     }
 }
 
-/// Drop the oldest half of the log, keeping the most recent lines.
-fn trim(path: &std::path::Path) {
-    let Ok(raw) = std::fs::read_to_string(path) else {
+fn serialized_event(event: &TrafficEvent) -> Option<String> {
+    let line = serde_json::to_string(event).ok()?;
+    (line.len() < MAX_EVENTS_BYTES as usize).then_some(line)
+}
+
+fn with_log_lock(operation: impl FnOnce()) {
+    static LOG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let Ok(_guard) = LOG_LOCK.get_or_init(|| Mutex::new(())).lock() else {
         return;
     };
-    let lines: Vec<&str> = raw.lines().collect();
-    let keep = &lines[lines.len() / 2..];
-    let _ = std::fs::write(path, format!("{}\n", keep.join("\n")));
+    operation();
+}
+
+/// Preserve the historical VM log behavior: cheap O_APPEND writes and, once
+/// oversized, discard the oldest half before the next append.
+fn append_legacy_event(path: &std::path::Path, event: &TrafficEvent) {
+    let Some(line) = serialized_event(event) else {
+        return;
+    };
+    with_log_lock(|| {
+        if std::fs::metadata(path).is_ok_and(|metadata| metadata.len() > MAX_EVENTS_BYTES) {
+            let _ = halve_log(path);
+        }
+        let _ = append_line(path, &line);
+    });
+}
+
+/// Runtime logs append in the common case and compact to the exact ring cap
+/// only after the append crosses 512 KiB.
+fn append_runtime_event(path: &std::path::Path, event: &TrafficEvent) {
+    let Some(line) = serialized_event(event) else {
+        return;
+    };
+    with_log_lock(|| {
+        if append_line(path, &line).is_ok_and(|len| len > MAX_EVENTS_BYTES) {
+            let _ = compact_runtime_log(path);
+        }
+    });
+}
+
+fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<u64> {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    writeln!(file, "{line}")?;
+    Ok(file.metadata()?.len())
+}
+
+fn halve_log(path: &std::path::Path) -> std::io::Result<()> {
+    let raw = std::fs::read(path)?;
+    let midpoint = raw.len() / 2;
+    let keep_from = raw[midpoint..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(raw.len(), |offset| midpoint + offset + 1);
+    write_log_file(path, &raw[keep_from..])
+}
+
+fn compact_runtime_log(path: &std::path::Path) -> std::io::Result<()> {
+    let raw = std::fs::read(path)?;
+    if raw.len() <= MAX_EVENTS_BYTES as usize {
+        return Ok(());
+    }
+    let floor = raw.len() - MAX_EVENTS_BYTES as usize;
+    let keep_from = raw[floor..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(raw.len(), |offset| floor + offset + 1);
+    let tmp = path.with_extension("jsonl.tmp");
+    write_log_file(&tmp, &raw[keep_from..])?;
+    std::fs::rename(tmp, path)
+}
+
+#[cfg(unix)]
+fn write_log_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .open(path)?;
+    file.write_all(bytes)
+}
+
+#[cfg(not(unix))]
+fn write_log_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    std::fs::write(path, bytes)
 }
 
 /// Return the most recent `limit` events, oldest-first.
 pub fn tail(name: &str, limit: usize) -> Vec<TrafficEvent> {
-    let Ok(raw) = std::fs::read_to_string(events_path(name)) else {
+    tail_path(&events_path(name), limit)
+}
+
+/// Return the most recent app-scoped runtime events, oldest-first.
+#[cfg(test)]
+pub fn tail_runtime(app: &str, limit: usize) -> Vec<TrafficEvent> {
+    tail_path(&runtime_events_path(app), limit)
+}
+
+fn tail_path(path: &std::path::Path, limit: usize) -> Vec<TrafficEvent> {
+    let Ok(raw) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
     let mut events: Vec<TrafficEvent> = raw
@@ -125,18 +347,24 @@ pub fn aggregate_denied(events: &[TrafficEvent]) -> Vec<DeniedHost> {
     use std::collections::BTreeMap;
     let mut by_dest: BTreeMap<(String, u16), DeniedHost> = BTreeMap::new();
     for e in events.iter().filter(|e| e.decision == "deny") {
-        let entry = by_dest.entry((e.host.clone(), e.port)).or_insert(DeniedHost {
-            host: e.host.clone(),
-            port: e.port,
-            count: 0,
-            last_seen: 0,
-        });
+        let entry = by_dest
+            .entry((e.host.clone(), e.port))
+            .or_insert(DeniedHost {
+                host: e.host.clone(),
+                port: e.port,
+                count: 0,
+                last_seen: 0,
+            });
         entry.count += 1;
         entry.last_seen = entry.last_seen.max(e.ts);
     }
     let mut out: Vec<DeniedHost> = by_dest.into_values().collect();
     // Most-recent first; stable tiebreak on host so output is deterministic.
-    out.sort_by(|a, b| b.last_seen.cmp(&a.last_seen).then_with(|| a.host.cmp(&b.host)));
+    out.sort_by(|a, b| {
+        b.last_seen
+            .cmp(&a.last_seen)
+            .then_with(|| a.host.cmp(&b.host))
+    });
     out
 }
 
@@ -175,12 +403,19 @@ pub fn render_denied_report(
     if denied.is_empty() {
         return format!("No denied egress attempts recorded for '{name}'.\n");
     }
-    let name_flag = if is_default_vm { String::new() } else { format!(" --name {name}") };
+    let name_flag = if is_default_vm {
+        String::new()
+    } else {
+        format!(" --name {name}")
+    };
     let mut out = format!(
         "Denied egress attempts for '{name}' ({} blocked destination(s)):\n\n",
         denied.len()
     );
-    out.push_str(&format!("  {:<40} {:>5}  {:>5}  LAST SEEN\n", "HOST", "PORT", "COUNT"));
+    out.push_str(&format!(
+        "  {:<40} {:>5}  {:>5}  LAST SEEN\n",
+        "HOST", "PORT", "COUNT"
+    ));
     for d in denied {
         out.push_str(&format!(
             "  {:<40} {:>5}  {:>5}  {}\n",
@@ -191,9 +426,14 @@ pub fn render_denied_report(
         ));
     }
     out.push_str("\nThese flows were BLOCKED by the egress boundary (default-deny).\n");
-    out.push_str("To permit one, allow its host and re-run the workload (the policy reloads live):\n");
+    out.push_str(
+        "To permit one, allow its host and re-run the workload (the policy reloads live):\n",
+    );
     for d in denied {
-        out.push_str(&format!("  appliance vm egress allow {}{}\n", d.host, name_flag));
+        out.push_str(&format!(
+            "  appliance vm egress allow {}{}\n",
+            d.host, name_flag
+        ));
     }
     out
 }
@@ -224,7 +464,14 @@ mod tests {
         let name = "traffic-test-path";
         clear(name);
         let _ = std::fs::create_dir_all(VmPaths::for_name(name).dir);
-        record(name, "api.example.com", 443, "GET", Some("/v1/models"), "mitm");
+        record(
+            name,
+            "api.example.com",
+            443,
+            "GET",
+            Some("/v1/models"),
+            "mitm",
+        );
         let evs = tail(name, 10);
         assert_eq!(evs.len(), 1);
         assert_eq!(evs[0].path.as_deref(), Some("/v1/models"));
@@ -232,15 +479,74 @@ mod tests {
         clear(name);
     }
 
+    #[test]
+    fn persisted_paths_strip_query_fragment_and_absolute_authority() {
+        assert_eq!(sanitize_path("/v1/items?token=secret#part"), "/v1/items");
+        assert_eq!(
+            sanitize_path("https://api.example.com/v1/items?q=secret"),
+            "/v1/items"
+        );
+        assert_eq!(sanitize_path("https://api.example.com?q=secret"), "/");
+    }
+
     fn ev(host: &str, port: u16, decision: &str, ts: u64) -> TrafficEvent {
         TrafficEvent {
             ts,
             host: host.to_string(),
             port,
-            method: if decision == "deny" { "DENY".into() } else { "CONNECT".into() },
+            method: if decision == "deny" {
+                "DENY".into()
+            } else {
+                "CONNECT".into()
+            },
             path: None,
             decision: decision.to_string(),
+            app: None,
+            service: None,
+            principal: None,
+            reason: None,
+            transport: default_transport(),
+            tls_version: None,
+            sni: None,
+            status: None,
+            bytes_in: None,
+            bytes_out: None,
+            duration_ms: None,
         }
+    }
+
+    #[test]
+    fn legacy_halves_only_when_oversized_and_runtime_compacts_after_append() {
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-traffic-ring-{}-{}",
+            std::process::id(),
+            now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let seed = vec![b'x'; MAX_EVENTS_BYTES as usize + 100];
+
+        let legacy = dir.join("legacy.jsonl");
+        std::fs::write(&legacy, &seed).unwrap();
+        append_legacy_event(&legacy, &ev("legacy.test", 443, "allow", 1));
+        let legacy_len = std::fs::metadata(&legacy).unwrap().len();
+        assert!(legacy_len < MAX_EVENTS_BYTES, "legacy log was halved");
+
+        let runtime = dir.join("runtime.jsonl");
+        let mut runtime_seed = Vec::with_capacity(seed.len());
+        while runtime_seed.len() <= MAX_EVENTS_BYTES as usize {
+            runtime_seed.extend_from_slice(b"{}\n");
+        }
+        std::fs::write(&runtime, runtime_seed).unwrap();
+        let latest = ev("runtime.test", 443, "deny", 2);
+        append_runtime_event(&runtime, &latest);
+        assert!(std::fs::metadata(&runtime).unwrap().len() <= MAX_EVENTS_BYTES);
+        let raw = std::fs::read_to_string(&runtime).unwrap();
+        assert_eq!(
+            serde_json::from_str::<TrafficEvent>(raw.lines().last().unwrap()).unwrap(),
+            latest
+        );
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -266,7 +572,12 @@ mod tests {
     fn render_denied_report_shows_counts_and_remediation_hint() {
         let now = 1_000_000;
         let denied = vec![
-            DeniedHost { host: "exfil.evil.test".into(), port: 443, count: 7, last_seen: now - 12_000 },
+            DeniedHost {
+                host: "exfil.evil.test".into(),
+                port: 443,
+                count: 7,
+                last_seen: now - 12_000,
+            },
             DeniedHost {
                 host: "registry.example.com".into(),
                 port: 443,
@@ -288,7 +599,12 @@ mod tests {
 
     #[test]
     fn render_denied_report_names_non_default_vm_in_hint() {
-        let denied = vec![DeniedHost { host: "x.test".into(), port: 443, count: 1, last_seen: 0 }];
+        let denied = vec![DeniedHost {
+            host: "x.test".into(),
+            port: 443,
+            count: 1,
+            last_seen: 0,
+        }];
         let out = render_denied_report("agent", false, &denied, 1_000);
         assert!(out.contains("appliance vm egress allow x.test --name agent"));
     }

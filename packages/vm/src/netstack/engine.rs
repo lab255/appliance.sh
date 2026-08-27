@@ -14,10 +14,14 @@
 use super::frame::{self, Class};
 use super::{Bridge, BridgeStream, ConnectRequest, LinkConfig, Netstack};
 use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet};
-use smoltcp::phy::{Checksum, ChecksumCapabilities, Device, DeviceCapabilities, Medium, RxToken, TxToken};
+use smoltcp::phy::{
+    Checksum, ChecksumCapabilities, Device, DeviceCapabilities, Medium, RxToken, TxToken,
+};
 use smoltcp::socket::tcp;
 use smoltcp::time::{Duration as SmolDuration, Instant as SmolInstant};
-use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint, IpListenEndpoint};
+use smoltcp::wire::{
+    EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint, IpListenEndpoint,
+};
 use std::collections::{HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::os::fd::RawFd;
@@ -81,7 +85,10 @@ where
 
 /// The effective concurrent-flow cap: [`ENV_MAX_FLOWS`] or the default.
 fn max_concurrent_flows() -> usize {
-    parse_positive(std::env::var(ENV_MAX_FLOWS).ok().as_deref(), DEFAULT_MAX_CONCURRENT_FLOWS)
+    parse_positive(
+        std::env::var(ENV_MAX_FLOWS).ok().as_deref(),
+        DEFAULT_MAX_CONCURRENT_FLOWS,
+    )
 }
 
 /// The effective per-flow idle timeout: [`ENV_IDLE_SECS`] secs or the default.
@@ -152,7 +159,10 @@ pub fn start(host_fd: RawFd, cfg: LinkConfig) -> Netstack {
             }
             unsafe { libc::close(host_fd) };
         });
-    Netstack { guest_ip, connect_tx }
+    Netstack {
+        guest_ip,
+        connect_tx,
+    }
 }
 
 // --- the smoltcp phy device over the host fd ------------------------
@@ -227,7 +237,11 @@ type Tuple = (Ipv4Addr, u16, Ipv4Addr, u16);
 enum FlowKind {
     /// Guest-originated (outbound): we terminated the guest's SYN and
     /// forward to `dst` upstream once established.
-    Terminated { dst: SocketAddr, upstream_spawned: bool },
+    Terminated {
+        src: Ipv4Addr,
+        dst: SocketAddr,
+        upstream_spawned: bool,
+    },
     /// Host-originated (inbound published port): the bridge's ext side is
     /// already held by the `connect()` caller.
     Originated,
@@ -327,7 +341,10 @@ fn engine_loop(host_fd: RawFd, cfg: LinkConfig, connect_rx: Receiver<ConnectRequ
     config.random_seed = seed();
     let mut iface = Interface::new(config, &mut device, smol_now(start));
     iface.update_ip_addrs(|addrs| {
-        let _ = addrs.push(IpCidr::new(IpAddress::Ipv4(cfg.gateway_ip), super::PREFIX_LEN));
+        let _ = addrs.push(IpCidr::new(
+            IpAddress::Ipv4(cfg.gateway_ip),
+            super::PREFIX_LEN,
+        ));
     });
     // Default route via our own gateway address + AnyIP: the guest's
     // frames to public IPs arrive addressed to the gateway MAC but with a
@@ -359,8 +376,11 @@ fn engine_loop(host_fd: RawFd, cfg: LinkConfig, connect_rx: Receiver<ConnectRequ
         while let Ok(req) = connect_rx.try_recv() {
             let mut sock = tcp_socket(idle_timeout);
             let local = next_local_port;
-            next_local_port = next_local_port.checked_add(1).filter(|p| *p != 0).unwrap_or(49152);
-            let remote = IpEndpoint::new(IpAddress::Ipv4(cfg.guest_ip), req.port);
+            next_local_port = next_local_port
+                .checked_add(1)
+                .filter(|p| *p != 0)
+                .unwrap_or(49152);
+            let remote = IpEndpoint::new(IpAddress::Ipv4(req.target_ip), req.port);
             match sock.connect(iface.context(), remote, local) {
                 Ok(()) => {
                     let handle = sockets.add(sock);
@@ -385,9 +405,14 @@ fn engine_loop(host_fd: RawFd, cfg: LinkConfig, connect_rx: Receiver<ConnectRequ
         for f in read_frames(host_fd) {
             match frame::classify(&f, cfg.gateway_ip) {
                 Class::Dhcp => answer_dhcp(&f, &cfg, host_fd),
-                Class::Dns { src_ip, src_port } => {
-                    spawn_dns(&f, src_ip, src_port, &cfg, outframe_tx.clone(), resolved.clone())
-                }
+                Class::Dns { src_ip, src_port } => spawn_dns(
+                    &f,
+                    src_ip,
+                    src_port,
+                    &cfg,
+                    outframe_tx.clone(),
+                    resolved.clone(),
+                ),
                 Class::Tcp(seg) => {
                     if seg.is_syn {
                         // Pre-create the LISTEN socket on the exact dst so
@@ -408,6 +433,7 @@ fn engine_loop(host_fd: RawFd, cfg: LinkConfig, connect_rx: Receiver<ConnectRequ
                                     Flow {
                                         bridge: Arc::new(Mutex::new(Bridge::default())),
                                         kind: FlowKind::Terminated {
+                                            src: seg.src_ip,
                                             dst: SocketAddr::new(seg.dst_ip.into(), seg.dst_port),
                                             upstream_spawned: false,
                                         },
@@ -516,15 +542,21 @@ fn service_flow(
     // its own thread so the bounded peek + re-resolution never blocks the
     // netstack loop. **This is the choke point** — every guest flow that
     // reaches upstream passes through here.
-    if let FlowKind::Terminated { dst, upstream_spawned } = &mut flow.kind {
+    if let FlowKind::Terminated {
+        src,
+        dst,
+        upstream_spawned,
+    } = &mut flow.kind
+    {
         if bridge.established && !*upstream_spawned {
             *upstream_spawned = true;
             let dst = *dst;
+            let source = *src;
             let ext = BridgeStream::new(bridge_arc.clone());
             let name = vm_name.to_string();
             let resolved = resolved.clone();
             std::thread::spawn(move || {
-                super::guard::serve_outbound(&name, dst, ext, &resolved);
+                super::guard::serve_outbound(&name, source, dst, ext, &resolved);
             });
         }
     }
@@ -534,7 +566,11 @@ fn service_flow(
     // stalled upstream backpressures the guest instead of ballooning host
     // memory — symmetric to the ext→guest cap).
     drain_guest_to_ext(sock, &mut bridge.guest_to_ext);
-    if !sock.may_recv() {
+    // SYN-SENT/LISTEN sockets cannot receive yet, but that is not EOF. Only
+    // publish guest FIN after this flow has actually established; otherwise
+    // the bridge pump can close the host client's response half before a
+    // slower principal-targeted guest relay has read the request.
+    if bridge.established && !sock.may_recv() {
         bridge.guest_fin = true;
     }
 
@@ -605,15 +641,54 @@ fn spawn_dns(
         let qname = super::dns::query_name(&query);
         // F2 (§8.1 #1): the resolver applies the VM's default-deny policy
         // to the name (denied/absent ⇒ no answer, fail-closed)...
-        let policy = crate::egress::netstack_policy(&cfg.vm_name);
-        if !super::dns::name_allowed(&qname, &policy) {
+        let context = crate::egress::policy_for(&cfg.vm_name, src_ip);
+        let policy = context.policy();
+        if matches!(context, crate::egress::PolicyContext::Unknown { .. }) {
+            crate::traffic::record_unknown(
+                &cfg.vm_name,
+                &context.principal(),
+                qname.as_deref().unwrap_or("<invalid-dns>"),
+                53,
+                "DNS",
+                "unknown-principal",
+            );
             return;
         }
-        if let Some(resp) = super::dns::forward(&query, &cfg.dns_upstreams, super::dns::UPSTREAM_TIMEOUT) {
+        if !super::dns::name_allowed(&qname, &policy) {
+            if let crate::egress::PolicyContext::Runtime(runtime) = &context {
+                crate::traffic::record_runtime(
+                    runtime,
+                    qname.as_deref().unwrap_or("<invalid-dns>"),
+                    53,
+                    "DNS",
+                    None,
+                    "deny",
+                    crate::traffic::TrafficDetails {
+                        reason: Some("policy"),
+                        ..Default::default()
+                    },
+                );
+            }
+            return;
+        }
+        let runtime_ports = match (&context, &qname) {
+            (crate::egress::PolicyContext::Runtime(runtime), Some(host)) => {
+                Some(runtime.allowed_ports_for(host))
+            }
+            _ => None,
+        };
+        if let Some(resp) =
+            super::dns::forward(&query, &cfg.dns_upstreams, super::dns::UPSTREAM_TIMEOUT)
+        {
             // ...and drops any answer that resolves into a private/
             // internal/host-LAN range (anti-rebind SSRF), recording the
             // public answers for the raw-IP back-reference hatch.
-            if !super::dns::answer_ok_and_record(&resp, &resolved) {
+            if !super::dns::answer_ok_and_record_for(
+                &resp,
+                &resolved,
+                &context.principal(),
+                runtime_ports.as_deref(),
+            ) {
                 return;
             }
             let out = frame::build_udp_ipv4(
@@ -672,7 +747,122 @@ fn seed() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::{Shutdown, TcpListener, TcpStream};
     use std::time::Duration;
+
+    #[test]
+    fn principal_inbound_waits_for_request_and_preserves_half_close_response() {
+        const PRINCIPAL: Ipv4Addr = Ipv4Addr::new(192, 168, 127, 10);
+        const PORT: u16 = 18_080;
+        const REQUEST: &[u8] = b"GET /ready HTTP/1.1\r\nHost: app.test\r\n\r\n";
+        const RESPONSE: &[u8] =
+            b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nprincipal-ok";
+
+        let (host_fd, vz_fd) = make_link().unwrap();
+        // The engine's fd reader is nonblocking; give the in-memory guest
+        // peer the same behavior so its test loop can interleave poll/send.
+        unsafe {
+            let flags = libc::fcntl(vz_fd, libc::F_GETFL);
+            libc::fcntl(vz_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+        let guest_mac = [0x52, 0x54, 0x00, 0xaa, 0xbb, 0xdd];
+        let cfg = LinkConfig::for_guest_mac("principal-inbound-test", "52:54:00:aa:bb:dd");
+        let netstack = start(host_fd, cfg);
+
+        // A tiny guest-side smoltcp server bound to the runtime principal
+        // /32. Crucially, it sends nothing until the full request arrives;
+        // an eager responder would hide the pre-establishment EOF race.
+        let guest = std::thread::spawn(move || {
+            let mut device = FdDevice {
+                fd: vz_fd,
+                rx: VecDeque::new(),
+            };
+            let mut config = Config::new(HardwareAddress::Ethernet(EthernetAddress(guest_mac)));
+            config.random_seed = 7;
+            let started = Instant::now();
+            let mut iface = Interface::new(config, &mut device, smol_now(started));
+            iface.update_ip_addrs(|addrs| {
+                let _ = addrs.push(IpCidr::new(
+                    IpAddress::Ipv4(PRINCIPAL),
+                    super::super::PREFIX_LEN,
+                ));
+            });
+            let _ = iface
+                .routes_mut()
+                .add_default_ipv4_route(super::super::GATEWAY_IP);
+
+            let mut sockets = SocketSet::new(Vec::new());
+            let server = sockets.add(tcp_socket(flow_idle_timeout()));
+            sockets
+                .get_mut::<tcp::Socket>(server)
+                .listen(IpListenEndpoint {
+                    addr: Some(IpAddress::Ipv4(PRINCIPAL)),
+                    port: PORT,
+                })
+                .unwrap();
+
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut request = Vec::new();
+            let mut responded = false;
+            loop {
+                for frame in read_frames(vz_fd) {
+                    device.rx.push_back(frame);
+                }
+                iface.poll(smol_now(started), &mut device, &mut sockets);
+
+                {
+                    let socket = sockets.get_mut::<tcp::Socket>(server);
+                    while socket.can_recv() {
+                        let mut buf = [0u8; 1024];
+                        let count = socket.recv_slice(&mut buf).unwrap();
+                        if count == 0 {
+                            break;
+                        }
+                        request.extend_from_slice(&buf[..count]);
+                    }
+                    if !responded && request.ends_with(b"\r\n\r\n") {
+                        socket.send_slice(RESPONSE).unwrap();
+                        socket.close();
+                        responded = true;
+                    }
+                }
+
+                iface.poll(smol_now(started), &mut device, &mut sockets);
+                let socket = sockets.get::<tcp::Socket>(server);
+                if responded
+                    && socket.send_queue() == 0
+                    && matches!(socket.state(), tcp::State::Closed | tcp::State::TimeWait)
+                {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "guest server timed out");
+                wait_readable(vz_fd, 2);
+            }
+            unsafe { libc::close(vz_fd) };
+            request
+        });
+
+        // Model the published localhost listener/client pair, then splice its
+        // accepted stream through connect_to(PRINCIPAL) exactly as net.rs does.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let (accepted, _) = listener.accept().unwrap();
+        let bridge = netstack.connect_to(PRINCIPAL, PORT).unwrap();
+        let pump = std::thread::spawn(move || super::super::bridge_pump(bridge, accepted));
+
+        client.write_all(REQUEST).unwrap();
+        client.shutdown(Shutdown::Write).unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+
+        pump.join().unwrap();
+        assert_eq!(response, RESPONSE, "half-close must not drop the reply");
+        assert_eq!(guest.join().unwrap(), REQUEST);
+    }
 
     /// Drive the engine over a real socketpair: write a DHCP DISCOVER as
     /// the "guest" and read back the OFFER the engine builds. Exercises
@@ -682,7 +872,10 @@ mod tests {
     fn engine_answers_dhcp_over_the_link() {
         let (host_fd, vz_fd) = make_link().unwrap();
         // Give the guest end a read timeout so a regression can't hang CI.
-        let tv = libc::timeval { tv_sec: 3, tv_usec: 0 };
+        let tv = libc::timeval {
+            tv_sec: 3,
+            tv_usec: 0,
+        };
         unsafe {
             libc::setsockopt(
                 vz_fd,
@@ -756,14 +949,29 @@ mod tests {
         // Unset → default.
         assert_eq!(parse_positive(None, DEFAULT_MAX_CONCURRENT_FLOWS), 1024);
         // A valid positive override wins (whitespace tolerated).
-        assert_eq!(parse_positive(Some("4096"), DEFAULT_MAX_CONCURRENT_FLOWS), 4096);
-        assert_eq!(parse_positive(Some("  256 "), DEFAULT_MAX_CONCURRENT_FLOWS), 256);
+        assert_eq!(
+            parse_positive(Some("4096"), DEFAULT_MAX_CONCURRENT_FLOWS),
+            4096
+        );
+        assert_eq!(
+            parse_positive(Some("  256 "), DEFAULT_MAX_CONCURRENT_FLOWS),
+            256
+        );
         // Invalid → default: non-numeric, empty, negative, and zero (zero
         // would wedge the stack, so it's rejected like garbage).
-        assert_eq!(parse_positive(Some("lots"), DEFAULT_MAX_CONCURRENT_FLOWS), 1024);
+        assert_eq!(
+            parse_positive(Some("lots"), DEFAULT_MAX_CONCURRENT_FLOWS),
+            1024
+        );
         assert_eq!(parse_positive(Some(""), DEFAULT_MAX_CONCURRENT_FLOWS), 1024);
-        assert_eq!(parse_positive(Some("-5"), DEFAULT_MAX_CONCURRENT_FLOWS), 1024);
-        assert_eq!(parse_positive(Some("0"), DEFAULT_MAX_CONCURRENT_FLOWS), 1024);
+        assert_eq!(
+            parse_positive(Some("-5"), DEFAULT_MAX_CONCURRENT_FLOWS),
+            1024
+        );
+        assert_eq!(
+            parse_positive(Some("0"), DEFAULT_MAX_CONCURRENT_FLOWS),
+            1024
+        );
         // Same precedence holds for the u64 idle-secs knob.
         assert_eq!(parse_positive(Some("120"), DEFAULT_FLOW_IDLE_SECS), 120u64);
         assert_eq!(parse_positive(Some("0"), DEFAULT_FLOW_IDLE_SECS), 60u64);
@@ -778,7 +986,9 @@ mod tests {
         // one interface, so the test drives the actual recv path the engine
         // drains (can_recv / recv_slice) rather than a stand-in.
         let mut device = Loopback::new(Medium::Ethernet);
-        let mut config = Config::new(HardwareAddress::Ethernet(EthernetAddress([0x02, 0, 0, 0, 0, 1])));
+        let mut config = Config::new(HardwareAddress::Ethernet(EthernetAddress([
+            0x02, 0, 0, 0, 0, 1,
+        ])));
         config.random_seed = 1;
         let mut iface = Interface::new(config, &mut device, SmolInstant::from_millis(0));
         let ip = Ipv4Addr::new(192, 168, 69, 1);
@@ -791,11 +1001,18 @@ mod tests {
         let client = sockets.add(tcp_socket(flow_idle_timeout()));
         sockets
             .get_mut::<tcp::Socket>(server)
-            .listen(IpListenEndpoint { addr: Some(IpAddress::Ipv4(ip)), port: 7777 })
+            .listen(IpListenEndpoint {
+                addr: Some(IpAddress::Ipv4(ip)),
+                port: 7777,
+            })
             .unwrap();
         sockets
             .get_mut::<tcp::Socket>(client)
-            .connect(iface.context(), IpEndpoint::new(IpAddress::Ipv4(ip), 7777), 49000)
+            .connect(
+                iface.context(),
+                IpEndpoint::new(IpAddress::Ipv4(ip), 7777),
+                49000,
+            )
             .unwrap();
 
         let mut t = 1i64;
@@ -803,23 +1020,36 @@ mod tests {
             iface.poll(SmolInstant::from_millis(t), &mut device, &mut sockets);
             t += 1;
         }
-        assert!(sockets.get::<tcp::Socket>(client).may_send(), "handshake completed");
+        assert!(
+            sockets.get::<tcp::Socket>(client).may_send(),
+            "handshake completed"
+        );
 
         // Client sends a blob; pump so the server has it buffered to read.
         let blob = vec![7u8; 8 * 1024];
-        sockets.get_mut::<tcp::Socket>(client).send_slice(&blob).unwrap();
+        sockets
+            .get_mut::<tcp::Socket>(client)
+            .send_slice(&blob)
+            .unwrap();
         for _ in 0..40 {
             iface.poll(SmolInstant::from_millis(t), &mut device, &mut sockets);
             t += 1;
         }
-        assert!(sockets.get::<tcp::Socket>(server).can_recv(), "server has data buffered");
+        assert!(
+            sockets.get::<tcp::Socket>(server).can_recv(),
+            "server has data buffered"
+        );
 
         // Buffer already AT the high-water: draining must pull NOTHING, and
         // the bytes stay in smoltcp (receive window closed ⇒ the guest is
         // backpressured rather than ballooning host memory).
         let mut buf: VecDeque<u8> = vec![0u8; crate::netstack::GUEST_TO_EXT_HIGH_WATER].into();
         drain_guest_to_ext(sockets.get_mut::<tcp::Socket>(server), &mut buf);
-        assert_eq!(buf.len(), crate::netstack::GUEST_TO_EXT_HIGH_WATER, "nothing drained past the cap");
+        assert_eq!(
+            buf.len(),
+            crate::netstack::GUEST_TO_EXT_HIGH_WATER,
+            "nothing drained past the cap"
+        );
         assert!(
             sockets.get::<tcp::Socket>(server).can_recv(),
             "data held in smoltcp == window closed == backpressure"

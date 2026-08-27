@@ -482,17 +482,17 @@ fn build_configuration(
         // Runtime payload shares are separate boot-configured devices,
         // each hash-tagged below VZ's 36-byte maximum. They are exported
         // read-only and mounted only by the guest supervisor.
-        for runtime_share in &spec.runtime_shares {
+        for runtime_mount in &spec.runtime_mounts {
             let shared = VZSharedDirectory::initWithURL_readOnly(
                 VZSharedDirectory::alloc(),
-                &file_url(Path::new(&runtime_share.host_path)),
-                runtime_share.read_only,
+                &file_url(Path::new(&runtime_mount.host)),
+                !runtime_mount.writable,
             );
             let share =
                 VZSingleDirectoryShare::initWithDirectory(VZSingleDirectoryShare::alloc(), &shared);
-            let tag = NSString::from_str(&runtime_share.tag);
+            let tag = NSString::from_str(&runtime_mount.tag);
             VZVirtioFileSystemDeviceConfiguration::validateTag_error(&tag)
-                .map_err(|e| anyhow!("invalid runtime virtiofs tag '{}': {}", runtime_share.tag, error_text(&e)))?;
+                .map_err(|e| anyhow!("invalid runtime virtiofs tag '{}': {}", runtime_mount.tag, error_text(&e)))?;
             let fs_device = VZVirtioFileSystemDeviceConfiguration::initWithTag(
                 VZVirtioFileSystemDeviceConfiguration::alloc(),
                 &tag,

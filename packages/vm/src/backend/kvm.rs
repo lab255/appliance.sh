@@ -22,9 +22,9 @@ impl VmBackend for KvmBackend {
     }
 
     fn run_foreground(&self, spec: &VmSpec) -> Result<()> {
-        if !spec.runtime_shares.is_empty() {
+        if !spec.runtime_mounts.is_empty() {
             // TODO(AP-163/kvm-virtiofsd): launch one sandboxed virtiofsd
-            // per RuntimeShare and attach its vhost-user socket. The KVM
+            // per RuntimeMount and attach its vhost-user socket. The KVM
             // VMM itself remains scaffold-only, so fail closed instead of
             // silently booting without a declared payload share.
             bail!("KVM runtime shares require the pending virtiofsd backend integration");

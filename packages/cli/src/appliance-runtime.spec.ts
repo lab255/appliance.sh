@@ -1,6 +1,6 @@
 import { applianceV2Input } from '@appliance.sh/sdk';
 import { describe, expect, it } from 'vitest';
-import { manifestToRuntimePlan, sanitizeRuntimeLog } from './appliance-runtime.js';
+import { manifestToRuntimePlan, manifestToRuntimePolicy, sanitizeRuntimeLog } from './appliance-runtime.js';
 
 function manifest(resources: Record<string, number> = {}) {
   return applianceV2Input.parse({
@@ -72,6 +72,27 @@ describe('manifest to pooled runtime plan', () => {
         value.ports.map((port, index) => ({ ...port, host: 20000 + index }))
       )
     ).toThrow('at most 16 ports');
+  });
+});
+
+describe('manifest to effective Runtime policy', () => {
+  it('installs a default-deny principal policy with normalized host/port grants', () => {
+    const value = manifest();
+    value.network = {
+      egress: [
+        { host: '*.example.com', ports: [443, 80] },
+        { host: 'example.com', ports: [443] },
+      ],
+    };
+    expect(manifestToRuntimePolicy(value, '192.168.127.10')).toEqual({
+      version: 1,
+      app: 'journal',
+      vm: 'appliance-runtime',
+      principal: 'journal',
+      source: '192.168.127.10',
+      policy: { default: 'deny', allow: ['example.com'], deny: [], mitm: false },
+      allowPorts: { 'example.com': [80, 443] },
+    });
   });
 });
 

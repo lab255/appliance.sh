@@ -1,10 +1,11 @@
 import chalk from 'chalk';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
 import type { ApplianceV2 } from '@appliance.sh/sdk';
-import { ensurePooledRuntime, runVm, vmDir } from './utils/microvm-up.js';
+import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
@@ -34,6 +35,36 @@ export interface RuntimePlan {
 }
 
 type LoadedRuntimeBundle = VerifyBundleResult;
+
+export interface EffectiveRuntimePolicy {
+  version: 1;
+  app: string;
+  vm: string;
+  principal: string;
+  source: string;
+  policy: { default: 'deny'; allow: string[]; deny: []; mitm: false };
+  allowPorts: Record<string, number[]>;
+}
+
+export function manifestToRuntimePolicy(manifest: ApplianceV2, principalIp: string): EffectiveRuntimePolicy {
+  const allowed = new Map<string, Set<number>>();
+  for (const rule of manifest.network?.egress ?? []) {
+    const host = rule.host.startsWith('*.') ? rule.host.slice(2) : rule.host;
+    const ports = allowed.get(host) ?? new Set<number>();
+    for (const port of rule.ports) ports.add(port);
+    allowed.set(host, ports);
+  }
+  const allow = [...allowed.keys()].sort();
+  return {
+    version: 1,
+    app: manifest.name,
+    vm: RUNTIME_POOL_VM,
+    principal: manifest.name,
+    source: principalIp,
+    policy: { default: 'deny', allow, deny: [], mitm: false },
+    allowPorts: Object.fromEntries(allow.map((host) => [host, [...(allowed.get(host) ?? [])].sort((a, b) => a - b)])),
+  };
+}
 
 export function manifestToRuntimePlan(
   manifest: ApplianceV2,
@@ -163,6 +194,7 @@ async function runtimeRun(args: string[]): Promise<void> {
 
   console.log(chalk.cyan('» reconciling the pooled appliance-runtime VM (2 vCPU / 4096 MiB)'));
   const prepared = vmJson(['runtime', 'prepare', RUNTIME_POOL_VM, JSON.stringify(plan)]);
+  installEffectiveRuntimePolicy(manifestToRuntimePolicy(loaded.manifest, principalIp));
   const restartRequired = Boolean(prepared.restartRequired);
   if (restartRequired) {
     updateRuntimeRecord(plan.appId, { poolRestartPending: true });
@@ -407,26 +439,39 @@ function persistedRuntimeAllocation(
     const spec = JSON.parse(fs.readFileSync(path.join(vmDir(RUNTIME_POOL_VM), 'vm.json'), 'utf8')) as {
       published?: Array<{
         host?: number;
-        name?: string;
-        principal?: string;
-        target?: string;
-        guest?: number;
+        container?: number;
+        runtimeTarget?: { principal?: string; address?: string };
       }>;
     };
     const expected = (manifest.ports ?? []).filter((port) => port.expose === 'host');
-    const published = (spec.published ?? []).filter((port) => port.principal === manifest.name);
-    if (published.length !== expected.length || published.some((port) => !port.target)) return undefined;
+    const published = (spec.published ?? []).filter((port) => port.runtimeTarget?.principal === manifest.name);
+    if (published.length !== expected.length || published.some((port) => !port.runtimeTarget?.address)) return undefined;
+    const remaining = [...published];
     const hostPorts = expected.map((port) => {
-      const existing = published.find((candidate) => candidate.name === port.name && candidate.guest === port.guest);
+      const index = remaining.findIndex((candidate) => candidate.container === port.guest);
+      const existing = index < 0 ? undefined : remaining.splice(index, 1)[0];
       if (!existing || typeof existing.host !== 'number') throw new Error('published port shape changed');
       return { name: port.name, host: existing.host, guest: port.guest, protocol: 'tcp' as const };
     });
-    const principalIp = published[0]?.target;
+    const principalIp = published[0]?.runtimeTarget?.address;
+    if (published.some((port) => port.runtimeTarget?.address !== principalIp)) return undefined;
     const leaf = Number.parseInt(principalIp?.split('.').slice(-1)[0] ?? '', 10);
     if (!principalIp || !Number.isInteger(leaf) || leaf < 10 || leaf > 239) return undefined;
     return { principalIp, uid: 20000 + leaf - 10, hostPorts };
   } catch {
     return undefined;
+  }
+}
+
+function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): void {
+  const result = spawnSync(vmBinary(), ['runtime-policy', 'set', policy.vm, policy.principal], {
+    encoding: 'utf8',
+    input: `${JSON.stringify(policy)}\n`,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || '').trim();
+    fail(`could not install effective Runtime policy for '${policy.app}'${detail ? `: ${detail}` : ''}`, 1);
   }
 }
 
