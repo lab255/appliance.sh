@@ -22,17 +22,30 @@ import {
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
-export interface RuntimePlan {
+interface RuntimePlanBase {
   appId: string;
   version: string;
   principalIp: string;
   uid: number;
   share: { tag: string; hostPath: string; readOnly: true };
-  imagePath: string;
-  env: Record<string, string>;
   ports: Array<RuntimeHostPort & { relay: number; target: string }>;
   resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
 }
+
+export type RuntimePlan = RuntimePlanBase &
+  (
+    | { kind: 'container'; imagePath: string; env: Record<string, string> }
+    | {
+        kind: 'binary';
+        target: {
+          path: string;
+          entrypoint: string;
+          args: string[];
+          env: Record<string, string>;
+          cwd: string;
+        };
+      }
+  );
 
 type LoadedRuntimeBundle = VerifyBundleResult;
 
@@ -71,12 +84,32 @@ export function manifestToRuntimePlan(
   installDir: string,
   principalIp: string,
   uid: number,
-  hostPorts: RuntimeHostPort[]
+  hostPorts: RuntimeHostPort[],
+  runtimeArch: NodeJS.Architecture = process.arch
 ): RuntimePlan {
-  if (manifest.type !== 'container') throw new Error(`${manifest.type} runnable bundles are not yet supported`);
-  const platform = process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
-  const target = manifest.payload.images[platform];
-  if (!target) throw new Error(`bundle has no payload for host runtime platform ${platform}`);
+  if (manifest.type === 'compound') throw new Error('compound runnable bundles are not yet supported');
+  const platform = runtimeLinuxPlatform(runtimeArch);
+  const payload =
+    manifest.type === 'container'
+      ? (() => {
+          const image = manifest.payload.images[platform];
+          if (!image) throw missingRuntimeTarget(manifest, platform, 'images');
+          return { kind: 'container' as const, imagePath: image.path, env: manifest.env };
+        })()
+      : (() => {
+          const target = manifest.payload.targets[platform];
+          if (!target) throw missingRuntimeTarget(manifest, platform, 'targets');
+          return {
+            kind: 'binary' as const,
+            target: {
+              path: target.root,
+              entrypoint: target.entrypoint,
+              args: target.args,
+              env: manifest.env,
+              cwd: '.',
+            },
+          };
+        })();
   const requested = manifest.resources ?? {};
   const ports = manifest.ports ?? [];
   const published = ports.filter((port) => port.expose === 'host');
@@ -90,8 +123,7 @@ export function manifestToRuntimePlan(
     principalIp,
     uid,
     share: { tag: shareTag, hostPath: installDir, readOnly: true },
-    imagePath: target.path,
-    env: manifest.env,
+    ...payload,
     ports: published.map((port, index) => ({
       ...hostPorts[index],
       relay: 22000 + (uid - 20000) * 16 + index,
@@ -104,6 +136,26 @@ export function manifestToRuntimePlan(
       pids: 256,
     },
   };
+}
+
+function runtimeLinuxPlatform(arch: NodeJS.Architecture): 'linux/amd64' | 'linux/arm64' {
+  if (arch === 'arm64') return 'linux/arm64';
+  if (arch === 'x64') return 'linux/amd64';
+  throw new Error(
+    `host architecture '${arch}' is not supported by the Linux Runtime VM; build on an amd64 or arm64 host`
+  );
+}
+
+function missingRuntimeTarget(
+  manifest: Exclude<ApplianceV2, { type: 'compound' }>,
+  platform: 'linux/amd64' | 'linux/arm64',
+  branch: 'images' | 'targets'
+): Error {
+  const nativeOnly = manifest.type === 'binary' && manifest.native?.macos ? ' macOS native targets are out of scope.' : '';
+  return new Error(
+    `bundle '${manifest.name}' has no payload for host runtime platform ${platform}; ` +
+      `add payload.${branch}["${platform}"] and repackage.${nativeOnly}`
+  );
 }
 
 export async function runRuntimeCommand(verb: string, args: string[]): Promise<void> {
@@ -133,7 +185,7 @@ export async function runRuntimeCommand(verb: string, args: string[]): Promise<v
 async function runtimeRun(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Usage: appliance runtime run <path-to-app.appliance.zip>');
-    console.log('Runs one container-type bundle in the pooled appliance-runtime VM; Ctrl-C stops the app.');
+    console.log('Runs one container- or binary-type bundle in the pooled appliance-runtime VM; Ctrl-C stops the app.');
     return;
   }
   const input = args.find((arg) => !arg.startsWith('-'));
@@ -149,7 +201,7 @@ async function runtimeRun(args: string[]): Promise<void> {
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error), 2);
   }
-  if (loaded.manifest.type !== 'container') {
+  if (loaded.manifest.type === 'compound') {
     fail(`${loaded.manifest.type} runnable bundle '${loaded.manifest.name}' is not yet supported`, 2);
   }
   const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
@@ -434,7 +486,7 @@ function removePreviousRuntimeInstalls(destination: string): void {
 function persistedRuntimeAllocation(
   manifest: ApplianceV2
 ): { principalIp: string; uid: number; hostPorts: RuntimeHostPort[] } | undefined {
-  if (manifest.type !== 'container') return undefined;
+  if (manifest.type === 'compound') return undefined;
   try {
     const spec = JSON.parse(fs.readFileSync(path.join(vmDir(RUNTIME_POOL_VM), 'vm.json'), 'utf8')) as {
       published?: Array<{
@@ -479,7 +531,7 @@ function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): void {
 }
 
 async function allocatePublishedPorts(manifest: ApplianceV2, records: RuntimeRecord[]): Promise<RuntimeHostPort[]> {
-  if (manifest.type !== 'container') return [];
+  if (manifest.type === 'compound') return [];
   const requested = (manifest.ports ?? []).filter((port) => port.expose === 'host');
   const used = new Set(records.flatMap((record) => record.hostPorts.map((port) => port.host)));
   const result: RuntimeHostPort[] = [];

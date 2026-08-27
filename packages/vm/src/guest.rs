@@ -1353,6 +1353,7 @@ cleanup_resources() {
     OLD_SHARE=/run/appliance/shares/$OLD_TAG
     grep -qs " $OLD_SHARE " /proc/mounts && umount "$OLD_SHARE" || true
   fi
+  rm -rf "$STATE/rootfs"
   rm -f "$STATE/relay.pids" "$STATE/logcap.pid"
 }
 
@@ -1426,7 +1427,7 @@ printf '%s\n' "$REQ" > "$STATE/request.json"
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
 UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
-IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath')
+KIND=$(printf '%s' "$REQ" | jq -r '.plan.kind // empty')
 TAG_HEX=${TAG#ap-}
 case "$TAG" in ap-*) ;; *) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
 case "$TAG_HEX" in ''|*[!0-9a-f]*) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
@@ -1439,11 +1440,34 @@ case "$IP_LEAF" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid princ
 [ "$IP_PREFIX" = 192.168.127 ] && [ "$IP_LEAF" -ge 10 ] && [ "$IP_LEAF" -le 239 ] || {
   echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;
 }
-case "/$IMAGE_PATH/" in
-  /payload/*) ;;
-  *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;;
+case "$KIND" in
+  container)
+    IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath // empty')
+    case "/$IMAGE_PATH/" in /payload/*) ;; *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+    case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+    printf '%s' "$REQ" | jq -e '.plan.env | type == "object"' >/dev/null || {
+      echo '{"state":"failed","message":"invalid container environment"}'; exit 2;
+    }
+    ;;
+  binary)
+    BINARY_PATH=$(printf '%s' "$REQ" | jq -r '.plan.target.path // empty')
+    ENTRYPOINT=$(printf '%s' "$REQ" | jq -r '.plan.target.entrypoint // empty')
+    BINARY_CWD=$(printf '%s' "$REQ" | jq -r '.plan.target.cwd // empty')
+    case "/$BINARY_PATH/" in /payload/*) ;; *) echo '{"state":"failed","message":"invalid binary target path"}'; exit 2;; esac
+    case "/$BINARY_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid binary target path"}'; exit 2;; esac
+    case "$ENTRYPOINT" in ''|/*|*\\*) echo '{"state":"failed","message":"invalid binary entrypoint"}'; exit 2;; esac
+    case "/$ENTRYPOINT/" in *'/../'*|*'/./'*) echo '{"state":"failed","message":"invalid binary entrypoint"}'; exit 2;; esac
+    case "$BINARY_CWD" in .) BINARY_CWD=/;; ''|/*|*\\*) echo '{"state":"failed","message":"invalid binary working directory"}'; exit 2;;
+      *) case "/$BINARY_CWD/" in *'/../'*|*'/./'*) echo '{"state":"failed","message":"invalid binary working directory"}'; exit 2;; esac
+         BINARY_CWD=/$BINARY_CWD;;
+    esac
+    printf '%s' "$REQ" | jq -e '
+      (.plan.target.args | type == "array") and all(.plan.target.args[]; type == "string") and
+      (.plan.target.env | type == "object")
+    ' >/dev/null || { echo '{"state":"failed","message":"invalid binary arguments or environment"}'; exit 2; }
+    ;;
+  *) echo '{"state":"failed","message":"invalid runtime workload kind"}'; exit 2;;
 esac
-case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
 [ "$(printf '%s' "$REQ" | jq '.plan.ports | length')" -le 16 ] || {
   echo '{"state":"failed","message":"too many published ports"}'; exit 2;
 }
@@ -1453,6 +1477,29 @@ printf '%s' "$REQ" | jq -e --arg ip "$IP" '
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+
+if [ "$KIND" = binary ]; then
+  SOURCE=$SHARE/$BINARY_PATH
+  STAGED=$STATE/rootfs
+  [ -d "$SOURCE" ] && [ ! -L "$SOURCE" ] || {
+    echo '{"state":"failed","message":"binary target is not a regular directory"}'; cleanup_resources; exit 2;
+  }
+  if find "$SOURCE" -type l -print -quit | grep -q .; then
+    echo '{"state":"failed","message":"binary payload symlinks are not allowed"}'; cleanup_resources; exit 2
+  fi
+  if find "$SOURCE" ! -type d ! -type f -print -quit | grep -q .; then
+    echo '{"state":"failed","message":"binary payload contains an unsupported file type"}'; cleanup_resources; exit 2
+  fi
+  mkdir -p "$STAGED"
+  cp -a "$SOURCE/." "$STAGED/"
+  [ -f "$STAGED/$ENTRYPOINT" ] && [ ! -L "$STAGED/$ENTRYPOINT" ] || {
+    echo '{"state":"failed","message":"binary entrypoint is not a regular file"}'; cleanup_resources; exit 2;
+  }
+  [ -d "$STAGED$BINARY_CWD" ] && [ ! -L "$STAGED$BINARY_CWD" ] || {
+    echo '{"state":"failed","message":"binary working directory is not a directory"}'; cleanup_resources; exit 2;
+  }
+  chmod 0755 "$STAGED/$ENTRYPOINT"
+fi
 
 # A stable unprivileged identity exists even when the image config names
 # its own uid; ownership and audit records use this principal uid.
@@ -1515,21 +1562,24 @@ ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print ad
 
 rc-service containerd start >/dev/null 2>&1 || true
 for _ in $(seq 1 50); do [ -S /run/containerd/containerd.sock ] && break; sleep 0.1; done
-set +e
-IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" 2>&1)
-IMPORT_CODE=$?
-set -e
-printf '%s\n' "$IMPORT_OUTPUT" >> "$STATE/current.log"
-[ "$IMPORT_CODE" -eq 0 ] || { echo '{"state":"failed","message":"container image import failed"}'; cleanup_resources; exit 2; }
-IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
-if [ -z "$IMAGE" ]; then
-  IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+IMAGE=
+if [ "$KIND" = container ]; then
+  set +e
+  IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" 2>&1)
+  IMPORT_CODE=$?
+  set -e
+  printf '%s\n' "$IMPORT_OUTPUT" >> "$STATE/current.log"
+  [ "$IMPORT_CODE" -eq 0 ] || { echo '{"state":"failed","message":"container image import failed"}'; cleanup_resources; exit 2; }
+  IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
+  if [ -z "$IMAGE" ]; then
+    IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+  fi
+  [ -n "$IMAGE" ] || {
+    echo '{"state":"failed","message":"container image import produced no image"}'
+    cleanup_resources
+    exit 2
+  }
 fi
-[ -n "$IMAGE" ] || {
-  echo '{"state":"failed","message":"container image import produced no image"}'
-  cleanup_resources
-  exit 2
-}
 
 # Root-namespace relays are unique per app. Host listeners terminate at
 # these relay ports; each relay's final target is the app's /32.
@@ -1551,13 +1601,18 @@ if [ -f "$STATE/relay.pids" ]; then
   done < "$STATE/relay.pids"
 fi
 
-printf '%s' "$REQ" | jq -r '.plan.env | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+printf '%s' "$REQ" | jq -r '(.plan.target.env // .plan.env) | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+if [ "$KIND" = binary ]; then
+  printf '%s' "$REQ" | jq -r '.plan.target.args[] | @base64' > "$STATE/args.txt"
+else
+  : > "$STATE/args.txt"
+fi
 # The lifecycle RPC is a one-shot vsock shell. Ignore its closing SIGHUP so
 # the pooled workload outlives that control connection, and let containerd
 # place the actual task (rather than this short-lived launcher) in the app's
 # cgroup. Runtime status is task-based, and the child records its own PID
 # after setsid so teardown never races a short-lived wrapper.
-export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM
+export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM KIND STAGED ENTRYPOINT BINARY_CWD
 nohup setsid sh -c '
   echo $$ > "$STATE/logcap.pid"
   while true; do
@@ -1597,7 +1652,16 @@ nohup setsid sh -c '
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
   set +e
-  ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  if [ "$KIND" = container ]; then
+    ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  else
+    set -- "$@" --rootfs --cwd "$BINARY_CWD" "$STAGED" "$CID" "/$ENTRYPOINT"
+    while IFS= read -r VALUE; do
+      DECODED=$(printf '%s' "$VALUE" | base64 -d)
+      set -- "$@" "$DECODED"
+    done < "$STATE/args.txt"
+    ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" >> "$STATE/current.log" 2>&1
+  fi
   CODE=$?
   echo "$CODE" > "$STATE/exit-code"
   if [ -f "$STATE/relay.pids" ]; then
@@ -1607,6 +1671,7 @@ nohup setsid sh -c '
   ip netns del "$NS" 2>/dev/null || true
   ip link del "$ROOT_IF" 2>/dev/null || true
   grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+  [ "$KIND" = binary ] && rm -rf "$STAGED"
   rm -f "$STATE/pid" "$STATE/relay.pids" "$STATE/logcap.pid"
   exit "$CODE"
 ' </dev/null >/dev/null 2>&1 &
@@ -1620,7 +1685,7 @@ for _ in $(seq 1 100); do
 done
 if [ -z "$TASK_PID" ]; then
   cleanup_resources
-  echo '{"state":"failed","message":"container task did not start"}'
+  echo '{"state":"failed","message":"runtime task did not start"}'
   exit 2
 fi
 if ! grep -qx "$TASK_PID" "$CG/cgroup.procs"; then
@@ -3267,6 +3332,24 @@ mod tests {
         for line in supervisor.lines().filter(|line| line.trim_start().starts_with("nft ")) {
             assert!(!line.contains("|| true"), "nft rule must fail closed: {line}");
         }
+    }
+
+    #[test]
+    fn runtime_supervisor_stages_binary_without_following_symlinks_and_reuses_hardening() {
+        let supervisor = RUNTIME_SUPERVISOR;
+        assert!(supervisor.contains("find \"$SOURCE\" -type l -print -quit"));
+        assert!(supervisor.contains("cp -a \"$SOURCE/.\" \"$STAGED/\""));
+        assert!(supervisor.contains("chmod 0755 \"$STAGED/$ENTRYPOINT\""));
+        assert!(supervisor.contains("--rootfs --cwd \"$BINARY_CWD\" \"$STAGED\" \"$CID\" \"/$ENTRYPOINT\""));
+        assert_eq!(
+            supervisor
+                .matches(
+                    "--user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP\" --seccomp --with-ns \"network:/var/run/netns/$NS\"",
+                )
+                .count(),
+            2,
+            "container and binary launchers must share the hardened ctr flags"
+        );
     }
 
     #[test]
