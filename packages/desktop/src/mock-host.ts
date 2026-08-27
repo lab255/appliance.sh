@@ -14,7 +14,7 @@ import type {
   LocalPreflightCheck,
   InstalledRuntimeApp,
 } from '@appliance.sh/app';
-import type { InstalledApp } from '@appliance.sh/sdk';
+import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@appliance.sh/sdk';
 
 // Browser-runnable stand-in for the Tauri host, so the desktop-only
 // pages (Local Runtime, deploy wizard, bootstrap) can be developed and
@@ -42,6 +42,8 @@ import type { InstalledApp } from '@appliance.sh/sdk';
 //   installed-apps-empty empty Installed Apps page
 //   unknown-publisher    unsigned app requiring the warning dialog
 //   install-from-file    file-picker installation path
+//   grant-prompt         install grant dialog with an optional mount
+//   entitlements-suggest-revoke Settings suggested-revocation list
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
 // lines) so spinners, disabled states, and progress UI are exercised
@@ -63,9 +65,12 @@ type Scenario =
   | 'catalogue-stale'
   | 'catalogue-loading'
   | 'installed-apps'
+  | 'installed-apps-before-grant'
   | 'installed-apps-empty'
   | 'unknown-publisher'
-  | 'install-from-file';
+  | 'install-from-file'
+  | 'grant-prompt'
+  | 'entitlements-suggest-revoke';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -84,9 +89,12 @@ export function mockHostEnabled(): boolean {
         scenario === 'user-mode' ||
         scenario === 'user-mode-no-vm' ||
         scenario === 'installed-apps' ||
+        scenario === 'installed-apps-before-grant' ||
         scenario === 'installed-apps-empty' ||
         scenario === 'unknown-publisher' ||
-        scenario === 'install-from-file'
+        scenario === 'install-from-file' ||
+        scenario === 'grant-prompt' ||
+        scenario === 'entitlements-suggest-revoke'
       ) {
         sessionStorage.setItem(APP_MODE_KEY, 'user');
         configureWorkspaceScenario(scenario === 'user-mode-no-vm' ? 'user-mode-no-vm' : 'user-mode');
@@ -112,9 +120,12 @@ function scenario(): Scenario {
     s === 'catalogue-stale' ||
     s === 'catalogue-loading' ||
     s === 'installed-apps' ||
+    s === 'installed-apps-before-grant' ||
     s === 'installed-apps-empty' ||
     s === 'unknown-publisher' ||
-    s === 'install-from-file'
+    s === 'install-from-file' ||
+    s === 'grant-prompt' ||
+    s === 'entitlements-suggest-revoke'
     ? s
     : 'ready';
 }
@@ -435,6 +446,59 @@ function mockInstalledApp(
   };
 }
 
+function mockEntitlement(app: InstalledApp): EntitlementRecord {
+  const approvedAt = '2026-07-01T09:30:00.000Z';
+  const grants: EntitlementRecord['grants'] = [
+    ...(app.controlsSummary.egressHosts[0]
+      ? [
+          {
+            id: `egress:${app.controlsSummary.egressHosts[0]}`,
+            control: 'egress-host' as const,
+            value: { host: app.controlsSummary.egressHosts[0], ports: [443] },
+            approvedAt,
+          },
+        ]
+      : []),
+    ...app.controlsSummary.publishedPorts.map((port) => ({
+      id: `port:${port.name}`,
+      control: 'published-port' as const,
+      value: port,
+      approvedAt,
+    })),
+  ];
+  return {
+    appId: app.appId,
+    version: app.version,
+    license: app.license,
+    grantedAt: approvedAt,
+    installerId: `desktop:mock-${app.appId}`,
+    state: 'installed',
+    grants,
+    usage: {},
+    signature: {
+      alg: 'ed25519',
+      keyId: `ed25519:sha256:${'1'.repeat(64)}`,
+      role: 'entitlement',
+      sig: 'mock-signature',
+    },
+  };
+}
+
+function mockInstalledView(
+  app: InstalledApp,
+  state: InstalledRuntimeApp['state'],
+  urls: string[]
+): InstalledRuntimeApp {
+  return {
+    app,
+    state,
+    urls,
+    ...(scenario() === 'installed-apps-before-grant'
+      ? {}
+      : { entitlement: { license: app.license, grantedAt: mockEntitlement(app).grantedAt } }),
+  };
+}
+
 function initialInstalledApps(): InstalledRuntimeApp[] {
   if (scenario() === 'installed-apps-empty') return [];
   if (scenario() === 'unknown-publisher') {
@@ -448,17 +512,16 @@ function initialInstalledApps(): InstalledRuntimeApp[] {
         }),
         state: 'stopped',
         urls: [],
+        entitlement: { license: 'MIT', grantedAt: '2026-07-01T09:30:00.000Z' },
       },
     ];
   }
   return [
-    { app: mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'), state: 'running', urls: ['http://127.0.0.1:8443'] },
-    { app: mockInstalledApp('dashboard', 'Dashboard', '0.9.1', 'Apache-2.0'), state: 'stopped', urls: [] },
-    {
-      app: mockInstalledApp('notes-sync', 'Notes+Sync', '2.4.0', 'AGPL-3.0'),
-      state: 'running',
-      urls: ['http://127.0.0.1:8445'],
-    },
+    mockInstalledView(mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'), 'running', ['http://127.0.0.1:8443']),
+    mockInstalledView(mockInstalledApp('dashboard', 'Dashboard', '0.9.1', 'Apache-2.0'), 'stopped', []),
+    mockInstalledView(mockInstalledApp('notes-sync', 'Notes+Sync', '2.4.0', 'AGPL-3.0'), 'running', [
+      'http://127.0.0.1:8445',
+    ]),
   ];
 }
 
@@ -468,6 +531,26 @@ export function createMockHost(): ConsoleHost {
   const catalogueFixture = signedCatalogueFixture();
   let catalogueCache: CatalogueFetchResult | null = null;
   let installedApps = initialInstalledApps();
+  let entitlementRecords = installedApps.map((item) => mockEntitlement(item.app));
+  let entitlementSuggestions: EntitlementSuggestion[] =
+    scenario() === 'entitlements-suggest-revoke'
+      ? [
+          {
+            appId: 'journal',
+            version: '1.2.0',
+            license: 'MIT',
+            grant: {
+              id: 'egress:api.example.com',
+              control: 'egress-host',
+              value: { host: 'api.example.com', ports: [443] },
+              approvedAt: '2026-07-01T09:30:00.000Z',
+            },
+            lastUsedAt: '2026-07-10T08:00:00.000Z',
+            reason: 'unused',
+            revokeCommand: 'appliance runtime entitlements revoke journal egress:api.example.com',
+          },
+        ]
+      : [];
   return {
     async getConfig(): Promise<HostConfig> {
       const state = readState();
@@ -552,13 +635,67 @@ export function createMockHost(): ConsoleHost {
       async installBundle(source, _target, options) {
         await sleep(120);
         const catalogueApp = source.startsWith('https://');
-        const next = catalogueApp
-          ? mockInstalledApp(source.split('://')[1]?.split('.')[0] ?? 'catalogue-app', 'Catalogue App', '1.0.0', 'MIT')
-          : mockInstalledApp('local-tool', 'Local Tool', '0.1.0', 'MIT', {
-              publisher: { name: 'Local developer', tier: 'unknown' },
-              source: 'file',
-              verification: { signature: 'unsigned' },
-            });
+        const next =
+          scenario() === 'grant-prompt'
+            ? mockInstalledApp('journal-import', 'Journal Import', '1.0.0', 'MIT', {
+                controlsSummary: {
+                  egressHosts: ['sync.example.com'],
+                  mounts: [{ name: 'documents', source: 'host', guest: '/documents', readOnly: true }],
+                  publishedPorts: [{ name: 'web', guest: 8080, protocol: 'tcp' }],
+                  resources: { cpus: 1, memoryMib: 512 },
+                  serviceCount: 1,
+                  serviceNames: [],
+                },
+              })
+            : catalogueApp
+              ? mockInstalledApp(
+                  source.split('://')[1]?.split('.')[0] ?? 'catalogue-app',
+                  'Catalogue App',
+                  '1.0.0',
+                  'MIT'
+                )
+              : mockInstalledApp('local-tool', 'Local Tool', '0.1.0', 'MIT', {
+                  publisher: { name: 'Local developer', tier: 'unknown' },
+                  source: 'file',
+                  verification: { signature: 'unsigned' },
+                });
+        if (scenario() === 'grant-prompt' && options?.grantIds === undefined) {
+          throw new Error(
+            `ENTITLEMENT_GRANT_REQUIRED:${JSON.stringify({
+              appId: next.appId,
+              version: next.version,
+              license: next.license,
+              upgrade: false,
+              requiredGrantIds: ['egress:sync.example.com', 'port:web', 'resources:runtime'],
+              grants: [
+                {
+                  id: 'egress:sync.example.com',
+                  control: 'egress-host',
+                  value: { host: 'sync.example.com', ports: [443] },
+                  approvedAt: new Date().toISOString(),
+                },
+                {
+                  id: 'mount:documents',
+                  control: 'mount',
+                  value: { name: 'documents', source: 'host', guest: '/documents', access: 'read-only' },
+                  approvedAt: new Date().toISOString(),
+                },
+                {
+                  id: 'port:web',
+                  control: 'published-port',
+                  value: { name: 'web', guest: 8080, protocol: 'tcp' },
+                  approvedAt: new Date().toISOString(),
+                },
+                {
+                  id: 'resources:runtime',
+                  control: 'resources',
+                  value: { cpus: 1, memoryMib: 512 },
+                  approvedAt: new Date().toISOString(),
+                },
+              ],
+            })}`
+          );
+        }
         if (next.publisher.tier === 'unknown' && !options?.acceptUnknownPublisher) {
           throw new Error(
             `UNKNOWN_PUBLISHER:${JSON.stringify({
@@ -577,7 +714,11 @@ export function createMockHost(): ConsoleHost {
         if (next.publisher.tier === 'unknown') next.lastWarnedAt = new Date().toISOString();
         installedApps = [
           ...installedApps.filter((item) => item.app.appId !== next.appId),
-          { app: next, state: 'stopped', urls: [] },
+          mockInstalledView(next, 'stopped', []),
+        ];
+        entitlementRecords = [
+          ...entitlementRecords.filter((record) => record.appId !== next.appId),
+          mockEntitlement(next),
         ];
         return next;
       },
@@ -607,6 +748,29 @@ export function createMockHost(): ConsoleHost {
       },
       async pickBundle() {
         return '/private/tmp/unsigned-local.appliance.zip';
+      },
+    },
+
+    entitlements: {
+      async list() {
+        return entitlementRecords;
+      },
+      async suggestions() {
+        return entitlementSuggestions;
+      },
+      async revoke(appId, grantId) {
+        entitlementSuggestions = entitlementSuggestions.filter(
+          (suggestion) => suggestion.appId !== appId || suggestion.grant.id !== grantId
+        );
+        entitlementRecords = entitlementRecords.map((record) =>
+          record.appId === appId
+            ? {
+                ...record,
+                grants: record.grants.filter((grant) => grant.id !== grantId),
+                usage: Object.fromEntries(Object.entries(record.usage).filter(([id]) => id !== grantId)),
+              }
+            : record
+        );
       },
     },
 

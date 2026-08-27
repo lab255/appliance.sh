@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { RefreshCw, Download, ArrowUpCircle } from 'lucide-react';
+import { RefreshCw, Download, ArrowUpCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
 import { KeyValueList } from '@/components/ui/key-value-list';
@@ -13,6 +13,7 @@ import type { AvailableUpdate, UpdateProgress } from '@/lib/host';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/use-app-mode';
 import type { AppMode } from '@/lib/host';
+import type { EntitlementSuggestion } from '@appliance.sh/sdk';
 
 // ⑤ Settings — slimmed to Updates · About · Preferences (docs/desktop-ia.md
 // §3 / move-map 4b). Cluster CRUD and the cloud-lifecycle panels moved to ②
@@ -39,6 +40,8 @@ export function SettingsPage() {
 
       {canReplaySetup ? <PreferencesSection /> : null}
 
+      {host.entitlements ? <EntitlementsSection /> : null}
+
       <section aria-labelledby="about-heading" className="px-1">
         <h2 id="about-heading" className="mb-2 text-sm font-semibold">
           About
@@ -52,6 +55,90 @@ export function SettingsPage() {
         />
       </section>
     </PageShell>
+  );
+}
+
+function EntitlementsSection() {
+  const host = useHost();
+  const [suggestions, setSuggestions] = React.useState<EntitlementSuggestion[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const refresh = React.useCallback(async () => {
+    if (!host.entitlements) return;
+    setLoading(true);
+    try {
+      setSuggestions(await host.entitlements.suggestions(30));
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Entitlement suggestions could not be loaded.');
+    } finally {
+      setLoading(false);
+    }
+  }, [host.entitlements]);
+
+  React.useEffect(() => void refresh(), [refresh]);
+
+  const revoke = async (suggestion: EntitlementSuggestion) => {
+    if (!host.entitlements) return;
+    setBusy(`${suggestion.appId}:${suggestion.grant.id}`);
+    try {
+      await host.entitlements.revoke(suggestion.appId, suggestion.grant.id);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The grant could not be revoked.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Entitlements"
+      description="Review controls that have not been used for at least 30 days. Suggestions never revoke automatically."
+    >
+      {error ? (
+        <p className="mb-3 text-xs text-[var(--color-destructive-foreground)]" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {loading ? (
+        <p className="text-xs text-[var(--color-muted-foreground)]" role="status">
+          Checking grant usage…
+        </p>
+      ) : suggestions.length === 0 ? (
+        <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
+          <ShieldCheck className="h-4 w-4 text-[var(--color-success-foreground)]" aria-hidden />
+          No grants are suggested for revocation.
+        </div>
+      ) : (
+        <ul className="divide-y divide-[var(--color-border)]" aria-label="Suggested entitlement revocations">
+          {suggestions.map((suggestion) => {
+            const key = `${suggestion.appId}:${suggestion.grant.id}`;
+            return (
+              <li key={key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{suggestion.appId}</div>
+                  <div className="mt-0.5 truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+                    {suggestion.grant.id} · last used {suggestion.lastUsedAt?.slice(0, 10) ?? 'never'}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy === key}
+                  onClick={() => void revoke(suggestion)}
+                  aria-label={`Revoke ${suggestion.grant.id} from ${suggestion.appId}`}
+                >
+                  {busy === key ? 'Revoking…' : 'Revoke'}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </SectionCard>
   );
 }
 

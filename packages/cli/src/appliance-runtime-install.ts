@@ -630,7 +630,10 @@ export async function runRuntimeInstallCommand(args: string[]): Promise<void> {
       acceptUnknownPublisher: args.includes('--accept-unknown-publisher'),
       confirmUnknownPublisher: promptForUnknownPublisher,
       grantAll: args.includes('--grant-all'),
-      approvedGrantIds: args.includes('--grant-id') ? optionValues(args, '--grant-id') : undefined,
+      approvedGrantIds:
+        args.includes('--grant-selection') || args.includes('--grant-id')
+          ? optionValues(args, '--grant-id')
+          : undefined,
       confirmEntitlementGrants: promptForEntitlementGrants,
       installer: args.includes('--desktop') ? 'desktop' : 'cli',
     });
