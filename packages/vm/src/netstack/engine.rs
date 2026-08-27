@@ -751,9 +751,122 @@ fn seed() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Read, Write};
+    use std::io::{self, Read, Write};
     use std::net::{Shutdown, TcpListener, TcpStream};
+    use std::os::fd::AsRawFd;
     use std::time::Duration;
+
+    fn remaining_poll_ms(deadline: Instant, context: &str) -> i32 {
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .unwrap_or_else(|| panic!("{context} timed out"));
+        remaining.as_millis().clamp(1, i32::MAX as u128) as i32
+    }
+
+    fn wait_readable_until(fd: RawFd, deadline: Instant, context: &str) {
+        wait_readable(fd, remaining_poll_ms(deadline, context));
+    }
+
+    fn wait_writable_until(fd: RawFd, deadline: Instant, context: &str) {
+        loop {
+            let mut pfd = libc::pollfd {
+                fd,
+                events: libc::POLLOUT,
+                revents: 0,
+            };
+            let rc = unsafe { libc::poll(&mut pfd, 1, remaining_poll_ms(deadline, context)) };
+            if rc > 0 {
+                assert_eq!(pfd.revents & libc::POLLNVAL, 0, "{context}: invalid fd");
+                return;
+            }
+            if rc == 0 {
+                panic!("{context} timed out");
+            }
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                panic!("{context}: poll failed: {error}");
+            }
+        }
+    }
+
+    fn accept_until(listener: &TcpListener, deadline: Instant, context: &str) -> TcpStream {
+        loop {
+            match listener.accept() {
+                Ok((stream, _)) => return stream,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    wait_readable_until(listener.as_raw_fd(), deadline, context);
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => panic!("{context}: accept failed: {error}"),
+            }
+        }
+    }
+
+    fn connect_until(address: &SocketAddr, deadline: Instant, context: &str) -> TcpStream {
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .unwrap_or_else(|| panic!("{context} timed out"));
+            match TcpStream::connect_timeout(address, remaining) {
+                Ok(stream) => return stream,
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock
+                    ) => {}
+                Err(error) => panic!("{context}: connect failed: {error}"),
+            }
+        }
+    }
+
+    fn write_all_until(stream: &mut TcpStream, mut bytes: &[u8], deadline: Instant, context: &str) {
+        while !bytes.is_empty() {
+            match stream.write(bytes) {
+                Ok(0) => panic!("{context}: socket closed while writing"),
+                Ok(count) => bytes = &bytes[count..],
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    wait_writable_until(stream.as_raw_fd(), deadline, context);
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => panic!("{context}: write failed: {error}"),
+            }
+        }
+    }
+
+    fn read_to_end_until(
+        stream: &mut TcpStream,
+        output: &mut Vec<u8>,
+        deadline: Instant,
+        context: &str,
+    ) {
+        loop {
+            let mut buffer = [0u8; 1024];
+            match stream.read(&mut buffer) {
+                Ok(0) => return,
+                Ok(count) => output.extend_from_slice(&buffer[..count]),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    wait_readable_until(stream.as_raw_fd(), deadline, context);
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => panic!("{context}: read failed: {error}"),
+            }
+        }
+    }
+
+    fn wait_until_blocking(stream: &TcpStream, deadline: Instant) {
+        loop {
+            let flags = unsafe { libc::fcntl(stream.as_raw_fd(), libc::F_GETFL) };
+            assert_ne!(flags, -1, "inspect accepted socket flags");
+            if flags & libc::O_NONBLOCK == 0 {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "bridge pump did not normalize its accepted socket"
+            );
+            std::thread::yield_now();
+        }
+    }
 
     #[test]
     fn principal_inbound_waits_for_request_and_preserves_half_close_response() {
@@ -890,26 +1003,23 @@ mod tests {
         let onward_addr = onward_listener.local_addr().unwrap();
         let onward = std::thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_secs(5);
-            let mut stream = loop {
-                match onward_listener.accept() {
-                    Ok((stream, _)) => break stream,
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        assert!(Instant::now() < deadline, "relay never dialed upstream");
-                        std::thread::sleep(Duration::from_millis(1));
-                    }
-                    Err(error) => panic!("relay upstream accept failed: {error}"),
-                }
-            };
+            let mut stream = accept_until(&onward_listener, deadline, "relay upstream accept");
+            stream.set_nonblocking(true).unwrap();
             let mut request = Vec::new();
             while !request.ends_with(b"\r\n\r\n") {
                 let mut buf = [0u8; 1024];
-                let count = stream.read(&mut buf).unwrap();
-                assert_ne!(count, 0, "relay upstream closed before the request");
-                request.extend_from_slice(&buf[..count]);
+                match stream.read(&mut buf) {
+                    Ok(0) => panic!("relay upstream closed before the request"),
+                    Ok(count) => request.extend_from_slice(&buf[..count]),
+                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                        wait_readable_until(stream.as_raw_fd(), deadline, "relay request");
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                    Err(error) => panic!("relay request read failed: {error}"),
+                }
             }
             assert_eq!(request, REQUEST);
-            std::thread::sleep(Duration::from_millis(25));
-            stream.write_all(RESPONSE).unwrap();
+            write_all_until(&mut stream, RESPONSE, deadline, "relay response");
             stream.shutdown(Shutdown::Write).unwrap();
         });
 
@@ -975,11 +1085,26 @@ mod tests {
                         request.extend_from_slice(&buf[..count]);
                     }
                     if response.is_none() && request.ends_with(b"\r\n\r\n") {
-                        let mut upstream = TcpStream::connect(onward_addr).unwrap();
-                        upstream.write_all(&request).unwrap();
+                        // `onward_listener` was bound before this guest thread
+                        // was spawned, so the relay dial cannot race its bind.
+                        let deadline = Instant::now() + Duration::from_secs(5);
+                        let mut upstream =
+                            connect_until(&onward_addr, deadline, "guest relay onward dial");
+                        upstream.set_nonblocking(true).unwrap();
+                        write_all_until(
+                            &mut upstream,
+                            &request,
+                            deadline,
+                            "guest relay onward request",
+                        );
                         upstream.shutdown(Shutdown::Write).unwrap();
                         let mut reply = Vec::new();
-                        upstream.read_to_end(&mut reply).unwrap();
+                        read_to_end_until(
+                            &mut upstream,
+                            &mut reply,
+                            deadline,
+                            "guest relay onward response",
+                        );
                         response = Some(reply);
                     }
                     if !response_sent && socket.can_send() {
@@ -1007,22 +1132,29 @@ mod tests {
         });
 
         // The production Runtime listener is nonblocking so it can service
-        // unbinds. Force the accepted stream into that exact mode and let the
-        // pump start before curl-like request bytes arrive.
+        // unbinds. Force its accepted stream into that exact mode.
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
-        client
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        let (accepted, _) = listener.accept().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut client = connect_until(
+            &listener.local_addr().unwrap(),
+            deadline,
+            "host client connect",
+        );
+        client.set_nonblocking(true).unwrap();
+        let accepted = accept_until(&listener, deadline, "runtime listener accept");
         accepted.set_nonblocking(true).unwrap();
+        let accepted_flags = accepted.try_clone().unwrap();
         let bridge = netstack.connect(RELAY_PORT).unwrap();
         let pump = std::thread::spawn(move || super::super::bridge_pump(bridge, accepted));
 
-        std::thread::sleep(Duration::from_millis(10));
-        client.write_all(REQUEST).unwrap();
+        // The clone shares file status flags with the pump's stream. This is
+        // a readiness handoff, not a timing sleep: request bytes are withheld
+        // until bridge_pump has changed the accepted stream to blocking mode.
+        wait_until_blocking(&accepted_flags, deadline);
+        write_all_until(&mut client, REQUEST, deadline, "host request");
         let mut response = Vec::new();
-        client.read_to_end(&mut response).unwrap();
+        read_to_end_until(&mut client, &mut response, deadline, "host response");
         drop(client);
 
         pump.join().unwrap();
