@@ -10,3 +10,5 @@ export * from './invite';
 export * from './build';
 export * from './workloads';
 export * from './stack';
+export * from './catalogue';
+export * from './catalogue-trust';
