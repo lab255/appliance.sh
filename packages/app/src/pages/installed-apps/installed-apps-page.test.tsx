@@ -23,6 +23,7 @@ function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntime
         publishedPorts: [{ name: 'web', guest: 8080, protocol: 'tcp' }],
         resources: {},
         serviceCount: 2,
+        serviceNames: ['web', 'sync'],
       },
     },
     state: 'running',
@@ -37,17 +38,23 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('Notes+Sync');
     expect(html).toContain('v2.4.0');
     expect(html).toContain('AGPL-3.0');
-    expect(html).toContain('granted 2026-09-02');
+    expect(html).toContain('installed 2026-09-02');
     expect(html).toContain('Running');
     expect(html).toContain('2 services');
+    expect(html).toContain('web, sync');
+    expect(html).toContain('egress: 1 host');
+    expect(html).toContain('aria-label="Open Notes+Sync"');
+    expect(html).toContain('aria-label="Stop Notes+Sync"');
     expect(html).toContain('Open');
     expect(html).toContain('Stop');
   });
 
   it('renders installed-apps-empty', () => {
-    const html = renderToStaticMarkup(<InstalledAppsEmptyState />);
+    const html = renderToStaticMarkup(<InstalledAppsEmptyState onInstall={() => {}} />);
     expect(html).toContain('No apps installed in this workspace');
-    expect(html).toContain('install a local .appliance.zip bundle');
+    expect(html).toContain('font-mono');
+    expect(html).toContain('.appliance.zip');
+    expect(html).toContain('Install from file');
   });
 
   it('renders unknown-publisher with separate requested controls', () => {
@@ -76,5 +83,7 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('Requested controls');
     expect(html).toContain('Open once');
     expect(html).toContain('Open and remember for 30 days');
+    expect(html.match(/<button/g)?.length).toBe(3);
+    expect(html.match(/bg-\[var\(--color-primary\)\]/g)?.length).toBe(1);
   });
 });

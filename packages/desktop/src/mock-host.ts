@@ -429,6 +429,7 @@ function mockInstalledApp(
       publishedPorts: [{ name: 'web', guest: 8080, protocol: 'tcp' }],
       resources: { cpus: 1, memoryMib: 512 },
       serviceCount: appId === 'notes-sync' ? 2 : 1,
+      serviceNames: appId === 'notes-sync' ? ['web', 'sync'] : [],
     },
     ...overrides,
   };

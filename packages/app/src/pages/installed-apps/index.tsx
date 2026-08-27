@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router';
 import type { InstalledRuntimeApp } from '@/lib/host';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatusPill } from '@/components/ui/status-pill';
+import { Tag } from '@/components/ui/tag';
 import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
 import {
   parseUnknownPublisherError,
@@ -30,7 +32,7 @@ function promptForInstalledApp(item: InstalledRuntimeApp): UnknownPublisherPromp
     license: app.license,
     source: app.source,
     digest: app.digest,
-    signature: app.verification.signature === 'unsigned' ? 'unsigned' : 'invalid',
+    signature: app.verification.signature,
     publisher: app.publisher.name,
     controlsSummary: app.controlsSummary,
   };
@@ -87,26 +89,35 @@ export function InstalledAppCard({
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
         <span className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 text-micro font-medium">{app.license}</span>
-        <span>granted {app.installedAt.slice(0, 10)}</span>
+        <span>installed {app.installedAt.slice(0, 10)}</span>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {app.controlsSummary.serviceCount > 1 ? (
-          <StatusPill tone="info" label={`${app.controlsSummary.serviceCount} services`} dot={false} />
+          <Tag
+            emphasis="info"
+            title={app.controlsSummary.serviceNames.length ? app.controlsSummary.serviceNames.join(', ') : undefined}
+          >
+            {app.controlsSummary.serviceCount} services
+            {app.controlsSummary.serviceNames.length ? `: ${app.controlsSummary.serviceNames.join(', ')}` : ''}
+          </Tag>
         ) : null}
         <StatusPill tone="sandbox" label="sandboxed" dot={false} />
         <span className="font-mono text-micro text-[var(--color-muted-foreground)]">
-          egress: {app.controlsSummary.egressHosts.length ? `${app.controlsSummary.egressHosts.length} hosts` : 'none'}
+          egress:{' '}
+          {app.controlsSummary.egressHosts.length
+            ? `${app.controlsSummary.egressHosts.length} host${app.controlsSummary.egressHosts.length === 1 ? '' : 's'}`
+            : 'none'}
         </span>
       </div>
       <p className="mt-3 flex-1 text-xs text-[var(--color-muted-foreground)]">
         {app.publisher.tier === 'unknown' ? 'Unknown Publisher' : app.publisher.name}
       </p>
       <div className="mt-4 flex items-center gap-2">
-        <Button size="sm" disabled={busy} onClick={onOpen}>
+        <Button size="sm" disabled={busy} onClick={onOpen} aria-label={`Open ${app.name}`}>
           Open
         </Button>
         {item.state === 'running' ? (
-          <Button variant="outline" size="sm" disabled={busy} onClick={onStop}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={onStop} aria-label={`Stop ${app.name}`}>
             Stop
           </Button>
         ) : null}
@@ -115,22 +126,40 @@ export function InstalledAppCard({
   );
 }
 
-export function InstalledAppsEmptyState({ filtered = false }: { filtered?: boolean }) {
+export function InstalledAppsEmptyState({
+  filtered = false,
+  onInstall,
+}: {
+  filtered?: boolean;
+  onInstall?: () => void;
+}) {
   return (
-    <SectionCard>
-      <div className="flex min-h-52 flex-col items-center justify-center text-center">
-        <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-muted-foreground)]">
-          <Grid2X2 className="h-5 w-5" aria-hidden />
-        </span>
-        <h2 className="text-sm font-semibold">
-          {filtered ? 'No installed apps match' : 'No apps installed in this workspace'}
-        </h2>
-        <p className="mt-1 max-w-md text-xs leading-4 text-[var(--color-muted-foreground)]">
-          Browse the verified catalogue or install a local .appliance.zip bundle.
-        </p>
-      </div>
-    </SectionCard>
+    <EmptyState
+      icon={Grid2X2}
+      title={filtered ? 'No installed apps match' : 'No apps installed in this workspace'}
+      description={
+        filtered ? (
+          'Try a different search.'
+        ) : (
+          <>
+            Browse the verified catalogue or install a local <code className="font-mono">.appliance.zip</code> bundle.
+          </>
+        )
+      }
+      action={
+        !filtered && onInstall ? (
+          <Button size="sm" onClick={onInstall}>
+            <FolderOpen className="h-4 w-4" aria-hidden /> Install from file
+          </Button>
+        ) : undefined
+      }
+    />
   );
+}
+
+interface Notice {
+  title: string;
+  message: string;
 }
 
 export function InstalledAppsPage() {
@@ -142,7 +171,8 @@ export function InstalledAppsPage() {
   const [apps, setApps] = React.useState<InstalledRuntimeApp[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [notice, setNotice] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<Notice | null>(null);
+  const [announcement, setAnnouncement] = React.useState('');
   const [query, setQuery] = React.useState('');
   const [pending, setPending] = React.useState<PendingWarning | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -174,7 +204,10 @@ export function InstalledAppsPage() {
     try {
       const installed = await host.installedApps.installBundle(source, target, { acceptUnknownPublisher: accepted });
       setPending(null);
-      setNotice(`${installed.name} ${installed.version} was installed for ${workspaceName}.`);
+      setNotice({
+        title: 'Installed',
+        message: `${installed.name} ${installed.version} was installed for ${workspaceName}.`,
+      });
       await refresh();
     } catch (cause) {
       const prompt = parseUnknownPublisherError(cause);
@@ -203,8 +236,14 @@ export function InstalledAppsPage() {
         rememberUnknownPublisher: remember,
       });
       setPending(null);
+      setAnnouncement(`${item.app.name} is running.`);
       if (result.urls[0]) await host.openExternal(result.urls[0]);
-      else setNotice(`${item.app.name} started, but it does not publish a browser URL.`);
+      else {
+        setNotice({
+          title: 'App started',
+          message: `${item.app.name} started, but it does not publish a browser URL.`,
+        });
+      }
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not open ${item.app.name}.`);
@@ -218,6 +257,7 @@ export function InstalledAppsPage() {
     setBusy(item.app.appId);
     try {
       await host.installedApps.stop(item.app.appId);
+      setAnnouncement(`${item.app.name} is stopped.`);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Could not stop ${item.app.name}.`);
@@ -252,10 +292,13 @@ export function InstalledAppsPage() {
       />
 
       {notice ? (
-        <Banner tone="success" title="Installed" className="mb-4" onDismiss={() => setNotice(null)}>
-          {notice}
+        <Banner tone="success" title={notice.title} className="mb-4" onDismiss={() => setNotice(null)}>
+          {notice.message}
         </Banner>
       ) : null}
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
       {error ? (
         <Banner tone="error" title="Installed Apps error" className="mb-4" onDismiss={() => setError(null)}>
           {error}
@@ -285,7 +328,7 @@ export function InstalledAppsPage() {
           </p>
         </SectionCard>
       ) : visible.length === 0 ? (
-        <InstalledAppsEmptyState filtered={apps.length > 0} />
+        <InstalledAppsEmptyState filtered={apps.length > 0} onInstall={() => void pickAndInstall()} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => (

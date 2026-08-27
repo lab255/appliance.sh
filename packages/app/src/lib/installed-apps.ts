@@ -7,7 +7,7 @@ export interface UnknownPublisherPrompt {
   license: string;
   source: string;
   digest: string;
-  signature: 'unsigned' | 'invalid';
+  signature: 'valid' | 'unsigned' | 'invalid';
   publisher: string;
   controlsSummary: InstalledApp['controlsSummary'];
 }

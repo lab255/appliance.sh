@@ -19,24 +19,52 @@ export function UnknownPublisherDialog({
   onRemember?: () => void;
 }) {
   const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  const invokingElementRef = React.useRef<HTMLElement | null>(null);
 
   React.useEffect(() => {
+    invokingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     cancelRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onCancel();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [busy, onCancel]);
+    return () => invokingElementRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && !busy) {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [
+      ...(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) ?? []),
+    ];
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) {
+      event.preventDefault();
+      return;
+    }
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="unknown-publisher-title"
         aria-describedby="unknown-publisher-description"
         className="w-full max-w-lg rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-surface-overlay)] p-5 shadow-xl"
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--color-warning-border)] bg-[var(--color-warning-background)] text-[var(--color-warning-foreground)]">
@@ -60,7 +88,13 @@ export function UnknownPublisherDialog({
           <dt className="text-[var(--color-muted-foreground)]">License</dt>
           <dd>{prompt.license}</dd>
           <dt className="text-[var(--color-muted-foreground)]">Signature</dt>
-          <dd>{prompt.signature === 'unsigned' ? 'Unsigned' : 'Signature could not be verified'}</dd>
+          <dd>
+            {prompt.signature === 'unsigned'
+              ? 'Unsigned'
+              : prompt.signature === 'valid'
+                ? 'Valid signature; publisher evidence unavailable'
+                : 'Signature could not be verified'}
+          </dd>
           <dt className="text-[var(--color-muted-foreground)]">Digest</dt>
           <dd className="truncate font-mono" title={prompt.digest}>
             {prompt.digest.slice(0, 27)}…
@@ -90,7 +124,7 @@ export function UnknownPublisherDialog({
             {busy ? 'Checking…' : action === 'open' ? 'Open once' : 'Install this bundle'}
           </Button>
           {action === 'open' && onRemember ? (
-            <Button size="sm" disabled={busy} onClick={onRemember}>
+            <Button variant="outline" size="sm" disabled={busy} onClick={onRemember}>
               Open and remember for 30 days
             </Button>
           ) : null}
