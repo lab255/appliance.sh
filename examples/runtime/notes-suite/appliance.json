@@ -15,6 +15,9 @@
     "port": "http",
     "path": "/"
   },
+  "network": {
+    "egress": []
+  },
   "services": {
     "web": {
       "type": "container",
