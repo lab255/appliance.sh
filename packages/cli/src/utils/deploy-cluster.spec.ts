@@ -3,6 +3,7 @@ import { selectDeployCluster } from './cluster-registry.js';
 
 describe('selectDeployCluster', () => {
   it('preserves the deploy profile cascade', () => {
+    expect(selectDeployCluster({ command: 'deploy' })).toBeUndefined();
     expect(
       selectDeployCluster({
         command: 'deploy',

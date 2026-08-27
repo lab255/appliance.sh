@@ -62,8 +62,8 @@ async function maybeDeployStack(opts: {
 registerManifestOptions(program)
   .description(
     command === 'install'
-      ? 'install the linked (or named) project/environment to a selected cluster (defaults to local)'
-      : 'deploy the linked (or named) project/environment using the selected/active cluster (usually cloud) — or the whole stack in a stack folder'
+      ? 'install the linked (or named) project to the local VM cluster (--cluster <name> to override) — or the whole stack in a stack folder'
+      : 'deploy the linked (or named) project to the active cluster (see `appliance cluster`; usually cloud)'
   )
   .argument('[project]', 'project name (defaults to the linked project, then to the manifest `name`)')
   .argument('[environment]', 'environment name (defaults to the linked environment)')

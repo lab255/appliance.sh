@@ -81,11 +81,12 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     load: () => import('./appliance-configure.js'),
   },
   deploy: {
-    description: 'deploy the linked (or named) target using the selected/active cluster (usually cloud)',
+    description: 'deploy the linked (or named) project to the active cluster (see `appliance cluster`; usually cloud)',
     load: () => import('./appliance-deploy.js'),
   },
   install: {
-    description: 'install the linked (or named) target to a selected cluster (defaults to local)',
+    description:
+      'install the linked (or named) project to the local VM cluster (--cluster <name> to override) — or the whole stack in a stack folder',
     load: () => import('./appliance-deploy.js'),
   },
   deployment: {
@@ -253,6 +254,7 @@ const BUILDER_VERBS: Record<string, string> = {
   down: 'down',
   env: 'env',
   init: 'init',
+  install: 'install',
   link: 'link',
   logs: 'logs',
   manifest: 'manifest',
@@ -297,10 +299,6 @@ const HELP_ONLY: Record<string, string> = {
 // "Other" so a newly registered command is never silently hidden.
 const COMMAND_GROUPS: Array<{ title: string; names: string[] }> = [
   {
-    title: 'Runtime',
-    names: ['runtime', 'run', 'uninstall', 'ps', 'stop', 'search', 'entitlements'],
-  },
-  {
     title: 'Builder',
     names: [
       'builder',
@@ -323,7 +321,7 @@ const COMMAND_GROUPS: Array<{ title: string; names: string[] }> = [
     ],
   },
   {
-    title: 'Cluster & Machine',
+    title: 'Cluster & machine',
     names: [
       'up',
       'down',
@@ -341,6 +339,10 @@ const COMMAND_GROUPS: Array<{ title: string; names: string[] }> = [
   },
   { title: 'Agents', names: ['agent', 'mcp'] },
   { title: 'Account', names: ['login', 'whoami', 'app', 'setup', 'list'] },
+  {
+    title: 'Runtime',
+    names: ['runtime', 'run', 'uninstall', 'ps', 'stop', 'search', 'entitlements'],
+  },
 ];
 
 function showHelp(): void {
@@ -433,7 +435,10 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       const { runRuntimeStub } = await import('./appliance-runtime-stub.js');
-      runRuntimeStub(verb);
+      runRuntimeStub(
+        verb,
+        args.slice(2).some((arg) => arg === '--help' || arg === '-h')
+      );
     }
     const target = BUILDER_VERBS[verb];
     if (!target) {
