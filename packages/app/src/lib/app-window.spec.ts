@@ -10,8 +10,10 @@ import {
 
 describe('app window contract', () => {
   it('derives the stable per-app label and approved title', () => {
-    expect(appWindowLabel('journal')).toBe('app-journal');
-    expect(appWindowLabel('Notes.Sync')).toBe('app-notes-sync');
+    expect(appWindowLabel('journal')).toBe('app-journal-c1875f78');
+    expect(appWindowLabel('Notes.Sync')).toBe('app-notes-sync-cdcfbd0f');
+    expect(appWindowLabel('a.b')).toBe('app-a-b-108bf50c');
+    expect(appWindowLabel('a-b')).toBe('app-a-b-2a89df63');
     expect(appWindowTitle('Journal')).toBe('Journal — Appliance');
   });
 

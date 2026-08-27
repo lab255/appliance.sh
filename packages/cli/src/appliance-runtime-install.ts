@@ -29,6 +29,7 @@ import {
   writeInstalledApps,
 } from './utils/installed-apps.js';
 import { readRuntimeRegistry, runtimeRoot } from './utils/runtime-registry.js';
+import { describeRuntimeApp } from './appliance-runtime-open.js';
 
 const DEFAULT_CATALOGUE_ORIGIN = 'https://www.appliance.sh';
 const MAX_BUNDLE_BYTES = 2 * 1024 ** 3;
@@ -636,7 +637,18 @@ export function runRuntimeListCommand(args: string[]): void {
     ? listInstalledTargets(root).flatMap((group) => group.apps.map((app) => ({ target: group.target, app })))
     : readInstalledApps(target, root).map((app) => ({ target, app }));
   if (args.includes('--json')) {
-    console.log(JSON.stringify(rows));
+    const registry = readRuntimeRegistry();
+    console.log(
+      JSON.stringify(
+        rows.map((row) => ({
+          ...row,
+          descriptor: describeRuntimeApp(row.app.appId, row.target, {
+            installed: row.app,
+            record: registry.find((record) => record.appId === row.app.appId),
+          }),
+        }))
+      )
+    );
     return;
   }
   console.log(formatInstalledAppsTable(rows));

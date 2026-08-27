@@ -61,6 +61,16 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).not.toContain('aria-label="Open Notes+Sync"');
   });
 
+  it('announces opening and stopping busy actions', () => {
+    const opening = renderToStaticMarkup(<InstalledAppCard item={fixture()} busy busyAction="opening" />);
+    expect(opening).toContain('Opening…');
+    expect(opening).toContain('aria-busy="true"');
+
+    const stopping = renderToStaticMarkup(<InstalledAppCard item={fixture()} busy busyAction="stopping" />);
+    expect(stopping).toContain('Stopping…');
+    expect(stopping).toContain('aria-busy="true"');
+  });
+
   it('renders installed-apps-empty', () => {
     const html = renderToStaticMarkup(<InstalledAppsEmptyState onInstall={() => {}} />);
     expect(html).toContain('No apps installed in this workspace');

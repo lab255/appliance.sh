@@ -112,7 +112,11 @@ export interface InstalledAppsHost {
     target: string,
     options?: { acceptUnknownPublisher?: boolean; rememberUnknownPublisher?: boolean }
   ): Promise<RuntimeOpenResult>;
-  openWindow(app: string, target: string): Promise<import('./app-window').RuntimeAppWindowDescriptor>;
+  openWindow(
+    app: string,
+    target: string,
+    options?: import('./app-window').AppOpenMetricContext
+  ): Promise<import('./app-window').RuntimeAppWindowDescriptor>;
   windowStatus(app: string, target: string): Promise<import('./app-window').RuntimeAppWindowDescriptor>;
   stop(app: string): Promise<void>;
   pickBundle(): Promise<string | null>;

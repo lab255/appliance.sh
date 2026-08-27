@@ -22,6 +22,12 @@ export interface RuntimeOpenDescriptor {
   url?: string;
   hostPort?: number;
   egressHostCount: number;
+  openMetric?: RuntimeOpenMetricContext;
+}
+
+export interface RuntimeOpenMetricContext {
+  kind: 'cold' | 'warm' | 'reopen';
+  startedAtMs: number;
 }
 
 interface DesktopIpcRegistration {
@@ -93,6 +99,14 @@ export async function routeRuntimeOpen(
   return 'browser';
 }
 
+export function runtimeOpenJson(descriptor: RuntimeOpenDescriptor, route: 'desktop' | 'browser') {
+  return {
+    descriptor,
+    route,
+    metrics: { appOpenTtv: descriptor.openMetric },
+  };
+}
+
 export async function sendRuntimeOpenToDesktop(
   descriptor: RuntimeOpenDescriptor,
   file = desktopIpcFile()
@@ -139,14 +153,16 @@ export async function sendRuntimeOpenToDesktop(
 
 export async function runRuntimeOpen(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: appliance runtime open <app> [--target <workspace>] [--print]');
+    console.log('Usage: appliance runtime open <app> [--target <workspace>] [--print] [--json]');
     console.log('Opens the dedicated Appliance app window when Desktop is running, otherwise the default browser.');
     return;
   }
   const selector = firstPositional(args, ['--target']);
   if (!selector) throw new Error('Usage: appliance runtime open <app>');
   const target = currentWorkspaceTarget(optionValue(args, '--target'));
+  const startedAtMs = Date.now();
   let descriptor = describeRuntimeApp(selector, target);
+  const kind = descriptor.state === 'running' || descriptor.state === 'starting' ? 'warm' : 'cold';
 
   if (args.includes('--describe')) {
     console.log(JSON.stringify(descriptor));
@@ -172,15 +188,20 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
   if (!descriptor.url || descriptor.hostPort == null) {
     throw new Error(`'${descriptor.name}' did not publish its manifest UI port`);
   }
-  await waitForTcpPort(descriptor.hostPort, 8_000);
+  await waitForTcpPort(descriptor.hostPort, 15_000);
   if (args.includes('--print')) {
     console.log(descriptor.url);
     return;
   }
+  descriptor = { ...descriptor, openMetric: { kind, startedAtMs } };
   const routed = await routeRuntimeOpen(descriptor, {
     sendDesktop: sendRuntimeOpenToDesktop,
     openBrowser: openInBrowser,
   });
+  if (args.includes('--json')) {
+    console.log(JSON.stringify(runtimeOpenJson(descriptor, routed)));
+    return;
+  }
   console.log(
     chalk.dim(routed === 'desktop' ? `Opened ${descriptor.name} in Appliance Desktop` : `Opening ${descriptor.url}`)
   );

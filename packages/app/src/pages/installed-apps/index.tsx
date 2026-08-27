@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FolderOpen, Grid2X2, Search } from 'lucide-react';
+import { FolderOpen, Grid2X2, Loader2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import type { InstalledRuntimeApp } from '@/lib/host';
 import { Banner } from '@/components/ui/banner';
@@ -17,6 +17,7 @@ import {
   type UnknownPublisherPrompt,
 } from '@/lib/installed-apps';
 import { useHost } from '@/providers/host-provider';
+import { clearAppStopStart, recordAppStopStart } from '@/lib/app-window';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
 
 type PendingWarning =
@@ -41,12 +42,14 @@ function promptForInstalledApp(item: InstalledRuntimeApp): UnknownPublisherPromp
 export function InstalledAppCard({
   item,
   busy = false,
+  busyAction,
   onOpen = () => {},
   onStop = () => {},
   onLogs = () => {},
 }: {
   item: InstalledRuntimeApp;
   busy?: boolean;
+  busyAction?: 'opening' | 'stopping';
   onOpen?: () => void;
   onStop?: () => void;
   onLogs?: () => void;
@@ -118,15 +121,40 @@ export function InstalledAppCard({
       </p>
       <div className="mt-4 flex items-center gap-2">
         {item.ui.type === 'web' ? (
-          <Button size="sm" disabled={busy} onClick={onOpen} aria-label={`Open ${app.name}`}>
-            Open
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={onOpen}
+            aria-label={`Open ${app.name}`}
+            aria-busy={busy && busyAction === 'opening'}
+          >
+            {busy && busyAction === 'opening' ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Opening…
+              </>
+            ) : (
+              'Open'
+            )}
           </Button>
         ) : (
           <span className="font-mono text-micro text-[var(--color-muted-foreground)]">No UI</span>
         )}
         {item.state === 'running' ? (
-          <Button variant="outline" size="sm" disabled={busy} onClick={onStop} aria-label={`Stop ${app.name}`}>
-            Stop
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={onStop}
+            aria-label={`Stop ${app.name}`}
+            aria-busy={busy && busyAction === 'stopping'}
+          >
+            {busy && busyAction === 'stopping' ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Stopping…
+              </>
+            ) : (
+              'Stop'
+            )}
           </Button>
         ) : null}
         <Button variant="ghost" size="sm" disabled={busy} onClick={onLogs} aria-label={`Logs for ${app.name}`}>
@@ -187,6 +215,7 @@ export function InstalledAppsPage() {
   const [query, setQuery] = React.useState('');
   const [pending, setPending] = React.useState<PendingWarning | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [busyAction, setBusyAction] = React.useState<'opening' | 'stopping' | null>(null);
 
   const refresh = React.useCallback(
     async (quiet = false) => {
@@ -257,15 +286,21 @@ export function InstalledAppsPage() {
       return;
     }
     setBusy(item.app.appId);
+    setBusyAction('opening');
+    const openMetric = {
+      kind: item.state === 'running' || item.state === 'starting' ? ('warm' as const) : ('cold' as const),
+      startedAtMs: Date.now(),
+    };
     try {
       const result = await host.installedApps.run(item.app.appId, target, {
         acceptUnknownPublisher: accepted,
         rememberUnknownPublisher: remember,
       });
       setPending(null);
-      setAnnouncement(`${item.app.name} is running.`);
-      if (result.urls[0]) await host.installedApps.openWindow(item.app.appId, target);
-      else {
+      if (result.urls[0]) {
+        await host.installedApps.openWindow(item.app.appId, target, openMetric);
+        setAnnouncement(`${item.app.name} is running.`);
+      } else {
         setNotice({
           title: 'App started',
           message: `${item.app.name} started, but it does not publish a browser URL.`,
@@ -276,20 +311,25 @@ export function InstalledAppsPage() {
       setError(cause instanceof Error ? cause.message : `Could not open ${item.app.name}.`);
     } finally {
       setBusy(null);
+      setBusyAction(null);
     }
   };
 
   const stopApp = async (item: InstalledRuntimeApp) => {
     if (!host.installedApps) return;
     setBusy(item.app.appId);
+    setBusyAction('stopping');
+    recordAppStopStart(item.app.appId);
     try {
       await host.installedApps.stop(item.app.appId);
       setAnnouncement(`${item.app.name} is stopped.`);
       await refresh();
     } catch (cause) {
+      clearAppStopStart(item.app.appId);
       setError(cause instanceof Error ? cause.message : `Could not stop ${item.app.name}.`);
     } finally {
       setBusy(null);
+      setBusyAction(null);
     }
   };
 
@@ -363,6 +403,7 @@ export function InstalledAppsPage() {
               key={item.app.appId}
               item={item}
               busy={busy === item.app.appId}
+              busyAction={busy === item.app.appId ? (busyAction ?? undefined) : undefined}
               onOpen={() => void openApp(item)}
               onStop={() => void stopApp(item)}
               onLogs={() =>

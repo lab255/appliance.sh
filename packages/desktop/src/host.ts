@@ -173,11 +173,12 @@ export const tauriHost: ConsoleHost = {
         },
       });
     },
-    async openWindow(app: string, target: string) {
-      const descriptor = await invoke<RuntimeAppWindowDescriptor>('runtime_open_descriptor', {
+    async openWindow(app: string, target: string, openMetric) {
+      const resolved = await invoke<RuntimeAppWindowDescriptor>('runtime_open_descriptor', {
         selector: app,
         target,
       });
+      const descriptor = openMetric ? { ...resolved, openMetric } : resolved;
       if (descriptor.ui.type !== 'web' || !descriptor.url) return descriptor;
       await waitForPublishedPort(async () => {
         const controller = new AbortController();

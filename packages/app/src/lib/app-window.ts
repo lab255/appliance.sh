@@ -18,6 +18,21 @@ export interface RuntimeAppWindowDescriptor {
   url?: string;
   hostPort?: number;
   egressHostCount: number;
+  openMetric?: AppOpenMetricContext;
+}
+
+export type AppOpenKind = 'cold' | 'warm' | 'reopen';
+
+export interface AppOpenMetricContext {
+  kind: AppOpenKind;
+  startedAtMs: number;
+}
+
+export interface AppWindowMetric {
+  name: 'app_open_ttv' | 'app_stop_ttx';
+  appId: string;
+  durationMs: number;
+  kind?: AppOpenKind;
 }
 
 export interface PortWaitOptions {
@@ -28,12 +43,13 @@ export interface PortWaitOptions {
 }
 
 export function appWindowLabel(appId: string): string {
-  const safe = appId
+  const trimmed = appId.trim();
+  const safe = trimmed
     .trim()
     .toLocaleLowerCase()
     .replace(/[^a-z0-9-]/g, '-');
   if (!safe) throw new Error('an app id is required');
-  return `app-${safe}`;
+  return `app-${safe}-${shortAppIdHash(trimmed)}`;
 }
 
 export function appWindowTitle(name: string): string {
@@ -48,7 +64,7 @@ export async function waitForPublishedPort(
   probe: () => Promise<boolean>,
   options: PortWaitOptions = {}
 ): Promise<void> {
-  const timeoutMs = options.timeoutMs ?? 8_000;
+  const timeoutMs = options.timeoutMs ?? 15_000;
   const intervalMs = options.intervalMs ?? 100;
   const now = options.now ?? Date.now;
   const delay = options.delay ?? ((milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
@@ -101,12 +117,21 @@ export function appWindowStatusText(descriptor: RuntimeAppWindowDescriptor): str
   return `sandboxed · egress: ${hosts} host${hosts === 1 ? '' : 's'} allowed · ${port}`;
 }
 
+export function recordAppStopStart(appId: string, startedAtMs = Date.now()): void {
+  window.localStorage.setItem(appStopMetricKey(appId), String(startedAtMs));
+}
+
+export function clearAppStopStart(appId: string): void {
+  window.localStorage.removeItem(appStopMetricKey(appId));
+}
+
 export function renderAppWindow(
   root: HTMLElement,
   initial: RuntimeAppWindowDescriptor,
   options: {
     status?: () => Promise<RuntimeAppWindowDescriptor>;
     reopen?: () => Promise<RuntimeAppWindowDescriptor>;
+    metric?: (metric: AppWindowMetric) => void | Promise<void>;
     pollMs?: number;
   } = {}
 ): () => void {
@@ -114,6 +139,7 @@ export function renderAppWindow(
   let stopped = false;
   let stripLeft: HTMLSpanElement | null = null;
   let stripRight: HTMLSpanElement | null = null;
+  const emittedOpenMetrics = new Set<number>();
 
   const meta = document.createElement('meta');
   meta.httpEquiv = 'Content-Security-Policy';
@@ -126,6 +152,7 @@ export function renderAppWindow(
     root.setAttribute('data-app-window', descriptor.appId);
     const shell = document.createElement('main');
     shell.className = 'appliance-app-window';
+    shell.tabIndex = -1;
 
     if (isTerminal(descriptor)) {
       const exited = document.createElement('section');
@@ -133,31 +160,43 @@ export function renderAppWindow(
       const title = document.createElement('h1');
       title.textContent = 'App exited';
       const detail = document.createElement('p');
-      detail.textContent =
-        descriptor.exitCode == null
-          ? `${descriptor.name} is no longer running.`
-          : `${descriptor.name} exited (${descriptor.exitCode}).`;
+      detail.textContent = terminalCopy(descriptor);
       const reopen = document.createElement('button');
       reopen.type = 'button';
       reopen.textContent = 'Reopen';
       reopen.disabled = !options.reopen;
+      const reopenError = document.createElement('p');
+      reopenError.className = 'appliance-app-reopen-error';
+      reopenError.setAttribute('role', 'alert');
       reopen.addEventListener('click', () => {
         if (!options.reopen) return;
+        const startedAtMs = Date.now();
         reopen.disabled = true;
+        reopen.setAttribute('aria-busy', 'true');
+        reopen.textContent = 'Reopening…';
+        reopenError.textContent = '';
         void options
           .reopen()
           .then((next) => {
-            descriptor = next;
+            descriptor = { ...next, openMetric: { kind: 'reopen', startedAtMs } };
             draw();
+            window.requestAnimationFrame(() => {
+              (root.querySelector<HTMLElement>('iframe') ?? root.querySelector<HTMLElement>('main'))?.focus();
+            });
           })
-          .finally(() => {
+          .catch((cause: unknown) => {
+            reopenError.textContent = cause instanceof Error ? cause.message : `Could not reopen ${descriptor.name}.`;
             reopen.disabled = false;
+            reopen.removeAttribute('aria-busy');
+            reopen.textContent = 'Reopen';
           });
       });
-      exited.append(title, detail, reopen);
+      exited.append(title, detail, reopen, reopenError);
       shell.append(exited);
+      emitStopMetricAfterPaint();
     } else if (descriptor.url) {
       const frame = document.createElement('iframe');
+      const openMetric = descriptor.openMetric;
       frame.src = descriptor.url;
       frame.title = `${descriptor.name} web UI`;
       frame.referrerPolicy = 'no-referrer';
@@ -165,13 +204,19 @@ export function renderAppWindow(
         'sandbox',
         'allow-downloads allow-forms allow-modals allow-popups allow-scripts allow-same-origin'
       );
+      frame.addEventListener('load', () => emitOpenMetric(openMetric));
       shell.append(frame);
     }
 
     const strip = document.createElement('footer');
     strip.className = 'appliance-app-status';
+    strip.setAttribute('role', 'status');
+    strip.setAttribute('aria-live', 'polite');
+    strip.setAttribute('aria-atomic', 'true');
     stripLeft = document.createElement('span');
+    stripLeft.className = 'appliance-app-status__group';
     stripRight = document.createElement('span');
+    stripRight.className = 'appliance-app-status__group';
     updateStatusStrip();
     strip.append(stripLeft, stripRight);
     shell.append(strip);
@@ -198,11 +243,56 @@ export function renderAppWindow(
   return () => {
     stopped = true;
     if (timer !== undefined) window.clearInterval(timer);
+    meta.remove();
+    style.remove();
   };
 
   function updateStatusStrip() {
-    if (stripLeft) stripLeft.textContent = appWindowStatusText(descriptor);
-    if (stripRight) stripRight.textContent = `${descriptor.name} ${descriptor.version} · ${descriptor.license}`;
+    if (stripLeft) {
+      const hosts = descriptor.egressHostCount;
+      stripLeft.replaceChildren(
+        statusSpan('', 'appliance-app-status__dot', true),
+        statusSpan('sandboxed'),
+        statusSpan('·', 'appliance-app-status__separator', true),
+        statusSpan(`egress: ${hosts} host${hosts === 1 ? '' : 's'} allowed`),
+        statusSpan('·', 'appliance-app-status__separator', true),
+        statusSpan(descriptor.hostPort == null ? 'port unavailable' : `port ${descriptor.hostPort}`)
+      );
+    }
+    if (stripRight) {
+      stripRight.replaceChildren(
+        statusSpan(`${descriptor.name} ${descriptor.version}`),
+        statusSpan('·', 'appliance-app-status__separator', true),
+        statusSpan(descriptor.license)
+      );
+    }
+  }
+
+  function emitOpenMetric(context: AppOpenMetricContext | undefined) {
+    if (!context || emittedOpenMetrics.has(context.startedAtMs)) return;
+    emittedOpenMetrics.add(context.startedAtMs);
+    void options.metric?.({
+      name: 'app_open_ttv',
+      appId: descriptor.appId,
+      durationMs: Math.max(0, Date.now() - context.startedAtMs),
+      kind: context.kind,
+    });
+  }
+
+  function emitStopMetricAfterPaint() {
+    const key = appStopMetricKey(descriptor.appId);
+    const startedAtMs = Number(window.localStorage.getItem(key));
+    if (!Number.isFinite(startedAtMs) || startedAtMs <= 0 || Date.now() - startedAtMs > 60_000) return;
+    window.localStorage.removeItem(key);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        void options.metric?.({
+          name: 'app_stop_ttx',
+          appId: descriptor.appId,
+          durationMs: Math.max(0, Date.now() - startedAtMs),
+        });
+      });
+    });
   }
 }
 
@@ -210,9 +300,40 @@ function isTerminal(descriptor: RuntimeAppWindowDescriptor): boolean {
   return descriptor.state === 'stopped' || descriptor.state === 'exited' || descriptor.state === 'failed';
 }
 
-function wrapperCsp(descriptor: RuntimeAppWindowDescriptor): string {
+export function wrapperCsp(descriptor: RuntimeAppWindowDescriptor): string {
   const frame = descriptor.hostPort == null ? "'none'" : `http://127.0.0.1:${descriptor.hostPort}`;
-  return `default-src 'none'; frame-src ${frame}; style-src 'unsafe-inline'; img-src data:`;
+  return `default-src 'none'; frame-src ${frame}; connect-src ipc: http://ipc.localhost; script-src 'self'; style-src 'unsafe-inline'; img-src data:`;
+}
+
+function shortAppIdHash(appId: string): string {
+  let hash = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(appId)) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+function appStopMetricKey(appId: string): string {
+  return `appliance:app-stop:${appWindowLabel(appId)}`;
+}
+
+function terminalCopy(descriptor: RuntimeAppWindowDescriptor): string {
+  if (descriptor.state === 'failed') {
+    return descriptor.exitCode == null
+      ? `${descriptor.name} failed.`
+      : `${descriptor.name} failed (exit code ${descriptor.exitCode}).`;
+  }
+  if (descriptor.exitCode == null || descriptor.exitCode === 0) return `${descriptor.name} has stopped.`;
+  return `${descriptor.name} stopped (exit code ${descriptor.exitCode}).`;
+}
+
+function statusSpan(text: string, className?: string, ariaHidden = false): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.textContent = text;
+  if (className) span.className = className;
+  if (ariaHidden) span.setAttribute('aria-hidden', 'true');
+  return span;
 }
 
 const APP_WINDOW_CSS = `
@@ -221,12 +342,15 @@ const APP_WINDOW_CSS = `
   html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; background: hsl(0 0% 4%); color: hsl(0 0% 93%); }
   .appliance-app-window { display: grid; grid-template-rows: minmax(0, 1fr) 28px; width: 100%; height: 100%; }
   .appliance-app-window iframe { width: 100%; height: 100%; border: 0; background: hsl(0 0% 7%); }
-  .appliance-app-status { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; padding: 0 10px; border-top: 1px solid hsl(0 0% 18%); background: hsl(0 0% 7%); color: hsl(0 0% 63%); font: 11px/28px "Geist Mono Variable", "SFMono-Regular", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .appliance-app-status span { overflow: hidden; text-overflow: ellipsis; }
-  .appliance-app-status span:first-child::first-letter { color: hsl(189 85% 70%); }
+  .appliance-app-status { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; padding: 0 10px; border-top: 1px solid var(--color-border); background: var(--color-muted); color: var(--color-muted-foreground); font: 11px/28px var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .appliance-app-status__group { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .appliance-app-status__group > span { overflow: hidden; text-overflow: ellipsis; }
+  .appliance-app-status__dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 999px; background: var(--color-sandbox); }
+  .appliance-app-status__separator { color: var(--color-border-strong); }
   .appliance-app-exited { align-self: center; justify-self: center; width: min(420px, calc(100% - 48px)); padding: 28px; border: 1px solid hsl(0 0% 18%); border-radius: 6px; background: hsl(0 0% 7%); text-align: center; }
   .appliance-app-exited h1 { margin: 0; font-size: 20px; font-weight: 600; }
   .appliance-app-exited p { margin: 8px 0 20px; color: hsl(0 0% 63%); font-size: 13px; }
   .appliance-app-exited button { border: 0; border-radius: 5px; padding: 7px 13px; background: hsl(0 0% 93%); color: hsl(0 0% 4%); font: 600 12px/16px inherit; cursor: pointer; }
   .appliance-app-exited button:disabled { cursor: default; opacity: .5; }
+  .appliance-app-exited .appliance-app-reopen-error { min-height: 16px; margin: 10px 0 0; color: var(--color-destructive-foreground); font-size: 12px; }
 `;

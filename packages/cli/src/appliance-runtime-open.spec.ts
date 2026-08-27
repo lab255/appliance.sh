@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { routeRuntimeOpen, type RuntimeOpenDescriptor } from './appliance-runtime-open';
+import { routeRuntimeOpen, runtimeOpenJson, type RuntimeOpenDescriptor } from './appliance-runtime-open';
 
 const descriptor: RuntimeOpenDescriptor = {
   appId: 'journal',
@@ -41,5 +41,16 @@ describe('runtime open routing', () => {
         }
       )
     ).rejects.toThrow('has no web UI');
+  });
+
+  it('carries a machine-readable open metric context through desktop routing', async () => {
+    const measured = { ...descriptor, openMetric: { kind: 'warm' as const, startedAtMs: 1_000 } };
+    const sendDesktop = vi.fn().mockResolvedValue(true);
+    await expect(routeRuntimeOpen(measured, { sendDesktop, openBrowser: vi.fn() })).resolves.toBe('desktop');
+    expect(sendDesktop).toHaveBeenCalledWith(measured);
+    expect(runtimeOpenJson(measured, 'desktop')).toMatchObject({
+      route: 'desktop',
+      metrics: { appOpenTtv: { kind: 'warm', startedAtMs: 1_000 } },
+    });
   });
 });
