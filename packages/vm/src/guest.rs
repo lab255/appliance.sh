@@ -1635,6 +1635,11 @@ echo '{"state":"running"}'
 
 const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
 # k3s, registry, BuildKit, Node, or development toolchain is installed.
+if ! SOCAT_SELF_CHECK=$(socat -V 2>&1); then
+  echo "appliance-runtime: socat self-check failed; offline Runtime APK set is ABI-inconsistent"
+  printf '%s\n' "$SOCAT_SELF_CHECK"
+  exit 1
+fi
 rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
 mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
 find /persist/runtime/apps -type f \( -name pid -o -name relay.pids -o -name logcap.pid \) -delete
@@ -3223,11 +3228,19 @@ mod tests {
         assert_eq!(repositories, "/media/vdb/apks/main\n/media/vdb/apks/community\n");
         assert!(!repositories.contains("https://"));
         let world = apkovl_file(&overlay, "etc/apk/world").unwrap();
-        assert!(world.lines().any(|package| package == "containerd"));
-        assert!(world.lines().any(|package| package == "containerd-ctr"));
-        assert!(world.lines().any(|package| package == "nftables"));
+        assert!(world.lines().any(|package| package == "containerd=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "containerd-ctr=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "nftables=1.1.1-r0"));
+        assert!(world.lines().any(|package| package == "socat=1.8.1.3-r0"));
+        assert!(world.lines().any(|package| package == "openssl=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libssl3=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libcrypto3=3.3.7-r0"));
         let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
         assert!(start.contains("cgroup.subtree_control"));
+        let self_check = start.find("socat -V").unwrap();
+        let ready = start.find("appliance-runtime: supervisor ready").unwrap();
+        assert!(self_check < ready, "socat ABI self-check must gate Runtime readiness");
+        assert!(start.contains("offline Runtime APK set is ABI-inconsistent"));
     }
 
     #[test]
