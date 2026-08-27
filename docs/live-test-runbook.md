@@ -546,7 +546,7 @@ BuildKit, Node, or the dev toolchain.
 
 **Board metric (2026-08-28): Command-to-first-byte (`time appliance runtime
 run` → first curl 200), cold (pool down) and warm (pool up), per sample.**
-Journal: `11.013s` cold / `0.716s` warm; dashboard: `9.022s` cold / `0.947s`
+Journal: `9.036s` cold / `0.815s` warm; dashboard: `9.022s` cold / `0.947s`
 warm; notes-suite: `9.406s` cold / `1.155s` warm.
 
 “Warm start” has one definition throughout this section: command-to-first-byte
@@ -749,7 +749,7 @@ each stop range contains the cold-run and warm-run stop observations.
 
 | Kind                 | Command used                                                                                                        | Cold start | Warm start |         Stop |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------: | ---------: | -----------: |
-| Journal container    | `time appliance runtime run "$OUT/journal.appliance.zip"` → curl 200; `time appliance runtime stop journal`         |    11.013s |     0.716s | 0.353–0.359s |
+| Journal container    | `time appliance runtime run "$OUT/journal.appliance.zip"` → curl 200; `time appliance runtime stop journal`         |     9.036s |     0.815s | 0.347–0.835s |
 | Dashboard binary     | `time appliance runtime run "$OUT/dashboard.appliance.zip"` → curl 200; `time appliance runtime stop dashboard`     |     9.022s |     0.947s |       0.851s |
 | Notes Suite compound | `time appliance runtime run "$OUT/notes-suite.appliance.zip"` → curl 200; `time appliance runtime stop notes-suite` |     9.406s |     1.155s | 0.885–1.378s |
 
