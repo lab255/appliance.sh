@@ -256,6 +256,10 @@ async function runtimeRun(args: string[]): Promise<void> {
     );
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
+    // Binary payloads must not race the asynchronous VZ shutdown: their
+    // custom-rootfs share has to be attached at the very next boot. Keep the
+    // established container reconciliation path unchanged in this stacked PR.
+    if (loaded.manifest.type === 'binary') await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
@@ -597,6 +601,23 @@ function vmJson(args: string[], tolerateFailure = false): Record<string, unknown
 
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+async function waitForRuntimePoolStop(timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = runVmCapture(['status', RUNTIME_POOL_VM]);
+    if (status.status === 0) {
+      try {
+        const parsed = JSON.parse(status.stdout) as { running?: unknown };
+        if (parsed.running === false) return;
+      } catch {
+        // The engine may be between process teardown and status-file cleanup.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  fail(`timed out waiting for ${RUNTIME_POOL_VM} to stop for binary payload share reconciliation`, 1);
 }
 
 function formatUptime(startedAt: string): string {

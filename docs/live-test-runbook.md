@@ -668,3 +668,8 @@ VM running. Record Docker/package, cold/warm boot, supervisor start, curl, ps,
 stop, and exit-propagation timings. The binary runner uses containerd's custom
 rootfs mode so UID/GID, cgroup, seccomp, empty capability sets, network
 namespace, relays, and policy stay identical to the container runner.
+
+Observed on macOS VZ (2026-08-28): serialized rebuilt-media pool boot `10.36s`;
+host curl `status=200 total=0.035151s`; `runtime ps` `0.49s`; app stop `1.07s`;
+exit fixture cold reconcile/run `11.14s`, with CLI status `7`, `runtime ps`
+rendering `exited (7)`, and the pool remaining core-ready.
