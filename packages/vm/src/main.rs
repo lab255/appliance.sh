@@ -1936,6 +1936,19 @@ fn spawn_host_process(name: &str, budget_secs: u64) -> Result<std::process::Chil
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::from(log))
         .stderr(std::process::Stdio::from(log_err));
+    configure_host_process_detachment(&mut cmd);
+    cmd.spawn().context("spawn VM host process")
+}
+
+/// Keep terminal signals sent to the launching CLI away from the resident
+/// hypervisor. Redirecting stdio is not sufficient on Unix: without a new
+/// process group, Ctrl-C targets both `runtime run` and its pooled VM child.
+fn configure_host_process_detachment(cmd: &mut Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -1947,7 +1960,6 @@ fn spawn_host_process(name: &str, budget_secs: u64) -> Result<std::process::Chil
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     }
-    cmd.spawn().context("spawn VM host process")
 }
 
 /// One `up` poll's readiness verdict, pure so the ordering contract is
@@ -1978,6 +1990,24 @@ fn tail_of(path: &std::path::Path, n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn detached_host_process_uses_its_own_process_group() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 5"]);
+        configure_host_process_detachment(&mut command);
+        let mut child = command.spawn().expect("spawn detached test child");
+        let child_pid = child.id() as i32;
+        let child_group = unsafe { libc::getpgid(child_pid) };
+        let caller_group = unsafe { libc::getpgrp() };
+
+        let _ = child.kill();
+        let _ = child.wait();
+
+        assert_eq!(child_group, child_pid);
+        assert_ne!(child_group, caller_group);
+    }
 
     fn valid_runtime_plan() -> RuntimePlan {
         RuntimePlan {
