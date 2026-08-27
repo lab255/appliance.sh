@@ -1,6 +1,6 @@
 import { getPublicKeyAsync, signAsync } from '@noble/ed25519';
 import { catalogueSigningInput, type CatalogueIndex, type CatalogueTrustPolicy } from '@appliance.sh/sdk';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { searchCatalogue } from './appliance-runtime-search';
 
 it('searches only free entries after verifying the pair', async () => {
@@ -42,4 +42,3 @@ it('searches only free entries after verifying the pair', async () => {
     searchCatalogue('', { origin: 'https://example.test', fetch: fetcher, policy, now: new Date('2026-08-27T00:00:00Z') })
   ).resolves.toMatchObject({ entries: [{ id: 'journal' }] });
 });
-

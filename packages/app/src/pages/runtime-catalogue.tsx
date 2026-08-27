@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { CatalogueEntry } from '@appliance.sh/sdk';
-import { Grid2X2, Search, ShieldAlert, ShoppingBag } from 'lucide-react';
+import { Grid2X2, Search, ShieldAlert } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
