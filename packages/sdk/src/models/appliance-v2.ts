@@ -132,6 +132,7 @@ export const applianceV2BinaryPayloadInput = z
   })
   .strict();
 
+// TODO(psl): replace the hardcoded public-suffix set with the tldts package in a follow-up.
 const publicSuffixes = new Set([
   'com',
   'net',
@@ -413,9 +414,10 @@ function validateControls(
     pairs.add(pair);
   }
 
-  const primaryCount = ports.filter(
-    (port) => port.primary === true || (port.primary === undefined && port.name === primaryPort)
-  ).length;
+  const explicitPrimary = ports.filter((port) => port.primary === true);
+  const defaultPrimaryCount =
+    explicitPrimary.length === 0 ? ports.filter((port) => port.name === primaryPort).length : 0;
+  const primaryCount = explicitPrimary.length + defaultPrimaryCount;
   if (ports.length > 0 && primaryCount !== 1) {
     ctx.addIssue({
       code: 'custom',
@@ -460,9 +462,6 @@ function validateManifest(root: V2Root, ctx: z.RefinementCtx): void {
   const visit = (services: Record<string, ApplianceV2Service>, depth: number, path: (string | number)[]) => {
     for (const [name, service] of Object.entries(services)) {
       const servicePath = [...path, name];
-      if (depth > 2) {
-        ctx.addIssue({ code: 'custom', path: servicePath, message: 'Service containment exceeds depth two' });
-      }
       if (depth > 1 && service.isolation !== undefined) {
         ctx.addIssue({
           code: 'custom',
@@ -471,6 +470,9 @@ function validateManifest(root: V2Root, ctx: z.RefinementCtx): void {
         });
       }
       if (service.type === 'compound') {
+        if (depth >= 2) {
+          ctx.addIssue({ code: 'custom', path: servicePath, message: 'Service containment exceeds depth two' });
+        }
         visit(service.services, depth + 1, [...servicePath, 'services']);
         continue;
       }
@@ -567,8 +569,13 @@ function validateWebUiPort(
 }
 
 function applyDefaults(root: V2Root): V2Root {
-  const defaultPorts = (ports: z.output<typeof applianceV2PortInput>[] | undefined, primaryName?: string) =>
-    ports?.map((port) => ({ ...port, primary: port.primary ?? port.name === primaryName }));
+  const defaultPorts = (ports: z.output<typeof applianceV2PortInput>[] | undefined, primaryName?: string) => {
+    const hasExplicitPrimary = ports?.some((port) => port.primary === true) ?? false;
+    return ports?.map((port) => ({
+      ...port,
+      primary: !hasExplicitPrimary && port.name === primaryName ? true : (port.primary ?? false),
+    }));
+  };
 
   root.ports = defaultPorts(
     root.ports,
