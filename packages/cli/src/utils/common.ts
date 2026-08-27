@@ -2,7 +2,15 @@ import { Command } from 'commander';
 import path from 'path';
 import * as fs from 'node:fs';
 import { confirm } from '@inquirer/prompts';
-import { Appliance, applianceFullInput, ApplianceFullInput, ManifestContext, Result } from '@appliance.sh/sdk';
+import {
+  Appliance,
+  applianceFullInput,
+  ApplianceFullInput,
+  applianceV2Input,
+  ApplianceV2,
+  ManifestContext,
+  Result,
+} from '@appliance.sh/sdk';
 import chalk from 'chalk';
 import { addTrustedProject, isTrustedProject, settingsFilePath } from './settings.js';
 import { evaluateManifest } from '../sandbox/index.js';
@@ -67,6 +75,12 @@ export async function extractApplianceFile(
 
   try {
     const raw = await loadManifest(filePath, ext, ctx);
+    if (isManifestV2(raw)) {
+      return {
+        success: false,
+        error: new Error(`manifest v2 is not yet supported by ${commandDisplayName(cmd)}`),
+      };
+    }
     // Parse against the combined build+runtime schema so callers can
     // pull either half: `appliance build` archives only the build
     // fields; `appliance deploy` forwards env / memory / timeout /
@@ -93,6 +107,27 @@ export async function extractApplianceFile(
   } catch (err) {
     return { success: false, error: err as Error };
   }
+}
+
+/** Parse-only path used by `appliance manifest read`. Runtime/build/deploy
+ * consumers deliberately continue through extractApplianceFile's v1 gate. */
+export function parseApplianceManifestForPrint(raw: unknown): Result<ApplianceFullInput | ApplianceV2> {
+  const parsed = isManifestV2(raw) ? applianceV2Input.safeParse(raw) : applianceFullInput.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  return { success: true, data: parsed.data };
+}
+
+function isManifestV2(raw: unknown): raw is { manifest: 'v2' } {
+  return typeof raw === 'object' && raw !== null && 'manifest' in raw && raw.manifest === 'v2';
+}
+
+function commandDisplayName(cmd: Command): string {
+  const commanderName = cmd.name();
+  const executable = path.basename(process.argv[1] ?? 'appliance').replace(/\.[cm]?[jt]s$/, '');
+  const name = commanderName || executable;
+  if (name === 'appliance') return 'appliance';
+  if (name.startsWith('appliance-')) return name.replace(/^appliance-/, 'appliance ');
+  return `appliance ${name}`;
 }
 
 // Standard manifest options every command that loads a manifest

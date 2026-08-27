@@ -1,4 +1,5 @@
 export * from './appliance';
+export * from './appliance-v2';
 export * from './appliance-base';
 export * from './project';
 export * from './environment';

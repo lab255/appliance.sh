@@ -1,8 +1,9 @@
 import { Command } from 'commander';
 import path from 'node:path';
 import * as fs from 'node:fs';
-import { applianceFullInput, type ManifestContext } from '@appliance.sh/sdk';
+import { type ManifestContext } from '@appliance.sh/sdk';
 import { evaluateManifest } from './sandbox/index.js';
+import { parseApplianceManifestForPrint } from './utils/common.js';
 
 // `appliance manifest read` evaluates a programmatic manifest in the
 // QuickJS sandbox and prints the resolved object as JSON on stdout.
@@ -50,7 +51,7 @@ program
       }
 
       if (opts.validate !== false) {
-        const parsed = applianceFullInput.safeParse(raw);
+        const parsed = parseApplianceManifestForPrint(raw);
         if (!parsed.success) {
           fail({ ok: false, kind: 'validation', error: parsed.error.message, path: resolved });
         }
