@@ -1990,8 +1990,14 @@ start_service() {
     IMAGE_PATH=$(jq -r '.imagePath' "$SERVICE/plan.json")
     case "/$IMAGE_PATH/" in /payload/*) ;; *) echo failed > "$SERVICE/state"; return 1;; esac
     case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo failed > "$SERVICE/state"; return 1;; esac
+    case "$(uname -m)" in
+      aarch64|arm64) OCI_PLATFORM=linux/arm64;;
+      x86_64|amd64) OCI_PLATFORM=linux/amd64;;
+      *) echo failed > "$SERVICE/state"; return 1;;
+    esac
     set +e
-    IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP/$SVC" "$SHARE/$IMAGE_PATH" 2>&1)
+    IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --local --platform "$OCI_PLATFORM" \
+      --base-name "appliance.local/$APP/$SVC" "$SHARE/$IMAGE_PATH" 2>&1)
     IMPORT_CODE=$?
     set -e
     printf '%s\n' "$IMPORT_OUTPUT" >> "$SERVICE/current.log"
@@ -3913,6 +3919,7 @@ mod tests {
         assert!(supervisor.contains(".plan.services | reverse | .[].name"));
         assert!(supervisor.contains("--cgroup \"appliance/$APP/$SVC\""));
         assert!(supervisor.contains("--with-ns \"network:/var/run/netns/$NS\""));
+        assert!(supervisor.contains("images import --local --platform \"$OCI_PLATFORM\""));
         assert!(supervisor.contains("wget -q -T \"$TIMEOUT\" --spider"));
         assert!(supervisor.contains("tasks exec --exec-id"));
         assert!(supervisor.contains("echo \"$ATTEMPT\" > \"$SERVICE/restart-count\""));
