@@ -15,6 +15,7 @@ import type {
   StatePromotionInput,
   StatePromotionOptions,
 } from '@appliance.sh/bootstrap';
+import type { InstalledApp } from '@appliance.sh/sdk';
 
 // A cluster is one (api-server URL, API key) pair the user has either
 // connected to manually or bootstrapped from this shell. Identity is a
@@ -86,8 +87,31 @@ export interface CatalogueHost {
   fetchCatalogue(): Promise<CatalogueFetchResult>;
   /** Atomically retain only a pair the shared trust verifier accepted. */
   cacheVerified?(pair: CatalogueFetchResult, generation: number, verifiedAt: string): Promise<void>;
-  /** AP-173 owns the real installer; absent means the UI must not fake success. */
-  installBundle?(path: string): Promise<void>;
+}
+
+export interface InstalledRuntimeApp {
+  app: InstalledApp;
+  state: 'running' | 'stopped' | 'starting' | 'failed';
+  urls: string[];
+}
+
+export interface RuntimeOpenResult {
+  appId: string;
+  urls: string[];
+}
+
+/** Per-workspace installed-app surface owned by the desktop host. */
+export interface InstalledAppsHost {
+  list(target: string): Promise<InstalledRuntimeApp[]>;
+  installBundle(source: string, target: string, options?: { acceptUnknownPublisher?: boolean }): Promise<InstalledApp>;
+  uninstall(app: string, target: string, options?: { keepData?: boolean }): Promise<void>;
+  run(
+    app: string,
+    target: string,
+    options?: { acceptUnknownPublisher?: boolean; rememberUnknownPublisher?: boolean }
+  ): Promise<RuntimeOpenResult>;
+  stop(app: string): Promise<void>;
+  pickBundle(): Promise<string | null>;
 }
 
 export interface AddClusterInput {
@@ -294,6 +318,8 @@ export interface ConsoleHost {
   appMode?: AppModeHost;
   /** Desktop-owned paired catalogue transport/cache. */
   catalogue?: CatalogueHost;
+  /** Desktop-owned per-workspace app installation and Runtime controls. */
+  installedApps?: InstalledAppsHost;
   bootstrap?: BootstrapHost;
   /**
    * Local-runtime support surface: preflight, prerequisite installs,
