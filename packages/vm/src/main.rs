@@ -327,7 +327,7 @@ enum RuntimeServiceWorkload {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
+#[serde(tag = "type", rename_all = "lowercase", rename_all_fields = "camelCase")]
 enum RuntimeServiceHealth {
     Http {
         port: u16,
@@ -2524,6 +2524,11 @@ mod tests {
         };
         validate_runtime_plan(&plan).unwrap();
         normalize_runtime_service_order(&mut plan).unwrap();
+        let wire = serde_json::to_string(&plan).unwrap();
+        assert!(wire.contains("\"intervalSeconds\":5"));
+        assert!(wire.contains("\"dependsOn\":["));
+        let decoded: RuntimePlan = serde_json::from_str(&wire).unwrap();
+        validate_runtime_plan(&decoded).unwrap();
         let RuntimePlanWorkload::Compound { services } = &plan.workload else {
             unreachable!();
         };
