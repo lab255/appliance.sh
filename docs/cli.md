@@ -50,4 +50,4 @@ Existing colliding top-level commands remain unchanged.
 
 - `appliance deploy` keeps the existing target selection: it uses `--profile`, `APPLIANCE_PROFILE`, or the active cluster (usually a cloud cluster), falling back to the local cluster when none is selected.
 - `appliance install` uses the same deploy engine but defaults to the local VM cluster. It ignores `APPLIANCE_PROFILE` and the active cluster; use `--cluster <name>` to install to another registered cluster (`--profile <name>` remains accepted for compatibility).
-- `appliance runtime install` is the reserved packaged-app command and is still a placeholder in this release.
+- `appliance runtime install <path|url>` installs a packaged app into the current workspace target (see [docs/runtime.md](runtime.md#install-list-and-uninstall)); unlike the top-level `install`, it honours `APPLIANCE_PROFILE`.
