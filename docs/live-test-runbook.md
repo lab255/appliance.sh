@@ -544,19 +544,31 @@ pool is separate from `$SBX`: its fixed name is `appliance-runtime`, it is 2
 vCPU / 4096 MiB, and it reaches core supervisor readiness without k3s, Docker,
 BuildKit, Node, or the dev toolchain.
 
+**Board metric (2026-08-28): Command-to-first-byte (`time appliance runtime
+run` → first curl 200), cold (pool down) and warm (pool up), per sample.**
+Journal: `11.013s` cold / `0.716s` warm; dashboard: `9.022s` cold / `0.947s`
+warm; notes-suite: `9.406s` cold / `1.155s` warm.
+
+“Warm start” has one definition throughout this section: command-to-first-byte
+wall-clock from invoking `time appliance runtime run <bundle>` with the pool
+already running and core-ready until the first curl returns HTTP 200. “Cold
+start” uses the identical boundary with `appliance-runtime` fully down. Stop
+time is measured separately with `time appliance runtime stop <app>` after the
+successful probe.
+
 Prerequisites are macOS with Virtualization.framework, Docker with Buildx,
 Node/pnpm/Bun, and the repository's Rust and JavaScript toolchains. The sample
 script commits no generated OCI archives, executables, or zip files. It invokes
 `appliance builder package` for every bundle; that command calls `verifyBundle`
 before returning success and the wrapper also asserts every exit status and
-embedded digest.
+embedded digest. CI requires Docker (`--require-docker`); local builds skip with
+a message. Building a standalone CLI binary is not a prerequisite: the sample
+script builds only the SDK/helper workspace entrypoints used by the source CLI.
 
 ```sh
 cd ~/Workspaces/appliance.sh
 export OUT="${TMPDIR:-/tmp}/appliance-runtime-samples"
 scripts/build-runtime-samples.sh --require-docker
-
-pnpm exec nx run @appliance.sh/cli:build
 
 cd packages/vm
 cargo build --release
@@ -600,12 +612,6 @@ stop timings from `time` plus `appliance-vm timings`.
 
 Ctrl-C in Terminal A is an equivalent stop proof: it stops `journal`, exits
 130, and deliberately leaves the pooled VM running.
-
-Observed on the final macOS VZ proof (2026-08-28): serialized cold pool boot
-`10.33s`; warm Runtime reconciliation/start reached the published-port line in
-`<=1.01s`; `runtime ps` `0.29s`; host curl `status=200 total=0.035827s`
-(repeat `0.040435s`); explicit app teardown `12.7s`. The explicit-stop and
-Ctrl-C cycles both left the same pool PID running and core-ready.
 
 ### Dashboard binary
 
@@ -660,11 +666,6 @@ stop, and exit-propagation timings. The binary runner uses containerd's custom
 rootfs mode so UID/GID, cgroup, seccomp, empty capability sets, network
 namespace, relays, and policy stay identical to the container runner.
 
-Observed on macOS VZ (2026-08-28): serialized rebuilt-media pool boot `10.36s`;
-host curl `status=200 total=0.035151s`; `runtime ps` `0.49s`; app stop `1.07s`;
-exit fixture cold reconcile/run `11.14s`, with CLI status `7`, `runtime ps`
-rendering `exited (7)`, and the pool remaining core-ready.
-
 ### Notes Suite compound app
 
 `notes-suite` is source-only and Docker-builds two OCI leaves at package time.
@@ -716,13 +717,6 @@ increments its restart count and returns it to healthy; stop removes the whole
 app while the pool remains running. Record bundle build, pool boot, supervisor
 start, curl, ps, restart recovery, and stop timings.
 
-Observed on the final macOS VZ proof (2026-08-28): cached source bundle build
-`2.85s`; rebuilt-media cold pool boot `10.34s`; the API began listening in the
-same one-second timestamp bucket as the app registry start; host curl `0.04s`
-with HTTP 200; `runtime ps` `0.33s`; forced API recovery was healthy with
-`restarts=1` within `9s`; reverse unit stop `10.61s`. Pool PID `92499` remained
-running after the app and both service rows disappeared.
-
 The shared-VM controls default for this increment is explicit: payload,
 environment, task, cgroup, health, restart, state, and logs are leaf-scoped.
 All leaves retain one app principal `/32` and netns, so host-enforced egress is
@@ -746,17 +740,22 @@ must do the same without stopping the VM. After either path, assert
 above is the restart-recovery check: only the API leaf is killed, it returns
 healthy with `restarts=1`, and the web leaf and pool survive.
 
-These are the recorded macOS VZ values from 2026-08-28. “First byte” uses the
-recorded curl total as the available upper bound. A dash means the source proof
-did not isolate that measurement; no value is inferred.
+These macOS VZ values were recorded on 2026-08-28 with the definition above.
+Every row used the same `appliance runtime run <bundle>` → curl-200 boundary;
+each stop range contains the cold-run and warm-run stop observations.
 
-| Kind                 | Commands used                                                                                                              | Cold boot |                                  Warm start |  First byte |   Stop |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------: | ------------------------------------------: | ----------: | -----: |
-| Journal container    | `time appliance vm up`; `time appliance runtime run`; `curl -w '%{time_total}'`; `time appliance runtime stop journal`     |    10.33s |                                     <=1.01s | <=0.035827s |  12.7s |
-| Dashboard binary     | `time appliance vm up`; `time appliance runtime run`; `curl -w '%{time_total}'`; `time appliance runtime stop dashboard`   |    10.36s | — (exit fixture cold reconcile/run: 11.14s) | <=0.035151s |  1.07s |
-| Notes Suite compound | `time appliance vm up`; `time appliance runtime run`; `curl -w '%{time_total}'`; `time appliance runtime stop notes-suite` |    10.34s |                       <=1s timestamp bucket |     <=0.04s | 10.61s |
+| Kind                 | Command used                                                                                                        | Cold start | Warm start |         Stop |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------: | ---------: | -----------: |
+| Journal container    | `time appliance runtime run "$OUT/journal.appliance.zip"` → curl 200; `time appliance runtime stop journal`         |    11.013s |     0.716s | 0.353–0.359s |
+| Dashboard binary     | `time appliance runtime run "$OUT/dashboard.appliance.zip"` → curl 200; `time appliance runtime stop dashboard`     |     9.022s |     0.947s |       0.851s |
+| Notes Suite compound | `time appliance runtime run "$OUT/notes-suite.appliance.zip"` → curl 200; `time appliance runtime stop notes-suite` |     9.406s |     1.155s | 0.885–1.378s |
+
+Journal and notes-suite now use PID 1 wrappers that trap SIGTERM and forward it
+to BusyBox `httpd`. The engine's effective stop-grace constant remains about
+10 seconds, encoded by the `seq 1 20` × `sleep 0.5` loops in
+[`guest.rs`](../packages/vm/src/guest.rs); the engine owner can decide whether
+to shorten it independently of these samples.
 
 The notes-suite recovery check (`ctr ... tasks kill -s SIGKILL ...` followed by
-the `runtime ps` loop) returned healthy within 9s. Its cached source bundle
-build was 2.85s. Recorded `runtime ps` times were 0.29s (journal), 0.49s
-(dashboard), and 0.33s (notes-suite).
+the `runtime ps` loop) returned healthy with `restarts=1` within 9s, and the
+pool remained running.

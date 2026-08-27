@@ -4,9 +4,9 @@
 
 From the repository root, set `OUT` to a temporary directory and run
 `scripts/build-runtime-samples.sh --require-docker` to build all three
-source-only examples. `OUT` defaults to `$TMPDIR`; without `--require-docker`,
-a missing Docker daemon produces a clear skip and a successful exit. The script
-packages each bundle through the CLI's self-verifying `appliance builder
+source-only examples. `OUT` defaults to `$TMPDIR/appliance-runtime-samples`.
+CI requires Docker (`--require-docker`); local builds skip with a message. The
+script packages each bundle through the CLI's self-verifying `appliance builder
 package` path and prints its embedded SHA-256 digest. See the [Runtime live
 test](live-test-runbook.md#runtime-live-test) for the complete pooled-VM
 exercise.
