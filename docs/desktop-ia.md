@@ -19,6 +19,20 @@ still apply. The choice can be changed immediately in **Settings → Mode**.
 Web/console hosts have no desktop preference capability, so they retain the
 historical developer mode without showing the first-run choice.
 
+### Catalogue
+
+`/catalogue` fetches `index.json` and its detached `index.json.sig` as one pair,
+then validates the strict RFC 8785 / SHA-256 / Ed25519 envelope before any entry
+reaches search, category counts, or rendering. Paid entries are discarded at
+that boundary. A valid current index shows **Verified index ✓ signed**; a bad
+pair shows no apps; an expired previously verified pair is labelled **Stale**
+and remains browseable with installs disabled. The desktop retains only a pair
+that passed verification, atomically, and a failed refresh keeps that prior
+pair. `APPLIANCE_CATALOGUE_URL` changes the catalogue origin from the default
+`https://www.appliance.sh` (HTTPS is required outside localhost development).
+The Runtime installer itself remains owned by AP-173, so this page reports that
+handoff explicitly and never simulates a successful install.
+
 Status: **plan** (no feature code). This is the blueprint phases **I1–I5** build to.
 Scope: the Appliance **desktop app** (`packages/app`, the shared `Console`). The same
 bundle is the web PWA, so every surface below is **host-capability gated** — the web
