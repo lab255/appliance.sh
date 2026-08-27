@@ -315,7 +315,7 @@ struct RuntimeServicePlan {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", rename_all_fields = "camelCase")]
 enum RuntimeServiceWorkload {
     Container {
         image_path: String,
@@ -2527,6 +2527,7 @@ mod tests {
         let wire = serde_json::to_string(&plan).unwrap();
         assert!(wire.contains("\"intervalSeconds\":5"));
         assert!(wire.contains("\"dependsOn\":["));
+        assert!(wire.contains("\"imagePath\":"));
         let decoded: RuntimePlan = serde_json::from_str(&wire).unwrap();
         validate_runtime_plan(&decoded).unwrap();
         let RuntimePlanWorkload::Compound { services } = &plan.workload else {
