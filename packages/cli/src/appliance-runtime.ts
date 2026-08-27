@@ -4,15 +4,20 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import type { ApplianceV2 } from '@appliance.sh/sdk';
+import { PINNED_CATALOGUE_TRUST, type ApplianceV2 } from '@appliance.sh/sdk';
 import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
-import { currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
+import { controlsSummaryForManifest, currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
 import {
+  assertIndexBinding,
+  assertNotBlacklisted,
+  findLocalEvidence,
+  loadBlacklist,
   markUnknownPublisherWarned,
   promptForUnknownPublisher,
+  readCachedIndex,
   runRuntimeInstallCommand,
   runRuntimeListCommand,
   runRuntimeUninstallCommand,
@@ -43,7 +48,7 @@ export interface RuntimePlan {
   resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
 }
 
-type LoadedRuntimeBundle = VerifyBundleResult;
+export type LoadedRuntimeBundle = VerifyBundleResult;
 
 export interface EffectiveRuntimePolicy {
   version: 1;
@@ -160,45 +165,88 @@ async function runtimeRun(args: string[]): Promise<void> {
   if (/^https?:\/\//.test(input))
     fail('runtime run URLs are not yet supported; download the bundle and pass a local path', 2);
   const target = currentWorkspaceTarget(optionValue(args, '--target'));
-  const installed = !fs.existsSync(path.resolve(input)) ? resolveInstalledApp(input, target) : null;
-  if (installed && unknownPublisherWarningDue(installed)) {
-    const automatedAcceptance = args.includes('--accept-unknown-publisher');
-    const rememberedAcceptance = args.includes('--remember-unknown-publisher');
-    const interactiveAcceptance =
-      !automatedAcceptance &&
-      !rememberedAcceptance &&
-      (await promptForUnknownPublisher(
-        {
-          appId: installed.appId,
-          name: installed.name,
-          version: installed.version,
-          license: installed.license,
-          source: installed.source,
-          digest: installed.digest,
-          signature: installed.verification.signature === 'unsigned' ? 'unsigned' : 'invalid',
-          publisher: installed.publisher.name,
-          controlsSummary: installed.controlsSummary,
-        },
-        'open'
-      ));
-    const accepted = automatedAcceptance || rememberedAcceptance || interactiveAcceptance;
-    if (!accepted) fail('Unknown Publisher acknowledgement required; pass --accept-unknown-publisher for this run', 2);
-    // The headless --accept flag applies to this invocation only. A desktop
-    // user explicitly choosing the 30-day action uses the internal remember
-    // flag; an interactive TTY acknowledgement is also time-bounded.
-    if (rememberedAcceptance || interactiveAcceptance) markUnknownPublisherWarned(installed, target);
-  }
-  const originalBundlePath = installed?.bundlePath ?? path.resolve(input);
-  const bundlePath = stageRuntimeOpenCopy(originalBundlePath);
-  let loaded: LoadedRuntimeBundle;
+  const inputPath = path.resolve(input);
+  const inputIsFile = fs.existsSync(inputPath) && fs.statSync(inputPath).isFile();
+  const installed = inputIsFile ? null : resolveInstalledApp(input, target);
+  const originalBundlePath = installed?.bundlePath ?? inputPath;
+  let opened: VerifiedRuntimeOpenCopy | null = null;
   try {
-    const bounded = readBundleManifest(bundlePath);
-    if (bounded.classification !== 'runnable') throw new Error('runtime run requires a manifest v2 runnable bundle');
-    loaded = verifyBundle(bundlePath);
+    opened = stageAndVerifyRuntimeOpenCopy(originalBundlePath, installed?.digest);
+    const { loaded, bundlePath } = opened;
+    const now = new Date();
+    const blacklist = await loadBlacklist({
+      fetcher: fetch,
+      policy: PINNED_CATALOGUE_TRUST,
+      now,
+      root: runtimeRoot(),
+      networkInstall: false,
+      preOpen: true,
+    });
+    if (blacklist) {
+      assertNotBlacklisted(
+        blacklist,
+        loaded.manifest.name,
+        loaded.manifest.version,
+        loaded.digest,
+        loaded.manifest.publisher.keyId
+      );
+    }
+
+    const index = await readCachedIndex(PINNED_CATALOGUE_TRUST, now, runtimeRoot());
+    const evidence = findLocalEvidence(index, bundlePath);
+    if (installed?.verification.indexBound) {
+      const expectedGeneration = installed.verification.indexBound.generation;
+      if (!index || index.stale || index.payload.generation !== expectedGeneration) {
+        throw new Error(
+          `Installed publisher evidence for '${installed.name}' is not bound to the current verified index generation.`
+        );
+      }
+      if (!evidence || evidence.generation !== expectedGeneration) {
+        throw new Error(`The current verified index no longer binds '${installed.name}' to this exact bundle.`);
+      }
+      assertIndexBinding(evidence.entry, loaded.digest, loaded.manifest);
+    }
+
+    const signature = loaded.signature ? (loaded.signature.valid ? 'valid' : 'invalid') : 'unsigned';
+    const knownPublisher = Boolean(evidence && signature === 'valid');
+    const warningDue =
+      !knownPublisher &&
+      (!installed || unknownPublisherWarningDue(installed, now) || installed.verification.signature !== signature);
+    if (warningDue) {
+      const automatedAcceptance = args.includes('--accept-unknown-publisher');
+      const rememberedAcceptance = args.includes('--remember-unknown-publisher');
+      const interactiveAcceptance =
+        !automatedAcceptance &&
+        !rememberedAcceptance &&
+        (await promptForUnknownPublisher(
+          {
+            appId: loaded.manifest.name,
+            name: evidence?.entry.name ?? installed?.name ?? loaded.manifest.name,
+            version: loaded.manifest.version,
+            license: loaded.manifest.license,
+            source: installed?.source ?? 'file',
+            digest: loaded.digest,
+            signature,
+            publisher: loaded.manifest.publisher.name,
+            controlsSummary: installed?.controlsSummary ?? controlsSummaryForManifest(loaded.manifest),
+          },
+          'open'
+        ));
+      if (!automatedAcceptance && !rememberedAcceptance && !interactiveAcceptance) {
+        throw new Error('Unknown Publisher acknowledgement required; pass --accept-unknown-publisher for this run');
+      }
+      // Headless acceptance is one-shot. Desktop's explicit remember action
+      // and an interactive TTY acknowledgement are time-bounded in the store.
+      if (installed && (rememberedAcceptance || interactiveAcceptance)) {
+        markUnknownPublisherWarned(installed, target);
+      }
+    }
   } catch (error) {
-    fs.rmSync(bundlePath, { force: true });
+    if (opened) fs.rmSync(opened.bundlePath, { force: true });
     fail(error instanceof Error ? error.message : String(error), 2);
   }
+  if (!opened) fail('Runtime pre-open verification did not produce an immutable bundle copy.', 2);
+  const { bundlePath, loaded } = opened;
   if (loaded.manifest.type !== 'container') {
     fs.rmSync(bundlePath, { force: true });
     fail(`${loaded.manifest.type} runnable bundle '${loaded.manifest.name}' is not yet supported`, 2);
@@ -374,8 +422,16 @@ export function runtimeStop(args: string[], print = true): void {
   if (print) console.log(`${chalk.green('✓')} stopped ${appId}; pooled VM ${record.poolVm} remains running`);
 }
 
-function stageRuntimeOpenCopy(source: string): string {
-  const directory = path.join(runtimeRoot(), 'preopen');
+export interface VerifiedRuntimeOpenCopy {
+  bundlePath: string;
+  loaded: LoadedRuntimeBundle;
+}
+
+export function stageAndVerifyRuntimeOpenCopy(
+  source: string,
+  expectedDigest?: string,
+  directory = path.join(runtimeRoot(), 'preopen')
+): VerifiedRuntimeOpenCopy {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   fs.chmodSync(directory, 0o700);
   const destination = path.join(
@@ -384,7 +440,22 @@ function stageRuntimeOpenCopy(source: string): string {
   );
   fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
   fs.chmodSync(destination, 0o400);
-  return destination;
+  try {
+    const bounded = readBundleManifest(destination);
+    if (bounded.classification !== 'runnable') {
+      throw new Error('runtime run requires a manifest v2 runnable bundle');
+    }
+    const loaded = verifyBundle(destination, {
+      resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
+    });
+    if (expectedDigest && loaded.digest !== expectedDigest) {
+      throw new Error('installed bundle integrity check failed for the exact immutable pre-open copy');
+    }
+    return { bundlePath: destination, loaded };
+  } catch (cause) {
+    fs.rmSync(destination, { force: true });
+    throw cause;
+  }
 }
 
 function optionValue(args: string[], option: string): string | undefined {

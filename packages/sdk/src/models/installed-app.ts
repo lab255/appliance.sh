@@ -27,6 +27,7 @@ export const installedAppControlsSummarySchema = z.strictObject({
     diskGib: z.number().int().positive().optional(),
   }),
   serviceCount: z.number().int().positive(),
+  serviceNames: z.array(z.string()).default([]),
 });
 
 export const installedAppSchema = z.strictObject({

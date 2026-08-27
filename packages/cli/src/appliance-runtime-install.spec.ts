@@ -2,15 +2,24 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { CatalogueBlacklist, CatalogueIndex, InstalledApp, VerifiedCatalogue } from '@appliance.sh/sdk';
+import {
+  PINNED_CATALOGUE_TRUST,
+  type CatalogueBlacklist,
+  type CatalogueIndex,
+  type InstalledApp,
+  type VerifiedCatalogue,
+} from '@appliance.sh/sdk';
 import {
   BlacklistedBundleError,
   UnknownPublisherError,
+  assertBlacklistStaleness,
+  blacklistRefreshDue,
   formatInstalledAppsTable,
   installBundle,
   unknownPublisherWarningDue,
   uninstallInstalledApp,
 } from './appliance-runtime-install';
+import { readDevSigningKey } from './utils/bundle-sign';
 import { immutableBundlePath, upsertInstalledApp } from './utils/installed-apps';
 import { tinyOciTar } from './utils/bundle-oci-fixture';
 import { writeBundle } from './utils/bundle-write';
@@ -80,6 +89,47 @@ describe('runtime install', () => {
     ).rejects.toBeInstanceOf(BlacklistedBundleError);
   });
 
+  it('reports a valid signature without current index evidence as valid Unknown Publisher', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-install-'));
+    roots.push(directory);
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const keyFile = path.join(directory, 'publisher.pem');
+    fs.writeFileSync(keyFile, privateKey.export({ type: 'pkcs8', format: 'pem' }));
+    const key = readDevSigningKey(keyFile);
+    const unsigned = await unsignedBundle(directory);
+    const signed = await writeBundle({
+      outputPath: path.join(directory, 'signed.appliance.zip'),
+      manifest: unsigned.manifest,
+      files: [
+        {
+          path: 'payload/image.tar',
+          data: tinyOciTar(process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64'),
+        },
+      ],
+      signingKeyPath: keyFile,
+    });
+    const policy = {
+      ...PINNED_CATALOGUE_TRUST,
+      keys: { ...PINNED_CATALOGUE_TRUST.keys, [key.keyId]: key.publicKeyWire },
+    };
+    const error = await installBundle(signed.outputPath, {
+      root: path.join(directory, 'runtime'),
+      verifiedBlacklist: null,
+      policy,
+    }).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(UnknownPublisherError);
+    expect((error as UnknownPublisherError).details.signature).toBe('valid');
+  });
+
+  it('refreshes blacklist evidence after six hours and fails network installs after seven stale days', () => {
+    const verified = blacklist('journal');
+    expect(blacklistRefreshDue(verified, new Date('2026-08-28T05:59:59.000Z'))).toBe(false);
+    expect(blacklistRefreshDue(verified, new Date('2026-08-28T06:00:00.000Z'))).toBe(true);
+    expect(() => assertBlacklistStaleness(verified, new Date('2026-09-10T00:00:00.001Z'), true)).toThrow(
+      'more than seven days stale'
+    );
+  });
+
   it('accepts HTTPS only for URL installs', async () => {
     await expect(installBundle('http://journal.appliance.zip', { verifiedBlacklist: null })).rejects.toThrow(
       'must use HTTPS'
@@ -139,7 +189,14 @@ describe('runtime uninstall/list', () => {
       installedAt: '2026-08-28T00:00:00.000Z',
       source: target === 'local' ? 'file' : 'https://journal.appliance.zip/',
       verification: { signature: 'unsigned' },
-      controlsSummary: { egressHosts: [], mounts: [], publishedPorts: [], resources: {}, serviceCount: 1 },
+      controlsSummary: {
+        egressHosts: [],
+        mounts: [],
+        publishedPorts: [],
+        resources: {},
+        serviceCount: 1,
+        serviceNames: [],
+      },
     };
   }
 
@@ -150,12 +207,29 @@ describe('runtime uninstall/list', () => {
     const local = app(root, 'local');
     fs.mkdirSync(path.dirname(local.bundlePath), { recursive: true });
     fs.writeFileSync(local.bundlePath, 'immutable');
+    const extracted = path.join(root, 'apps', local.appId, local.version);
+    fs.mkdirSync(extracted, { recursive: true });
+    fs.writeFileSync(path.join(extracted, 'payload'), 'runtime payload');
     upsertInstalledApp('local', local, root);
     upsertInstalledApp('cloud', app(root, 'cloud'), root);
     await uninstallInstalledApp('Journal', { target: 'local', root });
     expect(fs.existsSync(local.bundlePath)).toBe(true);
+    expect(fs.existsSync(extracted)).toBe(true);
     await uninstallInstalledApp('journal', { target: 'cloud', root });
     expect(fs.existsSync(local.bundlePath)).toBe(false);
+    expect(fs.existsSync(extracted)).toBe(false);
+  });
+
+  it('never deletes a non-canonical bundle path during uninstall', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-uninstall-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const external = path.join(directory, 'user-owned.appliance.zip');
+    fs.writeFileSync(external, 'keep me');
+    const installed = { ...app(root, 'local'), bundlePath: external };
+    upsertInstalledApp('local', installed, root);
+    await uninstallInstalledApp('journal', { target: 'local', root });
+    expect(fs.readFileSync(external, 'utf8')).toBe('keep me');
   });
 
   it('formats the per-target CLI table', () => {
@@ -174,3 +248,4 @@ describe('runtime uninstall/list', () => {
     expect(unknownPublisherWarningDue(row, new Date('2026-09-28T00:00:00.000Z'))).toBe(true);
   });
 });
+import { generateKeyPairSync } from 'node:crypto';

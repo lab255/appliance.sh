@@ -1,6 +1,22 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { applianceV2Input } from '@appliance.sh/sdk';
-import { describe, expect, it } from 'vitest';
-import { manifestToRuntimePlan, manifestToRuntimePolicy, sanitizeRuntimeLog } from './appliance-runtime.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  manifestToRuntimePlan,
+  manifestToRuntimePolicy,
+  sanitizeRuntimeLog,
+  stageAndVerifyRuntimeOpenCopy,
+} from './appliance-runtime.js';
+import { tinyOciTar } from './utils/bundle-oci-fixture.js';
+import { writeBundle } from './utils/bundle-write.js';
+
+const roots: string[] = [];
+
+afterEach(() => {
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
 
 function manifest(resources: Record<string, number> = {}) {
   return applianceV2Input.parse({
@@ -99,5 +115,27 @@ describe('manifest to effective Runtime policy', () => {
 describe('runtime log rendering', () => {
   it('strips ANSI and terminal control bytes while preserving lines and tabs', () => {
     expect(sanitizeRuntimeLog('\u001b[31mred\u001b[0m\u0000\u0007\tline\nnext\u007f')).toBe('red\tline\nnext');
+  });
+});
+
+describe('runtime immutable pre-open copy', () => {
+  it('hashes the exact staged bytes and rejects a stored digest mismatch before open', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-preopen-'));
+    roots.push(root);
+    const platform = process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
+    const bundleManifest = manifest();
+    bundleManifest.payload.images = { [platform]: { path: 'payload/journal.oci.tar' } };
+    const bundle = await writeBundle({
+      outputPath: path.join(root, 'journal.appliance.zip'),
+      manifest: bundleManifest,
+      files: [{ path: 'payload/journal.oci.tar', data: tinyOciTar(platform) }],
+    });
+    const opened = stageAndVerifyRuntimeOpenCopy(bundle.outputPath, bundle.digest, path.join(root, 'preopen'));
+    fs.appendFileSync(bundle.outputPath, 'source changed after copy');
+    expect(opened.loaded.digest).toBe(bundle.digest);
+    expect(fs.readFileSync(opened.bundlePath).includes(Buffer.from('source changed after copy'))).toBe(false);
+    expect(() =>
+      stageAndVerifyRuntimeOpenCopy(opened.bundlePath, `sha256:${'f'.repeat(64)}`, path.join(root, 'preopen-mismatch'))
+    ).toThrow('exact immutable pre-open copy');
   });
 });

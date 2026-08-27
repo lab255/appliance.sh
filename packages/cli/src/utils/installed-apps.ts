@@ -128,6 +128,7 @@ export function controlsSummaryForManifest(manifest: ApplianceV2): InstalledAppC
   const egressHosts = new Set<string>();
   const mounts = new Map<string, InstalledAppControlsSummary['mounts'][number]>();
   const publishedPorts = new Map<string, InstalledAppControlsSummary['publishedPorts'][number]>();
+  const serviceNames: string[] = [];
   let serviceCount = 0;
 
   const collect = (value: unknown, prefix: string): void => {
@@ -151,6 +152,7 @@ export function controlsSummaryForManifest(manifest: ApplianceV2): InstalledAppC
       }
     } else {
       serviceCount += 1;
+      if (prefix) serviceNames.push(prefix.replace(/\.$/, ''));
     }
   };
 
@@ -161,5 +163,6 @@ export function controlsSummaryForManifest(manifest: ApplianceV2): InstalledAppC
     publishedPorts: [...publishedPorts.values()],
     resources: { ...(manifest.resources ?? {}) },
     serviceCount: Math.max(1, serviceCount),
+    serviceNames: serviceNames.sort(),
   };
 }

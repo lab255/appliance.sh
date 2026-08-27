@@ -33,6 +33,8 @@ import { readRuntimeRegistry, runtimeRoot } from './utils/runtime-registry.js';
 const DEFAULT_CATALOGUE_ORIGIN = 'https://www.appliance.sh';
 const MAX_BUNDLE_BYTES = 2 * 1024 ** 3;
 const UNKNOWN_WARNING_MS = 30 * 24 * 60 * 60 * 1000;
+const BLACKLIST_REFRESH_MS = 6 * 60 * 60 * 1000;
+const BLACKLIST_STALE_LIMIT_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface UnknownPublisherDetails {
   appId: string;
@@ -41,7 +43,7 @@ export interface UnknownPublisherDetails {
   license: string;
   source: string;
   digest: string;
-  signature: 'unsigned' | 'invalid';
+  signature: 'valid' | 'unsigned' | 'invalid';
   publisher: string;
   controlsSummary: InstalledApp['controlsSummary'];
 }
@@ -142,7 +144,7 @@ export async function installBundle(source: string, options: InstallBundleOption
       license: verified.manifest.license,
       source: sourceUrl?.toString() ?? 'file',
       digest: verified.digest,
-      signature: signature === 'valid' ? 'invalid' : signature,
+      signature,
       publisher: verified.manifest.publisher.name,
       controlsSummary,
     };
@@ -281,7 +283,7 @@ function catalogueCacheDirectory(root: string): string {
   return path.join(path.dirname(root), 'catalogue');
 }
 
-async function readCachedIndex(
+export async function readCachedIndex(
   policy: CatalogueTrustPolicy,
   now: Date,
   root: string
@@ -314,7 +316,7 @@ function findCatalogueEntry(
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
 
-function findLocalEvidence(
+export function findLocalEvidence(
   index: VerifiedCatalogue<CatalogueIndex> | undefined,
   stagedPath: string
 ): { entry: CatalogueEntry; generation: number } | undefined {
@@ -326,7 +328,7 @@ function findLocalEvidence(
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
 
-function assertIndexBinding(
+export function assertIndexBinding(
   entry: CatalogueEntry,
   digest: string,
   manifest: ReturnType<typeof verifyBundle>['manifest']
@@ -344,16 +346,67 @@ function assertIndexBinding(
   }
 }
 
-async function loadBlacklist(options: {
+interface BlacklistCache {
+  blacklistJson: string;
+  signatureJson: string;
+  verifiedAt: string;
+}
+
+async function readCachedBlacklist(
+  cacheFile: string,
+  policy: CatalogueTrustPolicy,
+  now: Date
+): Promise<VerifiedCatalogue<CatalogueBlacklist> | null> {
+  try {
+    const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as BlacklistCache;
+    if (!cache.verifiedAt || !Number.isFinite(Date.parse(cache.verifiedAt))) return null;
+    const verified = await verifyCatalogueBlacklistPair({
+      blacklistBytes: new TextEncoder().encode(cache.blacklistJson),
+      envelopeBytes: new TextEncoder().encode(cache.signatureJson),
+      policy,
+      now,
+      allowExpired: true,
+    });
+    return { ...verified, verifiedAt: cache.verifiedAt };
+  } catch {
+    return null;
+  }
+}
+
+export function blacklistRefreshDue(verified: VerifiedCatalogue<CatalogueBlacklist>, now: Date): boolean {
+  return now.getTime() - Date.parse(verified.verifiedAt) >= BLACKLIST_REFRESH_MS;
+}
+
+export function assertBlacklistStaleness(
+  verified: VerifiedCatalogue<CatalogueBlacklist>,
+  now: Date,
+  networkInstall: boolean,
+  preOpen = false
+): void {
+  const staleFor = now.getTime() - Date.parse(verified.payload.expiresAt);
+  if ((networkInstall || preOpen) && staleFor > BLACKLIST_STALE_LIMIT_MS) {
+    throw new Error(
+      `Verified unsafe-app blacklist is more than seven days stale; ${networkInstall ? 'network install' : 'open'} stopped.`
+    );
+  }
+}
+
+export async function loadBlacklist(options: {
   fetcher: typeof fetch;
   catalogueOrigin?: string;
   policy: CatalogueTrustPolicy;
   now: Date;
   root: string;
   networkInstall: boolean;
+  preOpen?: boolean;
 }): Promise<VerifiedCatalogue<CatalogueBlacklist> | null> {
   const directory = catalogueCacheDirectory(options.root);
   const cacheFile = path.join(directory, 'verified-blacklist.json');
+  const cached = await readCachedBlacklist(cacheFile, options.policy, options.now);
+  if (cached && !cached.stale && !blacklistRefreshDue(cached, options.now)) {
+    assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
+    return cached;
+  }
   try {
     const origin = catalogueOrigin(options.catalogueOrigin);
     const [payloadResponse, signatureResponse] = await Promise.all([
@@ -376,33 +429,25 @@ async function loadBlacklist(options: {
     });
     return verified;
   } catch (networkError) {
-    try {
-      const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as { blacklistJson: string; signatureJson: string };
-      const verified = await verifyCatalogueBlacklistPair({
-        blacklistBytes: new TextEncoder().encode(cache.blacklistJson),
-        envelopeBytes: new TextEncoder().encode(cache.signatureJson),
-        policy: options.policy,
-        now: options.now,
-        allowExpired: true,
-      });
-      const expires = Date.parse(verified.payload.expiresAt);
-      if (options.networkInstall && options.now.getTime() > expires + 7 * 24 * 60 * 60 * 1000) {
-        throw new Error('Verified unsafe-app blacklist is more than seven days stale; network install stopped.');
-      }
-      return verified;
-    } catch (cacheError) {
-      if (options.networkInstall) {
-        const detail =
-          cacheError instanceof Error ? cacheError.message : networkError instanceof Error ? networkError.message : '';
-        throw new Error(
-          `A current verified unsafe-app blacklist is required for network installation.${detail ? ` ${detail}` : ''}`
+    if (cached) {
+      assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
+      if (cached.stale) {
+        console.error(
+          chalk.yellow(
+            'Warning: unsafe-app blacklist refresh failed; evaluating the last verified stale blacklist for this operation.'
+          )
         );
       }
-      console.error(
-        chalk.yellow('Warning: no verified unsafe-app blacklist is available; local install continues offline.')
-      );
-      return null;
+      return cached;
     }
+    if (options.networkInstall) {
+      const detail = networkError instanceof Error ? networkError.message : '';
+      throw new Error(
+        `A current verified unsafe-app blacklist is required for network installation.${detail ? ` ${detail}` : ''}`
+      );
+    }
+    console.error(chalk.yellow('Warning: no verified unsafe-app blacklist is available; local operation continues.'));
+    return null;
   }
 }
 
@@ -454,11 +499,28 @@ export async function uninstallInstalledApp(input: string, options: UninstallOpt
   ) {
     await options.stop?.(app.appId);
   }
+  const runtimeAppsRoot = path.resolve(root, 'apps');
+  const extractedAppPath = path.resolve(runtimeAppsRoot, app.appId, app.version);
+  if (!extractedAppPath.startsWith(`${runtimeAppsRoot}${path.sep}`)) {
+    throw new Error('Installed app identity cannot address a runtime extraction outside the apps directory.');
+  }
   const removed = removeInstalledApp(target, app.appId, root);
   if (!removed) throw new Error(`Installed app '${input}' disappeared during uninstall.`);
   if (!options.keepData)
     fs.rmSync(installedAppDataDirectory(target, app.appId, root), { recursive: true, force: true });
-  if (!isBundleReferenced(app.bundlePath, root)) fs.rmSync(app.bundlePath, { force: true });
+  const appStillInstalled = listInstalledTargets(root).some(({ apps }) =>
+    apps.some((candidate) => candidate.appId === app.appId)
+  );
+  if (!appStillInstalled) {
+    fs.rmSync(extractedAppPath, { recursive: true, force: true });
+  }
+  const expectedImmutablePath = immutableBundlePath(app.digest, root);
+  if (
+    path.resolve(app.bundlePath) === path.resolve(expectedImmutablePath) &&
+    !isBundleReferenced(app.bundlePath, root)
+  ) {
+    fs.rmSync(app.bundlePath, { force: true });
+  }
   return app;
 }
 
@@ -498,6 +560,9 @@ export async function promptForUnknownPublisher(
   if (!process.stdin.isTTY || !process.stdout.isTTY) return false;
   console.error(chalk.yellow('Unknown Publisher'));
   console.error(`${details.name} ${details.version} · ${details.license} · ${details.digest.slice(0, 19)}…`);
+  console.error(
+    `Signature: ${details.signature === 'valid' ? 'valid; publisher evidence unavailable' : details.signature}`
+  );
   console.error('Publisher identity and code origin could not be verified. Requested controls are shown separately.');
   printControlsSummary(details.controlsSummary, console.error);
   const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -514,7 +579,7 @@ export async function runRuntimeInstallCommand(args: string[]): Promise<void> {
     console.log('Usage: appliance runtime install <path|https-url> [--accept-unknown-publisher] [--json]');
     return;
   }
-  const source = args.find((arg) => !arg.startsWith('-'));
+  const source = firstPositional(args, ['--target']);
   if (!source) throw new Error('Usage: appliance runtime install <path|https-url>');
   const target = optionValue(args, '--target');
   let installed: InstalledApp;
@@ -548,7 +613,7 @@ export async function runRuntimeUninstallCommand(
     console.log('Usage: appliance runtime uninstall <app> [--keep-data]');
     return;
   }
-  const input = args.find((arg) => !arg.startsWith('-'));
+  const input = firstPositional(args, ['--target']);
   if (!input) throw new Error('Usage: appliance runtime uninstall <app> [--keep-data]');
   const removed = await uninstallInstalledApp(input, {
     target: optionValue(args, '--target'),
@@ -580,6 +645,17 @@ export function runRuntimeListCommand(args: string[]): void {
 function optionValue(args: string[], option: string): string | undefined {
   const index = args.indexOf(option);
   return index >= 0 ? args[index + 1] : undefined;
+}
+
+function firstPositional(args: string[], valueOptions: string[]): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    if (valueOptions.includes(args[index]!)) {
+      index += 1;
+      continue;
+    }
+    if (!args[index]!.startsWith('-')) return args[index];
+  }
+  return undefined;
 }
 
 function printControlsSummary(summary: InstalledApp['controlsSummary'], output: (line: string) => void): void {

@@ -45,6 +45,10 @@ target names are used as their directory name; unusual names are represented by
 a stable SHA-256-derived directory key so path separators can never escape the
 store root.
 
+This precedence is specific to `runtime install`; the top-level builder
+`install` intentionally ignores `APPLIANCE_PROFILE` as documented in
+[CLI target selection](cli.md#install-versus-deploy).
+
 `uninstall` stops a running app first and removes its per-target record and app
 data. `--keep-data` retains the data directory. The immutable bundle remains
 while any other target references it and is deleted after the last reference is

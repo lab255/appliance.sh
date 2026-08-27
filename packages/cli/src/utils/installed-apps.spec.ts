@@ -25,7 +25,14 @@ function fixture(root: string, overrides: Partial<InstalledApp> = {}): Installed
     installedAt: '2026-08-28T00:00:00.000Z',
     source: 'file',
     verification: { signature: 'unsigned' },
-    controlsSummary: { egressHosts: [], mounts: [], publishedPorts: [], resources: {}, serviceCount: 1 },
+    controlsSummary: {
+      egressHosts: [],
+      mounts: [],
+      publishedPorts: [],
+      resources: {},
+      serviceCount: 1,
+      serviceNames: [],
+    },
     ...overrides,
   };
 }
