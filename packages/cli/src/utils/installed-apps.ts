@@ -9,7 +9,8 @@ import { runtimeRoot } from './runtime-registry.js';
 export const INSTALLED_APPS_SCHEMA = 'appliance.installed-apps/v1' as const;
 
 export function currentWorkspaceTarget(explicit?: string): string {
-  const target = explicit?.trim() || process.env.APPLIANCE_PROFILE?.trim() || readProfiles().activeProfile?.trim() || 'local';
+  const target =
+    explicit?.trim() || process.env.APPLIANCE_PROFILE?.trim() || readProfiles().activeProfile?.trim() || 'local';
   if (!target) throw new Error('The current workspace target is empty.');
   return target;
 }
@@ -38,7 +39,8 @@ export function immutableBundlePath(digest: string, root = runtimeRoot()): strin
 }
 
 export function installedAppDataDirectory(target: string, appId: string, root = runtimeRoot()): string {
-  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(appId)) throw new Error('Cannot address app data with an invalid app id.');
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(appId))
+    throw new Error('Cannot address app data with an invalid app id.');
   return path.join(installedTargetDirectory(target, root), 'data', appId);
 }
 
@@ -136,9 +138,9 @@ export function controlsSummaryForManifest(manifest: ApplianceV2): InstalledAppC
     for (const mount of (service.mounts as InstalledAppControlsSummary['mounts'] | undefined) ?? []) {
       mounts.set(`${prefix}${mount.name}`, mount);
     }
-    for (const port of
-      (service.ports as Array<InstalledAppControlsSummary['publishedPorts'][number] & { expose?: string }> | undefined) ??
-      []) {
+    for (const port of (service.ports as
+      | Array<InstalledAppControlsSummary['publishedPorts'][number] & { expose?: string }>
+      | undefined) ?? []) {
       if (port.expose === 'host') {
         publishedPorts.set(`${prefix}${port.name}`, { name: port.name, guest: port.guest, protocol: port.protocol });
       }

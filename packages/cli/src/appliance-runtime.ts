@@ -9,10 +9,7 @@ import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
-import {
-  currentWorkspaceTarget,
-  resolveInstalledApp,
-} from './utils/installed-apps.js';
+import { currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
 import {
   markUnknownPublisherWarned,
   promptForUnknownPublisher,
@@ -165,8 +162,11 @@ async function runtimeRun(args: string[]): Promise<void> {
   const target = currentWorkspaceTarget(optionValue(args, '--target'));
   const installed = !fs.existsSync(path.resolve(input)) ? resolveInstalledApp(input, target) : null;
   if (installed && unknownPublisherWarningDue(installed)) {
-    const accepted =
-      args.includes('--accept-unknown-publisher') ||
+    const automatedAcceptance = args.includes('--accept-unknown-publisher');
+    const rememberedAcceptance = args.includes('--remember-unknown-publisher');
+    const interactiveAcceptance =
+      !automatedAcceptance &&
+      !rememberedAcceptance &&
       (await promptForUnknownPublisher(
         {
           appId: installed.appId,
@@ -181,8 +181,12 @@ async function runtimeRun(args: string[]): Promise<void> {
         },
         'open'
       ));
+    const accepted = automatedAcceptance || rememberedAcceptance || interactiveAcceptance;
     if (!accepted) fail('Unknown Publisher acknowledgement required; pass --accept-unknown-publisher for this run', 2);
-    markUnknownPublisherWarned(installed, target);
+    // The headless --accept flag applies to this invocation only. A desktop
+    // user explicitly choosing the 30-day action uses the internal remember
+    // flag; an interactive TTY acknowledgement is also time-bounded.
+    if (rememberedAcceptance || interactiveAcceptance) markUnknownPublisherWarned(installed, target);
   }
   const originalBundlePath = installed?.bundlePath ?? path.resolve(input);
   const bundlePath = stageRuntimeOpenCopy(originalBundlePath);
@@ -272,9 +276,14 @@ async function runtimeRun(args: string[]): Promise<void> {
     fail(`runtime supervisor did not start '${plan.appId}': ${String(started.message ?? 'unknown error')}`, 1);
   }
   updateRuntimeRecord(plan.appId, { state: 'running', poolRestartPending: false });
-  for (const port of hostPorts) {
-    console.log(`${chalk.green('✓')} ${port.name}: http://127.0.0.1:${port.host} → ${principalIp}:${port.guest}/tcp`);
+  const urls = hostPorts.map((port) => `http://127.0.0.1:${port.host}`);
+  if (args.includes('--json')) console.log(JSON.stringify({ appId: plan.appId, urls }));
+  else {
+    for (const port of hostPorts) {
+      console.log(`${chalk.green('✓')} ${port.name}: http://127.0.0.1:${port.host} → ${principalIp}:${port.guest}/tcp`);
+    }
   }
+  if (args.includes('--detach')) return;
   console.log(chalk.dim(`streaming ${plan.appId} logs; Ctrl-C stops the app but leaves ${RUNTIME_POOL_VM} running`));
 
   let stopping = false;

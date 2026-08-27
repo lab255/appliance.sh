@@ -60,7 +60,11 @@ export class UnknownPublisherError extends Error {
 }
 
 export class BlacklistedBundleError extends Error {
-  constructor(readonly selector: string, readonly reason: string, readonly verifiedAt: string) {
+  constructor(
+    readonly selector: string,
+    readonly reason: string,
+    readonly verifiedAt: string
+  ) {
     super(`Install refused: ${selector} is on the verified unsafe-app blacklist (${reason}, verified ${verifiedAt}).`);
     this.name = 'BlacklistedBundleError';
   }
@@ -93,7 +97,9 @@ export async function installBundle(source: string, options: InstallBundleOption
       (sourceUrl
         ? await fetchVerifiedIndex(options.fetcher ?? fetch, options.catalogueOrigin, policy, now)
         : await readCachedIndex(policy, now, root));
-    const expectedEntry = sourceUrl ? findCatalogueEntry(index, sourceUrl.toString()) : findLocalEvidence(index, staging);
+    const expectedEntry = sourceUrl
+      ? findCatalogueEntry(index, sourceUrl.toString())
+      : findLocalEvidence(index, staging);
     const verified = verifyBundle(staging, {
       resolvePublicKey: (keyId) => policy.keys[keyId],
     });
@@ -102,7 +108,7 @@ export async function installBundle(source: string, options: InstallBundleOption
     if (sourceUrl && !expectedEntry) {
       throw new Error('Catalogue URL is not bound by the current verified free-app index.');
     }
-    if (sourceUrl && verified.signature && !verified.signature.valid) {
+    if (sourceUrl && (!verified.signature || !verified.signature.valid)) {
       throw new Error('Catalogue bundle signature could not be verified against its current index evidence.');
     }
 
@@ -117,7 +123,14 @@ export async function installBundle(source: string, options: InstallBundleOption
             networkInstall: Boolean(sourceUrl),
           })
         : options.verifiedBlacklist;
-    if (blacklist) assertNotBlacklisted(blacklist, verified.manifest.name, verified.manifest.version, verified.digest, verified.manifest.publisher.keyId);
+    if (blacklist)
+      assertNotBlacklisted(
+        blacklist,
+        verified.manifest.name,
+        verified.manifest.version,
+        verified.digest,
+        verified.manifest.publisher.keyId
+      );
 
     const signature = verified.signature ? (verified.signature.valid ? 'valid' : 'invalid') : 'unsigned';
     const tier = expectedEntry && signature === 'valid' ? expectedEntry.entry.tier : 'unknown';
@@ -170,7 +183,6 @@ export async function installBundle(source: string, options: InstallBundleOption
         ...(expectedEntry ? { indexBound: { generation: expectedEntry.generation } } : {}),
       },
       controlsSummary,
-      ...(tier === 'unknown' ? { lastWarnedAt: now.toISOString() } : {}),
     };
     upsertInstalledApp(target, installed, root);
     return installed;
@@ -187,10 +199,18 @@ function parseSourceUrl(source: string): URL | null {
   return url;
 }
 
-async function stageSource(source: string, sourceUrl: URL | null, root: string, fetcher: typeof fetch): Promise<string> {
+async function stageSource(
+  source: string,
+  sourceUrl: URL | null,
+  root: string,
+  fetcher: typeof fetch
+): Promise<string> {
   const directory = path.join(root, 'downloads');
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  const staging = path.join(directory, `install-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`);
+  const staging = path.join(
+    directory,
+    `install-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`
+  );
   if (!sourceUrl) {
     const local = path.resolve(source);
     const stat = fs.statSync(local);
@@ -306,8 +326,13 @@ function findLocalEvidence(
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
 
-function assertIndexBinding(entry: CatalogueEntry, digest: string, manifest: ReturnType<typeof verifyBundle>['manifest']): void {
-  if (entry.digest !== digest) throw new Error(`Catalogue digest mismatch: expected ${entry.digest}, received ${digest}.`);
+function assertIndexBinding(
+  entry: CatalogueEntry,
+  digest: string,
+  manifest: ReturnType<typeof verifyBundle>['manifest']
+): void {
+  if (entry.digest !== digest)
+    throw new Error(`Catalogue digest mismatch: expected ${entry.digest}, received ${digest}.`);
   if (
     entry.id !== manifest.name ||
     entry.version !== manifest.version ||
@@ -367,10 +392,15 @@ async function loadBlacklist(options: {
       return verified;
     } catch (cacheError) {
       if (options.networkInstall) {
-        const detail = cacheError instanceof Error ? cacheError.message : networkError instanceof Error ? networkError.message : '';
-        throw new Error(`A current verified unsafe-app blacklist is required for network installation.${detail ? ` ${detail}` : ''}`);
+        const detail =
+          cacheError instanceof Error ? cacheError.message : networkError instanceof Error ? networkError.message : '';
+        throw new Error(
+          `A current verified unsafe-app blacklist is required for network installation.${detail ? ` ${detail}` : ''}`
+        );
       }
-      console.error(chalk.yellow('Warning: no verified unsafe-app blacklist is available; local install continues offline.'));
+      console.error(
+        chalk.yellow('Warning: no verified unsafe-app blacklist is available; local install continues offline.')
+      );
       return null;
     }
   }
@@ -397,7 +427,11 @@ export function assertNotBlacklisted(
     const digestMatch = entry.digest === digest;
     const publisherMatch = Boolean(publisherKeyId && entry.publisherKeyId === publisherKeyId);
     if (appMatch || digestMatch || publisherMatch) {
-      const selector = digestMatch ? `digest ${digest}` : publisherMatch ? `publisher ${publisherKeyId}` : `app ${appId}`;
+      const selector = digestMatch
+        ? `digest ${digest}`
+        : publisherMatch
+          ? `publisher ${publisherKeyId}`
+          : `app ${appId}`;
       throw new BlacklistedBundleError(selector, entry.reason, verified.verifiedAt);
     }
   }
@@ -415,12 +449,15 @@ export async function uninstallInstalledApp(input: string, options: UninstallOpt
   const target = currentWorkspaceTarget(options.target);
   const app = resolveInstalledApp(input, target, root);
   if (!app) throw new Error(`Installed app '${input}' was not found for target '${target}'.`);
-  if (readRuntimeRegistry().some((record) => record.appId === app.appId && ['starting', 'running'].includes(record.state))) {
+  if (
+    readRuntimeRegistry().some((record) => record.appId === app.appId && ['starting', 'running'].includes(record.state))
+  ) {
     await options.stop?.(app.appId);
   }
   const removed = removeInstalledApp(target, app.appId, root);
   if (!removed) throw new Error(`Installed app '${input}' disappeared during uninstall.`);
-  if (!options.keepData) fs.rmSync(installedAppDataDirectory(target, app.appId, root), { recursive: true, force: true });
+  if (!options.keepData)
+    fs.rmSync(installedAppDataDirectory(target, app.appId, root), { recursive: true, force: true });
   if (!isBundleReferenced(app.bundlePath, root)) fs.rmSync(app.bundlePath, { force: true });
   return app;
 }
@@ -442,7 +479,12 @@ export function unknownPublisherWarningDue(app: InstalledApp, now = new Date()):
   return now.getTime() - Date.parse(app.lastWarnedAt) >= UNKNOWN_WARNING_MS;
 }
 
-export function markUnknownPublisherWarned(app: InstalledApp, target: string, root = runtimeRoot(), now = new Date()): void {
+export function markUnknownPublisherWarned(
+  app: InstalledApp,
+  target: string,
+  root = runtimeRoot(),
+  now = new Date()
+): void {
   const apps = readInstalledApps(target, root).map((entry) =>
     entry.appId === app.appId ? { ...entry, lastWarnedAt: now.toISOString() } : entry
   );
@@ -490,7 +532,9 @@ export async function runRuntimeInstallCommand(args: string[]): Promise<void> {
     console.log(JSON.stringify(installed));
     return;
   }
-  console.log(`${chalk.green('✓')} installed ${installed.name} ${installed.version} for ${currentWorkspaceTarget(target)}`);
+  console.log(
+    `${chalk.green('✓')} installed ${installed.name} ${installed.version} for ${currentWorkspaceTarget(target)}`
+  );
   console.log(`Publisher: ${installed.publisher.tier === 'unknown' ? 'Unknown Publisher' : installed.publisher.name}`);
   console.log(`Bundle: ${installed.bundlePath}`);
   printControlsSummary(installed.controlsSummary, console.log);
@@ -511,7 +555,9 @@ export async function runRuntimeUninstallCommand(
     keepData: args.includes('--keep-data'),
     stop,
   });
-  console.log(`${chalk.green('✓')} uninstalled ${removed.name}${args.includes('--keep-data') ? '; app data kept' : ''}`);
+  console.log(
+    `${chalk.green('✓')} uninstalled ${removed.name}${args.includes('--keep-data') ? '; app data kept' : ''}`
+  );
 }
 
 export function runRuntimeListCommand(args: string[]): void {
@@ -540,6 +586,10 @@ function printControlsSummary(summary: InstalledApp['controlsSummary'], output: 
   output('Controls summary:');
   output(`  services: ${summary.serviceCount}`);
   output(`  egress: ${summary.egressHosts.join(', ') || 'none'}`);
-  output(`  mounts: ${summary.mounts.map((mount) => `${mount.name}:${mount.guest}${mount.readOnly ? ' (read-only)' : ''}`).join(', ') || 'none'}`);
-  output(`  published ports: ${summary.publishedPorts.map((port) => `${port.name}:${port.guest}/${port.protocol}`).join(', ') || 'none'}`);
+  output(
+    `  mounts: ${summary.mounts.map((mount) => `${mount.name}:${mount.guest}${mount.readOnly ? ' (read-only)' : ''}`).join(', ') || 'none'}`
+  );
+  output(
+    `  published ports: ${summary.publishedPorts.map((port) => `${port.name}:${port.guest}/${port.protocol}`).join(', ') || 'none'}`
+  );
 }

@@ -8,6 +8,7 @@ import {
   UnknownPublisherError,
   formatInstalledAppsTable,
   installBundle,
+  unknownPublisherWarningDue,
   uninstallInstalledApp,
 } from './appliance-runtime-install';
 import { immutableBundlePath, upsertInstalledApp } from './utils/installed-apps';
@@ -163,5 +164,13 @@ describe('runtime uninstall/list', () => {
       'TARGET\tAPP\tVERSION\tLICENSE\tPUBLISHER\tINSTALLED\n' +
         'local\tJournal\t1.2.0\tMIT\tUnknown Publisher\t2026-08-28T00:00:00.000Z'
     );
+  });
+
+  it('re-warns an unknown publisher after the 30-day RFC cadence', () => {
+    const row = app('/tmp/runtime', 'local');
+    expect(unknownPublisherWarningDue(row, new Date('2026-09-01T00:00:00.000Z'))).toBe(true);
+    row.lastWarnedAt = '2026-08-28T00:00:00.000Z';
+    expect(unknownPublisherWarningDue(row, new Date('2026-09-01T00:00:00.000Z'))).toBe(false);
+    expect(unknownPublisherWarningDue(row, new Date('2026-09-28T00:00:00.000Z'))).toBe(true);
   });
 });
