@@ -110,6 +110,26 @@ describe('manifest to effective Runtime policy', () => {
       allowPorts: { 'example.com': [80, 443] },
     });
   });
+
+  it('rewrites effective policy as the intersection after an egress revoke', () => {
+    const value = manifest();
+    value.network = {
+      egress: [
+        { host: 'api.example.test', ports: [443] },
+        { host: 'sync.example.test', ports: [443] },
+      ],
+    };
+    const effective = manifestToRuntimePolicy(value, '192.168.127.10', [
+      {
+        id: 'egress:api.example.test',
+        control: 'egress-host',
+        value: { host: 'api.example.test', ports: [443] },
+        approvedAt: '2026-08-28T00:00:00.000Z',
+      },
+    ]);
+    expect(effective.policy.allow).toEqual(['api.example.test']);
+    expect(effective.allowPorts).toEqual({ 'api.example.test': [443] });
+  });
 });
 
 describe('runtime log rendering', () => {
