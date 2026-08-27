@@ -502,6 +502,21 @@ mod tests {
     }
 
     #[test]
+    fn legacy_connect_still_targets_the_guest_lease() {
+        let (connect_tx, connect_rx) = std::sync::mpsc::channel();
+        let netstack = Netstack {
+            guest_ip: GUEST_IP,
+            connect_tx,
+        };
+        let dial = std::thread::spawn(move || netstack.connect(8080).unwrap());
+        let request = connect_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert_eq!(request.target_ip, GUEST_IP);
+        assert_eq!(request.port, 8080);
+        request.bridge.lock().unwrap().established = true;
+        let _bridge = dial.join().unwrap();
+    }
+
+    #[test]
     fn bridge_pump_forwards_a_flow_to_a_mock_upstream() {
         // The accept→forward path: a terminated guest flow's bytes
         // (guest_to_ext) are spliced to an upstream, and the upstream's
