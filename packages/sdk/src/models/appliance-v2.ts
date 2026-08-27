@@ -132,9 +132,7 @@ export const applianceV2BinaryPayloadInput = z
   })
   .strict();
 
-// This intentionally small denylist covers the RFC examples and common public
-// suffixes; adopting the full Public Suffix List is deferred until it can be
-// shipped and updated without adding network-dependent validation.
+// TODO(psl): replace the hardcoded public-suffix set with the tldts package in a follow-up.
 const publicSuffixes = new Set([
   'com',
   'net',
