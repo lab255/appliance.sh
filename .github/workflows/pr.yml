@@ -55,7 +55,7 @@ jobs:
   runtime-samples:
     name: Runtime samples
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -74,11 +74,10 @@ jobs:
           bun-version: latest
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build Runtime sample CLI
-        run: pnpm exec nx run @appliance.sh/cli:build
-      - name: Build and verify Runtime samples
+      - name: Build and verify Runtime samples (Docker required)
         env:
           OUT: ${{ runner.temp }}/runtime-samples
+        # CI requires Docker (`--require-docker`); local builds skip with a message.
         run: scripts/build-runtime-samples.sh --require-docker
       - name: Upload Runtime sample bundles
         uses: actions/upload-artifact@v4

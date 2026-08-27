@@ -2,7 +2,7 @@
 set -eu
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-OUT=${OUT:-${TMPDIR:-/tmp}}
+OUT=${OUT:-${TMPDIR:-/tmp}/appliance-runtime-samples}
 REQUIRE_DOCKER=0
 
 case "${1:-}" in
@@ -23,11 +23,17 @@ fi
 mkdir -p "$OUT"
 OUT=$(CDPATH= cd -- "$OUT" && pwd -P)
 
+# The package command runs from TypeScript source, but its two workspace
+# imports publish compiled entrypoints. Build only those small dependencies;
+# compiling the standalone CLI binary is unnecessary.
+(cd "$REPO" && pnpm exec nx run-many --target=build --projects=@appliance.sh/sdk,@appliance.sh/helper)
+
 build_sample() {
   name=$1
   shift
   bundle=$OUT/$name.appliance.zip
   printf 'Building %s...\n' "$name"
+  rm -f "$bundle"
   if ! "$@" "$bundle"; then
     echo "Runtime sample packaging failed: $name" >&2
     exit 1
