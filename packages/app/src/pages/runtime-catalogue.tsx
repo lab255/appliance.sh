@@ -99,7 +99,9 @@ export function CatalogueContent({
   error: string | null;
   loading?: boolean;
 }) {
-  const [query, setQuery] = React.useState('');
+  const [query, setQuery] = React.useState(() =>
+    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('q') ?? '')
+  );
   const [category, setCategory] = React.useState<Category>('All');
   const [installMessage, setInstallMessage] = React.useState<string | null>(null);
   const entries = React.useMemo(() => {
