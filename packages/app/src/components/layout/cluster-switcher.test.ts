@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { Tag } from '@/components/ui/tag';
 import type { Cluster } from '@/lib/host';
 import { switcherName, workspaceKind } from './cluster-switcher';
 
@@ -28,6 +31,12 @@ describe('workspace switcher presentation', () => {
   it('derives workspace kind from the existing cluster identity', () => {
     expect(workspaceKind(local)).toBe('local');
     expect(workspaceKind(cloud)).toBe('cloud');
+  });
+
+  it('renders cloud metadata with the semantic info tag', () => {
+    const html = renderToStaticMarkup(createElement(Tag, { emphasis: 'info', children: 'cloud' }));
+    expect(html).toContain('--color-info-background');
+    expect(html).toContain('--color-info-foreground');
   });
 
   it('keeps the menu semantics and keyboard contract in the switcher', () => {

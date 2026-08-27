@@ -88,7 +88,6 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const [activeIndex, setActiveIndex] = React.useState(0);
-  const [showSetupAction, setShowSetupAction] = React.useState(false);
 
   const localClusters = orderedClusters.filter((item) => isMicroVmClusterId(item.id));
   const cloudClusters = orderedClusters.filter((item) => !isMicroVmClusterId(item.id));
@@ -181,7 +180,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
   if (clusters.length === 0 && coreMachines.length === 0 && isMachineLoading) {
     return <div className="text-xs text-[var(--color-muted-foreground)]">…</div>;
   }
-  if (clusters.length === 0 && coreMachines.length === 0 && !host.vm) {
+  if (clusters.length === 0 && coreMachines.length === 0 && !host.vm && !workspacePresentation) {
     return <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">Not connected</div>;
   }
 
@@ -217,7 +216,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
             isMicroVmClusterId(cluster.id) ? (
               <Tag emphasis="sandbox">sandboxed</Tag>
             ) : (
-              <Tag className="bg-[var(--color-info-background)] text-[var(--color-info-foreground)]">cloud</Tag>
+              <Tag emphasis="info">cloud</Tag>
             )
           ) : (
             <Tag>not set up</Tag>
@@ -302,9 +301,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                     type="button"
                     role="menuitem"
                     tabIndex={activeIndex === 0 ? 0 : -1}
-                    onClick={() => {
-                      setShowSetupAction(true);
-                    }}
+                    onClick={onSetupWorkspace}
                     className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                   >
                     <div className="w-4" />
@@ -313,20 +310,10 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                         This Mac <Tag>not set up</Tag>
                       </div>
                       <div className="text-xs leading-4 text-[var(--color-muted-foreground)]">
-                        Select to set up a sandbox
+                        Set up your Mac sandbox
                       </div>
                     </div>
                   </button>
-                  {showSetupAction ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={onSetupWorkspace}
-                      className="mx-3 mb-2 rounded-md border border-[var(--color-info-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-info-foreground)] hover:bg-[var(--color-info-background)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                    >
-                      Set up your Mac sandbox
-                    </button>
-                  ) : null}
                 </li>
               )}
               {cloudClusters.map((c, cloudIndex) => {
@@ -354,9 +341,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 font-medium">
                           {pending ? 'Switching…' : targetName(c)}
-                          <Tag className="bg-[var(--color-info-background)] text-[var(--color-info-foreground)]">
-                            cloud
-                          </Tag>
+                          <Tag emphasis="info">cloud</Tag>
                         </div>
                         <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
                           {c.apiServerUrl}
