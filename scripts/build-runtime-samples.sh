@@ -34,10 +34,16 @@ build_sample() {
   bundle=$OUT/$name.appliance.zip
   printf 'Building %s...\n' "$name"
   rm -f "$bundle"
-  if ! "$@" "$bundle"; then
+  log=$OUT/$name.build.log
+  if ! "$@" "$bundle" >"$log" 2>&1; then
+    cat "$log" >&2
     echo "Runtime sample packaging failed: $name" >&2
+    if grep -q "OCI exporter is not supported" "$log"; then
+      echo "Hint: the default docker buildx driver cannot export OCI images; run \`docker buildx create --use\` to switch to a docker-container driver." >&2
+    fi
     exit 1
   fi
+  cat "$log"
   if [ ! -s "$bundle" ]; then
     echo "Runtime sample packaging produced no bundle: $bundle" >&2
     exit 1
