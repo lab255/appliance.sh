@@ -264,6 +264,8 @@ enum RuntimeCmd {
         app: String,
         #[arg(default_value_t = 0)]
         offset: u64,
+        #[arg(long)]
+        service: Option<String>,
     },
 }
 
@@ -1428,7 +1430,7 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
             let started = serde_json::from_str::<serde_json::Value>(&response)
                 .ok()
                 .and_then(|value| value.get("state").and_then(serde_json::Value::as_str).map(str::to_owned))
-                .is_some_and(|state| state == "running");
+                .is_some_and(|state| matches!(state.as_str(), "running" | "degraded"));
             if !started {
                 for port in &plan.ports {
                     let _ = runtime_forward_request(
@@ -1445,7 +1447,7 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
         }
         RuntimeCmd::Stop { name, app } => runtime_stop_request(&name, &app),
         RuntimeCmd::Status { name, app } => runtime_status_request(&name, &app),
-        RuntimeCmd::Logs { name, app, offset } => runtime_logs_request(&name, &app, offset),
+        RuntimeCmd::Logs { name, app, offset, service } => runtime_logs_request(&name, &app, offset, service.as_deref()),
     }
 }
 
@@ -1922,21 +1924,24 @@ fn runtime_stop_request(name: &str, app: &str) -> Result<()> {
 
 fn runtime_status_request(name: &str, app: &str) -> Result<()> {
     let response = runtime_lifecycle_request(name, app, "status")?;
-    let running = serde_json::from_str::<serde_json::Value>(&response)
+    let active = serde_json::from_str::<serde_json::Value>(&response)
         .ok()
         .and_then(|value| value.get("state").and_then(serde_json::Value::as_str).map(str::to_owned))
-        .is_some_and(|state| state == "running");
-    if !running {
+        .is_some_and(|state| matches!(state.as_str(), "starting" | "running" | "degraded"));
+    if !active {
         runtime_unbind_app_forwards(name, app)?;
     }
     println!("{response}");
     Ok(())
 }
 
-fn runtime_logs_request(name: &str, app: &str, offset: u64) -> Result<()> {
+fn runtime_logs_request(name: &str, app: &str, offset: u64, service: Option<&str>) -> Result<()> {
     validate_runtime_app_id(app)?;
+    if let Some(service) = service {
+        validate_runtime_app_id(service).context("validate Runtime log service")?;
+    }
     ensure_runtime_running(name)?;
-    let request = serde_json::json!({ "action": "logs", "appId": app, "offset": offset });
+    let request = serde_json::json!({ "action": "logs", "appId": app, "offset": offset, "service": service });
     let response = guest_exec::runtime_request(name, &request.to_string())
         .map_err(|error| anyhow::anyhow!("runtime logs RPC: {error}"))?;
     println!("{response}");

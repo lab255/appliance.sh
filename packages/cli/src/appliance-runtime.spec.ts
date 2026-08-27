@@ -1,6 +1,11 @@
 import { applianceV2Input } from '@appliance.sh/sdk';
 import { describe, expect, it } from 'vitest';
-import { manifestToRuntimePlan, manifestToRuntimePolicy, sanitizeRuntimeLog } from './appliance-runtime.js';
+import {
+  manifestToRuntimePlan,
+  manifestToRuntimePolicy,
+  prefixServiceLog,
+  sanitizeRuntimeLog,
+} from './appliance-runtime.js';
 
 function manifest(resources: Record<string, number> = {}) {
   return applianceV2Input.parse({
@@ -219,5 +224,9 @@ describe('manifest to effective Runtime policy', () => {
 describe('runtime log rendering', () => {
   it('strips ANSI and terminal control bytes while preserving lines and tabs', () => {
     expect(sanitizeRuntimeLog('\u001b[31mred\u001b[0m\u0000\u0007\tline\nnext\u007f')).toBe('red\tline\nnext');
+  });
+
+  it('prefixes every compound service log line', () => {
+    expect(prefixServiceLog('api', 'ready\nrequest\n')).toBe('[api] ready\n[api] request\n');
   });
 });
