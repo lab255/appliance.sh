@@ -1,0 +1,93 @@
+{
+  "manifest": "v2",
+  "kind": "runnable",
+  "type": "compound",
+  "name": "notes-suite",
+  "version": "2.0.0",
+  "license": "MIT",
+  "description": "Two-service shared-VM Runtime lifecycle example",
+  "publisher": {
+    "name": "Lab 255 examples"
+  },
+  "ui": {
+    "type": "web",
+    "service": "web",
+    "port": "http",
+    "path": "/"
+  },
+  "services": {
+    "web": {
+      "type": "container",
+      "payload": {
+        "images": {
+          "linux/amd64": {
+            "path": "payload/web/web-linux-amd64.oci.tar"
+          },
+          "linux/arm64": {
+            "path": "payload/web/web-linux-arm64.oci.tar"
+          }
+        }
+      },
+      "dependsOn": ["api"],
+      "health": {
+        "type": "http",
+        "port": "http",
+        "path": "/",
+        "intervalSeconds": 1,
+        "timeoutSeconds": 1,
+        "failureThreshold": 5
+      },
+      "restart": {
+        "policy": "on-failure",
+        "maxAttempts": 5,
+        "backoffSeconds": 1
+      },
+      "required": true,
+      "ports": [
+        {
+          "name": "http",
+          "guest": 3000,
+          "protocol": "tcp",
+          "expose": "host",
+          "primary": true
+        }
+      ]
+    },
+    "api": {
+      "type": "container",
+      "payload": {
+        "images": {
+          "linux/amd64": {
+            "path": "payload/api/api-linux-amd64.oci.tar"
+          },
+          "linux/arm64": {
+            "path": "payload/api/api-linux-arm64.oci.tar"
+          }
+        }
+      },
+      "health": {
+        "type": "http",
+        "port": "api",
+        "path": "/healthz",
+        "intervalSeconds": 1,
+        "timeoutSeconds": 1,
+        "failureThreshold": 3
+      },
+      "restart": {
+        "policy": "always",
+        "maxAttempts": 5,
+        "backoffSeconds": 1
+      },
+      "required": true,
+      "ports": [
+        {
+          "name": "api",
+          "guest": 9000,
+          "protocol": "tcp",
+          "expose": "internal",
+          "primary": true
+        }
+      ]
+    }
+  }
+}
