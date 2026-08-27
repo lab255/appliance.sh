@@ -1817,19 +1817,22 @@ status() {
   SERVICES_JSON=$(jq -s '.' "$ROWS")
   DESIRED=$(cat "$STATE/desired" 2>/dev/null || echo starting)
   case "$DESIRED" in
-    failed|stopping|stopped|degraded) APP_STATE=$DESIRED ;;
+    failed|stopping|stopped|degraded|exited) APP_STATE=$DESIRED ;;
     *)
-      if printf '%s' "$SERVICES_JSON" | jq -e 'any(.[]; .required and (.state == "failed" or .state == "exited" or .state == "blocked"))' >/dev/null; then
-        APP_STATE=failed
-      elif printf '%s' "$SERVICES_JSON" | jq -e 'any(.[]; .state == "starting" or .state == "restarting")' >/dev/null; then
+      if printf '%s' "$SERVICES_JSON" | jq -e 'any(.[]; .state == "starting" or .state == "restarting")' >/dev/null; then
         APP_STATE=starting
       elif printf '%s' "$SERVICES_JSON" | jq -e 'any(.[]; (.required == false) and (.state == "failed" or .state == "exited" or .state == "blocked"))' >/dev/null; then
         APP_STATE=degraded
       else APP_STATE=running; fi
       ;;
   esac
+  CULPRIT=$(cat "$STATE/culprit" 2>/dev/null || true)
+  EXIT_CODE=$(cat "$STATE/exit-code" 2>/dev/null || true)
   jq -nc --arg state "$APP_STATE" --argjson services "$SERVICES_JSON" \
-    '{state: $state, serviceCount: ($services | length), services: $services}'
+    --arg culprit "$CULPRIT" --arg exitCode "$EXIT_CODE" '
+      {state: $state, serviceCount: ($services | length), services: $services}
+      + (if $culprit == "" then {} else {culprit: $culprit} end)
+      + (if $exitCode == "" then {} else {exitCode: ($exitCode | tonumber)} end)'
 }
 
 logs() {
@@ -1868,8 +1871,20 @@ case "$ACTION" in
     ;;
   fail)
     CULPRIT=$(printf '%s' "$REQ" | jq -r '.service // "unknown"')
+    EXIT_CODE=$(cat "$SERVICES/$CULPRIT/exit-code" 2>/dev/null || echo 1)
+    case "$EXIT_CODE" in ''|*[!0-9]*|-*) EXIT_CODE=1;; esac
+    echo "$CULPRIT" > "$STATE/culprit"
+    echo "$EXIT_CODE" > "$STATE/exit-code"
     stop_all failed
-    jq -nc --arg culprit "$CULPRIT" '{state:"failed", culprit:$culprit}'
+    jq -nc --arg culprit "$CULPRIT" --argjson exitCode "$EXIT_CODE" \
+      '{state:"failed", culprit:$culprit, exitCode:$exitCode}'
+    exit 0
+    ;;
+  complete)
+    rm -f "$STATE/culprit"
+    echo 0 > "$STATE/exit-code"
+    stop_all exited
+    echo '{"state":"exited","exitCode":0}'
     exit 0
     ;;
   start) ;;
@@ -1889,6 +1904,8 @@ rm -rf "$SERVICES"
 mkdir -p "$SERVICES"
 printf '%s\n' "$REQ" > "$STATE/request.json"
 echo starting > "$STATE/desired"
+rm -f "$STATE/culprit" "$STATE/exit-code" "$STATE/start-failed" "$STATE/failed-service" \
+  "$STATE/clean-required" "$STATE/degraded"
 
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
@@ -2030,6 +2047,17 @@ start_service() {
     jq -r '.target.args[] | @base64' "$SERVICE/plan.json" > "$SERVICE/args.txt"
   else echo failed > "$SERVICE/state"; return 1; fi
 
+  jq -r '
+    .plan.services[] |
+    .name as $service |
+    (.ports // [])[] |
+    . as $port |
+    ("APPLIANCE_SVC_" + ($service | ascii_upcase | gsub("-"; "_"))) as $prefix |
+    ([($prefix + "_" + ($port.name | ascii_upcase | gsub("-"; "_")) + "_URL"),
+      (if $port.primary then ($prefix + "_URL") else empty end)][]) as $key |
+    [$key, (("http://127.0.0.1:" + ($port.guest | tostring)) | @base64)] | @tsv
+  ' "$STATE/request.json" >> "$SERVICE/env.tsv"
+
   export APP SVC STATE SERVICE SERVICES CTR_NS NS CG UID_NUM KIND CID
   nohup setsid sh -c '
     echo $$ > "$SERVICE/worker.pid"
@@ -2093,7 +2121,7 @@ start_service() {
               set --
               jq -r ".health.command[] | @base64" "$SERVICE/plan.json" | while IFS= read -r ARG; do printf "%s\n" "$ARG"; done > "$SERVICE/health.args"
               while IFS= read -r ARG; do DECODED=$(printf "%s" "$ARG" | base64 -d); set -- "$@" "$DECODED"; done < "$SERVICE/health.args"
-              timeout "$TIMEOUT" ctr -n "$CTR_NS" tasks exec --exec-id "health-$$" "$CID" "$@" >/dev/null 2>&1 && OK=1 || true
+              timeout "$TIMEOUT" ctr -n "$CTR_NS" tasks exec --exec-id "health-$$-$(date +%s%N)" "$CID" "$@" >/dev/null 2>&1 && OK=1 || true
               ;;
           esac
           if [ "$OK" -eq 1 ]; then
@@ -2171,8 +2199,13 @@ jq -r '.plan.services[].name' "$STATE/request.json" | while read -r SVC; do
 done || START_FAILED=$(cat "$STATE/start-failed" 2>/dev/null || echo unknown)
 
 if [ -n "$START_FAILED" ]; then
+  START_EXIT=$(cat "$SERVICES/$START_FAILED/exit-code" 2>/dev/null || echo 1)
+  case "$START_EXIT" in ''|*[!0-9]*|-*) START_EXIT=1;; esac
+  echo "$START_FAILED" > "$STATE/culprit"
+  echo "$START_EXIT" > "$STATE/exit-code"
   stop_all failed
-  jq -nc --arg culprit "$START_FAILED" '{state:"failed", culprit:$culprit, message:("required service " + $culprit + " failed readiness")}'
+  jq -nc --arg culprit "$START_FAILED" --argjson exitCode "$START_EXIT" \
+    '{state:"failed", culprit:$culprit, exitCode:$exitCode, message:("required service " + $culprit + " failed readiness")}'
   exit 0
 fi
 [ -f "$STATE/degraded" ] && DEGRADED=1
@@ -2185,13 +2218,37 @@ nohup setsid sh -c '
     DESIRED=$(cat "$STATE/desired" 2>/dev/null || echo stopped)
     [ "$DESIRED" = running ] || [ "$DESIRED" = degraded ] || exit 0
     CULPRIT=
+    rm -f "$STATE/failed-service"
+    : > "$STATE/clean-required"
+    REQUIRED_TOTAL=$(jq "[.plan.services[] | select(.required)] | length" "$STATE/request.json")
     jq -r ".plan.services[] | select(.required) | .name" "$STATE/request.json" | while read -r SVC; do
       SVC_STATE=$(cat "$SERVICES/$SVC/state" 2>/dev/null || echo failed)
-      case "$SVC_STATE" in failed|exited|blocked) echo "$SVC" > "$STATE/failed-service"; exit 1;; esac
+      case "$SVC_STATE" in
+        failed|blocked)
+          echo "$SVC" > "$STATE/failed-service"
+          exit 1
+          ;;
+        exited)
+          EXIT_CODE=$(cat "$SERVICES/$SVC/exit-code" 2>/dev/null || echo 1)
+          POLICY=$(jq -r --arg svc "$SVC" ".plan.services[] | select(.name == \$svc) | .restart.policy" "$STATE/request.json")
+          if [ "$EXIT_CODE" = 0 ] && [ "$POLICY" = never ]; then
+            echo "$SVC" >> "$STATE/clean-required"
+          else
+            echo "$SVC" > "$STATE/failed-service"
+            exit 1
+          fi
+          ;;
+      esac
     done || CULPRIT=$(cat "$STATE/failed-service" 2>/dev/null || echo unknown)
     if [ -n "$CULPRIT" ]; then
       FAIL_REQ=$(printf "{\"action\":\"fail\",\"appId\":\"%s\",\"service\":\"%s\"}" "$APP" "$CULPRIT")
       /usr/local/bin/appliance-runtime-compound-supervisor "$FAIL_REQ" >/dev/null 2>&1
+      exit 0
+    fi
+    CLEAN_REQUIRED=$(wc -l < "$STATE/clean-required" 2>/dev/null || echo 0)
+    if [ "$REQUIRED_TOTAL" -gt 0 ] && [ "$CLEAN_REQUIRED" -eq "$REQUIRED_TOTAL" ]; then
+      COMPLETE_REQ=$(printf "{\"action\":\"complete\",\"appId\":\"%s\"}" "$APP")
+      /usr/local/bin/appliance-runtime-compound-supervisor "$COMPLETE_REQ" >/dev/null 2>&1
       exit 0
     fi
     OPTIONAL_FAILED=0
@@ -3923,7 +3980,10 @@ mod tests {
         assert!(supervisor.contains("images import --local --platform \"$OCI_PLATFORM\""));
         assert!(supervisor.contains("tasks list 2>/dev/null | grep \"^$CID \""));
         assert!(supervisor.contains("wget -q -T \"$TIMEOUT\" --spider"));
-        assert!(supervisor.contains("tasks exec --exec-id"));
+        assert!(supervisor.contains("--exec-id \"health-$$-$(date +%s%N)\""));
+        assert!(supervisor.contains("APPLIANCE_SVC_"));
+        assert!(supervisor.contains("echo \"$CULPRIT\" > \"$STATE/culprit\""));
+        assert!(supervisor.contains("stop_all exited"));
         assert!(supervisor.contains("echo \"$ATTEMPT\" > \"$SERVICE/restart-count\""));
         assert!(supervisor.contains("[ \"$DELAY\" -le 30 ] || DELAY=30"));
         assert!(supervisor.contains("$SERVICES/$SVC/current.log"));
