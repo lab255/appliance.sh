@@ -25,11 +25,13 @@ Locally built bundles need no signature. Unsigned bundles, bundles whose signer 
 
 Every install writes a local per-app entitlement record to `~/.appliance/entitlements.json`, mode `0600`. The record includes the manifest's SPDX license and every approved control. An upgrade prompts only for additional controls. Runtime records last use per granted mount and egress host and suggests revocation after 30 unused days by default. Uninstall marks the record historical rather than deleting it.
 
-A device Ed25519 key signs entitlement snapshots. It is generated on first Runtime use and stored through the keychain utility; only its public key and fingerprint appear in the entitlement file or sync. This signature detects accidental or external file modification and gives P4 account sync a stable device attestation. It does not prove that the human approved a grant and does not protect against malware running as the same OS user with keychain access.
+A device Ed25519 key signs entitlement snapshots. It is generated on first Runtime use and stored through the platform adapter in the keychain utility. This is same-user tamper-evidence, not proof that a human approved a grant.
+
+Distribution trust bottoms out in GitHub secrets (delegated + updater keys) and a client kept offline learns nothing; the device signature is tamper-evidence, not proof of user consent, and on Linux/Windows it is a same-user checksum.
 
 This RFC defines identity, trust, and entitlement semantics. RFC 0001 owns the exact `publisher` block and signature-envelope wire shape. The manifest inside a bundle is named `appliance.json`. Credential injection: deferred (owner, 2026-08-27). The existing host credential broker is unchanged and out of scope.
 
-Normative words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their RFC 2119 meanings. Times are UTC RFC 3339 strings. Digests are lowercase `sha256:<hex>` values over the bytes defined by RFC 0001. Key ids are fingerprints derived from public keys, never user-chosen labels.
+Normative words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their RFC 2119 meanings. Times are UTC RFC 3339 strings. JSON is canonicalized with RFC 8785 everywhere. Digests are lowercase `sha256:<hex>`. A public key is `ed25519:<base64url-no-padding-of-raw-32-bytes>`; its id is `ed25519:sha256:<64-lowercase-hex>` over those raw 32 bytes.
 
 ## Trust model
 
@@ -60,15 +62,27 @@ offline Appliance root public key (shipped pin)
                             └─ publisher signature -> third-party bundle
 ```
 
-The root key is the only authority that may create or revoke a delegation. It remains offline and is used only during an owner-run ceremony. The delegated private key is online only as an encrypted GitHub Actions secret. CI receives scopes, not root authority.
+The root key is the only authority that may create or revoke a delegation. It remains offline and is used only during an owner-run ceremony. The delegated private key is an encrypted GitHub Actions secret. Its scopes limit valid artefact roles, but compromise is effectively root for online distribution until clients receive a root-signed revocation and floor.
 
 Publisher identity is a public key plus claims authenticated by a verified index entry. The display name in `appliance.json` is untrusted text until it is matched to that entry. Changing a publisher key creates a new cryptographic identity even if the display name is unchanged.
 
 Transport security is defense in depth. TLS protects availability and privacy, but CDN, DNS, Worker, R2, mirror, and local proxy responses remain untrusted until cryptographic verification.
 
+### One signature envelope
+
+Every bundle, index, blacklist, delegation, revocation, entitlement, and sync signature MUST use the single envelope in RFC 0001 §Signature: `{alg: "ed25519", keyId, role, sig}`. The only roles are `bundle`, `index`, `blacklist`, `delegation`, `revocation`, `entitlement`, and `sync`. `sig` is Ed25519 over the byte concatenation `UTF8("appliance/" + role) || 0x00 || SHA-256(RFC8785(payload))`; SHA-256 contributes its raw 32 bytes. No artefact-specific envelope or alternate domain separator is allowed.
+
+Envelope-preimage test vectors below use deliberately unsigned payloads: implementations MUST produce the listed RFC 8785 bytes, payload hash, and signing-input hex before a fixture key supplies `sig`.
+
+| role         | RFC 8785 payload bytes                                                            | SHA-256 hex                                                        | signing-input hex (prefix + raw hash)                                                                        |
+| ------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `index`      | `{"generation":1,"schema":"appliance.catalogue-index/v1"}`                        | `40f2ae9c775126e40f60dd6337f5f024c7ecb9a1eae19e679b1a65c917d16a44` | `6170706c69616e63652f696e6465780040f2ae9c775126e40f60dd6337f5f024c7ecb9a1eae19e679b1a65c917d16a44`           |
+| `blacklist`  | `{"entries":[],"generation":1,"schema":"appliance.blacklist/v1"}`                 | `82bdec98c370ac2fafd748c10ef87d9f7819aecf7c975674cf30130bdea91a71` | `6170706c69616e63652f626c61636b6c6973740082bdec98c370ac2fafd748c10ef87d9f7819aecf7c975674cf30130bdea91a71`   |
+| `delegation` | `{"delegations":[],"generation":1,"schema":"appliance.catalogue-delegations/v1"}` | `864a8fab2c1aa10bde7413c628798fc429f055abbeff990359667669ba71a1ad` | `6170706c69616e63652f64656c65676174696f6e00864a8fab2c1aa10bde7413c628798fc429f055abbeff990359667669ba71a1ad` |
+
 ### Delegation format
 
-Delegations are published as `/catalogue/delegations.json` and `/catalogue/delegations.json.sig`. The JSON is canonicalized using the same canonical JSON rule chosen by RFC 0001. The detached envelope is RFC 0001's envelope with role `appliance-root`.
+Delegations are published as `/catalogue/delegations.json` plus an RFC 0001 §Signature envelope with role `delegation`, signed by the root key.
 
 The signed payload has these semantics:
 
@@ -77,12 +91,12 @@ The signed payload has these semantics:
   "schema": "appliance.catalogue-delegations/v1",
   "generation": 12,
   "issuedAt": "2026-08-27T00:00:00Z",
-  "expiresAt": "2027-02-27T00:00:00Z",
+  "expiresAt": "2026-11-25T00:00:00Z",
   "delegations": [
     {
-      "keyId": "ed25519:example-delegated-key-fingerprint",
-      "publicKey": "ed25519:EXAMPLE_PUBLIC_KEY_NOT_KEY_MATERIAL",
-      "scopes": ["catalogue-index", "catalogue-blacklist", "first-party-bundle"],
+      "keyId": "ed25519:sha256:66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+      "publicKey": "ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "scopes": ["index", "blacklist", "bundle"],
       "notBefore": "2026-08-27T00:00:00Z",
       "notAfter": "2026-11-27T00:00:00Z"
     }
@@ -90,13 +104,13 @@ The signed payload has these semantics:
 }
 ```
 
-All key strings above are nonfunctional placeholders. `generation` MUST increase for every root-signed change. Clients MUST reject a lower generation than the highest previously verified generation on that device. Clients MUST reject an unknown schema, invalid root signature, expired document, key outside its validity window, or use outside listed scopes.
+The all-zero public-key example is format-only and not a usable Ed25519 identity. `generation` MUST increase for every root-signed change. Clients reject an unknown schema, invalid root signature, generation below the binary floor or highest seen, expiry, a validity span over 90 days from `issuedAt`, key outside its window, or use outside listed scopes.
 
-The binary pinset contains the root public key and the delegated public key current at release time. A root-verified newer delegation MAY add an authenticated delegated pin to the local trust cache. A pinned delegated key without a currently valid root delegation MUST NOT sign new metadata merely because an old binary contains it.
+The binary contains the root public key, current delegated key, and minimum accepted delegation and revocation generations. `/catalogue/pins.json` carries delegated pins plus both generation floors and MUST itself use the root-signed `delegation` envelope. Clients accept pin or floor changes only from a valid root-signed `pins.json`, persist raised floors monotonically, and never lower them. A Tauri-updater-signed release alone cannot authorize a non-root delegation through this data path. A root-verified newer delegation MAY add a delegated pin to the trust cache; a pinned key without a valid root delegation cannot sign new metadata.
 
 ### Delegated-key revocation
 
-Emergency revocations are published as `/catalogue/revocations.json` and a detached root signature. The payload contains a monotonic `generation`, `issuedAt`, and entries with `keyId`, `effectiveAt`, `reason`, and optional `replacementKeyId`.
+Emergency revocations are published as `/catalogue/revocations.json` plus the root-signed RFC 0001 §Signature envelope with role `revocation`. The payload contains a monotonic `generation`, `issuedAt`, and entries with `keyId`, `effectiveAt`, `reason`, and optional `replacementKeyId`.
 
 Clients MUST process a valid newer root revocation before accepting newly downloaded index or blacklist metadata. A revoked delegated key is invalid for all catalogue metadata immediately, regardless of a signer-controlled timestamp. Previously installed first-party bundles signed only by that key lose first-party status and enter Unknown Publisher handling unless a replacement verified index binds their exact digest to a trusted publisher key. A blacklist match remains a separate block decision.
 
@@ -108,12 +122,12 @@ The Runtime derives one tier for an exact bundle digest:
 
 | Tier             | Required evidence                                                                      | User-facing label         |
 | ---------------- | -------------------------------------------------------------------------------------- | ------------------------- |
-| First-party      | Valid delegated `first-party-bundle` signature and exact verified index binding        | `Appliance · First-party` |
+| First-party      | Valid delegated `bundle` envelope and exact verified index binding                     | `Appliance · First-party` |
 | Verified account | Valid publisher signature, exact index binding, and valid `notarization` attestation   | `Verified publisher`      |
 | Known publisher  | Valid publisher signature and exact verified index binding                             | Publisher display name    |
 | Unknown          | Unsigned, signer absent/invalid, key not bound, evidence unavailable, or trust revoked | `Unknown Publisher`       |
 
-The verified-account tier is a future hook only. RFC 0001's envelope and index entry MAY carry a nullable `notarization` field with `{tier, attestationId, issuedAt}` semantics. V1 MUST treat the field as informational and MUST NOT claim it was verified. No notarization service, account verification workflow, or build is included.
+The verified-account tier is a future hook only. `appliance.json` and its index entry MAY carry a nullable `notarization` field with `{tier, attestationId, issuedAt}` semantics; the fixed signature envelope MUST NOT. V1 treats the field as informational and cannot claim it was verified. No notarization service, account workflow, or build is included.
 
 An invalid signature does not become valid because the app is local. It is reported as a failed signature and placed in Unknown Publisher handling. The UI MUST distinguish `Unsigned` from `Signature could not be verified`.
 
@@ -125,18 +139,20 @@ Trust tier is not permission. First-party apps receive no implicit egress, mount
 
 The desktop and CLI use this sequence:
 
-1. Load the highest verified delegation and root revocation generations.
+1. Load binary generation floors, highest verified delegation/revocation generations, and the highest persisted wall clock.
 2. If online, fetch newer root-signed delegation and revocation documents.
-3. Fetch `/catalogue/index.json` and its detached signature as a pair.
-4. Verify canonical bytes, signer scope, key validity, signature, schema, `generation`, `issuedAt`, and `expiresAt`.
+3. Fetch `/catalogue/index.json` and its `index` envelope into one staging transaction; cap the pair at 10 MiB before parsing.
+4. Verify that exact pair together, rejecting mirror-mixed payload/envelope generations, then verify RFC 8785 bytes, signer scope, key validity, schema, `generation`, `issuedAt`, and `expiresAt`.
 5. Reject a generation lower than the device's highest accepted generation.
 6. Atomically replace the cached index only after all checks succeed.
 7. Filter out `paid: true` before data reaches search, categories, counts, accessibility trees, telemetry, or deep-link results.
 8. Render the entries and the quiet `Verified index ✓ signed` state with the verified time.
 
-The client attempts refresh on catalogue open when the verified cache is older than six hours and at most every six hours while desktop remains running. Manual refresh bypasses that timer but not signature verification.
+The client attempts refresh on catalogue open when the verified cache is older than six hours and at most every six hours while desktop remains running. An index validity span MUST NOT exceed 14 days from `issuedAt`; a longer span is rejected. Manual refresh bypasses the timer but not verification.
 
-If download or verification fails, the client MUST retain the prior verified cache and display its verification time plus the refresh error. A verified cache MAY render offline until its signed `expiresAt`. An expired cache MAY render only in an explicitly labelled offline/stale view; it MUST NOT be represented as current and MUST NOT enable a new network install. No verified cache means no catalogue entries render.
+If download or verification fails, the client MUST retain the prior verified cache and display its verification time plus the refresh error. A verified cache MAY render offline until its signed `expiresAt`. An expired cache MAY render only in a labelled stale view and cannot enable a new network install. No verified cache means no catalogue entries render.
+
+The client persists `maxSeenWallClock = max(previous, currentWallClock)` after successful time use. If the current wall clock is earlier than that value, it refuses all expiry decisions and new metadata/install operations until time is corrected; it MUST NOT evaluate validity against the earlier clock.
 
 An exact already-downloaded bundle MAY be installed offline when its digest and publisher evidence match a still-retained verified index entry. The entitlement prompt remains required.
 
@@ -148,7 +164,7 @@ For a catalogue install:
 2. Fetch the URL without trusting URL, ETag, filename, MIME type, or CDN headers.
 3. Stream to a temporary file while computing SHA-256.
 4. Compare the exact digest with the verified index entry.
-5. Read `appliance.json` and the RFC 0001 envelope without executing payload.
+5. Read `appliance.json` and its RFC 0001 §Signature `bundle` envelope without executing payload.
 6. Require manifest `appId`, version, license, and publisher claim to match the verified entry.
 7. Verify the bundle signature using the exact publisher key bound by the entry, or the valid delegated key for a first-party bundle.
 8. Refresh and evaluate the blacklist as described below.
@@ -162,13 +178,13 @@ A mismatch at steps 4 or 6 is tampering and MUST stop installation. A cryptograp
 
 Local paths do not require an index entry or signature. The Runtime still computes and records the digest before extracting or running. It parses `appliance.json`, validates its schema, checks archive path safety, evaluates the blacklist when enabled, and computes entitlement deltas.
 
-If the signature is valid and maps to cached verified evidence, the corresponding tier is shown. Otherwise the bundle is Unknown Publisher. `--trust-publisher` MUST NOT create permanent global trust in v1. Trust acknowledgement is digest-bound and time-bounded through the UX contract.
+If the signature maps to evidence in the current verified index generation, the corresponding tier is shown. A newer verified index that omits the exact app/digest/key binding invalidates cached publisher evidence and yields Unknown Publisher. `--trust-publisher` MUST NOT create permanent global trust in v1; acknowledgement remains digest-bound and time-bounded.
 
 ### Pre-open integrity and blacklist check
 
-Every open recomputes or retrieves an authenticated digest of installed bytes, checks it against the installed record, and re-verifies available signature evidence before payload execution. Local storage changes after install therefore cannot silently retain the old publisher label.
+Every open hashes while copying the exact installed bytes into the immutable read-only rootfs/squash image that will be mounted into the VM, checks that digest and signature evidence, and hands that same image to the VM without reopening the source path. A verify-then-path-swap cannot change executed bytes.
 
-Blacklist metadata lives at `/catalogue/blacklist.json` with detached signature. It is signed by a delegation carrying `catalogue-blacklist` scope. Its payload includes schema, monotonic generation, `issuedAt`, `expiresAt`, and entries with a selector and human-safe reason code:
+Blacklist metadata lives at `/catalogue/blacklist.json` with an RFC 0001 §Signature envelope using role `blacklist`. It is signed by a key delegated for that role. The payload includes schema, monotonic generation, `issuedAt`, `expiresAt`, and entries with a selector and human-safe reason code:
 
 ```json
 {
@@ -179,16 +195,19 @@ Blacklist metadata lives at `/catalogue/blacklist.json` with detached signature.
   "entries": [
     { "digest": "sha256:example-only", "reason": "malware" },
     { "appId": "example.bad-app", "reason": "compromised" },
-    { "publisherKeyId": "ed25519:example-only", "reason": "key-compromise" }
+    {
+      "publisherKeyId": "ed25519:sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "reason": "key-compromise"
+    }
   ]
 }
 ```
 
 Selectors are ORed; a match on any selector blocks. An app-id selector covers all versions unless an optional version range narrows it. The reason shown to users is local fixed copy selected by reason code, not untrusted HTML from the file.
 
-The client refreshes the blacklist before open if its verified cache is older than six hours, and in the background every six hours while running. A confirmed match fails closed: the app does not open and the UI identifies the matched selector, verification time, and recovery path.
+Blacklist and delegation payload-plus-envelope pairs are capped at 1 MiB each before parsing. The client refreshes the blacklist before open if its cache is older than six hours. A blacklist validity span MUST NOT exceed seven days from `issuedAt`; longer is rejected. A confirmed match fails closed and identifies the selector, verification time, and recovery path.
 
-If refresh fails, the last verified unexpired blacklist is evaluated. If it is expired or no verified blacklist exists, open fails **open** after a prominent `Safety list unavailable` warning that names the last successful check. The warning offers Retry, Cancel, and Open anyway. Choosing Open anyway applies only to that open attempt. This availability choice leaves an honest window for newly blacklisted malware.
+If refresh fails, the last verified unexpired blacklist is evaluated. For up to seven days after expiry, every open warns with Retry, Cancel, and Open once; acceptance applies once. More than seven days after expiry, every catalogue app requires a stronger per-open explicit confirmation, new network installs stop, and the delegation cache is treated as expired regardless of its stated date. This availability choice leaves an honest window for newly blacklisted malware.
 
 ### Disable-check setting
 
@@ -269,18 +288,19 @@ The warning still appears on this cadence when blacklist checking is disabled. T
         }
       },
       "signature": {
-        "algorithm": "Ed25519",
-        "deviceKeyId": "ed25519:example-device-fingerprint",
-        "value": "EXAMPLE_SIGNATURE_NOT_KEY_MATERIAL"
+        "alg": "ed25519",
+        "keyId": "ed25519:sha256:66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+        "role": "entitlement",
+        "sig": "EXAMPLE_SIGNATURE_NOT_KEY_MATERIAL"
       }
     }
   ]
 }
 ```
 
-The required record fields are `appId`, `version`, manifest SPDX `license`, `grantedAt`, `installerId`, `grants`, `usage`, and the device signature. Implementation MAY add lifecycle metadata without changing these semantics. The signature covers the canonical record excluding `signature` and includes the store schema domain separator to prevent cross-protocol use.
+The required record fields are `appId`, `version`, manifest SPDX `license`, `grantedAt`, `installerId`, `grants`, `usage`, and the RFC 0001 §Signature envelope with role `entitlement`. Implementation MAY add lifecycle metadata without changing these semantics.
 
-The file and parent directory MUST be owner-only (`0600` and `0700` on Unix, equivalent ACL on Windows). Writes use a cross-process lock and atomic temporary-file rename. On a corrupt or invalidly signed record, the Runtime preserves the bytes for recovery, denies controls not independently recoverable, and asks the user to review rather than silently recreating broad grants.
+The file and parent directory MUST be owner-only (`0600` and `0700` on Unix, equivalent ACL on Windows). Each mutation takes a cross-process lock, reads and verifies the prior snapshot, records its hash, modifies, re-compares that prior hash immediately before atomic rename, and retries on change. It never steals a stale lock or proceeds unlocked; inability to lock fails the mutation. On an invalid record, Runtime preserves bytes, denies unrecoverable controls, and asks for review.
 
 `installerId` identifies the local CLI or desktop installation event, not an account and not a publisher. It is random public metadata and MUST NOT contain a username, hostname, API key, or machine serial number.
 
@@ -318,7 +338,7 @@ Runtime enforcement points update usage only after a granted item is actually us
 
 Credential usage is not tracked because credential injection is deferred. The existing host credential broker is outside this model.
 
-`lastUsedAt` is the security-relevant signal. `useCount` is optional coarse local context and MUST be saturating. Updates SHOULD be coalesced and flushed at most daily to limit disk writes and keychain signing operations, while preserving the most recent observed time. Clock rollback MUST NOT move `lastUsedAt` backwards.
+`lastUsedAt` is the security-relevant signal. `useCount` is optional coarse local context and MUST be saturating. Updates SHOULD be coalesced and flushed at most daily to limit disk writes and signing operations, while preserving the most recent observed time. Clock rollback MUST NOT move `lastUsedAt` backwards.
 
 Usage metadata stays local by default. P4 sync includes only last-used time when the user enables entitlement sync. It never includes request contents, URLs beyond the granted host, filenames, mount paths, bytes, or app data.
 
@@ -345,17 +365,15 @@ History deletion is a separate destructive privacy action in Settings and CLI. I
 
 ## Device key
 
-On first Runtime use, CLI or desktop asks the shared keychain utility to create one non-exportable-where-supported Ed25519 device key. The private key is stored through `packages/cli/src/utils/keychain.ts` under a device-specific service/account namespace separate from cluster API keys. Callers request `sign(bytes)` and never receive or log private key bytes.
-
-The current utility is macOS/API-key-specific. Implementation therefore requires extending its abstraction for device signing and equivalent OS-protected storage on supported platforms. This RFC does not change the existing API-key keychain entries or credential broker.
+On first Runtime use, CLI or desktop asks `packages/cli/src/utils/keychain.ts` to create one Ed25519 device key in a namespace separate from cluster API keys. V1 does not claim a non-exportable signing API: macOS stores key bytes as a generic-password Keychain item because `/usr/bin/security` has no Ed25519 signing operation and Secure Enclave supports P-256, not Ed25519. Linux stores an owner-only `0600` key file beside `entitlements.json`. Windows stores the same beside the file with a current-user-only ACL. The utility hides these platform details and never logs key bytes.
 
 The public key fingerprint is `deviceKeyId`. It is pseudonymous and not an account id. Desktop and CLI on the same OS user profile MUST resolve the same device key. VM guests and apps MUST never access it.
 
-If the keychain is locked or signing fails, usage events may queue in memory, but new grants, revocations, imports, and sync MUST stop with a recoverable error. The Runtime MUST NOT create an unsigned entitlement mutation.
+If the platform key is unavailable or signing fails, usage events may queue in memory, but new grants, revocations, imports, and sync MUST stop with a recoverable error. The Runtime MUST NOT create an unsigned entitlement mutation.
 
 Key loss makes old records unverifiable by a replacement device key. Recovery preserves old snapshots as `key-lost` history, generates a new key only after explicit user confirmation, and requires review before reactivating grants. There is no root or account escrow of device private keys.
 
-The device signature protects integrity against ordinary file edits and supports deduplication during sync. It does not provide trusted time, user presence, hardware attestation, or defense against same-user malware that can invoke keychain signing.
+The v1 device signature is tamper-evidence by the OS user's key, not proof of consent. On Linux/Windows it is effectively a same-user checksum. It provides no trusted time, user presence, hardware attestation, or defense against same-user malware that can read/use the key.
 
 ## Account sync record
 
@@ -367,8 +385,8 @@ Each upload is a device-signed, privacy-reduced record:
 {
   "schema": "appliance.entitlement-sync/v1",
   "recordId": "example-stable-random-id",
-  "deviceKeyId": "ed25519:example-device-fingerprint",
-  "devicePublicKey": "ed25519:EXAMPLE_PUBLIC_KEY_NOT_KEY_MATERIAL",
+  "deviceKeyId": "ed25519:sha256:66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+  "devicePublicKey": "ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   "sequence": 18,
   "appId": "sh.appliance.example",
   "version": "1.2.0",
@@ -390,11 +408,16 @@ Each upload is a device-signed, privacy-reduced record:
       "lastUsedAt": "2026-08-27T09:10:00Z"
     }
   ],
-  "signature": "EXAMPLE_SIGNATURE_NOT_KEY_MATERIAL"
+  "signature": {
+    "alg": "ed25519",
+    "keyId": "ed25519:sha256:66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925",
+    "role": "sync",
+    "sig": "EXAMPLE_SIGNATURE_NOT_KEY_MATERIAL"
+  }
 }
 ```
 
-`recordId` is stable for one local app-install lineage. `sequence` strictly increases per record and makes same-device replay detectable. The signature covers all fields except `signature` with a sync-specific domain separator.
+`recordId` is stable for one local app-install lineage. `sequence` strictly increases per record and makes same-device replay detectable. `signature` is the RFC 0001 §Signature `sync` envelope over the record without that field.
 
 The sync record MUST NOT contain device private keys, account tokens, API keys, hostnames, usernames, machine serials, absolute mount paths, request contents, app data, environment values, or credentials. Mount values are reduced to publisher-declared slot and access level.
 
@@ -408,35 +431,33 @@ Conflicting devices retain separate device-signed histories. The future service 
 
 Protected assets are catalogue authenticity, bundle identity and bytes, unsafe app blocks, least-privilege grants, local grant history, and device private key. The Runtime treats app code, bundle metadata text, network transport, CDN/storage, and unsigned local files as attacker-controlled.
 
-The host process and OS user account are trusted to enforce local policy. The microVM is a containment boundary for app code, not a source of identity. Root ceremony operators and release owners are trusted. GitHub Actions and repository administrators can exercise the delegated key's scopes while that key is available to CI.
-
-This RFC does not claim protection after full same-user host compromise, root account compromise, malicious signed runtime updates, or offline root-key theft.
+The host process and OS user account are trusted to enforce local policy. The microVM is containment, not identity. GitHub holds both the delegated distribution secret and `TAURI_SIGNING_PRIVATE_KEY`; compromise of either is effectively root in practice because the attacker can sign metadata or ship code that ignores checks. Root-signed `pins.json` prevents the honest verifier in an updater-compromised release from accepting non-root pin/floor changes, but cannot constrain a fully malicious signed binary. This RFC makes no claim after same-user host compromise, malicious signed runtime update, or offline root-key theft.
 
 ### Threats, mitigations, and residual risk
 
-| Threat                          | Mitigation                                                                                                      | Honest residual                                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Tampered index                  | Detached Ed25519 signature, scoped delegation, canonical bytes, generation rollback check, verify before render | Compromised delegated key or root can sign a malicious index; offline clients miss revocation                          |
-| Tampered bundle                 | SHA-256 match to verified index plus RFC 0001 signature before extraction/open                                  | Unknown local bundles remain user-runnable; a malicious authorized publisher can sign malware                          |
-| Tampered blacklist              | Scoped signature, monotonic generation, atomic verified cache                                                   | Compromised delegated key can publish or suppress entries until root revocation reaches clients                        |
-| Missing/stale blacklist         | Six-hour refresh, visible age, fail-open warning, manual retry                                                  | User may open newly known malware while offline or may disable enforcement entirely                                    |
-| Replay of old metadata          | Monotonic generations, signed expiry, highest-seen state                                                        | Clearing local state or rolling back the whole device can restore old metadata; wall-clock rollback weakens expiry     |
-| Revoked delegated key           | Root-signed revocation, scope checks, loss of first-party tier, rotation runbook                                | Offline revocation delay; previously maliciously signed app may already have run                                       |
-| Stolen publisher key            | Blacklist by key/app/digest, index key rotation, Unknown tier after removal                                     | No universal revocation channel for a never-online local user; signed malware looked known before response             |
-| Stolen device key               | OS keychain, non-exportable use where supported, separate namespace, no sync secret                             | Same-user malware may request signatures; device signatures do not prove human presence                                |
-| Edited entitlement file         | Device signature, owner-only permissions, atomic locked writes, fail-safe review                                | Malware with keychain signing access can forge coherent records; file deletion causes denial/recovery, not restoration |
-| Malicious upgrade asks for more | Delta-only prompt, stable grant ids, ambiguous changes treated as new                                           | Users can approve dangerous deltas; purpose labels come from publisher and may deceive                                 |
-| Downgrade to vulnerable code    | No automatic downgrade, explicit version warning, blacklist version selectors, no grant revival                 | User can explicitly downgrade while offline; vulnerability knowledge may not yet be in blacklist                       |
-| App impersonates publisher name | Trust label comes from verified key/index binding, not manifest text                                            | Similar Unicode names/icons can still socially engineer; UI must show tier and digest details                          |
-| Paid entry leakage in v1        | Filter after verification and before all render/search/telemetry surfaces                                       | Direct local bundle import remains possible and is intentionally outside catalogue commercial policy                   |
-| Account takeover                | Local opens and grants do not depend on account; remote record cannot activate grants                           | Synced history and app list are privacy-sensitive and exposed to the compromised account                               |
-| Signature algorithm confusion   | RFC 0001 envelope, explicit Ed25519 algorithm, role/domain separation                                           | Bugs in canonicalization or crypto library use remain implementation risks requiring test vectors and review           |
+| Threat                          | Mitigation                                                                                                  | Honest residual                                                                                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Tampered index                  | RFC 0001 `index` envelope, atomic payload/envelope pair, size cap, generation check                         | Compromised delegated key or root can sign a malicious index; offline clients miss revocation                          |
+| Tampered bundle                 | Hash exact immutable VM image and verify RFC 0001 `bundle` envelope                                         | Unknown local bundles remain user-runnable; a malicious authorized publisher can sign malware                          |
+| Tampered blacklist              | RFC 0001 `blacklist` envelope, seven-day max validity, size cap, atomic cache                               | Compromised delegated key can publish or suppress entries until root revocation reaches clients                        |
+| Missing/stale blacklist         | Six-hour refresh, per-open escalation, stop installs after seven stale days                                 | User may open newly known malware while offline or may disable enforcement entirely                                    |
+| Replay of old metadata          | Binary/root-signed floors, max-seen generations/clock, max validity spans                                   | Whole-device rollback can restore old local floor/clock state                                                          |
+| Revoked delegated key           | Root-signed revocation, scope checks, loss of first-party tier, rotation runbook                            | Offline revocation delay; previously maliciously signed app may already have run                                       |
+| Stolen publisher key            | Blacklist by key/app/digest, index key rotation, Unknown tier after removal                                 | No universal revocation channel for a never-online local user; signed malware looked known before response             |
+| Stolen device key               | Separate namespace/file, owner-only access, no sync secret                                                  | Same-user malware may use/read it; signatures do not prove human presence                                              |
+| Edited entitlement file         | Device envelope, read-verify-CAS-rename under a non-bypassable lock                                         | Same-user malware with the key can forge coherent records; deletion causes denial/recovery                             |
+| Malicious upgrade asks for more | Delta-only prompt, stable grant ids, ambiguous changes treated as new                                       | Users can approve dangerous deltas; purpose labels come from publisher and may deceive                                 |
+| Downgrade to vulnerable code    | No automatic downgrade, explicit version warning, blacklist version selectors, no grant revival             | User can explicitly downgrade while offline; vulnerability knowledge may not yet be in blacklist                       |
+| App impersonates publisher name | Trust label comes from verified key/index binding, not manifest text                                        | Similar Unicode names/icons can still socially engineer; UI must show tier and digest details                          |
+| App-id squatting                | Owner-reviewed index admission binds app id to publisher key and exact digest                               | A compromised CI index signer can assign a desirable id to an attacker; signatures faithfully authenticate the lie     |
+| Mirror mixes generations        | Fetch payload/envelope into one transaction and verify exact RFC 8785 bytes before atomic cache replacement | Malicious delegated signer can publish a coherent malicious pair                                                       |
+| Oversized trust metadata        | Pre-parse caps: index 10 MiB, blacklist/delegation 1 MiB                                                    | Inputs within limits can still target parser complexity; implementations need bounded parsers                          |
+| GitHub/updater key compromise   | Root-signed pins/floors, protected environments, revocation and updater replacement                         | Delegated signer controls online metadata; updater signer can ship code bypassing verification—both are effective root |
+| Paid entry leakage in v1        | Filter after verification and before all render/search/telemetry surfaces                                   | Direct local bundle import remains possible and is intentionally outside catalogue commercial policy                   |
+| Account takeover                | Local opens and grants do not depend on account; remote record cannot activate grants                       | Synced history and app list are privacy-sensitive and exposed to the compromised account                               |
+| Signature algorithm confusion   | RFC 0001 envelope, explicit Ed25519 algorithm, role/domain separation                                       | Bugs in canonicalization or crypto library use remain implementation risks requiring test vectors and review           |
 
 ### Specific attack walkthroughs
-
-**Tampered index:** an attacker changes an app URL, digest, `paid` flag, license, or publisher key at the CDN. Signature verification fails and the new bytes never replace the verified cache. The UI shows the old cache and refresh failure, or no entries if none exists.
-
-**Tampered bundle:** an attacker swaps payload bytes while retaining metadata. The streamed digest differs from the signed index and installation stops before extraction. For a local import with no verified index, the changed digest invalidates any remembered Unknown Publisher acknowledgement and triggers the warning again.
 
 **Tampered blacklist:** an attacker removes a digest or adds a target. Without the delegated signature it is ignored. With a stolen delegated key the attacker can sign the change; root revocation is the recovery mechanism, but clients that are offline remain exposed.
 
@@ -455,6 +476,7 @@ This RFC does not claim protection after full same-user host compromise, root ac
 - The owner keeps the root private key offline in owner-controlled hardware or encrypted removable storage with a separately stored recovery copy.
 - The root public key fingerprint is reviewed out of band and pinned in CLI and desktop source/releases.
 - The delegated private key exists only in the GitHub secret store and the ephemeral signing process that needs its scoped operation.
+- `TAURI_SIGNING_PRIVATE_KEY` is a separate GitHub secret but is equally security-critical: it can authorize malicious client code; root-signed pins/floors remain mandatory data even in updater-signed releases.
 - CI logs include key id, artifact digest, workflow identity, and delegation generation, never private key or raw secret values.
 - First-party bundle and catalogue signing jobs run only on protected release refs/environments with owner approval and least-privilege repository access.
 - Publisher private keys are publisher responsibility and never uploaded merely to appear in the catalogue; the index stores public keys only.
@@ -465,8 +487,8 @@ This RFC does not claim protection after full same-user host compromise, root ac
 1. Owner creates the replacement key outside agent and ordinary developer environments; this RFC intentionally provides no key-generation command.
 2. Owner records and independently verifies the replacement public key and id.
 3. Owner signs a higher-generation delegation containing overlapping old and new keys, scopes, and a short transition window.
-4. Publish delegation and detached root signature before using the new key.
-5. Release clients pinning the new public key while older clients learn it from the root-signed document.
+4. Publish the delegation with its root `delegation` envelope before using the new key.
+5. Root-sign a higher-floor `pins.json`; release clients carry that exact file while older clients learn it through the root-authenticated path.
 6. Owner installs the new private key in the protected GitHub environment using the secret UI; it never crosses an issue, chat, log, commit, or agent prompt.
 7. CI signs index, blacklist, and a harmless release candidate with the new key; verification checks public artifacts and key ids only.
 8. After the supported-client overlap, owner publishes a higher-generation delegation whose old `notAfter` has passed, then deletes the old CI secret.
@@ -478,7 +500,7 @@ This RFC does not claim protection after full same-user host compromise, root ac
 2. Owner audits published generations, bundle digests, workflow runs, and access logs without copying the private key.
 3. Offline root ceremony signs a higher-generation revocation naming the exact delegated key id and effective time.
 4. Owner creates a replacement delegation with minimum necessary scopes.
-5. Publish revocation and delegation through at least the normal static origin; ship an application update containing the new public pins and revocation.
+5. Root-sign `pins.json` containing the new pins and generation floors, publish it with revocation/delegation, then ship those exact root-authenticated files in an application update signed by the separate GitHub `TAURI_SIGNING_PRIVATE_KEY`.
 6. Publish blacklist entries for malicious app ids, digests, or publisher keys found during audit, signed by the replacement delegated key.
 7. Re-sign clean index, blacklist, and first-party bundles as appropriate.
 8. Communicate the offline exposure window and affected versions honestly.
@@ -502,7 +524,7 @@ CLI exit behavior:
 
 - signature or digest tampering during catalogue install is nonzero and cannot be bypassed in place;
 - confirmed blacklist match is nonzero while checking is enabled;
-- unavailable blacklist requires interactive confirmation, or an explicit per-invocation flag in noninteractive use;
+- unavailable blacklist requires interactive confirmation; any noninteractive `--allow-unchecked`-style flag MUST carry either the exact last-verified blacklist generation expected by the caller or a UTC expiry, and logs a loud warning with app id, digest, generation/expiry, and invocation source;
 - Unknown Publisher requires an explicit per-invocation flag in noninteractive use and never writes a remembered acknowledgement from that flag.
 
 ### Desktop
@@ -522,8 +544,6 @@ Accessibility copy MUST say what was verified. Color or a checkmark alone cannot
 ## Open for owner
 
 1. **Scope of the disable-check setting.** Default: it disables blacklist refresh and enforcement only; digest integrity and signature classification remain mandatory.
-2. **Maximum offline catalogue staleness beyond signed expiry.** Default: expired verified entries may be browsed in a labelled stale view but cannot start a new network install.
-3. **Blacklist fail-open interaction frequency.** Default: warn on every open attempt while no unexpired verified blacklist is available; `Open anyway` applies once.
-4. **Non-macOS device-key backend required for v1.** Default: use an OS-protected key through the shared keychain abstraction and block entitlement mutation when none is available; do not fall back to a plaintext private-key file.
-5. **Reinstall convenience.** Default: prior grants remain inactive; an explicit reviewable `Restore previous grants` action may preselect exact matching controls.
-6. **Usage sync privacy.** Default: P4 opt-in sync includes per-grant `lastUsedAt` but no counts, mount paths, request details, or app data.
+2. **Secure Enclave P-256 migration.** Default: keep Ed25519 for v1 and treat macOS Keychain storage as same-user tamper-evidence; evaluate a versioned P-256 device envelope separately rather than introducing a second algorithm now.
+3. **Reinstall convenience.** Default: prior grants remain inactive; an explicit reviewable `Restore previous grants` action may preselect exact matching controls.
+4. **Usage sync privacy.** Default: P4 opt-in sync includes per-grant `lastUsedAt` but no counts, mount paths, request details, or app data.
