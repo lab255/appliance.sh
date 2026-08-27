@@ -9,6 +9,7 @@ import { useAuthExpired } from '@/lib/auth-signal';
 import { ClusterCompatBanner } from '@/components/cluster-compat-banner';
 import { TerminalLayer } from '@/pages/local-runtime/terminal-drawer';
 import { ClusterSwitcher } from './cluster-switcher';
+import { WorkspaceSwitcher } from './workspace-switcher';
 import { TerminalDock } from './terminal-dock';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -159,7 +160,17 @@ export function AppShell() {
       </aside>
 
       <header className="col-start-2 flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-        <ClusterSwitcher />
+        {mode === 'user' ? (
+          <WorkspaceSwitcher
+            onSetup={() => {
+              void setMode('developer')
+                .then(() => navigate('/setup'))
+                .catch(() => undefined);
+            }}
+          />
+        ) : (
+          <ClusterSwitcher />
+        )}
         <div className="flex items-center gap-2">
           {mode === 'developer' ? <StatusPill tone="info" dot={false} label="Developer mode" /> : null}
         </div>
