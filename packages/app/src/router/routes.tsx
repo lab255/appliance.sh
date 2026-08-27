@@ -26,15 +26,18 @@ import { BootstrapWizardPage } from '@/pages/bootstrap/wizard';
 import { BootstrapProgressPage } from '@/pages/bootstrap/progress';
 import { useHost } from '@/providers/host-provider';
 import { AGENT_ADAPTERS } from '@/lib/agents';
+import { useAppMode } from '@/hooks/use-app-mode';
+import { CataloguePage, InstalledAppsPage } from '@/pages/runtime-catalogue';
 
-// Default-landing resolver: Setup when the shell is unconfigured (no
-// selected cluster), else the Apps home. We hold (render nothing) until
-// the host config resolves so we never flash the wrong destination.
+// User mode always lands on Installed Apps. Developer mode keeps the
+// adaptive historical landing (Setup / Machine / Agents / Projects).
+// Hold until host config + mode resolve so no wrong destination flashes.
 function LandingRedirect() {
   const host = useHost();
   const { config, cluster, isLoading } = useSelectedCluster();
   const devMachine = useDevMachineTargets(config?.clusters ?? []);
   const bootstrapOnly = isBootstrapOnlyConsole();
+  const { mode, isLoading: isModeLoading } = useAppMode();
   const intent = typeof localStorage === 'undefined' ? null : localStorage.getItem('appliance.firstRunIntent');
   const runningMachineNames = devMachine.machines
     .filter((item) => item.running)
@@ -88,7 +91,8 @@ function LandingRedirect() {
     };
   }, [bootstrapOnly, cluster, devMachine.state, runningMachineNames, host.agentAuth, host.vm, intent]);
 
-  if (isLoading || (!bootstrapOnly && !cluster && devMachine.isLoading)) return null;
+  if (isModeLoading || isLoading || (!bootstrapOnly && !cluster && devMachine.isLoading)) return null;
+  if (mode === 'user') return <Navigate to="/apps" replace />;
   // A bootstrap-only console (high-security deployments) never shows
   // the app: once connected, hand off to the hardened console.
   if (bootstrapOnly) {
@@ -163,6 +167,11 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <LandingRedirect /> },
+
+      // Runner surfaces — deliberately tiny until the app runtime and
+      // signed catalogue land in their dedicated implementation tasks.
+      { path: 'apps', element: <InstalledAppsPage /> },
+      { path: 'catalogue', element: <CataloguePage /> },
 
       // ① Setup — the onboarding hub + its children. `/setup` stays
       // routable even once configured. The microVM EXPRESS boot
