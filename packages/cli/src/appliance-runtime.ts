@@ -276,8 +276,7 @@ async function runtimeRun(args: string[]): Promise<void> {
   }
   let effectiveGrants: EntitlementGrant[];
   try {
-    const store = readEntitlementStore();
-    effectiveGrants = assertManifestEntitled(loaded.manifest, latestEntitlement(store.records, loaded.manifest.name));
+    effectiveGrants = assertRuntimeRunEntitled(loaded.manifest);
   } catch (error) {
     fs.rmSync(bundlePath, { force: true });
     fail(error instanceof Error ? error.message : String(error), 2);
@@ -329,6 +328,14 @@ async function runtimeRun(args: string[]): Promise<void> {
 
   console.log(chalk.cyan('» reconciling the pooled appliance-runtime VM (2 vCPU / 4096 MiB)'));
   const prepared = vmJson(['runtime', 'prepare', RUNTIME_POOL_VM, JSON.stringify(plan)]);
+  // Re-read at the last possible moment so a concurrent revoke between the
+  // pre-open check and policy installation can never widen the live policy.
+  try {
+    effectiveGrants = assertRuntimeRunEntitled(loaded.manifest);
+  } catch (error) {
+    updateRuntimeRecord(plan.appId, { state: 'failed' });
+    fail(error instanceof Error ? error.message : String(error), 2);
+  }
   installEffectiveRuntimePolicy(manifestToRuntimePolicy(loaded.manifest, principalIp, effectiveGrants));
   stampUsageBestEffort(
     loaded.manifest.name,
@@ -678,17 +685,42 @@ export function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): v
   }
 }
 
-export function rewriteEffectivePolicyAfterRevocation(appId: string, grantId: string): void {
-  const runtime = readRuntimeRegistry().find(
+export function assertRuntimeRunEntitled(manifest: ApplianceV2, home = applianceHome()): EntitlementGrant[] {
+  const store = readEntitlementStore({ home });
+  return assertManifestEntitled(manifest, latestEntitlement(store.records, manifest.name));
+}
+
+export interface RevocationRewriteDependencies {
+  readRuntimeRecords?: () => RuntimeRecord[];
+  readManifest?: (bundlePath: string) => ApplianceV2;
+  readCurrentGrants?: (appId: string) => EntitlementGrant[];
+  installPolicy?: (policy: EffectiveRuntimePolicy) => void;
+  stopRuntime?: (args: string[], print: boolean) => void;
+}
+
+export function rewriteEffectivePolicyAfterRevocation(
+  appId: string,
+  grantId: string,
+  dependencies: RevocationRewriteDependencies = {}
+): void {
+  const runtime = (dependencies.readRuntimeRecords ?? readRuntimeRegistry)().find(
     (record) => record.appId === appId && (record.state === 'running' || record.state === 'starting')
   );
   if (!runtime) return;
-  const loaded = verifyBundle(runtime.bundlePath, {
-    resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
-  });
-  const current = latestEntitlement(readEntitlementStore().records, appId);
-  installEffectiveRuntimePolicy(manifestToRuntimePolicy(loaded.manifest, runtime.principalIp, current?.grants ?? []));
-  if (!grantId.startsWith('egress:')) runtimeStop([appId], false);
+  const manifest = dependencies.readManifest
+    ? dependencies.readManifest(runtime.bundlePath)
+    : verifyBundle(runtime.bundlePath, {
+        resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
+      }).manifest;
+  const grants = dependencies.readCurrentGrants
+    ? dependencies.readCurrentGrants(appId)
+    : (latestEntitlement(readEntitlementStore().records, appId)?.grants ?? []);
+  (dependencies.installPolicy ?? installEffectiveRuntimePolicy)(
+    manifestToRuntimePolicy(manifest, runtime.principalIp, grants)
+  );
+  if (grantId.startsWith('port:') || grantId.startsWith('resources:')) {
+    (dependencies.stopRuntime ?? runtimeStop)([appId], false);
+  }
 }
 
 function stampUsageBestEffort(appId: string, grantIds: string[]): void {

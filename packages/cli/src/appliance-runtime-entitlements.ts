@@ -89,7 +89,11 @@ export async function runRuntimeEntitlementsCommand(
   const store = readEntitlementStore({ home });
   const verb = firstPositional(args, ['--days', '--home']) ?? 'list';
   if (args.includes('--suggest-revoke') || verb === 'suggest-revoke') {
-    const days = wholeDays(optionValue(args, '--days'));
+    const daysValue = optionValue(args, '--days');
+    if (args.includes('--days') && daysValue === undefined) {
+      throw new Error('--days requires a whole number (minimum 1).');
+    }
+    const days = wholeDays(daysValue);
     const suggestions = suggestedRevocations(store.records, new Date(), days);
     if (json) console.log(JSON.stringify(suggestions));
     else printSuggestions(suggestions);

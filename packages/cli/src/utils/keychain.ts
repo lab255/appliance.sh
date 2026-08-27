@@ -27,6 +27,7 @@ import { keyIdForPublicKey, type DevSigningKey } from './bundle-sign.js';
 // on argv; the (rare) write path does — see writeKeychainApiKey.
 export const KEYCHAIN_SERVICE = 'sh.appliance.desktop';
 export const DEVICE_KEYCHAIN_ACCOUNT = 'device:entitlements:v1';
+export const ENTITLEMENT_ANCHOR_KEYCHAIN_ACCOUNT = 'device:entitlements-anchor:v1';
 
 const SECURITY_BIN = '/usr/bin/security';
 const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
@@ -42,6 +43,11 @@ export interface DeviceKeyOptions {
   home?: string;
   /** Tests and non-desktop embedders can force the owner-only file adapter. */
   forceFile?: boolean;
+}
+
+export interface EntitlementAnchor {
+  sequence: number;
+  headHash: `sha256:${string}`;
 }
 
 /**
@@ -62,10 +68,16 @@ export function getOrCreateDeviceSigningKey(options: DeviceKeyOptions = {}): Dev
       );
     }
     const created = createDeviceSigningKey();
-    if (!writeDeviceKeychainSeed(privateKeyWire(created.privateKey))) {
+    const stored = writeDeviceKeychainSeed(privateKeyWire(created.privateKey));
+    if (stored.state === 'unreadable') {
       throw new Error('The device entitlement key could not be stored in macOS Keychain. No entitlement was changed.');
     }
-    return created;
+    if (stored.state === 'missing') {
+      throw new Error('The device entitlement key disappeared during creation. No entitlement was changed.');
+    }
+    // A concurrent first run may have won the add. Always use the value that
+    // is now canonical in Keychain rather than the key generated locally.
+    return deviceSigningKeyFromWire(stored.seed);
   }
   return getOrCreateFileDeviceKey(home);
 }
@@ -127,17 +139,109 @@ function probeDeviceKeychainSeed(): DeviceKeyProbe {
   }
 }
 
-function writeDeviceKeychainSeed(seed: string): boolean {
+function writeDeviceKeychainSeed(seed: string): DeviceKeyProbe {
   try {
+    // `security add-generic-password` has no password-from-stdin form (`-w -`
+    // stores a literal dash), so the seed must remain on argv for this call.
+    // Deliberately omit -U: a concurrent first-run key must never be replaced.
     execFileSync(
       SECURITY_BIN,
-      ['add-generic-password', '-U', '-s', KEYCHAIN_SERVICE, '-a', DEVICE_KEYCHAIN_ACCOUNT, '-w', seed],
+      ['add-generic-password', '-s', KEYCHAIN_SERVICE, '-a', DEVICE_KEYCHAIN_ACCOUNT, '-w', seed],
       { stdio: ['ignore', 'ignore', 'ignore'] }
     );
-    return true;
+    return { state: 'present', seed };
   } catch {
-    return false;
+    // Duplicate-item and first-run races are resolved by re-reading. An
+    // existing value wins; no update/overwrite path exists here.
+    return probeDeviceKeychainSeed();
   }
+}
+
+export function entitlementAnchorFile(home: string): string {
+  return path.join(home, 'device-entitlement-anchor.json');
+}
+
+export function readEntitlementAnchor(options: DeviceKeyOptions = {}): EntitlementAnchor | null {
+  const home = options.home ?? path.join(os.homedir(), '.appliance');
+  const defaultHome = path.resolve(home) === path.resolve(path.join(os.homedir(), '.appliance'));
+  if (isMacOS() && defaultHome && !options.forceFile) {
+    try {
+      const value = execFileSync(
+        SECURITY_BIN,
+        ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', ENTITLEMENT_ANCHOR_KEYCHAIN_ACCOUNT, '-w'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      ).trim();
+      return parseEntitlementAnchor(value);
+    } catch (cause) {
+      if (classifySecurityExit((cause as { status?: number | null }).status) === 'missing') return null;
+      throw new Error('The entitlement rollback anchor exists but macOS Keychain did not allow it to be read.');
+    }
+  }
+  const file = entitlementAnchorFile(home);
+  try {
+    const anchor = parseEntitlementAnchor(fs.readFileSync(file, 'utf8'));
+    fs.chmodSync(file, 0o600);
+    return anchor;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new Error('The entitlement rollback anchor file is unreadable or invalid.');
+  }
+}
+
+export function writeEntitlementAnchor(anchor: EntitlementAnchor, options: DeviceKeyOptions = {}): void {
+  const valid = parseEntitlementAnchor(JSON.stringify(anchor));
+  const home = options.home ?? path.join(os.homedir(), '.appliance');
+  const defaultHome = path.resolve(home) === path.resolve(path.join(os.homedir(), '.appliance'));
+  if (isMacOS() && defaultHome && !options.forceFile) {
+    try {
+      // The anchor is not secret. -U is required here because it is monotonic
+      // state that advances after every entitlement mutation.
+      execFileSync(
+        SECURITY_BIN,
+        [
+          'add-generic-password',
+          '-U',
+          '-s',
+          KEYCHAIN_SERVICE,
+          '-a',
+          ENTITLEMENT_ANCHOR_KEYCHAIN_ACCOUNT,
+          '-w',
+          JSON.stringify(valid),
+        ],
+        { stdio: ['ignore', 'ignore', 'ignore'] }
+      );
+      return;
+    } catch {
+      throw new Error('The entitlement rollback anchor could not be stored in macOS Keychain. No entitlement changed.');
+    }
+  }
+  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  fs.chmodSync(home, 0o700);
+  const file = entitlementAnchorFile(home);
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const descriptor = fs.openSync(temporary, 'wx', 0o600);
+  try {
+    fs.writeFileSync(descriptor, `${JSON.stringify(valid)}\n`, 'utf8');
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  fs.renameSync(temporary, file);
+  fs.chmodSync(file, 0o600);
+}
+
+function parseEntitlementAnchor(value: string): EntitlementAnchor {
+  const parsed = JSON.parse(value) as Partial<EntitlementAnchor>;
+  if (
+    !parsed ||
+    !Number.isSafeInteger(parsed.sequence) ||
+    parsed.sequence! < 1 ||
+    typeof parsed.headHash !== 'string' ||
+    !/^sha256:[0-9a-f]{64}$/.test(parsed.headHash)
+  ) {
+    throw new Error('Invalid entitlement rollback anchor.');
+  }
+  return parsed as EntitlementAnchor;
 }
 
 function createDeviceSigningKey(): DevSigningKey {

@@ -93,19 +93,26 @@ appliance runtime entitlements --suggest-revoke --days 14
 appliance runtime entitlements revoke journal egress:api.example.test
 ```
 
-Suggestions are derived only: an active item appears after 30 unused days by
-default (minimum configurable threshold: one whole day), and nothing is
-automatically revoked. Revoking egress immediately rewrites a running app's
-effective default-deny policy. Revoking a mount, published port, or resources
-stops a running app so the missing required control is enforced before another
-launch.
+Suggestions are derived only: an observable, active non-mount item appears
+after 30 unused days by default (minimum configurable threshold: one whole
+day), and nothing is automatically revoked. Mounts are excluded until Runtime
+implements attachment and can observe their use. Revoking egress immediately
+rewrites a running app's effective default-deny policy. Revoking a mount also
+rewrites the policy snapshot but does not stop the app; revoking a published
+port or resources stops it so the missing required control is enforced before
+another launch.
 
 Records use the RFC 0001 Ed25519 envelope with role `entitlement`. Mutations
 take a cross-process lock, verify every prior record, compare the prior file
 hash immediately before a mode-`0600` atomic rename, and fail rather than
 proceed unlocked. Signed sequence and previous-record hashes detect insertion,
-deletion, or reordering within the history. Invalid bytes are preserved and
-controls remain denied for review.
+deletion, or reordering within the history. A separate monotonic
+`{sequence, headHash}` anchor is advanced while the same lock is held before
+the store rename, so a crash between those writes fails closed. The anchor is
+a second Keychain item on macOS and a mode-`0600` file beside the device key on
+other platforms. Reads refuse a missing, truncated, or rolled-back store whose
+head is behind the intact anchor. Invalid bytes are preserved and controls
+remain denied for review.
 
 On macOS, the device Ed25519 key bytes are stored as a generic-password
 Keychain item. `/usr/bin/security` cannot sign with Ed25519 and Secure Enclave
@@ -114,6 +121,12 @@ uses a mode-`0600` file beside the entitlement store; Windows uses the same
 per-user file location and relies on the current user's filesystem ACL. The
 signature provides same-user tamper evidence, not proof that a human consented,
 trusted time, user presence, or protection from malware running as that user.
+Rollback is detectable only while the anchor is intact; a same-user attacker
+who re-signs records or resets both the store and anchor is out of scope. The
+macOS `security add-generic-password` command has no seed-from-stdin form (`-w
+-` stores a literal dash), so the one-time key creation passes the seed on its
+argument vector; it never uses `-U`, and a concurrent creator's existing key
+wins after a re-probe.
 
 ## Opening installed apps
 

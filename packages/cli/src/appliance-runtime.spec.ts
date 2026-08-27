@@ -4,13 +4,23 @@ import * as path from 'node:path';
 import { applianceV2Input } from '@appliance.sh/sdk';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  assertRuntimeRunEntitled,
   manifestToRuntimePlan,
   manifestToRuntimePolicy,
+  rewriteEffectivePolicyAfterRevocation,
   sanitizeRuntimeLog,
   stageAndVerifyRuntimeOpenCopy,
+  type EffectiveRuntimePolicy,
 } from './appliance-runtime.js';
 import { tinyOciTar } from './utils/bundle-oci-fixture.js';
 import { writeBundle } from './utils/bundle-write.js';
+import {
+  grantManifestEntitlements,
+  latestEntitlement,
+  readEntitlementStore,
+  requestedGrantsForManifest,
+  revokeEntitlementGrant,
+} from './utils/entitlements.js';
 
 const roots: string[] = [];
 
@@ -129,6 +139,72 @@ describe('manifest to effective Runtime policy', () => {
     ]);
     expect(effective.policy.allow).toEqual(['api.example.test']);
     expect(effective.allowPorts).toEqual({ 'api.example.test': [443] });
+  });
+
+  it('rechecks the runtime-run grant and refuses a revoke that races policy installation', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-runtime-entitlement-'));
+    roots.push(root);
+    const value = manifest({ cpus: 1 });
+    const ids = requestedGrantsForManifest(value).map((grant) => grant.id);
+    grantManifestEntitlements(value, 'cli', ids, { home: root });
+    expect(assertRuntimeRunEntitled(value, root).map((grant) => grant.id)).toEqual(ids);
+
+    revokeEntitlementGrant('journal', 'port:http', { home: root });
+    expect(() => assertRuntimeRunEntitled(value, root)).toThrow(
+      'Runtime start refused: required control is not granted: published port http 3000/tcp (port:http).'
+    );
+  });
+
+  it('rewrites the live policy from the post-revoke grant and does not stop for a mount revoke', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-runtime-revoke-'));
+    roots.push(root);
+    const value = manifest();
+    value.network = {
+      egress: [
+        { host: 'api.example.test', ports: [443] },
+        { host: 'sync.example.test', ports: [443] },
+      ],
+    };
+    value.mounts = [{ name: 'data', source: 'volume', guest: '/data', readOnly: false }];
+    grantManifestEntitlements(
+      value,
+      'cli',
+      requestedGrantsForManifest(value).map((grant) => grant.id),
+      { home: root }
+    );
+    revokeEntitlementGrant('journal', 'egress:api.example.test', { home: root });
+    const installed: EffectiveRuntimePolicy[] = [];
+    const stopped: string[][] = [];
+    const dependencies = {
+      readRuntimeRecords: () => [
+        {
+          appId: 'journal',
+          version: '1.2.3',
+          state: 'running' as const,
+          principalIp: '192.168.127.10',
+          hostPorts: [],
+          startedAt: '2026-08-28T00:00:00.000Z',
+          updatedAt: '2026-08-28T00:00:00.000Z',
+          poolVm: 'appliance-runtime',
+          poolRestartPending: false,
+          bundlePath: '/tmp/journal.appliance.zip',
+          installDir: '/tmp/journal',
+          shareTag: 'ap-journal',
+          uid: 20000,
+        },
+      ],
+      readManifest: () => value,
+      readCurrentGrants: () => latestEntitlement(readEntitlementStore({ home: root }).records, 'journal')!.grants,
+      installPolicy: (policy: EffectiveRuntimePolicy) => installed.push(policy),
+      stopRuntime: (args: string[]) => stopped.push(args),
+    };
+    rewriteEffectivePolicyAfterRevocation('journal', 'egress:api.example.test', dependencies);
+    expect(installed[0]?.policy.allow).toEqual(['sync.example.test']);
+    expect(stopped).toEqual([]);
+
+    revokeEntitlementGrant('journal', 'mount:data', { home: root });
+    rewriteEffectivePolicyAfterRevocation('journal', 'mount:data', dependencies);
+    expect(stopped).toEqual([]);
   });
 });
 

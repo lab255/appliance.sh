@@ -5,11 +5,13 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ApplianceV2 } from '@appliance.sh/sdk';
+import { runRuntimeEntitlementsCommand } from '../appliance-runtime-entitlements';
 import {
   EntitlementIntegrityError,
   UngrantedControlError,
   assertManifestEntitled,
   computeGrantDelta,
+  entitlementLockFile,
   entitlementsFile,
   grantManifestEntitlements,
   latestEntitlement,
@@ -19,6 +21,7 @@ import {
   stampEntitlementUsage,
   suggestedRevocations,
 } from './entitlements';
+import { entitlementAnchorFile } from './keychain';
 
 const roots: string[] = [];
 
@@ -66,6 +69,7 @@ describe('signed entitlement store', () => {
     });
     expect(readEntitlementStore({ home: directory }).records).toEqual([record]);
     expect(fs.statSync(entitlementsFile(directory)).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(entitlementAnchorFile(directory)).mode & 0o777).toBe(0o600);
     const file = entitlementsFile(directory);
     const edited = fs.readFileSync(file, 'utf8').replace('"license": "MIT"', '"license": "GPL-3.0"');
     fs.writeFileSync(file, edited);
@@ -84,6 +88,30 @@ describe('signed entitlement store', () => {
     store.records.reverse();
     fs.writeFileSync(file, JSON.stringify(store));
     expect(() => readEntitlementStore({ home: directory })).toThrow('history chain verification failed');
+  });
+
+  it('detects whole-file rollback to a valid pre-revoke snapshot while the anchor is intact', () => {
+    const directory = home();
+    const value = manifest();
+    grantManifestEntitlements(value, 'cli', allGrantIds(value), { home: directory });
+    const beforeRevoke = fs.readFileSync(entitlementsFile(directory));
+    revokeEntitlementGrant('journal', 'egress:api.example.test', { home: directory });
+    fs.writeFileSync(entitlementsFile(directory), beforeRevoke);
+    expect(() => readEntitlementStore({ home: directory })).toThrow(
+      'Entitlement rollback detected: store sequence 1 is behind protected sequence 2'
+    );
+  });
+
+  it('detects signed tail truncation while the anchor is intact', () => {
+    const directory = home();
+    const value = manifest();
+    grantManifestEntitlements(value, 'cli', allGrantIds(value), { home: directory });
+    stampEntitlementUsage('journal', ['egress:api.example.test'], { home: directory });
+    const file = entitlementsFile(directory);
+    const store = JSON.parse(fs.readFileSync(file, 'utf8')) as { records: unknown[] };
+    store.records.pop();
+    fs.writeFileSync(file, JSON.stringify(store));
+    expect(() => readEntitlementStore({ home: directory })).toThrow('behind protected sequence 2');
   });
 
   it('computes upgrade delta by stable id and treats a widening as new', () => {
@@ -129,7 +157,8 @@ describe('signed entitlement store', () => {
       readEntitlementStore({ home: directory }).records,
       new Date('2026-08-01T00:00:00.000Z')
     );
-    expect(suggestions).toHaveLength(4);
+    expect(suggestions).toHaveLength(3);
+    expect(suggestions.map((suggestion) => suggestion.grant.id)).not.toContain('mount:data');
     expect(suggestions[0]?.revokeCommand).toContain('appliance runtime entitlements revoke journal');
     current = revokeEntitlementGrant('journal', suggestions[0]!.grant.id, { home: directory });
     expect(current.grants).toHaveLength(3);
@@ -161,4 +190,27 @@ grantManifestEntitlements({manifest:'v2',kind:'runnable',type:'container',name:'
         .sort()
     ).toEqual(Array.from({ length: 6 }, (_, index) => `app-${index}`));
   }, 20_000);
+
+  it('breaks a lock whose mtime is older than 60 seconds', () => {
+    const directory = home();
+    fs.writeFileSync(entitlementLockFile(directory), `${JSON.stringify({ pid: process.pid, token: 'stale' })}\n`, {
+      mode: 0o600,
+    });
+    const old = new Date(Date.now() - 61_000);
+    fs.utimesSync(entitlementLockFile(directory), old, old);
+    expect(() =>
+      grantManifestEntitlements(manifest(), 'cli', allGrantIds(manifest()), { home: directory })
+    ).not.toThrow();
+    expect(fs.existsSync(entitlementLockFile(directory))).toBe(false);
+  });
+
+  it('validates --days as a present positive whole number', async () => {
+    const directory = home();
+    await expect(
+      runRuntimeEntitlementsCommand(['--home', directory, '--suggest-revoke', '--days', '0'])
+    ).rejects.toThrow('--days must be a whole number (minimum 1).');
+    await expect(runRuntimeEntitlementsCommand(['--home', directory, '--suggest-revoke', '--days'])).rejects.toThrow(
+      '--days requires a whole number (minimum 1).'
+    );
+  });
 });
