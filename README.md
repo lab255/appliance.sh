@@ -10,17 +10,33 @@ Everything local runs inside **one managed microVM**: a Kubernetes runtime, an i
 
 ## Quickstart
 
+Install the CLI once:
+
 ```bash
 pnpm add --global appliance.sh
-cd your-app
-appliance init     # checks your machine, boots the VM, offers your first deploy
-appliance dev      # deploys, streams logs, rebuilds on save
 ```
 
-Your app is live at `http://<app>-dev.appliance.localhost:8081`. That's the
-whole loop — no Dockerfile required (framework apps get their image generated
-server-side), no Docker daemon, no registry setup. Prefer clicking to typing?
-The [desktop app](docs/desktop.md) does all of the above with buttons.
+### Build an app
+
+```bash
+cd your-app
+appliance init # checks your machine, boots the VM, offers your first deploy
+appliance dev  # deploys, streams logs, rebuilds on save
+```
+
+Your app is live at `http://<app>-dev.appliance.localhost:8081`. That's the whole loop — no Dockerfile required (framework apps get their image generated server-side), no Docker daemon, no registry setup.
+
+### Run an app
+
+```bash
+cd your-runnable-app
+appliance builder package
+appliance runtime run ./your-app.appliance.zip
+```
+
+`builder package` works today; packaged-app `runtime run` is arriving with AP-163 and is still a placeholder in this release. Learn the distinction in [Appliance Runtime](docs/runtime.md), author bundles with the [manifest v2 reference](docs/manifest-v2.md), and check exact command availability in the [CLI reference](docs/cli.md). The design record starts at the [RFC index](docs/rfcs/README.md).
+
+Prefer clicking to typing? The [desktop app](docs/desktop.md) provides the same product surfaces with buttons.
 
 ## The three journeys
 
