@@ -404,7 +404,7 @@ async function runtimeRun(args: string[]): Promise<void> {
     // Binary payloads must not race the asynchronous VZ shutdown: their
     // custom-rootfs share has to be attached at the very next boot. Keep the
     // established container reconciliation path unchanged in this stacked PR.
-    if (planContainsBinary(plan)) await waitForRuntimePoolStop();
+    if (plan.kind === 'compound' || planContainsBinary(plan)) await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
