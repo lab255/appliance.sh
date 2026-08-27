@@ -1492,7 +1492,7 @@ ip netns exec "$NS" ip link set lo up
 ip netns exec "$NS" ip addr add "$IP/32" dev "$APP_IF"
 ip netns exec "$NS" ip link set "$APP_IF" up
 ip netns exec "$NS" ip route add default dev "$APP_IF"
-sysctl -q -w net.ipv4.ip_forward=1 "net.ipv4.conf.$ROOT_IF.proxy_arp=1"
+sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.eth0.proxy_arp=1 "net.ipv4.conf.$ROOT_IF.proxy_arp=1"
 if ! nft list table inet appliance_runtime >/dev/null 2>&1; then
   nft add table inet appliance_runtime
 fi
@@ -3256,6 +3256,7 @@ mod tests {
         assert!(!supervisor.contains("echo $$ > \"$CG/cgroup.procs\""));
         assert!(supervisor.contains("grep -qx \"$TASK_PID\" \"$CG/cgroup.procs\""));
         assert!(supervisor.contains("net.ipv4.ip_forward=1"));
+        assert!(supervisor.contains("net.ipv4.conf.eth0.proxy_arp=1"));
         assert!(supervisor.contains("net.ipv4.conf.$ROOT_IF.proxy_arp=1"));
         assert!(supervisor.contains("principal_input iifname \"r*\" drop"));
         assert!(supervisor.contains("principal_forward iifname \"r*\" oifname != \"eth0\" drop"));

@@ -1237,11 +1237,23 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
                 false,
             )?);
             spec.runtime_mounts.sort_by(|a, b| a.principal.cmp(&b.principal));
-            spec.published
-                .retain(|published| {
-                    published.runtime_target.as_ref().map(|target| target.principal.as_str())
-                        != Some(plan.app_id.as_str())
-                });
+            let planned_hosts = plan
+                .ports
+                .iter()
+                .map(|port| port.host)
+                .collect::<std::collections::HashSet<_>>();
+            spec.published.retain(|published| {
+                // Migrate the pre-RuntimeTarget relay record for this
+                // allocation while preserving unrelated legacy forwards.
+                if published.runtime_target.is_none() && planned_hosts.contains(&published.host) {
+                    return false;
+                }
+                published
+                    .runtime_target
+                    .as_ref()
+                    .map(|target| target.principal.as_str())
+                    != Some(plan.app_id.as_str())
+            });
             for port in plan.ports {
                 if !(20000..=29999).contains(&port.host) {
                     bail!("runtime host port {} is outside 20000-29999", port.host);
