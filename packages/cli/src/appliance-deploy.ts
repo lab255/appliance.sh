@@ -6,7 +6,7 @@ import { loadCredentials } from './utils/credentials.js';
 import { getActiveProfileOverride, setActiveProfileOverride } from './utils/credentials.js';
 import { attachProfileOption } from './utils/profile-flag.js';
 import { registerManifestOptions } from './utils/common.js';
-import { DEFAULT_BUILD_OUTPUT, isPrintedError, runDeploy } from './utils/deploy-core.js';
+import { assertSourceBundleForDeploy, DEFAULT_BUILD_OUTPUT, isPrintedError, runDeploy } from './utils/deploy-core.js';
 import { printCliError } from './utils/errors.js';
 import chalk from 'chalk';
 import { ensureLocalRuntime, LEGACY_MICROVM_PROFILE, LOCAL_PROFILE } from './utils/microvm-up.js';
@@ -123,6 +123,17 @@ registerManifestOptions(program)
       envFile: opts.envFile,
       file: opts.file,
     });
+
+    // Stack detection gets first refusal; in single-app mode reject a v2 or
+    // malformed archive before credentials, target resolution, or upload.
+    if (!opts.imageUri && fs.existsSync(path.resolve(opts.build))) {
+      try {
+        assertSourceBundleForDeploy(path.resolve(opts.build));
+      } catch (error) {
+        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        process.exit(1);
+      }
+    }
 
     const credentials = loadCredentials();
     if (!credentials) {

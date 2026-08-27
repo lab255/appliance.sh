@@ -1,0 +1,32 @@
+{
+  "manifest": "v2",
+  "kind": "runnable",
+  "type": "container",
+  "name": "journal",
+  "version": "1.0.0",
+  "license": "MIT",
+  "description": "Minimal static journal runnable-bundle example",
+  "publisher": {
+    "name": "Lab 255 examples"
+  },
+  "payload": {
+    "images": {
+      "linux/amd64": {
+        "path": "payload/images/journal-linux-amd64.oci.tar"
+      }
+    }
+  },
+  "ui": {
+    "type": "web",
+    "port": "http",
+    "path": "/"
+  },
+  "ports": [
+    {
+      "name": "http",
+      "guest": 80,
+      "protocol": "tcp",
+      "expose": "host"
+    }
+  ]
+}
