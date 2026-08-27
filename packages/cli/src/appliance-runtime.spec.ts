@@ -4,6 +4,7 @@ import {
   manifestToRuntimePlan,
   manifestToRuntimePolicy,
   prefixServiceLog,
+  runtimePoolRestartRequired,
   sanitizeRuntimeLog,
 } from './appliance-runtime.js';
 
@@ -228,5 +229,14 @@ describe('runtime log rendering', () => {
 
   it('prefixes every compound service log line', () => {
     expect(prefixServiceLog('api', 'ready\nrequest\n')).toBe('[api] ready\n[api] request\n');
+  });
+});
+
+describe('runtime pool share reconciliation', () => {
+  it('restarts for a replaced compound install without changing legacy single-workload behavior', () => {
+    expect(runtimePoolRestartRequired('compound', true, false)).toBe(true);
+    expect(runtimePoolRestartRequired('container', true, false)).toBe(false);
+    expect(runtimePoolRestartRequired('binary', true, false)).toBe(false);
+    expect(runtimePoolRestartRequired('container', false, true)).toBe(true);
   });
 });

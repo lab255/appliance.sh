@@ -357,7 +357,7 @@ async function runtimeRun(args: string[]): Promise<void> {
 
   const installDir = path.join(runtimeRoot(), 'apps', loaded.manifest.name, loaded.manifest.version);
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
-  installRuntimeBundle(bundlePath, installDir, loaded);
+  const installChanged = installRuntimeBundle(bundlePath, installDir, loaded);
   const records = readRuntimeRegistry().filter((entry) => entry.appId !== loaded.manifest.name);
   const persisted = persistedRuntimeAllocation(loaded.manifest);
   const principalIp = persisted?.principalIp ?? allocatePrincipalIp(records);
@@ -393,7 +393,7 @@ async function runtimeRun(args: string[]): Promise<void> {
   console.log(chalk.cyan('» reconciling the pooled appliance-runtime VM (2 vCPU / 4096 MiB)'));
   const prepared = vmJson(['runtime', 'prepare', RUNTIME_POOL_VM, JSON.stringify(plan)]);
   installEffectiveRuntimePolicy(manifestToRuntimePolicy(loaded.manifest, principalIp));
-  const restartRequired = Boolean(prepared.restartRequired);
+  const restartRequired = runtimePoolRestartRequired(plan.kind, installChanged, Boolean(prepared.restartRequired));
   if (restartRequired) {
     updateRuntimeRecord(plan.appId, { poolRestartPending: true });
     console.log(
@@ -648,12 +648,12 @@ export function sanitizeRuntimeLog(value: string): string {
   return safe.split(String.fromCharCode(0x7f)).join('');
 }
 
-function installRuntimeBundle(bundlePath: string, destination: string, verified: LoadedRuntimeBundle): void {
+function installRuntimeBundle(bundlePath: string, destination: string, verified: LoadedRuntimeBundle): boolean {
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
   if (runtimeInstallMatches(destination, verified.digest)) {
     removePreviousRuntimeInstalls(destination);
-    return;
+    return false;
   }
 
   const staging = `${destination}.staging-${process.pid}-${Date.now()}`;
@@ -667,11 +667,24 @@ function installRuntimeBundle(bundlePath: string, destination: string, verified:
     fs.renameSync(staging, destination);
     if (fs.existsSync(previous)) fs.rmSync(previous, { recursive: true, force: true });
     removePreviousRuntimeInstalls(destination);
+    return true;
   } catch (error) {
     fs.rmSync(staging, { recursive: true, force: true });
     if (!fs.existsSync(destination) && fs.existsSync(previous)) fs.renameSync(previous, destination);
     throw error;
   }
+}
+
+export function runtimePoolRestartRequired(
+  kind: RuntimePlan['kind'],
+  installChanged: boolean,
+  prepareRequiresRestart: boolean
+): boolean {
+  // Replacing an installed directory preserves its path but changes its inode.
+  // A running VZ VirtioFS device still holds the old directory and must reboot
+  // before compound leaves can import the replacement payloads. Keep legacy
+  // single-workload reconciliation unchanged in this stacked increment.
+  return prepareRequiresRestart || (kind === 'compound' && installChanged);
 }
 
 function runtimeInstallMatches(destination: string, digest: string): boolean {
