@@ -407,6 +407,14 @@ export interface RunDeployParams {
 export async function runDeploy(params: RunDeployParams): Promise<DeployOutcome> {
   const { client, apiUrl, program, opts } = params;
 
+  // Inspect an existing archive before target resolution or API mutation so a
+  // runnable/invalid bundle cannot be obscured by an unrelated link/prompt
+  // error. The resolveBuildId guard below also covers a just-auto-built zip.
+  if (!opts.imageUri) {
+    const existingBuild = path.resolve(opts.build);
+    if (fs.existsSync(existingBuild)) assertSourceBundleForDeploy(existingBuild);
+  }
+
   const { projectName, environmentName, source } = await resolveTarget(
     params.cliProject,
     params.cliEnvironment,
