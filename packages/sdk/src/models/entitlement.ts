@@ -60,6 +60,11 @@ export const entitlementUsageSchema = z.strictObject({
 });
 
 export const entitlementRecordPayloadSchema = z.strictObject({
+  sequence: z.number().int().positive(),
+  previousRecordHash: z
+    .string()
+    .regex(/^sha256:[0-9a-f]{64}$/)
+    .nullable(),
   appId: z.string().min(1).max(160),
   version: z.string().min(1).max(160),
   license: z.string().min(1).max(160),

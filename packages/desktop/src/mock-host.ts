@@ -467,6 +467,8 @@ function mockEntitlement(app: InstalledApp): EntitlementRecord {
     })),
   ];
   return {
+    sequence: 1,
+    previousRecordHash: null,
     appId: app.appId,
     version: app.version,
     license: app.license,

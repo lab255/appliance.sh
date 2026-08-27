@@ -73,6 +73,19 @@ describe('signed entitlement store', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe(edited);
   });
 
+  it('detects deletion or reordering of otherwise valid signed history', () => {
+    const directory = home();
+    const first = manifest();
+    grantManifestEntitlements(first, 'cli', allGrantIds(first), { home: directory });
+    const second = { ...manifest(), name: 'reader' };
+    grantManifestEntitlements(second, 'cli', allGrantIds(second), { home: directory });
+    const file = entitlementsFile(directory);
+    const store = JSON.parse(fs.readFileSync(file, 'utf8')) as { records: unknown[] };
+    store.records.reverse();
+    fs.writeFileSync(file, JSON.stringify(store));
+    expect(() => readEntitlementStore({ home: directory })).toThrow('history chain verification failed');
+  });
+
   it('computes upgrade delta by stable id and treats a widening as new', () => {
     const directory = home();
     const initial = manifest();

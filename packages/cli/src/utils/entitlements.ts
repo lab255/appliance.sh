@@ -29,6 +29,8 @@ export interface EntitlementOptions {
   lockTimeoutMs?: number;
 }
 
+type EntitlementRecordInput = Omit<EntitlementRecordPayload, 'sequence' | 'previousRecordHash'>;
+
 export interface GrantDelta {
   requested: EntitlementGrant[];
   unchanged: EntitlementGrant[];
@@ -195,7 +197,7 @@ export function grantManifestEntitlements(
     const retainedUsage = Object.fromEntries(
       Object.entries(current?.usage ?? {}).filter(([id]) => grants.some((grant) => grant.id === id))
     );
-    const payload: EntitlementRecordPayload = {
+    const payload: EntitlementRecordInput = {
       appId: manifest.name,
       version: manifest.version,
       license: manifest.license,
@@ -205,9 +207,7 @@ export function grantManifestEntitlements(
       grants,
       usage: retainedUsage,
     };
-    const record = signRecord(payload, resolveKey(options, store.devicePublicKey));
-    store.records.push(record);
-    return record;
+    return appendRecord(store, payload, resolveKey(options, store.devicePublicKey));
   });
 }
 
@@ -215,13 +215,12 @@ export function markEntitlementUninstalled(appId: string, options: EntitlementOp
   return mutateStore(options, (store) => {
     const current = latestEntitlement(store.records, appId);
     if (!current || current.state === 'uninstalled') return null;
-    const { signature: _signature, ...payload } = current;
-    const next = signRecord(
+    const { signature: _signature, sequence: _sequence, previousRecordHash: _previousRecordHash, ...payload } = current;
+    return appendRecord(
+      store,
       { ...payload, state: 'uninstalled', uninstalledAt: (options.now ?? new Date()).toISOString() },
       resolveKey(options, store.devicePublicKey)
     );
-    store.records.push(next);
-    return next;
   });
 }
 
@@ -236,8 +235,9 @@ export function revokeEntitlementGrant(
     if (!current.grants.some((grant) => grant.id === grantId)) {
       throw new Error(`Grant '${grantId}' is not active for '${appId}'.`);
     }
-    const { signature: _signature, ...payload } = current;
-    const next = signRecord(
+    const { signature: _signature, sequence: _sequence, previousRecordHash: _previousRecordHash, ...payload } = current;
+    return appendRecord(
+      store,
       {
         ...payload,
         grants: payload.grants.filter((grant) => grant.id !== grantId),
@@ -245,8 +245,6 @@ export function revokeEntitlementGrant(
       },
       resolveKey(options, store.devicePublicKey)
     );
-    store.records.push(next);
-    return next;
   });
 }
 
@@ -257,9 +255,8 @@ export function stampEntitlementUsage(
 ): EntitlementRecord | null {
   if (grantIds.length === 0) return latestEntitlement(readEntitlementStore(options).records, appId);
   return mutateStore(options, (store) => {
-    const index = findLatestIndex(store.records, appId);
-    if (index < 0 || store.records[index]!.state !== 'installed') return null;
-    const current = store.records[index]!;
+    const current = latestEntitlement(store.records, appId);
+    if (!current || current.state !== 'installed') return null;
     const active = new Set(current.grants.map((grant) => grant.id));
     const usedAt = (options.now ?? new Date()).toISOString();
     const usage = { ...current.usage };
@@ -275,10 +272,8 @@ export function stampEntitlementUsage(
       changed = true;
     }
     if (!changed) return current;
-    const { signature: _signature, ...payload } = current;
-    const next = signRecord({ ...payload, usage }, resolveKey(options, store.devicePublicKey));
-    store.records[index] = next;
-    return next;
+    const { signature: _signature, sequence: _sequence, previousRecordHash: _previousRecordHash, ...payload } = current;
+    return appendRecord(store, { ...payload, usage }, resolveKey(options, store.devicePublicKey));
   });
 }
 
@@ -392,7 +387,14 @@ function parseAndVerify(bytes: Buffer, key: DevSigningKey): EntitlementStore {
       'The entitlement store device key is unavailable or changed; controls remain denied pending review.'
     );
   }
-  for (const record of parsed.data.records) {
+  let previous: EntitlementRecord | null = null;
+  for (const [index, record] of parsed.data.records.entries()) {
+    const expectedPrevious = previous ? recordHash(previous) : null;
+    if (record.sequence !== index + 1 || record.previousRecordHash !== expectedPrevious) {
+      throw new EntitlementIntegrityError(
+        `Entitlement history chain verification failed at sequence ${index + 1}; controls remain denied pending review.`
+      );
+    }
     const { signature, ...payload } = record;
     let valid = false;
     try {
@@ -405,6 +407,7 @@ function parseAndVerify(bytes: Buffer, key: DevSigningKey): EntitlementStore {
         `Entitlement signature verification failed for '${record.appId}'; controls remain denied pending review.`
       );
     }
+    previous = record;
   }
   return parsed.data;
 }
@@ -418,6 +421,24 @@ function signRecord(payload: EntitlementRecordPayload, key: DevSigningKey): Enti
   return { ...valid, signature: signEnvelope(valid, 'entitlement', key) as EntitlementRecord['signature'] };
 }
 
+function appendRecord(store: EntitlementStore, input: EntitlementRecordInput, key: DevSigningKey): EntitlementRecord {
+  const previous = store.records[store.records.length - 1];
+  const record = signRecord(
+    {
+      sequence: store.records.length + 1,
+      previousRecordHash: previous ? recordHash(previous) : null,
+      ...input,
+    },
+    key
+  );
+  store.records.push(record);
+  return record;
+}
+
+function recordHash(record: EntitlementRecord): `sha256:${string}` {
+  return `sha256:${createHash('sha256').update(canonicalJsonBytes(record)).digest('hex')}`;
+}
+
 function resolveKey(options: EntitlementOptions, expectedPublicKey: string): DevSigningKey {
   const home = options.home ?? applianceHome();
   const key = options.key ?? getOrCreateDeviceSigningKey({ home, forceFile: home !== applianceHome() });
@@ -428,11 +449,6 @@ function resolveKey(options: EntitlementOptions, expectedPublicKey: string): Dev
 
 function grantMeaning(grant: EntitlementGrant): string {
   return Buffer.from(canonicalJsonBytes({ control: grant.control, value: grant.value })).toString('base64url');
-}
-
-function findLatestIndex(records: EntitlementRecord[], appId: string): number {
-  for (let index = records.length - 1; index >= 0; index -= 1) if (records[index]!.appId === appId) return index;
-  return -1;
 }
 
 function readBytes(file: string): Buffer | null {

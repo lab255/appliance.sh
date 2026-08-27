@@ -54,8 +54,13 @@ export function getOrCreateDeviceSigningKey(options: DeviceKeyOptions = {}): Dev
   const home = options.home ?? path.join(os.homedir(), '.appliance');
   const defaultHome = path.resolve(home) === path.resolve(path.join(os.homedir(), '.appliance'));
   if (isMacOS() && defaultHome && !options.forceFile) {
-    const existing = readDeviceKeychainSeed();
-    if (existing) return deviceSigningKeyFromWire(existing);
+    const existing = probeDeviceKeychainSeed();
+    if (existing.state === 'present') return deviceSigningKeyFromWire(existing.seed);
+    if (existing.state === 'unreadable') {
+      throw new Error(
+        'The device entitlement key exists but macOS Keychain did not allow it to be read. No entitlement was changed.'
+      );
+    }
     const created = createDeviceSigningKey();
     if (!writeDeviceKeychainSeed(privateKeyWire(created.privateKey))) {
       throw new Error('The device entitlement key could not be stored in macOS Keychain. No entitlement was changed.');
@@ -105,16 +110,20 @@ function getOrCreateFileDeviceKey(home: string): DevSigningKey {
   return created;
 }
 
-function readDeviceKeychainSeed(): string | null {
+type DeviceKeyProbe = { state: 'present'; seed: string } | { state: 'missing' } | { state: 'unreadable' };
+
+function probeDeviceKeychainSeed(): DeviceKeyProbe {
   try {
     const value = execFileSync(
       SECURITY_BIN,
       ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', DEVICE_KEYCHAIN_ACCOUNT, '-w'],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
     ).trim();
-    return value.startsWith('ed25519:') ? value : null;
-  } catch {
-    return null;
+    return value.startsWith('ed25519:') ? { state: 'present', seed: value } : { state: 'unreadable' };
+  } catch (cause) {
+    return classifySecurityExit((cause as { status?: number | null }).status) === 'missing'
+      ? { state: 'missing' }
+      : { state: 'unreadable' };
   }
 }
 

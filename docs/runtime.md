@@ -103,8 +103,9 @@ launch.
 Records use the RFC 0001 Ed25519 envelope with role `entitlement`. Mutations
 take a cross-process lock, verify every prior record, compare the prior file
 hash immediately before a mode-`0600` atomic rename, and fail rather than
-proceed unlocked. Invalid bytes are preserved and controls remain denied for
-review.
+proceed unlocked. Signed sequence and previous-record hashes detect insertion,
+deletion, or reordering within the history. Invalid bytes are preserved and
+controls remain denied for review.
 
 On macOS, the device Ed25519 key bytes are stored as a generic-password
 Keychain item. `/usr/bin/security` cannot sign with Ed25519 and Secure Enclave

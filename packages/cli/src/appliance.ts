@@ -172,8 +172,7 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
   },
   entitlements: {
     description: 'list, inspect, and revoke packaged-app entitlements',
-    load: async () =>
-      (await import('./appliance-runtime-entitlements.js')).runRuntimeEntitlementsCommand(process.argv.slice(2)),
+    load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('entitlements', process.argv.slice(2)),
   },
   runtime: {
     description: 'run packaged apps in microVMs (`appliance runtime <verb>`)',
