@@ -282,7 +282,7 @@ struct RuntimePlan {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", rename_all_fields = "camelCase")]
 enum RuntimePlanWorkload {
     Container {
         image_path: String,
@@ -2136,6 +2136,24 @@ mod tests {
             })
             .collect();
         assert!(validate_runtime_plan(&too_many).unwrap_err().to_string().contains("at most 16"));
+    }
+
+    #[test]
+    fn runtime_container_plan_round_trips_camelcase_image_path() {
+        let workload: RuntimePlanWorkload = serde_json::from_str(
+            r#"{"kind":"container","imagePath":"payload/images/linux-arm64.tar","env":{}}"#,
+        )
+        .unwrap();
+        let RuntimePlanWorkload::Container { image_path, env } = workload else {
+            panic!("expected container workload");
+        };
+        assert_eq!(image_path, "payload/images/linux-arm64.tar");
+        assert!(env.is_empty());
+
+        let json = serde_json::to_value(valid_runtime_plan()).unwrap();
+        assert_eq!(json["kind"], "container");
+        assert_eq!(json["imagePath"], "payload/images/journal.oci.tar");
+        assert!(json.get("image_path").is_none());
     }
 
     #[test]
