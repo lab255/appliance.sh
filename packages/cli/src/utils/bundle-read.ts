@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { applianceV2Input, type ApplianceV2, type ApplianceV2Service } from '@appliance.sh/sdk';
 import { canonicalJsonBytes, computeBundleDigest } from './bundle-digest.js';
-import { validateEnvelope, verifyEnvelope, type SignatureEnvelope, type DevSigningKey } from './bundle-sign.js';
+import { validateEnvelope, verifyEnvelope, type DevSigningKey } from './bundle-sign.js';
 
 export interface BundleLimits {
   maxCompressedBytes: number;
