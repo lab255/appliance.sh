@@ -1490,14 +1490,23 @@ if [ "$KIND" = binary ]; then
   [ -d "$SOURCE" ] && [ ! -L "$SOURCE" ] || {
     echo '{"state":"failed","message":"binary target is not a regular directory"}'; cleanup_resources; exit 2;
   }
-  if find "$SOURCE" -type l -print -quit | grep -q .; then
+  mkdir -p "$STAGED"
+  if cp --help 2>&1 | grep -q -- '--no-preserve'; then
+    cp -R --no-preserve=mode,ownership "$SOURCE/." "$STAGED/"
+  else
+    # Alpine's runtime image ships BusyBox cp. Copy without archive mode,
+    # then explicitly discard source modes before validating the private copy.
+    cp -R "$SOURCE/." "$STAGED/"
+    find "$STAGED" -type d -exec chmod 0755 {} \;
+    find "$STAGED" -type f -exec chmod 0644 {} \;
+  fi
+  if find "$STAGED" -type l -print -quit | grep -q .; then
     echo '{"state":"failed","message":"binary payload symlinks are not allowed"}'; cleanup_resources; exit 2
   fi
-  if find "$SOURCE" ! -type d ! -type f -print -quit | grep -q .; then
+  if find "$STAGED" ! -type d ! -type f -print -quit | grep -q .; then
     echo '{"state":"failed","message":"binary payload contains an unsupported file type"}'; cleanup_resources; exit 2
   fi
-  mkdir -p "$STAGED"
-  cp -a "$SOURCE/." "$STAGED/"
+  chown -R "$UID_NUM:$UID_NUM" "$STAGED"
   [ -f "$STAGED/$ENTRYPOINT" ] && [ ! -L "$STAGED/$ENTRYPOINT" ] || {
     echo '{"state":"failed","message":"binary entrypoint is not a regular file"}'; cleanup_resources; exit 2;
   }
@@ -3908,9 +3917,32 @@ mod tests {
     #[test]
     fn runtime_supervisor_stages_binary_without_following_symlinks_and_reuses_hardening() {
         let supervisor = RUNTIME_SUPERVISOR;
-        assert!(supervisor.contains("find \"$SOURCE\" -type l -print -quit"));
-        assert!(supervisor.contains("cp -a \"$SOURCE/.\" \"$STAGED/\""));
+        let copy = supervisor
+            .find("cp -R --no-preserve=mode,ownership \"$SOURCE/.\" \"$STAGED/\"")
+            .expect("binary payload is copied into private staging");
+        let busybox_copy = supervisor
+            .find("cp -R \"$SOURCE/.\" \"$STAGED/\"")
+            .expect("BusyBox has an equivalent non-archive staging path");
+        let symlink_check = supervisor
+            .find("find \"$STAGED\" -type l -print -quit")
+            .expect("staged payload rejects symlinks");
+        let special_file_check = supervisor
+            .find("find \"$STAGED\" ! -type d ! -type f -print -quit")
+            .expect("staged payload rejects special files");
+        assert!(copy < symlink_check);
+        assert!(busybox_copy < symlink_check);
+        assert!(copy < special_file_check);
+        assert!(busybox_copy < special_file_check);
+        assert!(!supervisor.contains("find \"$SOURCE\""));
+        assert!(supervisor.contains("chown -R \"$UID_NUM:$UID_NUM\" \"$STAGED\""));
         assert!(supervisor.contains("chmod 0755 \"$STAGED/$ENTRYPOINT\""));
+        assert!(supervisor.contains(".plan.target.args[] | @base64"));
+        assert!(supervisor.contains(
+            "set -- \"$@\" --rootfs --cwd \"$BINARY_CWD\" \"$STAGED\" \"$CID\" \"/$ENTRYPOINT\""
+        ));
+        assert!(supervisor.contains("set -- \"$@\" \"$DECODED\""));
+        assert!(supervisor.contains("\"network:/var/run/netns/$NS\" \"$@\" >>"));
+        assert!(!supervisor.contains("eval "));
         assert!(supervisor.contains("--rootfs --cwd \"$BINARY_CWD\" \"$STAGED\" \"$CID\" \"/$ENTRYPOINT\""));
         assert!(supervisor.contains("printf '{\"state\":\"exited\",\"exitCode\":%s}\\n' \"$CODE\""));
         assert_eq!(

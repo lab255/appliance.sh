@@ -388,10 +388,9 @@ async function runtimeRun(args: string[]): Promise<void> {
     );
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
-    // Binary payloads must not race the asynchronous VZ shutdown: their
-    // custom-rootfs share has to be attached at the very next boot. Keep the
-    // established container reconciliation path unchanged in this stacked PR.
-    if (plan.kind === 'compound' || planContainsBinary(plan)) await waitForRuntimePoolStop();
+    // Workloads must not race the asynchronous VZ shutdown: the next boot
+    // must attach the reconciled share regardless of payload kind.
+    await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
@@ -802,12 +801,6 @@ function publishedManifestPorts(
   );
 }
 
-function planContainsBinary(plan: RuntimePlan): boolean {
-  return (
-    plan.kind === 'binary' || (plan.kind === 'compound' && plan.services.some((service) => service.kind === 'binary'))
-  );
-}
-
 function portIsFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
@@ -864,7 +857,7 @@ async function waitForRuntimePoolStop(timeoutMs = 30_000): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  fail(`timed out waiting for ${RUNTIME_POOL_VM} to stop for binary payload share reconciliation`, 1);
+  fail(`timed out waiting for ${RUNTIME_POOL_VM} to stop for payload share reconciliation`, 1);
 }
 
 function formatUptime(startedAt: string): string {

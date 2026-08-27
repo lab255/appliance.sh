@@ -28,3 +28,7 @@ The v1 supervisor starts leaves sequentially in deterministic topological
 order, with a 300-second readiness cap for each leaf. Exhausting an optional
 leaf's restart budget degrades the app but does not stop that leaf's dependents.
 Parallel starts and dependent teardown for optional exhaustion are follow-ups.
+
+## Binary v1 deviations
+
+Per-target `env` and `cwd` support is tracked as follow-up AP-164b; binary workloads currently use manifest-level environment variables and the payload root as their working directory.
