@@ -45,5 +45,9 @@ NODE
 
 mkdir -p "$(dirname -- "$OUT")"
 cd "$REPO/packages/cli"
-pnpm exec bun src/appliance.ts builder package --directory "$STAGE" --out "$OUT"
+pnpm exec bun src/appliance.ts builder package \
+  --directory "$STAGE" \
+  --image "payload/web/web-linux-$OCI_ARCH.oci.tar=$STAGE/payload/web/web-linux-$OCI_ARCH.oci.tar" \
+  --image "payload/api/api-linux-$OCI_ARCH.oci.tar=$STAGE/payload/api/api-linux-$OCI_ARCH.oci.tar" \
+  --out "$OUT"
 printf 'Runnable bundle: %s\n' "$OUT"
