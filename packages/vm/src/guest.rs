@@ -1778,6 +1778,7 @@ stop_all() {
   echo stopping > "$STATE/desired"
   jq -r '.plan.services | reverse | .[].name' "$STATE/request.json" | while read -r SVC; do
     CID=appliance-$APP-$SVC
+    mkdir -p "$SERVICES/$SVC"
     ctr -n "$CTR_NS" tasks kill -s SIGTERM "$CID" >/dev/null 2>&1 || true
     for _ in $(seq 1 20); do
       [ -z "$(task_pid "$SVC")" ] && break
@@ -2064,7 +2065,7 @@ start_service() {
       set -e
       TASK_PID=
       for _ in $(seq 1 100); do
-        TASK_PID=$(ctr -n "$CTR_NS" tasks info "$CID" 2>/dev/null | jq -r ".Pid // empty")
+        TASK_PID=$(ctr -n "$CTR_NS" tasks list 2>/dev/null | grep "^$CID " | tr -s " " | cut -d " " -f2)
         [ -n "$TASK_PID" ] && break
         kill -0 "$RUNNER" 2>/dev/null || break
         sleep 0.1
@@ -3920,6 +3921,7 @@ mod tests {
         assert!(supervisor.contains("--cgroup \"appliance/$APP/$SVC\""));
         assert!(supervisor.contains("--with-ns \"network:/var/run/netns/$NS\""));
         assert!(supervisor.contains("images import --local --platform \"$OCI_PLATFORM\""));
+        assert!(supervisor.contains("tasks list 2>/dev/null | grep \"^$CID \""));
         assert!(supervisor.contains("wget -q -T \"$TIMEOUT\" --spider"));
         assert!(supervisor.contains("tasks exec --exec-id"));
         assert!(supervisor.contains("echo \"$ATTEMPT\" > \"$SERVICE/restart-count\""));
