@@ -566,7 +566,11 @@ fn service_flow(
     // stalled upstream backpressures the guest instead of ballooning host
     // memory — symmetric to the ext→guest cap).
     drain_guest_to_ext(sock, &mut bridge.guest_to_ext);
-    if !sock.may_recv() {
+    // SYN-SENT/LISTEN sockets cannot receive yet, but that is not EOF. Only
+    // publish guest FIN after this flow has actually established; otherwise
+    // the bridge pump can close the host client's response half before a
+    // slower principal-targeted guest relay has read the request.
+    if bridge.established && !sock.may_recv() {
         bridge.guest_fin = true;
     }
 
@@ -743,7 +747,122 @@ fn seed() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::{Shutdown, TcpListener, TcpStream};
     use std::time::Duration;
+
+    #[test]
+    fn principal_inbound_waits_for_request_and_preserves_half_close_response() {
+        const PRINCIPAL: Ipv4Addr = Ipv4Addr::new(192, 168, 127, 10);
+        const PORT: u16 = 18_080;
+        const REQUEST: &[u8] = b"GET /ready HTTP/1.1\r\nHost: app.test\r\n\r\n";
+        const RESPONSE: &[u8] =
+            b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nprincipal-ok";
+
+        let (host_fd, vz_fd) = make_link().unwrap();
+        // The engine's fd reader is nonblocking; give the in-memory guest
+        // peer the same behavior so its test loop can interleave poll/send.
+        unsafe {
+            let flags = libc::fcntl(vz_fd, libc::F_GETFL);
+            libc::fcntl(vz_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+        let guest_mac = [0x52, 0x54, 0x00, 0xaa, 0xbb, 0xdd];
+        let cfg = LinkConfig::for_guest_mac("principal-inbound-test", "52:54:00:aa:bb:dd");
+        let netstack = start(host_fd, cfg);
+
+        // A tiny guest-side smoltcp server bound to the runtime principal
+        // /32. Crucially, it sends nothing until the full request arrives;
+        // an eager responder would hide the pre-establishment EOF race.
+        let guest = std::thread::spawn(move || {
+            let mut device = FdDevice {
+                fd: vz_fd,
+                rx: VecDeque::new(),
+            };
+            let mut config = Config::new(HardwareAddress::Ethernet(EthernetAddress(guest_mac)));
+            config.random_seed = 7;
+            let started = Instant::now();
+            let mut iface = Interface::new(config, &mut device, smol_now(started));
+            iface.update_ip_addrs(|addrs| {
+                let _ = addrs.push(IpCidr::new(
+                    IpAddress::Ipv4(PRINCIPAL),
+                    super::super::PREFIX_LEN,
+                ));
+            });
+            let _ = iface
+                .routes_mut()
+                .add_default_ipv4_route(super::super::GATEWAY_IP);
+
+            let mut sockets = SocketSet::new(Vec::new());
+            let server = sockets.add(tcp_socket(flow_idle_timeout()));
+            sockets
+                .get_mut::<tcp::Socket>(server)
+                .listen(IpListenEndpoint {
+                    addr: Some(IpAddress::Ipv4(PRINCIPAL)),
+                    port: PORT,
+                })
+                .unwrap();
+
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut request = Vec::new();
+            let mut responded = false;
+            loop {
+                for frame in read_frames(vz_fd) {
+                    device.rx.push_back(frame);
+                }
+                iface.poll(smol_now(started), &mut device, &mut sockets);
+
+                {
+                    let socket = sockets.get_mut::<tcp::Socket>(server);
+                    while socket.can_recv() {
+                        let mut buf = [0u8; 1024];
+                        let count = socket.recv_slice(&mut buf).unwrap();
+                        if count == 0 {
+                            break;
+                        }
+                        request.extend_from_slice(&buf[..count]);
+                    }
+                    if !responded && request.ends_with(b"\r\n\r\n") {
+                        socket.send_slice(RESPONSE).unwrap();
+                        socket.close();
+                        responded = true;
+                    }
+                }
+
+                iface.poll(smol_now(started), &mut device, &mut sockets);
+                let socket = sockets.get::<tcp::Socket>(server);
+                if responded
+                    && socket.send_queue() == 0
+                    && matches!(socket.state(), tcp::State::Closed | tcp::State::TimeWait)
+                {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "guest server timed out");
+                wait_readable(vz_fd, 2);
+            }
+            unsafe { libc::close(vz_fd) };
+            request
+        });
+
+        // Model the published localhost listener/client pair, then splice its
+        // accepted stream through connect_to(PRINCIPAL) exactly as net.rs does.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let (accepted, _) = listener.accept().unwrap();
+        let bridge = netstack.connect_to(PRINCIPAL, PORT).unwrap();
+        let pump = std::thread::spawn(move || super::super::bridge_pump(bridge, accepted));
+
+        client.write_all(REQUEST).unwrap();
+        client.shutdown(Shutdown::Write).unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+
+        pump.join().unwrap();
+        assert_eq!(response, RESPONSE, "half-close must not drop the reply");
+        assert_eq!(guest.join().unwrap(), REQUEST);
+    }
 
     /// Drive the engine over a real socketpair: write a DHCP DISCOVER as
     /// the "guest" and read back the OFFER the engine builds. Exercises
