@@ -52,6 +52,42 @@ jobs:
       - name: Test
         run: pnpm exec nx run-many --target=test --all
 
+  runtime-samples:
+    name: Runtime samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build Runtime sample CLI
+        run: pnpm exec nx run @appliance.sh/cli:build
+      - name: Build and verify Runtime samples
+        env:
+          OUT: ${{ runner.temp }}/runtime-samples
+        run: scripts/build-runtime-samples.sh --require-docker
+      - name: Upload Runtime sample bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-samples
+          path: ${{ runner.temp }}/runtime-samples/*.appliance.zip
+          if-no-files-found: error
+          retention-days: 7
+
   verify-rust:
     name: Verify (Rust microVM crate)
     runs-on: macos-latest
