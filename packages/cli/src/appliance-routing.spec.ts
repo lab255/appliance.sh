@@ -12,7 +12,7 @@ function appliance(...args: string[]) {
 function listedVerbs(output: string): string[] {
   return output
     .split('\n')
-    .filter((line) => /^  [a-z]/.test(line))
+    .filter((line) => /^ {2}[a-z]/.test(line))
     .map((line) => line.trim().split(/\s+/, 1)[0]);
 }
 
