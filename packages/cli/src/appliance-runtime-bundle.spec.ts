@@ -22,24 +22,21 @@ describe('runtime bundle safety limits', () => {
     'rejects unsafe path %s',
     (unsafePath) => {
       expect(() =>
-        validateBundleEntries(
-          [manifest, { path: unsafePath, expandedBytes: 1, compressedBytes: 1, kind: 'file' }],
-          200
-        )
+        validateBundleEntries([manifest, { path: unsafePath, expandedBytes: 1, compressedBytes: 1, kind: 'file' }], 200)
       ).toThrow(/unsafe bundle path/);
     }
   );
 
   it('rejects case collisions, manifest overflow, entry overflow, and zip bombs', () => {
-    expect(() =>
-      validateBundleEntries(
-        [manifest, { ...manifest, path: 'APPLIANCE.JSON' }],
-        200
-      )
-    ).toThrow(/case-colliding/);
+    expect(() => validateBundleEntries([manifest, { ...manifest, path: 'APPLIANCE.JSON' }], 200)).toThrow(
+      /case-colliding/
+    );
     expect(() => validateBundleEntries([{ ...manifest, expandedBytes: 256 * 1024 + 1 }], 200)).toThrow(/256 KiB/);
     expect(() =>
-      validateBundleEntries([manifest, { path: 'payload/big', expandedBytes: 4 * 1024 ** 3 + 1, compressedBytes: 1, kind: 'file' }], 200)
+      validateBundleEntries(
+        [manifest, { path: 'payload/big', expandedBytes: 4 * 1024 ** 3 + 1, compressedBytes: 1, kind: 'file' }],
+        200
+      )
     ).toThrow(/exceeds 4 GiB/);
     expect(() =>
       validateBundleEntries(

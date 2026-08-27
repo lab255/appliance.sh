@@ -11,7 +11,12 @@ function manifest(resources: Record<string, number> = {}) {
     version: '1.2.3',
     license: 'MIT',
     publisher: { name: 'Lab 255' },
-    payload: { images: { 'linux/arm64': { path: 'payload/journal.oci.tar' }, 'linux/amd64': { path: 'payload/journal.oci.tar' } } },
+    payload: {
+      images: {
+        'linux/arm64': { path: 'payload/journal.oci.tar' },
+        'linux/amd64': { path: 'payload/journal.oci.tar' },
+      },
+    },
     ports: [{ name: 'http', guest: 3000, protocol: 'tcp', expose: 'host', primary: true }],
     resources,
   });

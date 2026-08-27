@@ -86,7 +86,10 @@ export async function runRuntimeCommand(verb: string, args: string[]): Promise<v
       return;
     default: {
       const { runRuntimeStub } = await import('./appliance-runtime-stub.js');
-      runRuntimeStub(verb, args.some((arg) => arg === '--help' || arg === '-h'));
+      runRuntimeStub(
+        verb,
+        args.some((arg) => arg === '--help' || arg === '-h')
+      );
     }
   }
 }
@@ -99,7 +102,8 @@ async function runtimeRun(args: string[]): Promise<void> {
   }
   const input = args.find((arg) => !arg.startsWith('-'));
   if (!input) fail('Usage: appliance runtime run <path-to-app.appliance.zip>', 2);
-  if (/^https?:\/\//.test(input)) fail('runtime run URLs are not yet supported; download the bundle and pass a local path', 2);
+  if (/^https?:\/\//.test(input))
+    fail('runtime run URLs are not yet supported; download the bundle and pass a local path', 2);
   const bundlePath = path.resolve(input);
   let loaded: ReturnType<typeof loadRuntimeBundle>;
   try {
@@ -152,7 +156,9 @@ async function runtimeRun(args: string[]): Promise<void> {
   const restartRequired = Boolean(prepared.restartRequired);
   if (restartRequired) {
     updateRuntimeRecord(plan.appId, { poolRestartPending: true });
-    console.log(chalk.yellow('pool restart required to attach the app\'s boot-time VirtioFS share; running apps will pause'));
+    console.log(
+      chalk.yellow("pool restart required to attach the app's boot-time VirtioFS share; running apps will pause")
+    );
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
   }
@@ -251,7 +257,8 @@ async function runtimeLogs(args: string[]): Promise<void> {
   }
   const appId = args.find((arg) => !arg.startsWith('-'));
   if (!appId) fail('Usage: appliance runtime logs <app> [-f|--follow]', 2);
-  if (!readRuntimeRegistry().some((entry) => entry.appId === appId)) fail(`runtime app '${appId}' is not registered`, 2);
+  if (!readRuntimeRegistry().some((entry) => entry.appId === appId))
+    fail(`runtime app '${appId}' is not registered`, 2);
   await followLogs(appId, args.includes('-f') || args.includes('--follow'));
 }
 

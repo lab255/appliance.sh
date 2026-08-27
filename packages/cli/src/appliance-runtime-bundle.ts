@@ -73,7 +73,8 @@ export function inspectBundle(bundlePath: string): BundleEntry[] {
   if (!stat.isFile()) throw new Error(`bundle is not a regular file: ${bundlePath}`);
   if (stat.size > BUNDLE_LIMITS.compressedBytes) throw new Error('bundle exceeds the 2 GiB compressed limit');
   const result = spawnSync('zipinfo', ['-l', bundlePath], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
-  if (result.status !== 0) throw new Error(`cannot inspect bundle zip: ${(result.stderr || '').trim() || 'zipinfo failed'}`);
+  if (result.status !== 0)
+    throw new Error(`cannot inspect bundle zip: ${(result.stderr || '').trim() || 'zipinfo failed'}`);
   const entries: BundleEntry[] = [];
   for (const line of result.stdout.split('\n')) {
     // zipinfo -l: "-rw-r--r--  3.0 unx  12 tx  8 defN ... path"
@@ -119,7 +120,11 @@ export function loadRuntimeBundle(bundlePath: string): LoadedRuntimeBundle {
   return { manifest: parsed.data, entries, digest: expectedDigest };
 }
 
-export function unpackRuntimeBundle(bundlePath: string, destination: string, loaded = loadRuntimeBundle(bundlePath)): void {
+export function unpackRuntimeBundle(
+  bundlePath: string,
+  destination: string,
+  loaded = loadRuntimeBundle(bundlePath)
+): void {
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
   const staging = `${destination}.staging-${process.pid}-${Date.now()}`;
@@ -129,7 +134,8 @@ export function unpackRuntimeBundle(bundlePath: string, destination: string, loa
     if (result.status !== 0) throw new Error('bundle extraction failed');
     verifyExtractedTree(staging, loaded.entries);
     const actualDigest = digestExtractedBundle(staging, loaded.entries);
-    if (actualDigest !== loaded.digest) throw new Error(`bundle digest mismatch: expected ${loaded.digest}, got ${actualDigest}`);
+    if (actualDigest !== loaded.digest)
+      throw new Error(`bundle digest mismatch: expected ${loaded.digest}, got ${actualDigest}`);
     if (fs.existsSync(destination)) fs.renameSync(destination, `${destination}.previous-${Date.now()}`);
     fs.renameSync(staging, destination);
   } catch (error) {
@@ -142,7 +148,8 @@ function verifyExtractedTree(root: string, entries: BundleEntry[]): void {
   for (const entry of entries) {
     const absolute = path.join(root, ...entry.path.split('/'));
     const relative = path.relative(root, absolute);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`bundle path escaped extraction root: ${entry.path}`);
+    if (relative.startsWith('..') || path.isAbsolute(relative))
+      throw new Error(`bundle path escaped extraction root: ${entry.path}`);
     const stat = fs.lstatSync(absolute);
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) {
       throw new Error(`bundle contains unsupported file kind: ${entry.path}`);
