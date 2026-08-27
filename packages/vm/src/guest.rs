@@ -2014,13 +2014,18 @@ pub fn build_boot_media(
     let volume_bytes = ((content as u64 + 64 * 1024 * 1024) / (16 * 1024 * 1024) + 1) * (16 * 1024 * 1024);
 
     let image_path = vm_dir.join("boot-media.img");
+    // Build away from the canonical path and durably flush the FAT image
+    // before VZ/KVM can attach it. Without this boundary a cold VZ boot can
+    // observe the directory entry before the apkovl payload has reached the
+    // backing file, producing an intermittent "invalid magic / short read".
+    let partial = vm_dir.join("boot-media.img.partial");
     let file = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&image_path)
-        .with_context(|| format!("create {}", image_path.display()))?;
+        .open(&partial)
+        .with_context(|| format!("create {}", partial.display()))?;
     file.set_len(volume_bytes)?;
 
     let buf = fscommon::BufStream::new(&file);
@@ -2071,6 +2076,10 @@ pub fn build_boot_media(
         }
     }
     fs.unmount().context("unmount FAT volume")?;
+    file.sync_all().context("sync FAT boot media")?;
+    drop(file);
+    fs::rename(&partial, &image_path)
+        .with_context(|| format!("publish {}", image_path.display()))?;
 
     Ok(BootMedia {
         image: image_path,
