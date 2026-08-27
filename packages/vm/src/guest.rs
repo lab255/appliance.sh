@@ -1575,13 +1575,29 @@ nohup setsid sh -c '
 ' </dev/null >/dev/null 2>&1 &
 nohup setsid sh -c '
   echo $$ > "$STATE/pid"
-  set --
+  # ctr 2.0 rejects the Docker-style `--cap-drop ALL`; enumerate every
+  # capability in its default OCI set so the resulting sets are empty.
+  set -- \
+    --cap-drop CAP_CHOWN \
+    --cap-drop CAP_DAC_OVERRIDE \
+    --cap-drop CAP_FSETID \
+    --cap-drop CAP_FOWNER \
+    --cap-drop CAP_MKNOD \
+    --cap-drop CAP_NET_RAW \
+    --cap-drop CAP_SETGID \
+    --cap-drop CAP_SETUID \
+    --cap-drop CAP_SETFCAP \
+    --cap-drop CAP_SETPCAP \
+    --cap-drop CAP_NET_BIND_SERVICE \
+    --cap-drop CAP_SYS_CHROOT \
+    --cap-drop CAP_KILL \
+    --cap-drop CAP_AUDIT_WRITE
   while IFS="$(printf '\t')" read -r KEY VALUE; do
     DECODED=$(printf '%s' "$VALUE" | base64 -d)
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
   set +e
-  ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --cap-drop ALL --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
   CODE=$?
   echo "$CODE" > "$STATE/exit-code"
   if [ -f "$STATE/relay.pids" ]; then
@@ -3218,7 +3234,25 @@ mod tests {
     fn runtime_supervisor_enforces_principal_isolation_and_bounded_logs() {
         let supervisor = RUNTIME_SUPERVISOR;
         assert!(supervisor.contains("--user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP\""));
-        assert!(supervisor.contains("--seccomp --cap-drop ALL"));
+        assert!(supervisor.contains("--seccomp --with-ns"));
+        for capability in [
+            "CAP_CHOWN",
+            "CAP_DAC_OVERRIDE",
+            "CAP_FSETID",
+            "CAP_FOWNER",
+            "CAP_MKNOD",
+            "CAP_NET_RAW",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_SETFCAP",
+            "CAP_SETPCAP",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_SYS_CHROOT",
+            "CAP_KILL",
+            "CAP_AUDIT_WRITE",
+        ] {
+            assert!(supervisor.contains(&format!("--cap-drop {capability}")));
+        }
         assert!(!supervisor.contains("echo $$ > \"$CG/cgroup.procs\""));
         assert!(supervisor.contains("grep -qx \"$TASK_PID\" \"$CG/cgroup.procs\""));
         assert!(supervisor.contains("net.ipv4.ip_forward=1"));
