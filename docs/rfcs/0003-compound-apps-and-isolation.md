@@ -3,7 +3,6 @@
 - Status: proposed
 - Date: 2026-08-27
 - Claim: `ap-p0-compound-c51d08`
-- Owners: Appliance Runtime
 - Depends on: RFC 0001 (bundle manifest v2), RFC 0002 (shared-VM controls)
 
 ## Summary
@@ -21,12 +20,9 @@ The runtime has two execution topologies:
 2. A first-level sub-appliance with `isolation: "vm"` runs in a dedicated,
    core-only VM. Its descendants, if any, inherit that VM.
 
-The pooled VM is separate from the existing development/deploy VM. It has no
-workspace mount, k3s, BuildKit, or Docker daemon. This prevents packaged,
-untrusted apps from sharing the developer workspace or control plane while
-still amortizing a VM across packaged apps. The default pool name is
-`appliance-runtime`; isolated VM names derive from app and sub-appliance
-identity but are not a stable public interface.
+The pool is separate from the existing development/deploy VM and has no
+workspace mount, k3s, BuildKit, or Docker daemon. Its default name is
+`appliance-runtime`; isolated VM names are not a stable public interface.
 
 Inside a VM, a small Appliance runtime supervisor manages both OCI containers
 through containerd and arbitrary Linux binaries as unprivileged, namespaced
@@ -35,18 +31,12 @@ restart policy, reports state and logs, and stops each top-level app as a unit.
 An app failure never deliberately stops another app in the pool, though a pool
 VM failure is necessarily a shared failure domain.
 
-The graph is deliberately bounded:
+The graph is limited to top-level app -> sub-appliance -> service and 16
+runnable leaves. Validation rejects deeper or larger graphs before extraction.
 
-- At most two runnable levels: top-level app -> sub-appliance -> service.
-- At most 16 runnable leaf services across one top-level app.
-- Validation rejects deeper or larger graphs before extracting payloads or
-  starting a VM.
-
-Shared-VM discovery uses stable loopback ports allocated per service and
-injected as `APPLIANCE_SVC_<NAME>_URL`. Cross-VM discovery uses runtime-owned
-`.appliance.internal` names and a host-only relay built on the existing
-netstack and published-port forwarding. No internal service is exposed on a
-host LAN interface or counted as public egress.
+Shared discovery uses stable loopback ports injected as
+`APPLIANCE_SVC_<NAME>_URL`; cross-VM discovery uses runtime-owned
+`.appliance.internal` names and host-only netstack relays.
 
 This is a packaging and runtime unit, not a replacement spelling for today's
 client-side stacks. `appliance stack` remains useful for source-level fleets of
@@ -97,29 +87,15 @@ interface ServiceLifecycleFields {
   required?: boolean; // default true
 }
 
-type ServiceHealth =
-  | {
-      type: 'http';
-      port: string;
-      path: string;
-      intervalSeconds?: number; // default 5
-      timeoutSeconds?: number; // default 2
-      failureThreshold?: number; // default 3
-    }
-  | {
-      type: 'tcp';
-      port: string;
-      intervalSeconds?: number; // default 5
-      timeoutSeconds?: number; // default 2
-      failureThreshold?: number; // default 3
-    }
-  | {
-      type: 'exec';
-      command: string[];
-      intervalSeconds?: number; // default 5
-      timeoutSeconds?: number; // default 2
-      failureThreshold?: number; // default 3
-    };
+type ServiceHealth = (
+  | { type: 'http'; port: string; path: string }
+  | { type: 'tcp'; port: string }
+  | { type: 'exec'; command: string[] }
+) & {
+  intervalSeconds?: number; // default 5
+  timeoutSeconds?: number; // default 2
+  failureThreshold?: number; // default 3
+};
 
 interface ServiceRestart {
   policy: 'never' | 'on-failure' | 'always'; // default on-failure
@@ -141,9 +117,8 @@ If `health` is absent, process/container liveness is readiness. This is a
 deliberate compatibility default, not a claim that liveness is an adequate
 production health signal.
 
-`restart.maxAttempts` is ignored when `policy: "always"` is used for an
-operator-requested stop: an explicit stop always wins. A process that remains
-healthy for 60 seconds clears its rolling failure count.
+An explicit stop always overrides restart policy. A process healthy for 60
+seconds clears its rolling failure count.
 
 ### Isolation field
 
@@ -155,11 +130,8 @@ interface ServiceIsolationFields {
 }
 ```
 
-Only a first-level entry may set `isolation`. A structural sub-appliance passes
-its selected topology to every leaf below it. A direct first-level runnable
-leaf applies the topology to itself. A second-level service declaring
-`isolation` is invalid, because allowing it would make placement ambiguous and
-would turn the structural parent into a second scheduler.
+Only first-level entries may set `isolation`; structural sub-appliances pass it
+to every descendant. A direct first-level leaf applies it to itself.
 
 `isolation: "vm"` means a dedicated VM for that first-level entry, not one VM
 per descendant. Multiple `isolation: "vm"` entries get distinct VMs. Omission
@@ -173,18 +145,13 @@ schema. Runnable leaf names must be unique across the whole top-level app, not
 just within a structural parent. This makes dependency references, CLI
 selectors, log prefixes, and `APPLIANCE_SVC_<NAME>_URL` unambiguous.
 
-Structural names need only be unique among siblings. The stable storage and
-diagnostic identity is the slash-separated path, for example
-`notes-suite/search/indexer`. The public graph identity of a runnable leaf is
-still its globally unique leaf name.
-
-Credential injection: deferred (owner, 2026-08-27).
+Structural names are sibling-unique. Storage and diagnostics use the full path,
+for example `notes-suite/search/indexer`.
 
 ## Validation rules
 
-Validation is deterministic and completes before payload extraction, VM
-creation, mount grants, or network listeners. The runtime reports every graph
-error it can find in one pass.
+Validation completes before extraction, VM creation, grants, or listeners and
+reports every graph error it can find in one pass.
 
 1. `type: "compound"` requires a non-empty `services[]`.
 2. Only v2 top-level or nested compound entries may contain `services[]`.
@@ -235,13 +202,9 @@ boundary.
 
 Use a small Appliance runtime supervisor installed in every runtime VM.
 
-Do not use systemd units: the guest is Alpine/OpenRC, and introducing systemd
-would replace the existing boot model merely to obtain dynamic units. Do not
-use Docker Compose: runtime container payloads use containerd, Compose does not
-supervise arbitrary binary payloads, and it cannot express the required
-cross-VM graph. Do not extend the current shell respawn loop: it has no durable
-graph state, health model, bounded backoff, per-service identity, or structured
-status API.
+Systemd conflicts with the Alpine/OpenRC guest. Docker Compose cannot supervise
+arbitrary binaries or the cross-VM graph. The current shell respawn loop lacks
+durable graph state, health, bounded backoff, identity, and structured status.
 
 The supervisor is a single, intentionally small guest binary. It accepts a
 validated, flattened execution plan over a host-owned vsock control channel;
@@ -251,9 +214,8 @@ and returns structured events and status. `guest_exec.rs` remains useful for
 bootstrap and diagnostics, but long-lived lifecycle RPC must not be encoded as
 shell command strings.
 
-Each top-level app has one supervisor namespace. Stop, restart, log selection,
-and desired state operate on that namespace even though the process shares a
-VM with other apps.
+Each top-level app has one supervisor namespace for desired state, lifecycle,
+status, and logs even when it shares the pool.
 
 ### Start
 
@@ -271,9 +233,8 @@ VM with other apps.
    optional leaf is either healthy/running or terminally failed without
    blocking a required leaf.
 
-Start order is therefore dependency-declared, deterministic at graph edges,
-and parallel where the graph permits it. Manifest array order only breaks ties
-in logs and status output.
+Start order is dependency-declared and parallel where possible; array order
+only breaks ties in output.
 
 ### Health and restart
 
@@ -322,3 +283,218 @@ Stop is scoped to the top-level app. The pooled VM remains running while any
 app uses it and may be idled or stopped later by the runtime's pool policy.
 Stopping a top-level app also stops its dedicated isolation VMs; persistent
 data and installed payloads remain.
+
+## `isolation: vm` networking
+
+Every runtime VM uses `VmSpec.netLink: "netstack"`. NAT is not acceptable for
+the runtime because RFC 0002's host-enforced controls and the private cross-VM
+router require the host to own every flow.
+
+For each named port on an isolated target, the runtime reserves a stable entry
+in that VM's `VmSpec.published` registry. The host side is loopback-only and
+connects to the target guest with today's `Netstack::connect(guest_port)` /
+`spawn_proxy_netstack` path. NAT backends may use `spawn_proxy` until they gain
+netstack support, but may not claim control enforcement parity.
+
+The source VM never connects to that host loopback listener directly. Its DNS
+netstack synthesizes an address for
+`<service>.<app>.appliance.internal`; an internal-route table then rewrites a
+connection for that address and named service port to the target's loopback
+relay. The relay pumps bytes into the destination VM's netstack. For a target
+in the pooled VM, the last leg is the same inbound netstack connection to the
+service's stable guest-loopback proxy.
+
+This route is symmetric: VM-B reaches a service in VM-A through the same
+synthetic name -> source-netstack -> host relay -> target-netstack sequence.
+The existing netstack therefore remains the only VM boundary, while
+`VmSpec.published` becomes the persistent allocation record already anticipated
+by `spec.rs`.
+
+Internal DNS answers are generated only from the verified app graph, are never
+forwarded upstream, and cannot be added by app-controlled DNS. Relays bind only
+to host loopback and accept only netstack-originated connections tagged with
+the same top-level app. Internal routes bypass public egress allowlists but may
+reach only declared service ports in their own compound app.
+
+Apps see a stable private URL, never host or peer-guest addresses. Undeclared
+ports, cross-app names, UDP, broadcast, and direct guest-IP routes are denied.
+
+## Service discovery
+
+The runtime injects `APPLIANCE_SVC_<NAME>_URL` into every service that may call
+the named service; DNS-safe hyphens become underscores and letters uppercase.
+For example, `search-api` becomes `APPLIANCE_SVC_SEARCH_API_URL`.
+
+For services in the same VM, the value is
+`http://127.0.0.1:<stable-runtime-port>`. The supervisor persists one loopback
+port per app/service and proxies it into the target's network namespace and
+declared primary port. Runtime allocation avoids collisions between apps whose
+containers both listen on `3000`; stability across restarts keeps configs and
+connection pools predictable.
+
+For a cross-VM target, the value is
+`http://<service>.<app>.appliance.internal:<declared-port>`. Named non-primary
+ports additionally use `APPLIANCE_SVC_<NAME>_<PORT_NAME>_URL`. Workers without
+ports receive no URL. Explicit manifest env wins for unrelated keys, but the
+reserved `APPLIANCE_SVC_` prefix cannot be authored or overridden.
+
+This is preferable to container DNS because it works for binaries, hides the
+containerd network, and makes cross-VM placement an app-transparent detail.
+
+## Controls composition
+
+Controls compose as a per-service policy map, never as one enforceable union
+for the pooled VM. The installer may display the union of requested egress
+hosts and mount slots as a top-level consent summary, but it stores the grant
+against each fully qualified service path.
+
+Each leaf's effective egress list is its own declaration; omission means deny.
+The supervisor already creates a network namespace and veth identity per leaf,
+so RFC 0002 can cheaply key host-netstack policy by source identity. An
+isolated sub-appliance gets the same map, enforced at its VM netstack. If a
+platform cannot preserve source identity, it must reject mixed-policy shared
+placement rather than widen to the union.
+
+Mounts are materialized only in the declaring leaf's mount namespace. A volume
+or user-granted host slot requested by one service is not visible to siblings.
+Consent UI may group requests, but grants remain service bindings and upgrades
+never silently widen them. Structural sub-appliances have no ambient authority.
+
+Credential injection: deferred (owner, 2026-08-27).
+
+## Observability
+
+`appliance runtime ps` prints one top-level row with a `2 services`-style badge,
+then indented leaf rows. The app row reports aggregate state, UI URL, pooled VM,
+and uptime; each leaf reports state, required/optional, health, restart count,
+placement (`shared` or `vm`), VM name, and internal endpoint.
+
+Aggregate states are `starting`, `running`, `degraded`, `recovering`, `failed`,
+`stopping`, and `stopped`. JSON output returns the graph rather than terminal
+indentation and includes stable app/service IDs.
+
+`appliance runtime logs notes-suite` merges lifecycle events and leaf output by
+timestamp with `[notes-suite/web]` prefixes. `--service`, `--since`, `--tail`,
+and `--follow` filter the host-fanned supervisor streams across all VMs.
+
+## Upgrades and data
+
+A publisher replaces one sub-appliance by shipping a newly signed top-level
+bundle whose nested `version` and payload digest changed. The runtime never
+accepts an unsigned loose nested payload. It verifies and stages the whole
+bundle, then computes the changed service and reverse-dependent closure.
+
+An in-place upgrade stops that closure in reverse dependency order, switches
+content-addressed payload pointers, and restarts it. Independent services keep
+running. Failed health restores old payloads; data is not rolled back, so
+migrations must be backward-safe.
+
+Persistent data keys use logical paths, never versions or VM names:
+`/persist/apps/<app>/<structural-path>/<service>/data`. Shared services receive
+only their directory in their mount namespace. Isolated VM disks use the same
+logical path and are retained across VM recreation or a change back to shared
+placement. Removing a service retains data until explicit
+`runtime uninstall --purge-data` confirmation.
+
+## Worked 2-level example
+
+`notes-suite.appliance.zip` contains this `appliance.json` plus the referenced
+payloads. `search` is the first-level isolated sub-appliance; `web` and
+`indexer` are the two runnable leaves, so the app is within both limits.
+
+```json
+{
+  "manifest": "v2",
+  "type": "compound",
+  "name": "notes-suite",
+  "version": "2.0.0",
+  "license": "AGPL-3.0-only",
+  "ui": { "type": "web", "service": "web" },
+  "services": [
+    {
+      "name": "frontend",
+      "type": "compound",
+      "services": [
+        {
+          "name": "web",
+          "type": "container",
+          "version": "2.0.0",
+          "payload": { "image": "payload/web/image.oci.tar" },
+          "ports": [{ "name": "http", "guest": 3000, "primary": true }],
+          "dependsOn": ["indexer"],
+          "health": { "type": "http", "port": "http", "path": "/healthz" },
+          "restart": { "policy": "on-failure", "maxAttempts": 5 },
+          "required": true,
+          "egress": { "allow": ["fonts.gstatic.com"] }
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "type": "compound",
+      "version": "4.1.0",
+      "isolation": "vm",
+      "services": [
+        {
+          "name": "indexer",
+          "type": "binary",
+          "version": "4.1.0",
+          "payload": {
+            "entrypoint": "payload/indexer/linux-arm64/indexer",
+            "args": ["serve"]
+          },
+          "ports": [{ "name": "api", "guest": 9000, "primary": true }],
+          "dependsOn": [],
+          "health": { "type": "tcp", "port": "api" },
+          "restart": { "policy": "always" },
+          "required": true,
+          "mounts": [{ "name": "index", "guest": "/data", "kind": "volume" }],
+          "egress": { "allow": [] }
+        }
+      ]
+    }
+  ]
+}
+```
+
+`web` receives
+`APPLIANCE_SVC_INDEXER_URL=http://indexer.notes-suite.appliance.internal:9000`.
+The binary runs namespaced and unprivileged in the `search` VM with only its
+volume and declared port.
+
+## Existing stacks: reuse and retire
+
+Reuse `dnsName` validation, early duplicate detection, deterministic env
+injection, combined status, fail-fast start summaries, and best-effort unit
+teardown patterns from `packages/sdk/src/models/stack.ts`,
+`packages/cli/src/utils/stack.ts`, and `packages/cli/src/appliance-stack.ts`.
+
+Do not reuse array-order deployment, directory references, project/environment
+creation, `{{service:...}}` interpolation, or cloud API fan-out. A stack remains
+a client-side collection of independently owned source projects. Retire stacks
+as the recommended way to package or run a coupled service graph; compound
+apps own signing, lifecycle, isolation, upgrades, and data as one runtime unit.
+
+## Engine/CLI changes required
+
+- `packages/sdk/src/models/appliance.ts` — let RFC 0001 add `compound` and these graph/lifecycle fields.
+- `packages/cli/src/utils/common.ts` — detect v2 runtime content while retaining `appliance.json`.
+- `packages/cli/src/appliance-runtime.ts` — add runtime lifecycle, graph status, logs, and upgrades.
+- `packages/cli/src/utils/microvm-up.ts` — manage the core-only pool and isolation VMs.
+- `packages/vm/src/spec.rs` — add a runtime role, placement, and internal published ports.
+- `packages/vm/src/guest.rs` — install and boot the runtime supervisor in core-only media.
+- `packages/vm/src/guest_exec.rs` — delegate structured lifecycle RPC to a framed vsock client.
+- `packages/vm/src/netstack/engine.rs` — route tagged internal flows before ordinary egress.
+- `packages/vm/src/netstack/dns.rs` — synthesize authorized `.appliance.internal` records.
+- `packages/vm/src/net.rs` — generalize proxies into tagged, loopback-only VM relays.
+- `packages/cli/src/utils/stack.ts` and `packages/cli/src/appliance-stack.ts` — redirect packaged-composition guidance.
+- `ARCHITECTURE.md` and `docs/stacks.md` — document the pool, isolation VMs, and stack boundary.
+
+## Open for owner
+
+1. **Pool sizing:** default to 2 vCPU / 4 GiB and reject over-admission; resizing requires explicit operator action.
+2. **Restart jitter:** default to deterministic exponential backoff; add jitter only if restart storms appear.
+3. **Exec health:** default to allow safe argv execution inside service namespaces; omit if it delays v1.
+4. **Partial upgrades:** default to require a complete, newly signed top-level bundle.
+5. **Non-UI public ports:** default to internal-only until RFC 0001 defines explicit public grants.
+6. **Data cleanup:** default to explicit `runtime uninstall --purge-data`; never age data out automatically.
