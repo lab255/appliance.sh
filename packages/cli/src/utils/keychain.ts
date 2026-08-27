@@ -1,5 +1,10 @@
 import { execFileSync } from 'node:child_process';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, type KeyObject } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type { Profile } from './profile-store.js';
+import { keyIdForPublicKey, type DevSigningKey } from './bundle-sign.js';
 
 // Keychain-first credential resolution (E4.4).
 //
@@ -21,12 +26,149 @@ import type { Profile } from './profile-store.js';
 // SECURITY: never log the secret. The read path passes nothing sensitive
 // on argv; the (rare) write path does — see writeKeychainApiKey.
 export const KEYCHAIN_SERVICE = 'sh.appliance.desktop';
+export const DEVICE_KEYCHAIN_ACCOUNT = 'device:entitlements:v1';
 
 const SECURITY_BIN = '/usr/bin/security';
+const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
+const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 export interface KeychainApiKey {
   keyId: string;
   secret: string;
+}
+
+export interface DeviceKeyOptions {
+  /** Appliance home, primarily for isolated tests. Defaults to ~/.appliance. */
+  home?: string;
+  /** Tests and non-desktop embedders can force the owner-only file adapter. */
+  forceFile?: boolean;
+}
+
+/**
+ * Resolve the per-device Ed25519 entitlement key. macOS uses a generic
+ * password Keychain item; Linux/Windows use an owner-only file beside the
+ * entitlement store. This is tamper-evidence for the same OS user, not proof
+ * of consent or a non-exportable hardware key.
+ */
+export function getOrCreateDeviceSigningKey(options: DeviceKeyOptions = {}): DevSigningKey {
+  const home = options.home ?? path.join(os.homedir(), '.appliance');
+  const defaultHome = path.resolve(home) === path.resolve(path.join(os.homedir(), '.appliance'));
+  if (isMacOS() && defaultHome && !options.forceFile) {
+    const existing = readDeviceKeychainSeed();
+    if (existing) return deviceSigningKeyFromWire(existing);
+    const created = createDeviceSigningKey();
+    if (!writeDeviceKeychainSeed(privateKeyWire(created.privateKey))) {
+      throw new Error('The device entitlement key could not be stored in macOS Keychain. No entitlement was changed.');
+    }
+    return created;
+  }
+  return getOrCreateFileDeviceKey(home);
+}
+
+function getOrCreateFileDeviceKey(home: string): DevSigningKey {
+  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  fs.chmodSync(home, 0o700);
+  const file = path.join(home, 'device-entitlement-key.json');
+  if (fs.existsSync(file)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      throw new Error('The device entitlement key file is unreadable. No entitlement was changed.');
+    }
+    if (!parsed || typeof parsed !== 'object' || typeof (parsed as { privateKey?: unknown }).privateKey !== 'string') {
+      throw new Error('The device entitlement key file is invalid. No entitlement was changed.');
+    }
+    fs.chmodSync(file, 0o600);
+    return deviceSigningKeyFromWire((parsed as { privateKey: string }).privateKey);
+  }
+  const created = createDeviceSigningKey();
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify({ privateKey: privateKeyWire(created.privateKey) })}\n`, {
+    mode: 0o600,
+    flag: 'wx',
+  });
+  fs.chmodSync(temporary, 0o600);
+  try {
+    // link is the no-overwrite commit: concurrent first users cannot replace
+    // a key another process already used to sign the initial store.
+    fs.linkSync(temporary, file);
+    fs.unlinkSync(temporary);
+  } catch (cause) {
+    fs.rmSync(temporary, { force: true });
+    if ((cause as NodeJS.ErrnoException).code === 'EEXIST' || fs.existsSync(file)) {
+      return getOrCreateFileDeviceKey(home);
+    }
+    throw cause;
+  }
+  fs.chmodSync(file, 0o600);
+  return created;
+}
+
+function readDeviceKeychainSeed(): string | null {
+  try {
+    const value = execFileSync(
+      SECURITY_BIN,
+      ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', DEVICE_KEYCHAIN_ACCOUNT, '-w'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+    ).trim();
+    return value.startsWith('ed25519:') ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDeviceKeychainSeed(seed: string): boolean {
+  try {
+    execFileSync(
+      SECURITY_BIN,
+      ['add-generic-password', '-U', '-s', KEYCHAIN_SERVICE, '-a', DEVICE_KEYCHAIN_ACCOUNT, '-w', seed],
+      { stdio: ['ignore', 'ignore', 'ignore'] }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createDeviceSigningKey(): DevSigningKey {
+  return deviceSigningKeyFromPrivateKey(generateKeyPairSync('ed25519').privateKey);
+}
+
+function deviceSigningKeyFromWire(wire: string): DevSigningKey {
+  if (!wire.startsWith('ed25519:')) throw new Error('Device private key is malformed.');
+  const seed = Buffer.from(wire.slice('ed25519:'.length), 'base64url');
+  if (seed.length !== 32 || seed.toString('base64url') !== wire.slice('ed25519:'.length)) {
+    throw new Error('Device private key is malformed.');
+  }
+  return deviceSigningKeyFromPrivateKey(
+    createPrivateKey({ key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]), format: 'der', type: 'pkcs8' })
+  );
+}
+
+function deviceSigningKeyFromPrivateKey(privateKey: KeyObject): DevSigningKey {
+  const publicKey = createPublicKey(privateKey);
+  const exported = publicKey.export({ format: 'der', type: 'spki' });
+  if (!Buffer.isBuffer(exported) || !exported.subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)) {
+    throw new Error('Device key is not a supported Ed25519 key.');
+  }
+  const raw = exported.subarray(ED25519_SPKI_PREFIX.length);
+  return {
+    privateKey,
+    publicKey,
+    publicKeyWire: `ed25519:${raw.toString('base64url')}`,
+    keyId: keyIdForPublicKey(raw),
+  };
+}
+
+function privateKeyWire(privateKey: KeyObject): string {
+  const exported = privateKey.export({ format: 'der', type: 'pkcs8' });
+  if (!Buffer.isBuffer(exported) || !exported.subarray(0, ED25519_PKCS8_PREFIX.length).equals(ED25519_PKCS8_PREFIX)) {
+    throw new Error('Device key is not a supported Ed25519 key.');
+  }
+  const seed = exported.subarray(ED25519_PKCS8_PREFIX.length);
+  if (seed.length !== 32) throw new Error('Device key is not a supported Ed25519 key.');
+  return `ed25519:${seed.toString('base64url')}`;
 }
 
 function isMacOS(): boolean {
