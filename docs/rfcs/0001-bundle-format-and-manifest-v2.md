@@ -392,7 +392,7 @@ journal.appliance.zip
 │   ├── icon.svg
 │   └── README.md
 ├── digest
-└── signature.sig                 # optional
+└── signature.sig                 # optional canonical signature envelope
 ```
 
 Compound payloads share the root `payload/` directory. Every payload path in an inline service is resolved against
@@ -410,9 +410,10 @@ This length-framed stream avoids dependence on zip entry order, compression, tim
 fields. Empty directories are not entries in the digest. The Runtime stages a selected binary entrypoint as mode
 `0500`; it does not trust zip permission metadata.
 
-`signature.sig`, when present, is `ed25519:<base64url-no-padding>` plus one LF. It is an Ed25519 detached signature
-over the UTF-8 bytes of the `sha256:<hex>` string, excluding the LF. Publisher identity is in `appliance.json`; the
-signature file does not duplicate it.
+`signature.sig`, when present, is the RFC 8785 canonical JSON signature envelope defined below plus one LF. Its role
+is `bundle`, and its signed payload is the JSON object `{"digest":"sha256:<64 lowercase hex>"}` containing the exact
+value from `digest` without its LF. The envelope duplicates the publisher key ID so verification can reject a
+manifest/envelope mismatch before key lookup.
 
 Default safety limits are:
 
@@ -481,16 +482,76 @@ Integrity and publisher identity are separate:
 1. Every runnable bundle has `digest`; a mismatch is always fatal.
 2. `signature.sig` is optional. Its absence is valid and yields Unknown Publisher.
 3. Every v2 root manifest has `publisher.name`; unsigned bundles may omit `publisher.keyId`.
-4. A signature requires `publisher.keyId`. A signature without a key ID is invalid.
+4. A signature requires `publisher.keyId`, which must equal the envelope `keyId`. A signature without a key ID is
+   invalid.
 5. `publisher.name` is display text. Trust, blacklist, and key lookup use `publisher.keyId` only.
 6. Verification resolves the Ed25519 public key by key ID from the identity task's trust source, then verifies the
    detached signature. An unresolved key or unsigned bundle may proceed only through the Unknown Publisher warning
    flow defined by that task; it is not reported as a valid signature.
 7. A publisher block without a signature remains Unknown Publisher and grants no trust.
 
-The default key ID encoding is `ed25519:sha256:<hex>`, where the hash covers the 32 raw Ed25519 public-key bytes.
-Private keys and public-key distribution are outside this bundle RFC. The hosting layer needs only the canonical
-bundle digest and publisher key ID when present; this RFC adds no hosting protocol.
+### One signature envelope
+
+Every Appliance signature uses this strict envelope; unknown fields are rejected:
+
+```ts
+interface SignatureEnvelope {
+  alg: 'ed25519';
+  keyId: `ed25519:sha256:${string}`;
+  role: 'bundle' | 'index' | 'blacklist' | 'delegation' | 'revocation' | 'entitlement' | 'sync';
+  sig: string;
+}
+```
+
+`keyId` is exactly `ed25519:sha256:<64 lowercase hex>`, where SHA-256 covers the 32 raw Ed25519 public-key bytes.
+The public-key wire form is `ed25519:<base64url-no-padding>`, encoding exactly those 32 bytes. `sig` is unprefixed
+base64url without padding and decodes to exactly 64 bytes; `alg` already identifies its algorithm.
+
+For the payload JSON value and expected role defined by the artifact's RFC, signing and verification perform:
+
+1. `canonical = RFC8785(payload)` as UTF-8 bytes. A detached envelope is not part of the payload; an embedded envelope
+   field is removed before canonicalization as directed by that artifact's schema.
+2. `payloadHash = SHA-256(canonical)` as the raw 32 bytes, not hex text.
+3. `signingInput = UTF8("appliance/" + role) || 0x00 || payloadHash`.
+4. `sig = Ed25519.Sign(privateKey, signingInput)`.
+
+A verifier supplies the expected role from context and rejects any different envelope role; it never lets the
+envelope choose the verification domain. It also recomputes the key ID from the resolved public key before verifying
+the signature. No role may accept another role's envelope, even when payload bytes and key are identical. RFC 0004
+defines the payload schemas and trust semantics for every non-bundle role.
+
+For a bundle, `payload` is the canonical digest object defined in Bundle layout. For an index, it is the index JSON
+without its detached envelope. Private keys and public-key distribution are outside this RFC. The hosting layer needs
+only the canonical bundle digest and publisher key ID when present; this RFC adds no hosting protocol.
+
+### Test vectors
+
+Both vectors use this non-secret fixture public identity:
+
+```text
+publicKey = ed25519:A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg
+keyId = ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c
+```
+
+Bundle vector:
+
+```text
+role = bundle
+payload = {"digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+payloadSha256 = e2869b082e9bdd62eca146dd5b83336050273af313f1b0a19aaeb1eb3f96b580
+signingInputHex = 6170706c69616e63652f62756e646c6500e2869b082e9bdd62eca146dd5b83336050273af313f1b0a19aaeb1eb3f96b580
+envelope = {"alg":"ed25519","keyId":"ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c","role":"bundle","sig":"2EAyh4IFCLycDQkiorQnwjyI6ZsOdKdZPklSsnKVm2sNOW5BX30QwqmpIv3VMg257WoPQouuKgl3q6tls6dFAA"}
+```
+
+Index vector, using RFC 0004's minimal index payload:
+
+```text
+role = index
+payload = {"generation":1,"schema":"appliance.catalogue-index/v1"}
+payloadSha256 = 40f2ae9c775126e40f60dd6337f5f024c7ecb9a1eae19e679b1a65c917d16a44
+signingInputHex = 6170706c69616e63652f696e6465780040f2ae9c775126e40f60dd6337f5f024c7ecb9a1eae19e679b1a65c917d16a44
+envelope = {"alg":"ed25519","keyId":"ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c","role":"index","sig":"sSRtIzTuKIHX1YjieIXDbGpWdcbRtWfHx-eiifnpls-KjlagcD2Ir0EOkgUMTuHaHtR8qiN2VA68nFlHO9RbBw"}
+```
 
 ## Validation rules
 
@@ -524,8 +585,9 @@ A v2 validator rejects the bundle when any of these checks fail:
     dependency graph cycles; health timing is outside `intervalSeconds` 1–300, `timeoutSeconds` 1–60 and no greater
     than the interval, or `failureThreshold` 1–20; or restart values are outside `maxAttempts` 0–100 or
     `backoffSeconds` 1–60.
-14. `publisher` or its required name is missing; `signature.sig` is malformed, lacks `publisher.keyId`, or fails
-    verification with a resolved public key.
+14. `publisher` or its required name is missing; `signature.sig` is not a canonical strict envelope, has the wrong
+    algorithm or role, has a malformed or mismatched key ID, lacks `publisher.keyId`, has a malformed signature, or
+    fails verification with the resolved public key.
 
 Validation order is limits and safe paths, bounded manifest parse, digest recomputation, signature status, full schema
 and cross-reference validation, then payload parsing. Nothing executes during validation.
@@ -557,16 +619,19 @@ The SDK schema task must make this exact set of SDK changes:
 Bundle-byte canonicalization, zip safety, digest/signature I/O, QuickJS stub names, CLI loading, and VM translation do
 not belong in the Zod task. They require separate downstream tasks after the pure SDK schema lands.
 
+Because `signature.sig` is outside `appliance.json`, a separate shared-signing task must add
+`packages/sdk/src/models/signature.ts` with strict `signatureRoleInput` and `signatureEnvelopeInput` schemas plus
+inferred `SignatureRole` and `SignatureEnvelope` types, export it from `packages/sdk/src/models/index.ts`, and exercise
+both vectors above. Manifest, catalogue, identity, entitlement, and sync code must import that shared definition.
+
 ## Open for owner
 
 1. **Are the default zip safety limits acceptable?** Default: 2 GiB compressed, 8 GiB expanded, 4,096 entries,
    256 KiB manifest, and 100:1 aggregate expansion ratio.
-2. **Is the key ID wire form stable enough to standardize now?** Default: `ed25519:sha256:<64 lowercase hex>` over the
-   raw 32-byte public key.
-3. **How often must native macOS execution warn?** Default: warn and require explicit confirmation on every launch;
+2. **How often must native macOS execution warn?** Default: warn and require explicit confirmation on every launch;
    do not persist a blanket grant because execution is outside the microVM.
-4. **How is “two nesting levels” counted?** Default: the root is depth zero, its services are depth one, their services
+3. **How is “two nesting levels” counted?** Default: the root is depth zero, its services are depth one, their services
    are depth two, and depth-three services are rejected; the 16-service cap counts runnable leaves at either service
    depth, while structural compound nodes do not count.
-5. **Should Builder deploy accept runnable binary or compound bundles before their backend tasks land?** Default: no;
+4. **Should Builder deploy accept runnable binary or compound bundles before their backend tasks land?** Default: no;
    reject explicitly, while runnable containers use the new already-built ingestion path.
