@@ -84,6 +84,7 @@ dependencies = [
  "fatfs",
  "flate2",
  "fscommon",
+ "idna",
  "libc",
  "objc2",
  "objc2-foundation",

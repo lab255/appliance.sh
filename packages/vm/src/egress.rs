@@ -19,11 +19,12 @@
 //! the proxy is independently runnable and testable on the host
 //! (`curl -x http://127.0.0.1:<port> https://example.com`).
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -47,7 +48,7 @@ fn default_action() -> Action {
 
 /// Desktop-controlled outbound policy. Persisted as JSON next to the
 /// VM's other state; reloaded per connection so edits apply live.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EgressPolicy {
     #[serde(default = "default_action")]
@@ -66,6 +67,89 @@ pub struct EgressPolicy {
     pub mitm: bool,
 }
 
+/// Host-enforced policy for one runnable app/service leaf. The runtime
+/// controller writes this resolved record to
+/// `~/.appliance/runtime/<app>/effective.json`; it is deliberately free of
+/// manifest/requested state so the engine can consume only granted policy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimePolicy {
+    pub version: u32,
+    pub app: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    pub vm: String,
+    pub principal: String,
+    pub source: Ipv4Addr,
+    pub policy: EgressPolicy,
+    /// Granted destination ports for each normalized allow suffix. Every
+    /// runtime allow entry must have a non-empty port set.
+    pub allow_ports: BTreeMap<String, Vec<u16>>,
+}
+
+impl RuntimePolicy {
+    pub fn allowed_ports_for(&self, host: &str) -> Vec<u16> {
+        let mut ports = self
+            .allow_ports
+            .iter()
+            .filter(|(suffix, _)| host_matches(host, suffix))
+            .flat_map(|(_, ports)| ports.iter().copied())
+            .collect::<Vec<_>>();
+        ports.sort_unstable();
+        ports.dedup();
+        ports
+    }
+
+    pub fn allows_host_port(&self, host: &str, port: u16) -> bool {
+        self.policy.allows(host) && self.allowed_ports_for(host).contains(&port)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RuntimePolicyFile {
+    version: u32,
+    app: String,
+    principals: Vec<RuntimePolicy>,
+}
+
+/// The selected policy context. Only the VM's historical `.2` lease may use
+/// `Legacy`; all other addresses are runtime principals and fail closed when
+/// their effective policy is absent or invalid.
+#[derive(Debug, Clone)]
+pub enum PolicyContext {
+    Legacy(EgressPolicy),
+    Runtime(RuntimePolicy),
+    Unknown { source: Ipv4Addr },
+}
+
+impl PolicyContext {
+    pub fn policy(&self) -> EgressPolicy {
+        match self {
+            Self::Legacy(policy) => policy.clone(),
+            Self::Runtime(runtime) => runtime.policy.clone(),
+            Self::Unknown { .. } => EgressPolicy {
+                default: Action::Deny,
+                allow: Vec::new(),
+                deny: Vec::new(),
+                mitm: false,
+            },
+        }
+    }
+
+    pub fn principal(&self) -> String {
+        match self {
+            Self::Legacy(_) => "vm".to_string(),
+            Self::Runtime(runtime) => runtime.principal.clone(),
+            Self::Unknown { source, .. } => format!("unknown:{source}"),
+        }
+    }
+
+    pub fn is_runtime(&self) -> bool {
+        !matches!(self, Self::Legacy(_))
+    }
+}
+
 impl Default for EgressPolicy {
     fn default() -> Self {
         Self {
@@ -79,7 +163,11 @@ impl Default for EgressPolicy {
 
 pub fn host_matches(host: &str, suffix: &str) -> bool {
     let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
-    let suffix = suffix.trim().trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
+    let suffix = suffix
+        .trim()
+        .trim_start_matches('.')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
     if suffix.is_empty() {
         return false;
     }
@@ -124,8 +212,8 @@ fn policy_path(name: &str) -> PathBuf {
 pub const NETSTACK_ALLOWLIST: &[&str] = &[
     // api / model
     "api.anthropic.com",
-    "api.openai.com",     // codex (OpenAI Codex CLI) — docs/multi-agent-adapters.md §5
-    "githubcopilot.com",  // copilot model leg: api.githubcopilot.com + *.githubcopilot.com — §5
+    "api.openai.com", // codex (OpenAI Codex CLI) — docs/multi-agent-adapters.md §5
+    "githubcopilot.com", // copilot model leg: api.githubcopilot.com + *.githubcopilot.com — §5
     // alpine packages
     "dl-cdn.alpinelinux.org",
     // language package registries
@@ -168,6 +256,270 @@ pub fn netstack_policy(name: &str) -> EgressPolicy {
     p
 }
 
+fn appliance_home() -> PathBuf {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    home.join(".appliance")
+}
+
+pub fn runtime_root() -> PathBuf {
+    std::env::var_os("APPLIANCE_RUNTIME_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| appliance_home().join("runtime"))
+}
+
+fn valid_component(value: &str) -> bool {
+    !value.is_empty()
+        && value != "."
+        && value != ".."
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+}
+
+fn validate_runtime_identity(policy: &RuntimePolicy) -> Result<()> {
+    if policy.version != 1 {
+        bail!("unsupported runtime policy version {}", policy.version);
+    }
+    if !valid_component(&policy.app) || !valid_component(&policy.vm) {
+        bail!("runtime app and VM names must be safe path components");
+    }
+    if policy.source.octets()[3] < 10
+        || policy.source == Ipv4Addr::new(192, 168, 127, 255)
+        || policy.source.octets()[..3] != crate::netstack::GUEST_IP.octets()[..3]
+    {
+        bail!("runtime principal source must be in 192.168.127.10-254");
+    }
+    let expected = match &policy.service {
+        Some(service) if valid_component(service) => format!("{}/{service}", policy.app),
+        Some(_) => bail!("runtime service must be a safe path component"),
+        None => policy.app.clone(),
+    };
+    if policy.principal != expected {
+        bail!(
+            "principal '{}' does not match app/service identity '{expected}'",
+            policy.principal
+        );
+    }
+    Ok(())
+}
+
+/// Normalize and validate a runtime hostname suffix. Runtime policy never
+/// accepts the legacy raw-IP/CIDR hatch, URLs, ports, or single public-suffix
+/// labels. `*.` is accepted only as spelling for ordinary suffix matching.
+pub fn normalize_runtime_host(raw: &str) -> Result<String> {
+    let raw = raw.trim().trim_end_matches('.');
+    let raw = raw.strip_prefix("*.").unwrap_or(raw);
+    if raw.is_empty()
+        || raw.contains(['/', '\\', '@', ':'])
+        || raw.contains("..")
+        || raw.parse::<IpAddr>().is_ok()
+        || raw
+            .split_once('/')
+            .is_some_and(|(ip, bits)| ip.parse::<IpAddr>().is_ok() && bits.parse::<u8>().is_ok())
+    {
+        bail!("runtime egress entry must be a DNS hostname suffix, got '{raw}'");
+    }
+    let host = idna::domain_to_ascii(raw)
+        .map_err(|_| anyhow::anyhow!("invalid internationalized hostname '{raw}'"))?
+        .to_ascii_lowercase();
+    const PUBLIC_SUFFIXES: &[&str] = &[
+        "com", "net", "org", "edu", "gov", "mil", "io", "dev", "app", "co.uk", "org.uk",
+        "com.au", "co.jp",
+    ];
+    if host.len() > 253
+        || !host.contains('.')
+        || PUBLIC_SUFFIXES.contains(&host.as_str())
+        || host.split('.').any(|label| {
+            label.is_empty()
+                || label.len() > 63
+                || label.starts_with('-')
+                || label.ends_with('-')
+                || !label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        })
+    {
+        bail!("invalid or public-suffix-only runtime egress host '{raw}'");
+    }
+    Ok(host)
+}
+
+fn validate_runtime_policy(mut runtime: RuntimePolicy) -> Result<RuntimePolicy> {
+    validate_runtime_identity(&runtime)?;
+    runtime.policy.default = Action::Deny;
+    runtime.policy.allow = runtime
+        .policy
+        .allow
+        .iter()
+        .map(|host| normalize_runtime_host(host))
+        .collect::<Result<Vec<_>>>()?;
+    runtime.policy.deny = runtime
+        .policy
+        .deny
+        .iter()
+        .map(|host| normalize_runtime_host(host))
+        .collect::<Result<Vec<_>>>()?;
+    runtime.policy.allow.sort();
+    runtime.policy.allow.dedup();
+    runtime.policy.deny.sort();
+    runtime.policy.deny.dedup();
+    let mut normalized_ports = BTreeMap::new();
+    for (host, mut ports) in runtime.allow_ports {
+        let host = normalize_runtime_host(&host)?;
+        ports.sort_unstable();
+        ports.dedup();
+        if ports.is_empty() || ports.contains(&0) {
+            bail!("runtime allow port sets must contain non-zero TCP ports");
+        }
+        if normalized_ports.insert(host.clone(), ports).is_some() {
+            bail!("duplicate normalized runtime allow host '{host}'");
+        }
+    }
+    if runtime.policy.allow.iter().any(|host| !normalized_ports.contains_key(host))
+        || normalized_ports.keys().any(|host| !runtime.policy.allow.contains(host))
+    {
+        bail!("runtime policy allow and allowPorts must name the same normalized hosts");
+    }
+    runtime.allow_ports = normalized_ports;
+    Ok(runtime)
+}
+
+pub fn parse_runtime_policy(raw: &str) -> Result<RuntimePolicy> {
+    let value: serde_json::Value =
+        serde_json::from_str(raw).context("parse runtime effective policy")?;
+    if value
+        .pointer("/policy/mitm")
+        .and_then(serde_json::Value::as_bool)
+        .is_none()
+    {
+        bail!("runtime effective policy must resolve the inspection default as policy.mitm");
+    }
+    validate_runtime_policy(serde_json::from_str(raw).context("parse runtime effective policy")?)
+}
+
+fn runtime_policy_path(app: &str) -> Result<PathBuf> {
+    if !valid_component(app) {
+        bail!("runtime app must be a safe path component");
+    }
+    Ok(runtime_root().join(app).join("effective.json"))
+}
+
+pub fn save_runtime_policy(runtime: &RuntimePolicy) -> Result<()> {
+    let runtime = validate_runtime_policy(runtime.clone())?;
+    let path = runtime_policy_path(&runtime.app)?;
+    let parent = path.parent().context("runtime policy parent")?;
+    std::fs::create_dir_all(parent)?;
+    let mut principals = load_runtime_file(&path)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|existing| existing.principal != runtime.principal)
+        .collect::<Vec<_>>();
+    principals.push(runtime.clone());
+    principals.sort_by(|a, b| a.principal.cmp(&b.principal));
+    let stored = RuntimePolicyFile {
+        version: 1,
+        app: runtime.app.clone(),
+        principals,
+    };
+    let tmp = parent.join(".effective.json.tmp");
+    let bytes = serde_json::to_vec_pretty(&stored)?;
+    write_private(&tmp, &bytes)?;
+    std::fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
+    Ok(())
+}
+
+fn load_runtime_file(path: &Path) -> Result<Vec<RuntimePolicy>> {
+    let raw = std::fs::read_to_string(path)?;
+    if let Ok(single) = parse_runtime_policy(&raw) {
+        return Ok(vec![single]);
+    }
+    let stored: RuntimePolicyFile =
+        serde_json::from_str(&raw).context("parse runtime effective policy file")?;
+    if stored.version != 1 || !valid_component(&stored.app) {
+        bail!("invalid runtime effective policy file identity");
+    }
+    stored
+        .principals
+        .into_iter()
+        .map(|runtime| {
+            if runtime.app != stored.app {
+                bail!("runtime policy app does not match effective policy directory");
+            }
+            validate_runtime_policy(runtime)
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    std::fs::write(path, bytes)?;
+    Ok(())
+}
+
+fn all_runtime_policies() -> Vec<RuntimePolicy> {
+    let Ok(entries) = std::fs::read_dir(runtime_root()) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let app = entry.file_name().to_string_lossy().into_owned();
+            let policies = load_runtime_file(&entry.path().join("effective.json")).ok()?;
+            policies
+                .iter()
+                .all(|runtime| runtime.app == app)
+                .then_some(policies)
+        })
+        .flatten()
+        .collect()
+}
+
+pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<RuntimePolicy> {
+    let mut matches = all_runtime_policies()
+        .into_iter()
+        .filter(|runtime| runtime.vm == vm && runtime.principal == principal);
+    let found = matches.next()?;
+    matches.next().is_none().then_some(found)
+}
+
+pub fn policy_for(vm: &str, source: Ipv4Addr) -> PolicyContext {
+    if source == crate::netstack::GUEST_IP {
+        return PolicyContext::Legacy(netstack_policy(vm));
+    }
+    let mut matches = all_runtime_policies()
+        .into_iter()
+        .filter(|runtime| runtime.vm == vm && runtime.source == source);
+    let Some(found) = matches.next() else {
+        return PolicyContext::Unknown { source };
+    };
+    if matches.next().is_some() {
+        PolicyContext::Unknown { source }
+    } else {
+        PolicyContext::Runtime(found)
+    }
+}
+
+pub fn should_inspect_runtime(policy: &EgressPolicy, allowed: bool) -> bool {
+    policy.mitm && allowed
+}
+
 /// Does this VM enforce the host-side netstack boundary? True when the
 /// VM's resolved link is `Netstack` (persisted, or forced by the global
 /// `APPLIANCE_NETSTACK=1` override). This is the gate the effective-policy
@@ -180,7 +532,9 @@ pub fn is_netstack(name: &str) -> bool {
     match crate::store::load_spec(name).ok().flatten() {
         Some(spec) => spec.net_link() == NetLink::Netstack,
         // No persisted spec yet: only the global override can force it on.
-        None => std::env::var("APPLIANCE_NETSTACK").map(|v| v == "1").unwrap_or(false),
+        None => std::env::var("APPLIANCE_NETSTACK")
+            .map(|v| v == "1")
+            .unwrap_or(false),
     }
 }
 
@@ -247,7 +601,9 @@ pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: b
         out.push_str("\n  baked allowlist (always-on for Netstack VMs):\n");
         for h in NETSTACK_ALLOWLIST {
             if denied(h) {
-                out.push_str(&format!("    ✗ {h}  (overridden by an operator deny rule)\n"));
+                out.push_str(&format!(
+                    "    ✗ {h}  (overridden by an operator deny rule)\n"
+                ));
             } else {
                 out.push_str(&format!("    ✓ {h}\n"));
             }
@@ -258,15 +614,20 @@ pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: b
     // set (a Netstack VM merges the baked list into `allow`, so filter it
     // out here to keep the two categories distinct).
     let is_baked = |h: &str| NETSTACK_ALLOWLIST.iter().any(|b| b.eq_ignore_ascii_case(h));
-    let operator_allow: Vec<&String> =
-        persisted.allow.iter().filter(|h| !(netstack && is_baked(h))).collect();
+    let operator_allow: Vec<&String> = persisted
+        .allow
+        .iter()
+        .filter(|h| !(netstack && is_baked(h)))
+        .collect();
     out.push_str("\n  operator allow rules:\n");
     if operator_allow.is_empty() {
         out.push_str("    (none)\n");
     } else {
         for h in operator_allow {
             if denied(h) {
-                out.push_str(&format!("    ✗ {h}  (overridden by an operator deny rule)\n"));
+                out.push_str(&format!(
+                    "    ✗ {h}  (overridden by an operator deny rule)\n"
+                ));
             } else {
                 out.push_str(&format!("    ✓ {h}\n"));
             }
@@ -428,8 +789,8 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
         // Scope TLS interception to hosts that actually carry a credential
         // rule, and only when the connecting peer is THIS VM's exact leased
         // guest IP (re-attributed here — see should_intercept).
-        let intercept = peer_ip
-            .is_some_and(|ip| should_intercept(&ctx.name, ip, allowed, policy.mitm, &host));
+        let intercept =
+            peer_ip.is_some_and(|ip| should_intercept(&ctx.name, ip, allowed, policy.mitm, &host));
         if log {
             let action = if !allowed {
                 "deny"
@@ -452,7 +813,11 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
             // resolves `host:port` itself, but now rejects any forbidden
             // (private/internal/host-LAN) result before dialing — a legit
             // public CONNECT host resolves public, so it still works.
-            let target = mitm::MitmTarget { host: &host, port, upstream: None };
+            let target = mitm::MitmTarget {
+                host: &host,
+                port,
+                upstream: None,
+            };
             return mitm::intercept(
                 &ctx.name,
                 client,
@@ -474,7 +839,10 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
             .unwrap_or_default();
         let allowed = !host.is_empty() && policy.allows(&host);
         if log {
-            eprintln!("egress: {method} {host} -> {}", if allowed { "allow" } else { "deny" });
+            eprintln!(
+                "egress: {method} {host} -> {}",
+                if allowed { "allow" } else { "deny" }
+            );
         }
         let req_path = target_path(&target);
         crate::traffic::record(
@@ -534,7 +902,9 @@ fn header_value(head: &str, name: &str) -> Option<String> {
 /// Pull the authority out of an absolute request URI
 /// (`http://host:port/path` → `host:port` → `host`).
 fn authority_of(target: &str) -> Option<String> {
-    let rest = target.strip_prefix("http://").or_else(|| target.strip_prefix("https://"))?;
+    let rest = target
+        .strip_prefix("http://")
+        .or_else(|| target.strip_prefix("https://"))?;
     let authority = rest.split('/').next().unwrap_or(rest);
     let host = authority.rsplit_once(':').map_or(authority, |(h, _)| h);
     (!host.is_empty()).then(|| host.to_string())
@@ -544,7 +914,10 @@ fn authority_of(target: &str) -> Option<String> {
 /// returned as-is; absolute-form (`http://host/path`) is reduced to
 /// its path. Defaults to `/`.
 fn target_path(target: &str) -> String {
-    if let Some(rest) = target.strip_prefix("http://").or_else(|| target.strip_prefix("https://")) {
+    if let Some(rest) = target
+        .strip_prefix("http://")
+        .or_else(|| target.strip_prefix("https://"))
+    {
         match rest.find('/') {
             Some(i) => rest[i..].to_string(),
             None => "/".to_string(),
@@ -946,39 +1319,95 @@ mod tests {
 
         // Pre-lease (no guest-ip file): there is no exact IP to match, so
         // even the eventual lease holder gets a blind tunnel, not injection.
-        assert!(!should_intercept(name, this_vm, true, true, "api.anthropic.com"));
+        assert!(!should_intercept(
+            name,
+            this_vm,
+            true,
+            true,
+            "api.anthropic.com"
+        ));
         // And the sibling that passed the coarse /24 admission gate is refused.
-        assert!(!should_intercept(name, sibling, true, true, "api.anthropic.com"));
+        assert!(!should_intercept(
+            name,
+            sibling,
+            true,
+            true,
+            "api.anthropic.com"
+        ));
 
         // The victim's lease lands mid-window: injection resumes — but ONLY
         // for this VM's exact IP. The sibling that stalled its CONNECT across
         // the lease write is STILL refused; re-attributing at intercept time
         // is what closes the TOCTOU.
         std::fs::write(VmPaths::for_name(name).guest_ip(), "192.168.64.7\n").unwrap();
-        assert!(should_intercept(name, this_vm, true, true, "api.anthropic.com"));
-        assert!(!should_intercept(name, sibling, true, true, "api.anthropic.com"));
+        assert!(should_intercept(
+            name,
+            this_vm,
+            true,
+            true,
+            "api.anthropic.com"
+        ));
+        assert!(!should_intercept(
+            name,
+            sibling,
+            true,
+            true,
+            "api.anthropic.com"
+        ));
         // Loopback (the trusted local operator) is always injectable.
-        assert!(should_intercept(name, loopback, true, true, "api.anthropic.com"));
+        assert!(should_intercept(
+            name,
+            loopback,
+            true,
+            true,
+            "api.anthropic.com"
+        ));
 
         // The other gates still hold: brokered host only, allowed + mitm.
         assert!(!should_intercept(name, this_vm, true, true, "example.com"));
-        assert!(!should_intercept(name, this_vm, false, true, "api.anthropic.com"));
-        assert!(!should_intercept(name, this_vm, true, false, "api.anthropic.com"));
+        assert!(!should_intercept(
+            name,
+            this_vm,
+            false,
+            true,
+            "api.anthropic.com"
+        ));
+        assert!(!should_intercept(
+            name,
+            this_vm,
+            true,
+            false,
+            "api.anthropic.com"
+        ));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn authority_of_extracts_host() {
-        assert_eq!(authority_of("http://example.com/path").as_deref(), Some("example.com"));
-        assert_eq!(authority_of("http://example.com:8080/p").as_deref(), Some("example.com"));
-        assert_eq!(authority_of("https://api.test").as_deref(), Some("api.test"));
+        assert_eq!(
+            authority_of("http://example.com/path").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(
+            authority_of("http://example.com:8080/p").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(
+            authority_of("https://api.test").as_deref(),
+            Some("api.test")
+        );
         assert_eq!(authority_of("/just/a/path"), None);
     }
 
     #[test]
     fn configmap_embeds_policy_and_quotes_values() {
-        let cm = render_configmap("http://192.168.64.1:5053", "localhost,.svc", true, Some("PEMDATA"));
+        let cm = render_configmap(
+            "http://192.168.64.1:5053",
+            "localhost,.svc",
+            true,
+            Some("PEMDATA"),
+        );
         assert!(cm.contains("kind: ConfigMap"));
         assert!(cm.contains("name: appliance-egress"));
         assert!(cm.contains("namespace: appliance"));
@@ -998,10 +1427,19 @@ mod tests {
 
     #[test]
     fn split_host_port_defaults_to_443() {
-        assert_eq!(split_host_port("example.com:8443"), ("example.com".to_string(), 8443));
-        assert_eq!(split_host_port("example.com"), ("example.com".to_string(), 443));
+        assert_eq!(
+            split_host_port("example.com:8443"),
+            ("example.com".to_string(), 8443)
+        );
+        assert_eq!(
+            split_host_port("example.com"),
+            ("example.com".to_string(), 443)
+        );
         // Garbage port falls back to 443 rather than panicking.
-        assert_eq!(split_host_port("example.com:notaport"), ("example.com".to_string(), 443));
+        assert_eq!(
+            split_host_port("example.com:notaport"),
+            ("example.com".to_string(), 443)
+        );
     }
 
     #[test]
@@ -1104,5 +1542,75 @@ mod tests {
         };
         let out = render_effective_policy("agent", &persisted, true);
         assert!(out.contains("✗ github.com  (overridden by an operator deny rule)"));
+    }
+
+    fn runtime_json(allow: &[&str], mitm: bool) -> String {
+        let allow_ports = allow
+            .iter()
+            .map(|host| ((*host).to_string(), vec![443u16]))
+            .collect::<BTreeMap<_, _>>();
+        serde_json::json!({
+            "version": 1,
+            "app": "journal",
+            "vm": "appliance-runtime",
+            "principal": "journal",
+            "source": "192.168.127.10",
+            "policy": { "default": "allow", "allow": allow, "deny": [], "mitm": mitm },
+            "allowPorts": allow_ports
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn runtime_policy_is_default_deny_and_hostname_only() {
+        let runtime = parse_runtime_policy(&runtime_json(&["*.Example.COM."], true)).unwrap();
+        assert_eq!(runtime.policy.default, Action::Deny);
+        assert_eq!(runtime.policy.allow, vec!["example.com"]);
+        assert!(runtime.policy.allows("api.example.com"));
+        assert!(runtime.allows_host_port("api.example.com", 443));
+        assert!(!runtime.allows_host_port("api.example.com", 8443));
+        assert!(!runtime.policy.allows("not-example.test"));
+
+        for invalid in [
+            "1.2.3.4",
+            "10.0.0.0/8",
+            "https://example.com",
+            "com",
+            "user@example.com",
+        ] {
+            assert!(
+                parse_runtime_policy(&runtime_json(&[invalid], true)).is_err(),
+                "accepted {invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn absent_runtime_principal_fails_closed_without_baked_allowlist() {
+        let context = PolicyContext::Unknown {
+            source: "192.168.127.99".parse().unwrap(),
+        };
+        let policy = context.policy();
+        assert_eq!(policy.default, Action::Deny);
+        assert!(!policy.allows("api.openai.com"));
+        assert!(!policy.mitm);
+    }
+
+    #[test]
+    fn runtime_inspection_decision_matrix_is_policy_and_allowed_only() {
+        for (mitm, allowed, expected) in [
+            (false, false, false),
+            (false, true, false),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let policy = EgressPolicy {
+                default: Action::Deny,
+                allow: vec![],
+                deny: vec![],
+                mitm,
+            };
+            assert_eq!(should_inspect_runtime(&policy, allowed), expected);
+        }
     }
 }
