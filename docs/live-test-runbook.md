@@ -547,20 +547,28 @@ cd ~/Workspaces/appliance.sh
 pnpm --filter @appliance.sh/cli run build
 
 cd packages/vm
-cargo build
-./scripts/sign-dev.sh
+cargo build --release
+./scripts/sign-dev.sh --release
 cd ../..
+export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
 
 # The script commits only source; the OCI tar and zip stay generated/ignored.
 examples/runtime/journal/build-bundle.sh
 
-# Terminal A: validates, unpacks, reconciles/restarts the pool when its
-# boot-time VirtioFS share changes, starts journal, and follows logs.
+# Serialize the engine restart: `vm stop` requests shutdown asynchronously,
+# so wait for `running: false` before booting the rebuilt binary.
+packages/cli/dist/appliance vm stop --name appliance-runtime
+packages/vm/target/release/appliance-vm status appliance-runtime
+time packages/cli/dist/appliance vm up --name appliance-runtime
+
+# Terminal A: validates, unpacks, reconciles the already-booted pool, starts
+# journal, and follows logs.
 time packages/cli/dist/appliance runtime run \
   examples/runtime/journal/journal.appliance.zip
 
 # Terminal B, while Terminal A follows logs:
-time curl -fsS -D /tmp/journal.headers http://127.0.0.1:20000/ -o /tmp/journal.body
+curl -fsS -D /tmp/journal.headers -o /tmp/journal.body \
+  -w 'status=%{http_code} total=%{time_total}s\n' http://127.0.0.1:20000/
 grep -q '200 OK' /tmp/journal.headers
 grep -q 'journal runtime proof' /tmp/journal.body
 time packages/cli/dist/appliance runtime ps
@@ -579,3 +587,9 @@ stop timings from `time` plus `appliance-vm timings`.
 
 Ctrl-C in Terminal A is an equivalent stop proof: it stops `journal`, exits
 130, and deliberately leaves the pooled VM running.
+
+Observed on the final macOS VZ proof (2026-08-28): serialized cold pool boot
+`10.33s`; warm Runtime reconciliation/start reached the published-port line in
+`<=1.01s`; `runtime ps` `0.29s`; host curl `status=200 total=0.035827s`
+(repeat `0.040435s`); explicit app teardown `12.7s`. The explicit-stop and
+Ctrl-C cycles both left the same pool PID running and core-ready.
