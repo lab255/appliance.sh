@@ -15,6 +15,8 @@ export function GrantDialog({
   onGrant: (grantIds: string[]) => void;
 }) {
   const required = React.useMemo(() => new Set(prompt.requiredGrantIds), [prompt.requiredGrantIds]);
+  const requiredGrants = prompt.grants.filter((grant) => required.has(grant.id));
+  const mounts = prompt.grants.filter((grant) => grant.control === 'mount' && !required.has(grant.id));
   const [selected, setSelected] = React.useState(() => new Set(prompt.grants.map((grant) => grant.id)));
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const dialogRef = React.useRef<HTMLDivElement>(null);
@@ -80,52 +82,66 @@ export function GrantDialog({
               {prompt.upgrade ? 'Approve new controls' : 'Grant app controls'}
             </h2>
             <p id="grant-dialog-description" className="mt-1 text-sm text-[var(--color-muted-foreground)]">
-              {prompt.appId} {prompt.version} · {prompt.license}. Required controls are approved together; mounts may be
-              declined individually.
+              {prompt.appId} {prompt.version} ({prompt.license}) asks for the controls below. Required controls are
+              needed to install; mounts can be declined.
             </p>
           </div>
         </div>
 
-        <fieldset className="mt-4 space-y-2">
-          <legend className="sr-only">Requested controls</legend>
-          {prompt.grants.map((grant) => {
-            const isRequired = required.has(grant.id);
-            return (
-              <label
-                key={grant.id}
-                className="flex items-start gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={selected.has(grant.id)}
-                  disabled={busy || isRequired}
-                  aria-describedby={`grant-${grant.id}-detail`}
-                  onChange={() => toggle(grant.id)}
-                />
-                <span className="min-w-0">
-                  <span className="block text-xs font-medium">
-                    {grant.id} · {isRequired ? 'Required' : 'Optional mount'}
-                  </span>
-                  <span
-                    id={`grant-${grant.id}-detail`}
-                    className="mt-0.5 block text-xs text-[var(--color-muted-foreground)]"
+        <div className="mt-4 space-y-4">
+          {requiredGrants.length ? (
+            <section aria-labelledby="grant-required-heading">
+              <h3 id="grant-required-heading" className="mb-2 text-xs font-semibold tracking-wide uppercase">
+                Required
+              </h3>
+              <div className="space-y-2">
+                {requiredGrants.map((grant) => (
+                  <div
+                    key={grant.id}
+                    className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
                   >
-                    {grant.control === 'egress-host'
-                      ? `Network access to ${grant.value.host}:${grant.value.ports.join(', ')}`
-                      : grant.control === 'mount'
-                        ? `${grant.value.access} mount at ${grant.value.guest}`
-                        : grant.control === 'published-port'
-                          ? `Publish ${grant.value.guest}/${grant.value.protocol} to this device`
-                          : `CPU, memory, and disk limit: ${Object.entries(grant.value)
-                              .map(([key, value]) => `${key} ${value}`)
-                              .join(', ')}`}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
+                    <div className="text-xs font-medium">{grant.id}</div>
+                    <div className="mt-0.5 text-xs text-[var(--color-muted-foreground)]">{grantDetail(grant)}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {mounts.length ? (
+            <fieldset>
+              <legend className="mb-2 text-xs font-semibold tracking-wide uppercase">Mounts</legend>
+              <div className="space-y-2">
+                {mounts.map((grant) => (
+                  <label
+                    key={grant.id}
+                    htmlFor={`grant-${grant.id}`}
+                    className="flex items-start gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+                  >
+                    <input
+                      id={`grant-${grant.id}`}
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={selected.has(grant.id)}
+                      disabled={busy}
+                      aria-describedby={`grant-${grant.id}-detail`}
+                      onChange={() => toggle(grant.id)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-xs font-medium">{grant.id}</span>
+                      <span
+                        id={`grant-${grant.id}-detail`}
+                        className="mt-0.5 block text-xs text-[var(--color-muted-foreground)]"
+                      >
+                        {grantDetail(grant)}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+        </div>
 
         <div className="mt-5 flex justify-end gap-2">
           <Button ref={cancelRef} variant="outline" size="sm" disabled={busy} onClick={onCancel}>
@@ -138,4 +154,19 @@ export function GrantDialog({
       </div>
     </div>
   );
+}
+
+function grantDetail(grant: EntitlementGrantPrompt['grants'][number]): string {
+  if (grant.control === 'egress-host') {
+    return `Network access to ${grant.value.host}:${grant.value.ports.join(', ')}`;
+  }
+  if (grant.control === 'mount') return `${grant.value.access} mount at ${grant.value.guest}`;
+  if (grant.control === 'published-port') {
+    return `Publish ${grant.value.guest}/${grant.value.protocol} to this device`;
+  }
+  const labels: string[] = [];
+  if (grant.value.cpus !== undefined) labels.push(`${grant.value.cpus} CPU${grant.value.cpus === 1 ? '' : 's'}`);
+  if (grant.value.memoryMib !== undefined) labels.push(`${grant.value.memoryMib} MiB memory`);
+  if (grant.value.diskGib !== undefined) labels.push(`${grant.value.diskGib} GiB disk`);
+  return labels.join(' · ');
 }

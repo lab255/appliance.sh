@@ -63,6 +63,7 @@ function EntitlementsSection() {
   const [suggestions, setSuggestions] = React.useState<EntitlementSuggestion[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [confirming, setConfirming] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async () => {
@@ -85,6 +86,7 @@ function EntitlementsSection() {
     setBusy(`${suggestion.appId}:${suggestion.grant.id}`);
     try {
       await host.entitlements.revoke(suggestion.appId, suggestion.grant.id);
+      setConfirming(null);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The grant could not be revoked.');
@@ -108,38 +110,110 @@ function EntitlementsSection() {
           Checking grant usage…
         </p>
       ) : suggestions.length === 0 ? (
-        <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-          <ShieldCheck className="h-4 w-4 text-[var(--color-success-foreground)]" aria-hidden />
-          No grants are suggested for revocation.
-        </div>
+        <EntitlementsEmptyState />
       ) : (
         <ul className="divide-y divide-[var(--color-border)]" aria-label="Suggested entitlement revocations">
           {suggestions.map((suggestion) => {
             const key = `${suggestion.appId}:${suggestion.grant.id}`;
             return (
-              <li key={key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{suggestion.appId}</div>
-                  <div className="mt-0.5 truncate font-mono text-xs text-[var(--color-muted-foreground)]">
-                    {suggestion.grant.id} · last used {suggestion.lastUsedAt?.slice(0, 10) ?? 'never'}
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy === key}
-                  onClick={() => void revoke(suggestion)}
-                  aria-label={`Revoke ${suggestion.grant.id} from ${suggestion.appId}`}
-                >
-                  {busy === key ? 'Revoking…' : 'Revoke'}
-                </Button>
-              </li>
+              <EntitlementSuggestionRow
+                key={key}
+                suggestion={suggestion}
+                confirming={confirming === key}
+                busy={busy === key}
+                anotherBusy={busy !== null && busy !== key}
+                onReview={() => setConfirming(key)}
+                onRevoke={() => void revoke(suggestion)}
+                onKeep={() => setConfirming(null)}
+              />
             );
           })}
         </ul>
       )}
     </SectionCard>
   );
+}
+
+export function EntitlementsEmptyState() {
+  return (
+    <div className="flex items-start gap-2 text-xs text-[var(--color-muted-foreground)]">
+      <ShieldCheck className="h-4 w-4 text-[var(--color-success-foreground)]" aria-hidden />
+      <div>
+        <div className="font-medium text-[var(--color-foreground)]">All entitlement grants are active</div>
+        <div className="mt-0.5">No non-mount grants have been unused for 30 days.</div>
+      </div>
+    </div>
+  );
+}
+
+export function EntitlementSuggestionRow({
+  suggestion,
+  confirming,
+  busy,
+  anotherBusy,
+  onReview,
+  onRevoke,
+  onKeep,
+}: {
+  suggestion: EntitlementSuggestion;
+  confirming: boolean;
+  busy: boolean;
+  anotherBusy: boolean;
+  onReview: () => void;
+  onRevoke: () => void;
+  onKeep: () => void;
+}) {
+  return (
+    <li className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">{suggestion.appId}</div>
+        <div className="mt-0.5 truncate text-xs text-[var(--color-muted-foreground)]">
+          {controlKind(suggestion)} · <span className="font-mono">{suggestion.grant.id}</span> · last used{' '}
+          {suggestion.lastUsedAt?.slice(0, 10) ?? 'never'}
+        </div>
+      </div>
+      {confirming ? (
+        <div
+          className="flex shrink-0 items-center gap-2"
+          role="group"
+          aria-label={`Confirm revoke from ${suggestion.appId}`}
+        >
+          <span className="text-xs">
+            Revoke <span className="font-mono">{suggestion.grant.id}</span> from {suggestion.appId}?
+          </span>
+          <Button size="sm" disabled={busy} onClick={onRevoke}>
+            {busy ? 'Revoking…' : 'Revoke'}
+          </Button>
+          <Button variant="outline" size="sm" disabled={busy} onClick={onKeep}>
+            Keep
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || anotherBusy}
+          onClick={onReview}
+          aria-label={`Review revoking ${suggestion.grant.id} from ${suggestion.appId}`}
+        >
+          Revoke
+        </Button>
+      )}
+    </li>
+  );
+}
+
+function controlKind(suggestion: EntitlementSuggestion): string {
+  switch (suggestion.grant.control) {
+    case 'egress-host':
+      return 'Network';
+    case 'mount':
+      return 'Mount';
+    case 'published-port':
+      return 'Port';
+    case 'resources':
+      return 'Resources';
+  }
 }
 
 function ModeSection() {

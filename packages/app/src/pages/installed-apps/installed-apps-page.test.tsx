@@ -39,7 +39,8 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('Notes+Sync');
     expect(html).toContain('v2.4.0');
     expect(html).toContain('AGPL-3.0');
-    expect(html).toContain('AGPL-3.0 · granted 2026-09-03');
+    expect(html).toContain('granted 2026-09-03');
+    expect(html).toContain('rounded bg-[var(--color-muted)]');
     expect(html).toContain('Running');
     expect(html).toContain('2 services');
     expect(html).toContain('web, sync');
@@ -88,7 +89,7 @@ describe('Installed Apps mock scenarios', () => {
     expect(html.match(/bg-\[var\(--color-primary\)\]/g)?.length).toBe(1);
   });
 
-  it('renders an accessible grant dialog with required controls locked and mounts selectable', () => {
+  it('renders an accessible grant dialog with grouped required controls and selectable mounts', () => {
     const html = renderToStaticMarkup(
       <GrantDialog
         prompt={{
@@ -96,7 +97,7 @@ describe('Installed Apps mock scenarios', () => {
           version: '2.4.0',
           license: 'AGPL-3.0',
           upgrade: false,
-          requiredGrantIds: ['egress:sync.example.com'],
+          requiredGrantIds: ['egress:sync.example.com', 'resources:runtime'],
           grants: [
             {
               id: 'egress:sync.example.com',
@@ -110,6 +111,12 @@ describe('Installed Apps mock scenarios', () => {
               value: { name: 'data', source: 'volume', guest: '/data', access: 'read-write' },
               approvedAt: '2026-09-03T09:30:00.000Z',
             },
+            {
+              id: 'resources:runtime',
+              control: 'resources',
+              value: { cpus: 1, memoryMib: 512, diskGib: 2 },
+              approvedAt: '2026-09-03T09:30:00.000Z',
+            },
           ],
         }}
         onCancel={() => {}}
@@ -120,10 +127,15 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('aria-labelledby="grant-dialog-title"');
     expect(html).toContain('aria-describedby="grant-dialog-description"');
-    expect(html).toContain('egress:sync.example.com · Required');
-    expect(html).toContain('mount:data · Optional mount');
-    expect(html.match(/type="checkbox"/g)).toHaveLength(2);
-    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    expect(html).toContain('notes-sync 2.4.0 (AGPL-3.0) asks for the controls below');
+    expect(html).toContain('Required');
+    expect(html).toContain('Mounts');
+    expect(html).toContain('egress:sync.example.com');
+    expect(html).toContain('mount:data');
+    expect(html).toContain('1 CPU · 512 MiB memory · 2 GiB disk');
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toContain('id="grant-mount:data"');
+    expect(html).not.toContain('disabled=""');
     expect(html).toContain('Grant and install');
   });
 });

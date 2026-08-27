@@ -91,16 +91,14 @@ export function InstalledAppCard({
         />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-        {item.entitlement ? (
-          <span>
-            {item.entitlement.license} · granted {item.entitlement.grantedAt.slice(0, 10)}
-          </span>
-        ) : (
-          <>
-            <span className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 text-micro font-medium">{app.license}</span>
-            <span>installed {app.installedAt.slice(0, 10)}</span>
-          </>
-        )}
+        <span className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 text-micro font-medium">
+          {item.entitlement?.license ?? app.license}
+        </span>
+        <span>
+          {item.entitlement
+            ? `granted ${item.entitlement.grantedAt.slice(0, 10)}`
+            : `installed ${app.installedAt.slice(0, 10)}`}
+        </span>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {app.controlsSummary.serviceCount > 1 ? (
