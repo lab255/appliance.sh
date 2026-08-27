@@ -68,10 +68,11 @@ the installed entry; the warning returns after 30 days. CLI automation must pass
 remembered time.
 
 For a manifest with `ui.type: web`, **Open** starts the app with the same
-`runtime run --detach --json` path used by the CLI, waits up to eight seconds
+`runtime run --detach --json` path used by the CLI, waits up to 15 seconds
 for the manifest's named `ui.port`, and creates one native window labelled
-`app-<appId>` and titled `<App> — Appliance`. Window size is remembered per
-app. The window is an Appliance-owned wrapper containing the app in a
+`app-<sanitized-appId>-<short-hash>` and titled `<App> — Appliance`. The hash
+keeps ids such as `a.b` and `a-b` distinct; the same label keys the remembered
+window size. The window is an Appliance-owned wrapper containing the app in a
 cross-origin iframe and a 28 px status strip:
 
 ```text
@@ -80,17 +81,21 @@ sandboxed · egress: 2 hosts allowed · port 20421
 
 The iframe keeps the app's `http://127.0.0.1:<published-port>` origin separate
 from the desktop origin. The wrapper installs a restrictive CSP whose
-`frame-src` names only that loopback origin. It does not inject scripts into or
-read content from the app. The host count comes from the installed effective
-Runtime policy (falling back to the recorded controls summary), and the strip
-refreshes while the window is open.
+`frame-src` names only that loopback origin. Desktop also denies top-level
+navigation away from that host/port and rejects `window.open`/`target=_blank`
+requests. It does not inject scripts into or read content from the app. The
+host count comes from the installed effective Runtime policy (falling back to
+the recorded controls summary), and the strip refreshes while the window is
+open.
 
 Closing an app window keeps its Runtime process running by default, matching
-`appliance runtime ps`; the native close policy also supports an explicit
-`stop-on-close` mode. A Desktop restart reconciles the Runtime registry but
-does not reopen app windows until the user asks. If the app exits or is stopped,
-its window becomes a plain **App exited** page with **Reopen**, and its Installed
-Apps card reports `Exited (N)` when the supervisor supplied an exit code.
+`appliance runtime ps`. The Rust window command has a `stop-on-close` parameter
+for future settings work, but it is not yet user-configurable and every current
+Desktop caller uses keep-running. A Desktop restart reconciles the Runtime
+registry but does not reopen app windows until the user asks. If the app exits
+or is stopped, its window becomes a plain **App exited** page with **Reopen**,
+and its Installed Apps card reports `Exited (N)` when the supervisor supplied
+an exit code.
 
 Manifests with no `ui` or with a non-web UI show **No UI** and a Logs action on
 their card. Their lifecycle remains available through `runtime ps`, `logs`, and
@@ -102,6 +107,7 @@ their card. Their lifecycle remains available through `runtime ps`, `logs`, and
 appliance runtime open Journal
 appliance runtime open Journal --target local
 appliance runtime open Journal --print
+appliance runtime open Journal --json
 ```
 
 `runtime open` starts a stopped app, waits for its UI port, then checks the
@@ -112,6 +118,14 @@ If Desktop is absent or the bounded IPC connection fails, the CLI opens the
 same loopback URL in the operating system's default browser. The rendezvous
 contains no app data or credentials and is mode `0600`; a stale file only
 causes the browser fallback.
+
+`--json` prints the resolved descriptor, chosen route, and the
+`metrics.appOpenTtv` context. Desktop completes that measurement on the iframe
+load event and records `app_open_ttv` (`cold`, `warm`, or `reopen`) plus
+`app_stop_ttx` in its platform log directory as `desktop-metrics.jsonl` (on
+macOS: `~/Library/Logs/sh.appliance.desktop/desktop-metrics.jsonl`). Targets
+are warm p95 ≤2 seconds, cold p95 ≤15 seconds, and stop-to-exited paint ≤2
+seconds.
 
 The current Runtime supports container bundles in the pooled VM. Binary and
 compound execution remain separate runtime work; their manifests can be stored
