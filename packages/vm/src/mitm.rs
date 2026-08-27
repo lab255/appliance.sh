@@ -178,7 +178,8 @@ pub fn configs(name: &str) -> Result<(Arc<ServerConfig>, Arc<ClientConfig>)> {
 }
 
 /// The client config used to re-originate TLS to the real upstream,
-/// validating against the webpki trust roots. Built once.
+/// validating against the webpki trust roots. Built once. This shared config
+/// deliberately offers only HTTP/1.1, including on the legacy broker path.
 pub fn client_config() -> Result<Arc<ClientConfig>> {
     static CFG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
     if let Some(c) = CFG.get() {
@@ -336,7 +337,9 @@ pub fn intercept<S: Read + Write>(
 
 /// Runtime-principal TLS observation. This path is intentionally separate
 /// from the legacy credential broker above: it preserves the HTTP/1.1 request
-/// and response bytes exactly and never calls capture/injection helpers.
+/// and response bytes exactly and never calls capture/injection helpers. It
+/// observes one request/response only; a keep-alive client's second request
+/// sees EOF when this function returns.
 pub fn intercept_observe<S: Read + Write>(
     _name: &str,
     runtime: &crate::egress::RuntimePolicy,
@@ -354,7 +357,8 @@ pub fn intercept_observe<S: Read + Write>(
     } = target;
     let server_conn = ServerConnection::new(server_cfg).context("server tls conn")?;
     let mut client_tls = StreamOwned::new(server_conn, client_tcp);
-    let head = read_http_head(&mut client_tls)?;
+    let head_bytes = read_http_head_bytes(&mut client_tls)?;
+    let head = String::from_utf8_lossy(&head_bytes).into_owned();
     let request_line = head.lines().next().unwrap_or_default();
     let mut request_parts = request_line.split_whitespace();
     let method = request_parts.next().unwrap_or_default();
@@ -381,17 +385,18 @@ pub fn intercept_observe<S: Read + Write>(
 
     // Byte-for-byte forwarding: unlike the broker path, do not add
     // Connection: close and do not inspect or rewrite any header/body.
-    up_tls.write_all(head.as_bytes())?;
+    up_tls.write_all(&head_bytes)?;
     let request_body = copy_request_body_count(&mut client_tls, &mut up_tls, &head)?;
     up_tls.flush()?;
 
-    let response_head = read_http_head(&mut up_tls)?;
+    let response_head_bytes = read_http_head_bytes(&mut up_tls)?;
+    let response_head = String::from_utf8_lossy(&response_head_bytes).into_owned();
     let status = response_head
         .lines()
         .next()
         .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|value| value.parse::<u16>().ok());
-    client_tls.write_all(response_head.as_bytes())?;
+    client_tls.write_all(&response_head_bytes)?;
     let response_body =
         copy_response_body_count(&mut up_tls, &mut client_tls, &response_head, method, status)?;
     client_tls.flush()?;
@@ -408,8 +413,8 @@ pub fn intercept_observe<S: Read + Write>(
             tls_version: tls_version.as_deref(),
             sni: Some(host),
             status,
-            bytes_in: Some((head.len() as u64).saturating_add(request_body)),
-            bytes_out: Some((response_head.len() as u64).saturating_add(response_body)),
+            bytes_in: Some((head_bytes.len() as u64).saturating_add(request_body)),
+            bytes_out: Some((response_head_bytes.len() as u64).saturating_add(response_body)),
             duration_ms: Some(started.elapsed().as_millis() as u64),
         },
     );
@@ -577,6 +582,13 @@ fn dial_upstream(host: &str, port: u16, validated: Option<SocketAddr>) -> Result
 
 /// Read an HTTP message head (through the blank line) from a stream.
 fn read_http_head<R: Read>(r: &mut R) -> Result<String> {
+    Ok(String::from_utf8_lossy(&read_http_head_bytes(r)?).into_owned())
+}
+
+/// Read an HTTP message head without decoding it. Runtime observation parses
+/// a lossy copy but forwards this original buffer so non-UTF-8 bytes are never
+/// rewritten to the UTF-8 replacement sequence.
+fn read_http_head_bytes<R: Read>(r: &mut R) -> Result<Vec<u8>> {
     let mut buf = Vec::with_capacity(512);
     let mut byte = [0u8; 1];
     loop {
@@ -592,7 +604,7 @@ fn read_http_head<R: Read>(r: &mut R) -> Result<String> {
             anyhow::bail!("request head too large");
         }
     }
-    Ok(String::from_utf8_lossy(&buf).into_owned())
+    Ok(buf)
 }
 
 /// Replace any Connection/Proxy-Connection headers with a single
@@ -723,6 +735,55 @@ fn read_line<R: Read>(reader: &mut R) -> Result<String> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    fn test_ca() -> Arc<Ca> {
+        let mut params = CertificateParams::new(Vec::new()).unwrap();
+        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        params
+            .distinguished_name
+            .push(DnType::CommonName, "Appliance Test CA");
+        params.key_usages = vec![
+            KeyUsagePurpose::KeyCertSign,
+            KeyUsagePurpose::DigitalSignature,
+        ];
+        let key = KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        Arc::new(Ca { cert, key })
+    }
+
+    #[test]
+    fn observation_head_keeps_non_utf8_bytes_for_forwarding() {
+        let input = b"GET / HTTP/1.1\r\nX-Opaque: \xff\r\n\r\n".to_vec();
+        let raw = read_http_head_bytes(&mut Cursor::new(input.clone())).unwrap();
+        assert_eq!(raw, input);
+        let parsed = String::from_utf8_lossy(&raw);
+        assert!(parsed.contains('\u{fffd}'));
+    }
+
+    #[test]
+    fn h2_only_client_is_refused_by_http11_inspection_server() {
+        let server_cfg = server_config(test_ca()).unwrap();
+        let mut client_cfg = ClientConfig::builder_with_provider(provider())
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(RootCertStore::empty())
+            .with_no_client_auth();
+        client_cfg.alpn_protocols = vec![b"h2".to_vec()];
+        let mut client = ClientConnection::new(
+            Arc::new(client_cfg),
+            ServerName::try_from("example.com").unwrap(),
+        )
+        .unwrap();
+        let mut server = ServerConnection::new(server_cfg).unwrap();
+
+        let mut hello = Vec::new();
+        client.write_tls(&mut hello).unwrap();
+        server.read_tls(&mut Cursor::new(hello)).unwrap();
+        assert!(matches!(
+            server.process_new_packets(),
+            Err(rustls::Error::NoApplicationProtocol)
+        ));
+    }
 
     #[test]
     fn force_close_replaces_existing_connection_header() {

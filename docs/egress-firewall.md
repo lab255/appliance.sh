@@ -647,8 +647,11 @@ and may contain multiple service-principal records for one compound app.
 
 Allowed HTTPS is inspected when `policy.mitm && allowed`; this runtime path is
 inspection-only and never calls credential capture/injection or rewrites HTTP
-bytes. It offers HTTP/1.1 ALPN only. A user may set `mitm: false` without
-weakening destination enforcement.
+bytes. It offers HTTP/1.1 ALPN only; the shared upstream TLS client config also
+limits the legacy credential broker to HTTP/1.1. Observation is deliberately
+single-request: after one request/response, a keep-alive client's second
+request sees EOF. A user may set `mitm: false` without weakening destination
+enforcement.
 
 App events are kept separately at
 `~/.appliance/runtime/<app>/egress-events.jsonl` as a newest-records 512 KiB
@@ -656,3 +659,8 @@ ring. Records contain timestamp, app/service/principal, decision and reason,
 host/port/transport, and—when observed—SNI, TLS version, HTTP method,
 query/fragment-stripped path, status, bytes in/out, and duration. Headers,
 cookies, authorization values, query values, and bodies are never persisted.
+
+Residual compatibility: the pooled VM guest-root `.2` still uses the
+development baked allowlist and legacy credential broker. TODO: add a future
+`runtime: true` VM-spec flag that switches `.2` to default-deny; this change
+does not introduce that flag.

@@ -570,8 +570,8 @@ fn forward_name(
             )
         };
     if inspect {
-        match crate::mitm::configs(name) {
-            Ok((server_cfg, client_cfg)) => {
+        match inspection_configs(name, context, host, port, &ext) {
+            Ok(Some((server_cfg, client_cfg))) => {
                 // Replay the peeked ClientHello into rustls, which drives
                 // the handshake from the first byte.
                 let client = Prefixed::new(head, ext.clone());
@@ -597,12 +597,8 @@ fn forward_name(
                 ext.mark_ext_fin();
                 return;
             }
-            Err(_) if context.is_runtime() => {
-                log_deny(context, name, host, port, "inspection-unavailable");
-                ext.abort();
-                return;
-            }
-            Err(_) => {}
+            Err(()) => return,
+            Ok(None) => {}
         }
     }
 
@@ -627,6 +623,41 @@ fn forward_name(
         }
         Err(_) => ext.abort(),
     }
+}
+
+type InspectionConfigs = (
+    std::sync::Arc<rustls::ServerConfig>,
+    std::sync::Arc<rustls::ClientConfig>,
+);
+
+/// Runtime inspection cannot degrade to a blind tunnel when CA/config
+/// material is unavailable. Legacy retains its historical blind fallback.
+fn inspection_configs(
+    name: &str,
+    context: &egress::PolicyContext,
+    host: &str,
+    port: u16,
+    ext: &BridgeStream,
+) -> std::result::Result<Option<InspectionConfigs>, ()> {
+    match crate::mitm::configs(name) {
+        Ok(configs) => Ok(Some(configs)),
+        Err(_) if context.is_runtime() => {
+            abort_inspection_unavailable(context, name, host, port, ext);
+            Err(())
+        }
+        Err(_) => Ok(None),
+    }
+}
+
+fn abort_inspection_unavailable(
+    context: &egress::PolicyContext,
+    name: &str,
+    host: &str,
+    port: u16,
+    ext: &BridgeStream,
+) {
+    log_deny(context, name, host, port, "inspection-unavailable");
+    ext.abort();
 }
 
 /// Forward an allowed raw-IP flow (a public-only hatch). Nothing was
@@ -993,6 +1024,19 @@ mod tests {
         }
     }
 
+    fn runtime_context(app: &str) -> egress::PolicyContext {
+        egress::PolicyContext::Runtime(egress::RuntimePolicy {
+            version: 1,
+            app: app.to_string(),
+            service: None,
+            vm: "appliance-runtime".to_string(),
+            principal: app.to_string(),
+            source: Ipv4Addr::new(192, 168, 127, 10),
+            policy: policy(&["example.com"], true),
+            allow_ports: std::collections::BTreeMap::from([("example.com".to_string(), vec![443])]),
+        })
+    }
+
     /// Build a minimal but valid TLS ClientHello record carrying `sni`.
     fn client_hello(sni: &str) -> Vec<u8> {
         // server_name extension body.
@@ -1345,6 +1389,31 @@ mod tests {
         assert_eq!(deny.port, 443);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unavailable_runtime_ca_aborts_and_logs_fail_closed() {
+        crate::egress::with_runtime_test_root("ca-unavailable", |_root| {
+            let name = "runtime-ca-unavailable-test";
+            let vm_dir = crate::spec::VmPaths::for_name(name).dir;
+            let _ = std::fs::remove_dir_all(&vm_dir);
+            let _ = std::fs::remove_file(&vm_dir);
+            std::fs::create_dir_all(vm_dir.parent().unwrap()).unwrap();
+            // A regular file where the CA directory must be is a portable,
+            // deterministic unwritable-directory failure.
+            std::fs::write(&vm_dir, b"not a directory").unwrap();
+            let context = runtime_context("journal-ca-failure");
+            let (probe, ext) = crate::netstack::testkit::bridge(&[], true);
+            assert!(inspection_configs(name, &context, "example.com", 443, &ext).is_err());
+            assert!(probe.aborted());
+            let events = crate::traffic::tail_runtime("journal-ca-failure", 10);
+            let denied = events.last().expect("inspection failure log");
+            assert_eq!(denied.decision, "deny");
+            assert_eq!(denied.principal.as_deref(), Some("journal-ca-failure"));
+            assert_eq!(denied.reason.as_deref(), Some("inspection-unavailable"));
+
+            std::fs::remove_file(vm_dir).unwrap();
+        });
     }
 
     #[test]

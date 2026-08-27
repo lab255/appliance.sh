@@ -403,6 +403,17 @@ pub(crate) mod testkit {
         pub fn aborted(&self) -> bool {
             self.0.lock().map(|b| b.aborted).unwrap_or(false)
         }
+
+        pub fn ext_finished(&self) -> bool {
+            self.0.lock().map(|b| b.ext_fin).unwrap_or(false)
+        }
+
+        pub fn ext_bytes(&self) -> Vec<u8> {
+            self.0
+                .lock()
+                .map(|b| b.ext_to_guest.iter().copied().collect())
+                .unwrap_or_default()
+        }
     }
 
     /// A `(probe, ext)` pair for an established terminated flow carrying

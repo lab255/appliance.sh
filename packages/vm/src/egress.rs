@@ -21,12 +21,13 @@
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::SystemTime;
 
 use crate::mitm;
 use crate::spec::{NetLink, VmPaths};
@@ -112,6 +113,31 @@ struct RuntimePolicyFile {
     app: String,
     principals: Vec<RuntimePolicy>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RuntimeFileStamp {
+    modified: Option<SystemTime>,
+    len: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+
+#[derive(Debug, Clone)]
+struct CachedRuntimeFile {
+    stamp: RuntimeFileStamp,
+    policies: Option<Vec<RuntimePolicy>>,
+}
+
+#[derive(Debug, Default)]
+struct RuntimePolicyCache {
+    root: PathBuf,
+    files: BTreeMap<PathBuf, CachedRuntimeFile>,
+}
+
+static RUNTIME_POLICY_CACHE: OnceLock<Mutex<RuntimePolicyCache>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) static RUNTIME_ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// The selected policy context. Only the VM's historical `.2` lease may use
 /// `Legacy`; all other addresses are runtime principals and fail closed when
@@ -412,8 +438,13 @@ pub fn save_runtime_policy(runtime: &RuntimePolicy) -> Result<()> {
     let path = runtime_policy_path(&runtime.app)?;
     let parent = path.parent().context("runtime policy parent")?;
     std::fs::create_dir_all(parent)?;
-    let mut principals = load_runtime_file(&path)
-        .unwrap_or_default()
+    let existing = if path.exists() {
+        load_runtime_file(&path)
+            .with_context(|| format!("refuse to replace invalid {}", path.display()))?
+    } else {
+        Vec::new()
+    };
+    let mut principals = existing
         .into_iter()
         .filter(|existing| existing.principal != runtime.principal)
         .collect::<Vec<_>>();
@@ -428,6 +459,7 @@ pub fn save_runtime_policy(runtime: &RuntimePolicy) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(&stored)?;
     write_private(&tmp, &bytes)?;
     std::fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
+    invalidate_runtime_policy_cache(&path);
     Ok(())
 }
 
@@ -473,22 +505,125 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+fn runtime_file_stamp(path: &Path) -> Option<RuntimeFileStamp> {
+    let metadata = std::fs::metadata(path).ok()?;
+    #[cfg(unix)]
+    use std::os::unix::fs::MetadataExt;
+    Some(RuntimeFileStamp {
+        modified: metadata.modified().ok(),
+        len: metadata.len(),
+        #[cfg(unix)]
+        inode: metadata.ino(),
+    })
+}
+
+fn runtime_cache() -> &'static Mutex<RuntimePolicyCache> {
+    RUNTIME_POLICY_CACHE.get_or_init(|| Mutex::new(RuntimePolicyCache::default()))
+}
+
+fn invalidate_runtime_policy_cache(path: &Path) {
+    let mut cache = runtime_cache()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    cache.files.remove(path);
+}
+
+#[cfg(test)]
+pub(crate) fn clear_runtime_policy_cache() {
+    let mut cache = runtime_cache()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    *cache = RuntimePolicyCache::default();
+}
+
+#[cfg(test)]
+pub(crate) fn with_runtime_test_root<T>(label: &str, test: impl FnOnce(&Path) -> T) -> T {
+    struct Restore {
+        old: Option<std::ffi::OsString>,
+        root: PathBuf,
+    }
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            if let Some(old) = self.old.take() {
+                std::env::set_var("APPLIANCE_RUNTIME_ROOT", old);
+            } else {
+                std::env::remove_var("APPLIANCE_RUNTIME_ROOT");
+            }
+            clear_runtime_policy_cache();
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    let _lock = RUNTIME_ENV_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    let root = std::env::temp_dir().join(format!(
+        "appliance-runtime-{label}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let restore = Restore {
+        old: std::env::var_os("APPLIANCE_RUNTIME_ROOT"),
+        root: root.clone(),
+    };
+    std::env::set_var("APPLIANCE_RUNTIME_ROOT", &root);
+    clear_runtime_policy_cache();
+    let result = test(&root);
+    drop(restore);
+    result
+}
+
 fn all_runtime_policies() -> Vec<RuntimePolicy> {
-    let Ok(entries) = std::fs::read_dir(runtime_root()) else {
+    let root = runtime_root();
+    let mut cache = runtime_cache()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if cache.root != root {
+        cache.root = root.clone();
+        cache.files.clear();
+    }
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        cache.files.clear();
         return Vec::new();
     };
-    entries
-        .flatten()
-        .filter_map(|entry| {
-            let app = entry.file_name().to_string_lossy().into_owned();
-            let policies = load_runtime_file(&entry.path().join("effective.json")).ok()?;
-            policies
-                .iter()
-                .all(|runtime| runtime.app == app)
-                .then_some(policies)
-        })
-        .flatten()
-        .collect()
+    let mut seen = BTreeSet::new();
+    let mut policies = Vec::new();
+    for entry in entries.flatten() {
+        let app = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path().join("effective.json");
+        let Some(stamp) = runtime_file_stamp(&path) else {
+            continue;
+        };
+        seen.insert(path.clone());
+        let cached = cache
+            .files
+            .get(&path)
+            .filter(|cached| cached.stamp == stamp);
+        let loaded = if let Some(cached) = cached {
+            cached.policies.clone()
+        } else {
+            let loaded = load_runtime_file(&path)
+                .ok()
+                .filter(|items| items.iter().all(|runtime| runtime.app == app));
+            cache.files.insert(
+                path,
+                CachedRuntimeFile {
+                    stamp,
+                    policies: loaded.clone(),
+                },
+            );
+            loaded
+        };
+        if let Some(mut loaded) = loaded {
+            policies.append(&mut loaded);
+        }
+    }
+    cache.files.retain(|path, _| seen.contains(path));
+    policies
 }
 
 pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<RuntimePolicy> {
@@ -500,6 +635,10 @@ pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<Runtime
 }
 
 pub fn policy_for(vm: &str, source: Ipv4Addr) -> PolicyContext {
+    // Residual compatibility: pooled guest-root .2 retains the legacy baked
+    // dev allowlist and credential broker.
+    // TODO(runtime-spec): a future runtime:true VmSpec flag must switch .2
+    // to a default-deny runtime context instead.
     if source == crate::netstack::GUEST_IP {
         return PolicyContext::Legacy(netstack_policy(vm));
     }
@@ -1561,6 +1700,24 @@ mod tests {
         .to_string()
     }
 
+    fn runtime_policy(app: &str, source: Ipv4Addr, port: u16) -> RuntimePolicy {
+        RuntimePolicy {
+            version: 1,
+            app: app.to_string(),
+            service: None,
+            vm: "appliance-runtime".to_string(),
+            principal: app.to_string(),
+            source,
+            policy: EgressPolicy {
+                default: Action::Deny,
+                allow: vec!["example.com".to_string()],
+                deny: Vec::new(),
+                mitm: true,
+            },
+            allow_ports: BTreeMap::from([("example.com".to_string(), vec![port])]),
+        }
+    }
+
     #[test]
     fn runtime_policy_is_default_deny_and_hostname_only() {
         let runtime = parse_runtime_policy(&runtime_json(&["*.Example.COM."], true)).unwrap();
@@ -1594,6 +1751,91 @@ mod tests {
         assert_eq!(policy.default, Action::Deny);
         assert!(!policy.allows("api.openai.com"));
         assert!(!policy.mitm);
+    }
+
+    #[test]
+    fn runtime_policy_dispatch_round_trip_duplicates_and_port_gate() {
+        with_runtime_test_root("dispatch", |_root| {
+            let source = Ipv4Addr::new(192, 168, 127, 10);
+            let runtime = runtime_policy("journal", source, 443);
+            save_runtime_policy(&runtime).unwrap();
+
+            let loaded = runtime_policy_for_principal("appliance-runtime", "journal").unwrap();
+            assert_eq!(loaded, runtime, "saved policy must round-trip");
+            assert!(matches!(
+                policy_for("appliance-runtime", crate::netstack::GUEST_IP),
+                PolicyContext::Legacy(policy) if policy.allows("api.openai.com")
+            ));
+            assert!(matches!(
+                policy_for("appliance-runtime", source),
+                PolicyContext::Runtime(found) if found == runtime
+            ));
+            assert!(matches!(
+                policy_for("appliance-runtime", Ipv4Addr::new(192, 168, 127, 11)),
+                PolicyContext::Unknown { .. }
+            ));
+
+            // The host is allowlisted but only for 443. The executor must
+            // reject the port-80 flow before DNS/dial and attribute the log.
+            let request = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
+            let (probe, ext) = crate::netstack::testkit::bridge(request, true);
+            crate::netstack::guard::serve_outbound(
+                "appliance-runtime",
+                source,
+                "93.184.216.34:80".parse().unwrap(),
+                ext,
+                &crate::netstack::guard::Resolved::new(),
+            );
+            assert!(!probe.aborted(), "plain HTTP denial returns a 403");
+            assert!(probe.ext_finished());
+            assert!(probe.ext_bytes().starts_with(b"HTTP/1.1 403 Forbidden"));
+            let events = crate::traffic::tail_runtime("journal", 10);
+            let denied = events.last().expect("runtime deny log");
+            assert_eq!(denied.decision, "deny");
+            assert_eq!(denied.principal.as_deref(), Some("journal"));
+            assert_eq!(denied.host, "example.com");
+            assert_eq!(denied.port, 80);
+            assert_eq!(denied.reason.as_deref(), Some("policy"));
+
+            // An external controller may atomically replace the effective
+            // file. The mtime/inode cache must observe the new grant without
+            // reparsing unchanged files on every flow.
+            let mut replacement = runtime.clone();
+            replacement.policy.mitm = false;
+            let policy_path = runtime_policy_path("journal").unwrap();
+            let replacement_path = policy_path.with_extension("replacement");
+            write_private(
+                &replacement_path,
+                serde_json::to_vec_pretty(&replacement).unwrap().as_slice(),
+            )
+            .unwrap();
+            std::fs::rename(replacement_path, &policy_path).unwrap();
+            assert!(matches!(
+                policy_for("appliance-runtime", source),
+                PolicyContext::Runtime(found) if !found.policy.mitm
+            ));
+
+            // A duplicate (vm, source) is ambiguous and therefore unknown.
+            save_runtime_policy(&runtime_policy("journal-copy", source, 443)).unwrap();
+            assert!(matches!(
+                policy_for("appliance-runtime", source),
+                PolicyContext::Unknown { .. }
+            ));
+        });
+    }
+
+    #[test]
+    fn save_runtime_policy_refuses_corrupt_existing_file() {
+        with_runtime_test_root("corrupt-save", |root| {
+            let runtime = runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443);
+            let path = root.join("journal/effective.json");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, b"{ stale and corrupt").unwrap();
+
+            let error = save_runtime_policy(&runtime).unwrap_err();
+            assert!(error.to_string().contains("refuse to replace invalid"));
+            assert_eq!(std::fs::read(&path).unwrap(), b"{ stale and corrupt");
+        });
     }
 
     #[test]

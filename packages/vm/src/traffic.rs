@@ -114,7 +114,7 @@ pub fn record(name: &str, host: &str, port: u16, method: &str, path: Option<&str
         bytes_out: None,
         duration_ms: None,
     };
-    append_event(&events_path(name), &ev);
+    append_legacy_event(&events_path(name), &ev);
 }
 
 /// Record an app-scoped decision. Runtime records never share the VM log and
@@ -147,7 +147,7 @@ pub fn record_runtime(
         bytes_out: details.bytes_out,
         duration_ms: details.duration_ms,
     };
-    append_event(&runtime_events_path(&runtime.app), &ev);
+    append_runtime_event(&runtime_events_path(&runtime.app), &ev);
 }
 
 pub fn record_unknown(
@@ -177,7 +177,7 @@ pub fn record_unknown(
         bytes_out: None,
         duration_ms: None,
     };
-    append_event(&events_path(name), &ev);
+    append_legacy_event(&events_path(name), &ev);
 }
 
 pub fn sanitize_path(target: &str) -> String {
@@ -195,38 +195,86 @@ pub fn sanitize_path(target: &str) -> String {
     }
 }
 
-fn append_event(path: &std::path::Path, event: &TrafficEvent) {
+fn serialized_event(event: &TrafficEvent) -> Option<String> {
+    let line = serde_json::to_string(event).ok()?;
+    (line.len() < MAX_EVENTS_BYTES as usize).then_some(line)
+}
+
+fn with_log_lock(operation: impl FnOnce()) {
     static LOG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let Ok(_guard) = LOG_LOCK.get_or_init(|| Mutex::new(())).lock() else {
         return;
     };
-    let Ok(line) = serde_json::to_string(event) else {
+    operation();
+}
+
+/// Preserve the historical VM log behavior: cheap O_APPEND writes and, once
+/// oversized, discard the oldest half before the next append.
+fn append_legacy_event(path: &std::path::Path, event: &TrafficEvent) {
+    let Some(line) = serialized_event(event) else {
         return;
     };
-    if line.len() + 1 > MAX_EVENTS_BYTES as usize {
-        return;
-    }
-    if let Some(parent) = path.parent() {
-        if std::fs::create_dir_all(parent).is_err() {
-            return;
+    with_log_lock(|| {
+        if std::fs::metadata(path).is_ok_and(|metadata| metadata.len() > MAX_EVENTS_BYTES) {
+            let _ = halve_log(path);
         }
+        let _ = append_line(path, &line);
+    });
+}
+
+/// Runtime logs append in the common case and compact to the exact ring cap
+/// only after the append crosses 512 KiB.
+fn append_runtime_event(path: &std::path::Path, event: &TrafficEvent) {
+    let Some(line) = serialized_event(event) else {
+        return;
+    };
+    with_log_lock(|| {
+        if append_line(path, &line).is_ok_and(|len| len > MAX_EVENTS_BYTES) {
+            let _ = compact_runtime_log(path);
+        }
+    });
+}
+
+fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<u64> {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
     }
-    let mut lines: Vec<String> = std::fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
-        .filter(|existing| !existing.trim().is_empty())
-        .map(str::to_string)
-        .collect();
-    lines.push(line);
-    let mut bytes = lines.iter().map(|item| item.len() + 1).sum::<usize>();
-    while bytes > MAX_EVENTS_BYTES as usize && !lines.is_empty() {
-        bytes -= lines.remove(0).len() + 1;
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    let rendered = format!("{}\n", lines.join("\n"));
+    let mut file = options.open(path)?;
+    writeln!(file, "{line}")?;
+    Ok(file.metadata()?.len())
+}
+
+fn halve_log(path: &std::path::Path) -> std::io::Result<()> {
+    let raw = std::fs::read(path)?;
+    let midpoint = raw.len() / 2;
+    let keep_from = raw[midpoint..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(raw.len(), |offset| midpoint + offset + 1);
+    write_log_file(path, &raw[keep_from..])
+}
+
+fn compact_runtime_log(path: &std::path::Path) -> std::io::Result<()> {
+    let raw = std::fs::read(path)?;
+    if raw.len() <= MAX_EVENTS_BYTES as usize {
+        return Ok(());
+    }
+    let floor = raw.len() - MAX_EVENTS_BYTES as usize;
+    let keep_from = raw[floor..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(raw.len(), |offset| floor + offset + 1);
     let tmp = path.with_extension("jsonl.tmp");
-    if write_log_file(&tmp, rendered.as_bytes()).is_ok() {
-        let _ = std::fs::rename(tmp, path);
-    }
+    write_log_file(&tmp, &raw[keep_from..])?;
+    std::fs::rename(tmp, path)
 }
 
 #[cfg(unix)]
@@ -247,10 +295,19 @@ fn write_log_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::write(path, bytes)
 }
 
-/// Drop the oldest half of the log, keeping the most recent lines.
 /// Return the most recent `limit` events, oldest-first.
 pub fn tail(name: &str, limit: usize) -> Vec<TrafficEvent> {
-    let Ok(raw) = std::fs::read_to_string(events_path(name)) else {
+    tail_path(&events_path(name), limit)
+}
+
+/// Return the most recent app-scoped runtime events, oldest-first.
+#[cfg(test)]
+pub fn tail_runtime(app: &str, limit: usize) -> Vec<TrafficEvent> {
+    tail_path(&runtime_events_path(app), limit)
+}
+
+fn tail_path(path: &std::path::Path, limit: usize) -> Vec<TrafficEvent> {
+    let Ok(raw) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
     let mut events: Vec<TrafficEvent> = raw
@@ -456,6 +513,40 @@ mod tests {
             bytes_out: None,
             duration_ms: None,
         }
+    }
+
+    #[test]
+    fn legacy_halves_only_when_oversized_and_runtime_compacts_after_append() {
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-traffic-ring-{}-{}",
+            std::process::id(),
+            now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let seed = vec![b'x'; MAX_EVENTS_BYTES as usize + 100];
+
+        let legacy = dir.join("legacy.jsonl");
+        std::fs::write(&legacy, &seed).unwrap();
+        append_legacy_event(&legacy, &ev("legacy.test", 443, "allow", 1));
+        let legacy_len = std::fs::metadata(&legacy).unwrap().len();
+        assert!(legacy_len < MAX_EVENTS_BYTES, "legacy log was halved");
+
+        let runtime = dir.join("runtime.jsonl");
+        let mut runtime_seed = Vec::with_capacity(seed.len());
+        while runtime_seed.len() <= MAX_EVENTS_BYTES as usize {
+            runtime_seed.extend_from_slice(b"{}\n");
+        }
+        std::fs::write(&runtime, runtime_seed).unwrap();
+        let latest = ev("runtime.test", 443, "deny", 2);
+        append_runtime_event(&runtime, &latest);
+        assert!(std::fs::metadata(&runtime).unwrap().len() <= MAX_EVENTS_BYTES);
+        let raw = std::fs::read_to_string(&runtime).unwrap();
+        assert_eq!(
+            serde_json::from_str::<TrafficEvent>(raw.lines().last().unwrap()).unwrap(),
+            latest
+        );
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
