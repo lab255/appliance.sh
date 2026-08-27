@@ -1684,6 +1684,13 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 if [ -z "$TASK_PID" ]; then
+  if [ -f "$STATE/exit-code" ]; then
+    CODE=$(cat "$STATE/exit-code" 2>/dev/null || echo 1)
+    cleanup_resources
+    echo exited > "$STATE/desired"
+    printf '{"state":"exited","exitCode":%s}\n' "$CODE"
+    exit 0
+  fi
   cleanup_resources
   echo '{"state":"failed","message":"runtime task did not start"}'
   exit 2
@@ -3341,6 +3348,7 @@ mod tests {
         assert!(supervisor.contains("cp -a \"$SOURCE/.\" \"$STAGED/\""));
         assert!(supervisor.contains("chmod 0755 \"$STAGED/$ENTRYPOINT\""));
         assert!(supervisor.contains("--rootfs --cwd \"$BINARY_CWD\" \"$STAGED\" \"$CID\" \"/$ENTRYPOINT\""));
+        assert!(supervisor.contains("printf '{\"state\":\"exited\",\"exitCode\":%s}\\n' \"$CODE\""));
         assert_eq!(
             supervisor
                 .matches(

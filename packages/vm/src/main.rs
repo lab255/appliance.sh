@@ -2177,6 +2177,25 @@ mod tests {
     }
 
     #[test]
+    fn runtime_binary_plan_round_trips_the_tagged_wire_variant() {
+        let mut plan = valid_runtime_plan();
+        plan.workload = RuntimePlanWorkload::Binary {
+            target: RuntimeBinaryTarget {
+                path: "payload/dashboard/linux-arm64".to_string(),
+                entrypoint: "bin/dashboard".to_string(),
+                args: vec!["--exit-code".to_string(), "7".to_string()],
+                env: std::collections::BTreeMap::new(),
+                cwd: ".".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&plan).unwrap();
+        assert!(json.contains("\"kind\":\"binary\""));
+        assert!(json.contains("\"target\":{"));
+        let decoded: RuntimePlan = serde_json::from_str(&json).unwrap();
+        validate_runtime_plan(&decoded).unwrap();
+    }
+
+    #[test]
     fn up_readiness_needs_marker_and_terminal_ready_phase() {
         use bringup::Phase;
         // The happy exit: Ready phase + marker on disk.

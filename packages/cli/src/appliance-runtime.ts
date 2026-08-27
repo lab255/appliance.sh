@@ -264,11 +264,16 @@ async function runtimeRun(args: string[]): Promise<void> {
     fail(`pooled VM '${RUNTIME_POOL_VM}' failed to become core-ready`, 1);
   }
   const started = vmJson(['runtime', 'start', RUNTIME_POOL_VM, JSON.stringify(plan)]);
-  if (started.state !== 'running') {
+  if (started.state !== 'running' && started.state !== 'exited') {
     updateRuntimeRecord(plan.appId, { state: 'failed', exitCode: numberOrUndefined(started.exitCode) });
     fail(`runtime supervisor did not start '${plan.appId}': ${String(started.message ?? 'unknown error')}`, 1);
   }
-  updateRuntimeRecord(plan.appId, { state: 'running', poolRestartPending: false });
+  const initialExitCode = started.state === 'exited' ? (numberOrUndefined(started.exitCode) ?? 1) : undefined;
+  updateRuntimeRecord(plan.appId, {
+    state: initialExitCode === undefined ? 'running' : 'exited',
+    exitCode: initialExitCode,
+    poolRestartPending: false,
+  });
   for (const port of hostPorts) {
     console.log(`${chalk.green('✓')} ${port.name}: http://127.0.0.1:${port.host} → ${principalIp}:${port.guest}/tcp`);
   }
