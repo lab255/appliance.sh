@@ -445,6 +445,11 @@ async function main(): Promise<void> {
         await runRuntimeSearch(args.slice(2));
         return;
       }
+      if (verb === 'open') {
+        const { runRuntimeOpen } = await import('./appliance-runtime-open.js');
+        await runRuntimeOpen(args.slice(2));
+        return;
+      }
       const { runRuntimeCommand } = await import('./appliance-runtime.js');
       await runRuntimeCommand(verb, args.slice(2));
       return;

@@ -13,6 +13,7 @@ import type {
   HostConfig,
   LocalPreflightCheck,
   InstalledRuntimeApp,
+  RuntimeAppWindowDescriptor,
 } from '@appliance.sh/app';
 import type { InstalledApp } from '@appliance.sh/sdk';
 
@@ -39,6 +40,8 @@ import type { InstalledApp } from '@appliance.sh/sdk';
 //   catalogue-loading    fetch pending / verification loading state
 //   catalogue-stale expired-but-previously-verified read-only catalogue
 //   installed-apps       populated Installed Apps page
+//   app-window           dedicated running-app window
+//   app-exited           dedicated app-exited window
 //   installed-apps-empty empty Installed Apps page
 //   unknown-publisher    unsigned app requiring the warning dialog
 //   install-from-file    file-picker installation path
@@ -64,6 +67,8 @@ type Scenario =
   | 'catalogue-loading'
   | 'installed-apps'
   | 'installed-apps-empty'
+  | 'app-window'
+  | 'app-exited'
   | 'unknown-publisher'
   | 'install-from-file';
 
@@ -85,6 +90,8 @@ export function mockHostEnabled(): boolean {
         scenario === 'user-mode-no-vm' ||
         scenario === 'installed-apps' ||
         scenario === 'installed-apps-empty' ||
+        scenario === 'app-window' ||
+        scenario === 'app-exited' ||
         scenario === 'unknown-publisher' ||
         scenario === 'install-from-file'
       ) {
@@ -113,6 +120,8 @@ function scenario(): Scenario {
     s === 'catalogue-loading' ||
     s === 'installed-apps' ||
     s === 'installed-apps-empty' ||
+    s === 'app-window' ||
+    s === 'app-exited' ||
     s === 'unknown-publisher' ||
     s === 'install-from-file'
     ? s
@@ -424,7 +433,12 @@ function mockInstalledApp(
     source: `https://${appId}.appliance.zip/`,
     verification: { signature: 'valid', indexBound: { generation: 7 } },
     controlsSummary: {
-      egressHosts: appId === 'dashboard' ? [] : ['api.example.com'],
+      egressHosts:
+        appId === 'dashboard'
+          ? []
+          : appId === 'journal'
+            ? ['sync.example.com', 'updates.example.com']
+            : ['api.example.com'],
       mounts: [],
       publishedPorts: [{ name: 'web', guest: 8080, protocol: 'tcp' }],
       resources: { cpus: 1, memoryMib: 512 },
@@ -448,16 +462,29 @@ function initialInstalledApps(): InstalledRuntimeApp[] {
         }),
         state: 'stopped',
         urls: [],
+        ui: { type: 'none' },
       },
     ];
   }
   return [
-    { app: mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'), state: 'running', urls: ['http://127.0.0.1:8443'] },
-    { app: mockInstalledApp('dashboard', 'Dashboard', '0.9.1', 'Apache-2.0'), state: 'stopped', urls: [] },
+    {
+      app: mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'),
+      state: scenario() === 'app-exited' ? 'exited' : 'running',
+      ...(scenario() === 'app-exited' ? { exitCode: 17 } : {}),
+      urls: scenario() === 'app-exited' ? [] : ['http://127.0.0.1:8443'],
+      ui: { type: 'web', port: 'web', path: '/' },
+    },
+    {
+      app: mockInstalledApp('dashboard', 'Dashboard', '0.9.1', 'Apache-2.0'),
+      state: 'stopped',
+      urls: [],
+      ui: { type: 'none' },
+    },
     {
       app: mockInstalledApp('notes-sync', 'Notes+Sync', '2.4.0', 'AGPL-3.0'),
       state: 'running',
       urls: ['http://127.0.0.1:8445'],
+      ui: { type: 'web', port: 'web', path: '/' },
     },
   ];
 }
@@ -577,7 +604,7 @@ export function createMockHost(): ConsoleHost {
         if (next.publisher.tier === 'unknown') next.lastWarnedAt = new Date().toISOString();
         installedApps = [
           ...installedApps.filter((item) => item.app.appId !== next.appId),
-          { app: next, state: 'stopped', urls: [] },
+          { app: next, state: 'stopped', urls: [], ui: { type: 'none' } },
         ];
         return next;
       },
@@ -597,6 +624,22 @@ export function createMockHost(): ConsoleHost {
         item.state = 'running';
         item.urls = ['http://127.0.0.1:8443'];
         return { appId: item.app.appId, urls: item.urls };
+      },
+      async openWindow(app, target) {
+        const item = installedApps.find((candidate) => candidate.app.appId === app);
+        if (!item) throw new Error(`Mock installed app not found: ${app}`);
+        const descriptor = mockAppWindowDescriptor(item, target);
+        window.open(
+          `/?mock-host&scenario=${item.state === 'exited' ? 'app-exited' : 'app-window'}&app-window=${encodeMockAppWindowDescriptor(descriptor)}`,
+          '_blank',
+          'popup,width=1100,height=720'
+        );
+        return descriptor;
+      },
+      async windowStatus(app, target) {
+        const item = installedApps.find((candidate) => candidate.app.appId === app);
+        if (!item) throw new Error(`Mock installed app not found: ${app}`);
+        return mockAppWindowDescriptor(item, target);
       },
       async stop(app) {
         const item = installedApps.find((candidate) => candidate.app.appId === app);
@@ -1069,6 +1112,28 @@ export function createMockHost(): ConsoleHost {
       },
     },
   };
+}
+
+function mockAppWindowDescriptor(item: InstalledRuntimeApp, target: string): RuntimeAppWindowDescriptor {
+  return {
+    appId: item.app.appId,
+    target,
+    name: item.app.name,
+    version: item.app.version,
+    license: item.app.license,
+    ui: item.ui,
+    state: item.state,
+    ...(item.exitCode == null ? {} : { exitCode: item.exitCode }),
+    ...(item.urls[0] ? { url: item.urls[0], hostPort: Number(new URL(item.urls[0]).port) } : {}),
+    egressHostCount: item.app.controlsSummary.egressHosts.length,
+  };
+}
+
+function encodeMockAppWindowDescriptor(descriptor: RuntimeAppWindowDescriptor): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(descriptor));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // MicroVM mock state (module-level: survives SPA navigation, resets on

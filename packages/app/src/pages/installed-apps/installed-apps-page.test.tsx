@@ -28,6 +28,7 @@ function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntime
     },
     state: 'running',
     urls: ['http://127.0.0.1:8443'],
+    ui: { type: 'web', port: 'web', path: '/' },
     ...overrides,
   };
 }
@@ -45,8 +46,19 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('egress: 1 host');
     expect(html).toContain('aria-label="Open Notes+Sync"');
     expect(html).toContain('aria-label="Stop Notes+Sync"');
+    expect(html).toContain('aria-label="Logs for Notes+Sync"');
     expect(html).toContain('Open');
     expect(html).toContain('Stop');
+  });
+
+  it('renders exited and no-UI card states without an Open action', () => {
+    const html = renderToStaticMarkup(
+      <InstalledAppCard item={fixture({ state: 'exited', exitCode: 7, urls: [], ui: { type: 'native' } })} />
+    );
+    expect(html).toContain('Exited (7)');
+    expect(html).toContain('No UI');
+    expect(html).toContain('Logs');
+    expect(html).not.toContain('aria-label="Open Notes+Sync"');
   });
 
   it('renders installed-apps-empty', () => {

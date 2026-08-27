@@ -115,4 +115,20 @@ describe('mock host installed-app scenarios', () => {
       host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm', { acceptUnknownPublisher: true })
     ).resolves.toMatchObject({ publisher: { tier: 'unknown' } });
   });
+
+  it('provides running and exited dedicated-window scenarios', async () => {
+    const running = await hostFor('app-window');
+    const runningApp = (await running.installedApps!.list('microvm'))[0]!;
+    expect(runningApp).toMatchObject({ state: 'running', ui: { type: 'web', port: 'web' } });
+    await expect(running.installedApps!.windowStatus('journal', 'microvm')).resolves.toMatchObject({
+      appId: 'journal',
+      state: 'running',
+      hostPort: 8443,
+      egressHostCount: 2,
+    });
+
+    sessionStorage.clear();
+    const exited = await hostFor('app-exited');
+    expect((await exited.installedApps!.list('microvm'))[0]).toMatchObject({ state: 'exited', exitCode: 17 });
+  });
 });

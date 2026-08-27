@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities granted to the main window: invoke the backend commands, open external URLs, send notifications, drive the bundled appliance CLI, self-update from the signed update feed.",
-  "windows": ["main"],
+  "windows": ["main", "app-*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

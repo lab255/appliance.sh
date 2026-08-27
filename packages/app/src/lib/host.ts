@@ -91,8 +91,10 @@ export interface CatalogueHost {
 
 export interface InstalledRuntimeApp {
   app: InstalledApp;
-  state: 'running' | 'stopped' | 'starting' | 'failed';
+  state: 'running' | 'stopped' | 'starting' | 'exited' | 'failed';
+  exitCode?: number;
   urls: string[];
+  ui: import('./app-window').RuntimeAppUi;
 }
 
 export interface RuntimeOpenResult {
@@ -110,6 +112,8 @@ export interface InstalledAppsHost {
     target: string,
     options?: { acceptUnknownPublisher?: boolean; rememberUnknownPublisher?: boolean }
   ): Promise<RuntimeOpenResult>;
+  openWindow(app: string, target: string): Promise<import('./app-window').RuntimeAppWindowDescriptor>;
+  windowStatus(app: string, target: string): Promise<import('./app-window').RuntimeAppWindowDescriptor>;
   stop(app: string): Promise<void>;
   pickBundle(): Promise<string | null>;
 }
