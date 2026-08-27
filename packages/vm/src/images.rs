@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 /// Phase 2 replaces the initramfs with our own (busybox + appliance
 /// init: DHCP, mount data disk, exec k3s, vsock agent).
 pub const DEFAULT_IMAGE: &str = "alpine-3.21.3";
+/// Runtime pool image-set identity. It currently reuses the same pinned
+/// Alpine kernel/initramfs bytes, but has a distinct name so Runtime
+/// release pins can move independently from dev/cluster boot artifacts.
+pub const RUNTIME_IMAGE: &str = "appliance-runtime-alpine-3.21.3";
 
 struct ImageDef {
     name: &'static str,
@@ -33,6 +37,20 @@ struct ImageDef {
 // deliberate code change: new URLs + new digests, together.
 const IMAGES: &[ImageDef] = &[ImageDef {
     name: "alpine-3.21.3",
+    kernel_url_aarch64:
+        "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/netboot-3.21.3/vmlinuz-virt",
+    kernel_sha256_aarch64: "2a49ce5e4f525f3633295e7df03a80280bbc8f56a26ae8578d048f6e45d29efa",
+    initramfs_url_aarch64:
+        "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/netboot-3.21.3/initramfs-virt",
+    initramfs_sha256_aarch64: "c142c9c29d7e38bb1011fd87443410b91d08acfff21b6318ffb1ba6322854259",
+    kernel_url_x86_64:
+        "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/netboot-3.21.3/vmlinuz-virt",
+    kernel_sha256_x86_64: "e1d7a3cdae9a4a62ed629b90a9955754f676a339bc28176aa593f8f029c35e3c",
+    initramfs_url_x86_64:
+        "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/netboot-3.21.3/initramfs-virt",
+    initramfs_sha256_x86_64: "54cfbeb11009f4002b568f4e505547477c8873d6af3ce19acdbfd3a95c5a6a05",
+}, ImageDef {
+    name: RUNTIME_IMAGE,
     kernel_url_aarch64:
         "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/netboot-3.21.3/vmlinuz-virt",
     kernel_sha256_aarch64: "2a49ce5e4f525f3633295e7df03a80280bbc8f56a26ae8578d048f6e45d29efa",

@@ -21,7 +21,14 @@ impl VmBackend for KvmBackend {
         bail!("the KVM backend is not implemented yet — the microVM runtime (`appliance vm`) does not yet support Linux hosts");
     }
 
-    fn run_foreground(&self, _spec: &VmSpec) -> Result<()> {
+    fn run_foreground(&self, spec: &VmSpec) -> Result<()> {
+        if !spec.runtime_shares.is_empty() {
+            // TODO(AP-163/kvm-virtiofsd): launch one sandboxed virtiofsd
+            // per RuntimeShare and attach its vhost-user socket. The KVM
+            // VMM itself remains scaffold-only, so fail closed instead of
+            // silently booting without a declared payload share.
+            bail!("KVM runtime shares require the pending virtiofsd backend integration");
+        }
         self.availability()
     }
 }

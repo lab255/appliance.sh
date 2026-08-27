@@ -22,6 +22,17 @@ import { ensureApiServerArtifacts } from './api-server-artifact.js';
 // `appliance-vm.ts` and `appliance-init.ts` share one copy.
 
 export const DEFAULT_VM_NAME = 'appliance';
+export const RUNTIME_POOL_VM_NAME = 'appliance-runtime';
+
+/** Boot RFC 0002's fixed core-only pool. The engine's --runtime flag
+ * reasserts agent_only=true, dev/docker/cluster=false, Netstack, and
+ * the conservative 2 vCPU / 4096 MiB profile before core readiness. */
+export function ensurePooledRuntime(timeout = 900): void {
+  const status = runVm(['up', RUNTIME_POOL_VM_NAME, '--runtime', '--timeout', String(timeout)]);
+  if (status !== 0) {
+    throw new Error(`pooled VM '${RUNTIME_POOL_VM_NAME}' failed to become core-ready`);
+  }
+}
 
 // Mirrors VmSpec defaults in packages/vm/src/spec.rs — keep in sync.
 // These are the *default* VM's canonical ports; additional VMs get an

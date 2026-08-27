@@ -95,6 +95,11 @@ pub struct VmSpec {
     /// it false; one-way, like `dev`/`docker`.
     #[serde(default)]
     pub agent_only: bool,
+    /// Fixed core-only Appliance Runtime profile. Runtime VMs are
+    /// agent-only in the sense that they carry the host vsock control
+    /// channel, but deliberately omit the development toolchain.
+    #[serde(default)]
+    pub runtime: bool,
     /// Whether this VM's boot media provisions the lazy Kubernetes
     /// platform layer (k3s, BuildKit, registry, and api-server). Fresh
     /// VMs start core-only; `appliance-vm up --cluster` promotes this
@@ -110,6 +115,10 @@ pub struct VmSpec {
     /// default and absent from legacy specs (which parse to `vec![]`).
     #[serde(default)]
     pub published: Vec<PublishedPort>,
+    /// Boot-configured per-app VirtioFS exports. VZ devices cannot be
+    /// hot-added, so changes require a pool restart.
+    #[serde(default)]
+    pub runtime_shares: Vec<RuntimeShare>,
     /// How the guest NIC attaches to the host. Defaults to `Nat`
     /// (behaviour unchanged); `Netstack` swaps in the host-side smoltcp
     /// terminator. Legacy specs lack the field and parse to `Nat`. A
@@ -122,7 +131,7 @@ pub struct VmSpec {
 /// One published container port: the in-guest container port and the
 /// host loopback port forwarded to it. Persisted with the spec and
 /// consumed (later) by the boot-time forwarding code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedPort {
     /// Host loopback port (`127.0.0.1:<host>`), allocated from this VM's
@@ -130,6 +139,28 @@ pub struct PublishedPort {
     pub host: u16,
     /// Container port inside the guest the host port forwards to.
     pub container: u16,
+    /// Stable display key and target identity for pooled workloads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal: Option<String>,
+    /// App network-namespace /32. The first runtime slice uses a
+    /// guest-root relay port (`container`) while preserving this final
+    /// target for status and the direct netstack handoff follow-up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeShare {
+    pub app_id: String,
+    pub tag: String,
+    pub host_path: String,
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 // NOTE: the allocator below and its constants are exercised by the
@@ -198,10 +229,26 @@ impl VmSpec {
             dev_mount: None,
             docker: false,
             agent_only: false,
+            runtime: false,
             cluster: false,
             published: Vec::new(),
+            runtime_shares: Vec::new(),
             net_link: NetLink::Nat,
         }
+    }
+
+    /// RFC 0002's fixed pooled profile: core supervisor readiness only,
+    /// no k3s, Docker, or development toolchain.
+    pub fn runtime_defaults(name: &str) -> Self {
+        let mut spec = Self::defaults(name);
+        spec.agent_only = true;
+        spec.runtime = true;
+        spec.dev = false;
+        spec.docker = false;
+        spec.cluster = false;
+        spec.net_link = NetLink::Netstack;
+        spec.image = crate::images::RUNTIME_IMAGE.to_string();
+        spec
     }
 
     /// The link this VM should actually use, honouring the global
@@ -583,8 +630,22 @@ mod tests {
         let mut spec = VmSpec::defaults("x");
         assert!(spec.published.is_empty(), "fresh specs publish nothing");
         spec.published = vec![
-            PublishedPort { host: 20000, container: 8080 },
-            PublishedPort { host: 20001, container: 5432 },
+            PublishedPort {
+                host: 20000,
+                container: 8080,
+                name: None,
+                principal: None,
+                target: None,
+                guest: None,
+            },
+            PublishedPort {
+                host: 20001,
+                container: 5432,
+                name: None,
+                principal: None,
+                target: None,
+                guest: None,
+            },
         ];
         let json = serde_json::to_string(&spec).unwrap();
         let back: VmSpec = serde_json::from_str(&json).unwrap();
@@ -658,6 +719,22 @@ mod tests {
         assert!(json.contains("\"agentOnly\":true"), "wire form is camelCase agentOnly");
         let back: VmSpec = serde_json::from_str(&json).unwrap();
         assert!(back.agent_only, "agent_only must survive a JSON round-trip");
+    }
+
+    #[test]
+    fn runtime_profile_is_core_only_and_netstack_enforced() {
+        let spec = VmSpec::runtime_defaults("appliance-runtime");
+        assert_eq!(spec.name, "appliance-runtime");
+        assert_eq!(spec.cpus, 2);
+        assert_eq!(spec.memory_mib, 4096);
+        assert_eq!(spec.disk_gib, 10);
+        assert!(spec.agent_only);
+        assert!(spec.runtime);
+        assert!(!spec.dev);
+        assert!(!spec.docker);
+        assert!(!spec.cluster);
+        assert_eq!(spec.net_link, NetLink::Netstack);
+        assert_eq!(spec.image, crate::images::RUNTIME_IMAGE);
     }
 
     #[test]

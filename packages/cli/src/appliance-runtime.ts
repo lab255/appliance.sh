@@ -5,7 +5,7 @@ import * as net from 'node:net';
 import * as path from 'node:path';
 import type { ApplianceV2 } from '@appliance.sh/sdk';
 import { loadRuntimeBundle, unpackRuntimeBundle } from './appliance-runtime-bundle.js';
-import { runVm } from './utils/microvm-up.js';
+import { ensurePooledRuntime, runVm } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import {
   readRuntimeRegistry,
@@ -59,7 +59,7 @@ export function manifestToRuntimePlan(
     env: manifest.env,
     ports: published.map((port, index) => ({
       ...hostPorts[index],
-      relay: 22000 + uid - 20000 + index,
+      relay: 22000 + (uid - 20000) * 16 + index,
       target: principalIp,
     })),
     resources: {
@@ -157,8 +157,9 @@ async function runtimeRun(args: string[]): Promise<void> {
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
   }
-  const up = runVm(['up', RUNTIME_POOL_VM, '--runtime', '--timeout', '900']);
-  if (up !== 0) {
+  try {
+    ensurePooledRuntime();
+  } catch {
     updateRuntimeRecord(plan.appId, { state: 'failed', poolRestartPending: restartRequired });
     fail(`pooled VM '${RUNTIME_POOL_VM}' failed to become core-ready`, 1);
   }

@@ -332,6 +332,10 @@ fi
 # otherwise. Runs after /persist is mounted so the workspace, home, and
 # apk cache all land on the persistent disk.
 __DEV_PROVISION__
+# --- pooled Appliance Runtime supervisor ----------------------------
+# Core-only runtime VMs get containerd plus the small host-driven
+# supervisor below. Empty for ordinary core, dev, and cluster VMs.
+__RUNTIME_PROVISION__
 # --- docker engine (appliance vm ... --docker) -----------------------
 # Substituted with the provisioning block below for docker VMs, empty
 # otherwise. Backgrounded and fully decoupled from the bring-up phases:
@@ -1298,6 +1302,153 @@ set -g history-limit 50000
 set -g destroy-unattached off
 "#;
 
+/// Guest half of the v1 Runtime lifecycle protocol. The host sends a
+/// validated JSON request over the existing root vsock one-shot. Long-
+/// lived processes stay here: containerd owns the task and this script
+/// persists desired/observed state and captured output under
+/// /persist/runtime/apps/<app>.
+const RUNTIME_SUPERVISOR: &str = r#"#!/bin/sh
+set -eu
+REQ=${1:-'{}'}
+ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
+APP=$(printf '%s' "$REQ" | jq -r '.appId // .plan.appId // empty')
+case "$APP" in ''|*[!a-z0-9-]*) echo '{"state":"failed","message":"invalid app id"}'; exit 2;; esac
+STATE=/persist/runtime/apps/$APP
+NS=ap-$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+CTR_NS=appliance-$APP
+CID=appliance-$APP
+
+status() {
+  if [ -f "$STATE/exit-code" ]; then
+    CODE=$(cat "$STATE/exit-code" 2>/dev/null || echo 1)
+    printf '{"state":"exited","exitCode":%s}\n' "$CODE"
+  elif [ -s "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
+    echo '{"state":"running"}'
+  elif [ -d "$STATE" ]; then
+    echo '{"state":"exited","exitCode":1}'
+  else
+    echo '{"state":"missing"}'
+  fi
+}
+
+case "$ACTION" in
+  status) status; exit 0;;
+  logs) [ -f "$STATE/current.log" ] && cat "$STATE/current.log"; exit 0;;
+  stop)
+    if [ ! -d "$STATE" ]; then echo '{"state":"missing"}'; exit 0; fi
+    ctr -n "$CTR_NS" tasks kill -s SIGTERM "$CID" >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+      ctr -n "$CTR_NS" tasks list 2>/dev/null | grep -q "$CID" || break
+      sleep 0.5
+    done
+    ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
+    [ -f "$STATE/relay.pids" ] && while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+    [ -f "$STATE/pid" ] && kill "$(cat "$STATE/pid")" 2>/dev/null || true
+    ip netns del "$NS" 2>/dev/null || true
+    echo stopped > "$STATE/desired"
+    echo '{"state":"stopped"}'
+    exit 0
+    ;;
+  start) ;;
+  *) echo '{"state":"failed","message":"unknown runtime action"}'; exit 2;;
+esac
+
+if [ -s "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
+  echo '{"state":"failed","message":"instance already running"}'
+  exit 2
+fi
+mkdir -p "$STATE" /run/appliance/shares /sys/fs/cgroup/appliance
+rm -f "$STATE/exit-code" "$STATE/relay.pids"
+printf '%s\n' "$REQ" > "$STATE/request.json"
+TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
+IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
+UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
+IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath')
+SHARE=/run/appliance/shares/$TAG
+mkdir -p "$SHARE"
+grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+case "$IMAGE_PATH" in payload/*) ;; *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+
+# A stable unprivileged identity exists even when the image config names
+# its own uid; ownership and audit records use this principal uid.
+USER_NAME=u$UID_NUM
+getent group "$USER_NAME" >/dev/null 2>&1 || addgroup -g "$UID_NUM" "$USER_NAME"
+id "$USER_NAME" >/dev/null 2>&1 || adduser -D -H -u "$UID_NUM" -G "$USER_NAME" "$USER_NAME"
+
+# Per-principal cgroup v2 controls. Hints never resize the pooled VM.
+CG=/sys/fs/cgroup/appliance/$APP
+mkdir -p "$CG"
+CPUS=$(printf '%s' "$REQ" | jq -r '.plan.resources.cpus')
+MEM=$(printf '%s' "$REQ" | jq -r '.plan.resources.memoryMib')
+PIDS=$(printf '%s' "$REQ" | jq -r '.plan.resources.pids')
+echo "$((CPUS * 100000)) 100000" > "$CG/cpu.max"
+echo "$((MEM * 1024 * 1024))" > "$CG/memory.max"
+echo "$((MEM * 1024 * 1024 * 9 / 10))" > "$CG/memory.high"
+echo 1 > "$CG/memory.oom.group"
+echo "$PIDS" > "$CG/pids.max"
+printf '%s\n' "$(printf '%s' "$REQ" | jq -r '.plan.resources.diskGib')" > "$STATE/disk-quota-gib"
+
+# Stable /32 network namespace. The guest root routes the leaf through
+# its only NIC and proxy-ARPs it; nftables drops source spoofing at the
+# veth ingress. Inter-app forwarding remains absent by default.
+ip netns del "$NS" 2>/dev/null || true
+ip netns add "$NS"
+ROOT_IF=r$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+APP_IF=a$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+ip link del "$ROOT_IF" 2>/dev/null || true
+ip link add "$ROOT_IF" type veth peer name "$APP_IF"
+ip link set "$APP_IF" netns "$NS"
+ip link set "$ROOT_IF" up
+ip route replace "$IP/32" dev "$ROOT_IF"
+ip netns exec "$NS" ip link set lo up
+ip netns exec "$NS" ip addr add "$IP/32" dev "$APP_IF"
+ip netns exec "$NS" ip link set "$APP_IF" up
+ip netns exec "$NS" ip route add default dev "$APP_IF"
+sysctl -q -w net.ipv4.conf.eth0.proxy_arp=1
+nft add table inet appliance_runtime 2>/dev/null || true
+nft 'add chain inet appliance_runtime principal_ingress { type filter hook forward priority -10; policy accept; }' 2>/dev/null || true
+nft add rule inet appliance_runtime principal_ingress iifname "$ROOT_IF" ip saddr != "$IP" drop 2>/dev/null || true
+
+rc-service containerd start >/dev/null 2>&1 || true
+for _ in $(seq 1 50); do [ -S /run/containerd/containerd.sock ] && break; sleep 0.1; done
+ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" >> "$STATE/current.log" 2>&1
+IMAGE=$(ctr -n "$CTR_NS" images list -q | head -n 1)
+[ -n "$IMAGE" ] || { echo '{"state":"failed","message":"container image import produced no image"}'; exit 2; }
+
+# Root-namespace relays are unique per app. Host listeners terminate at
+# these relay ports; each relay's final target is the app's /32.
+printf '%s' "$REQ" | jq -r '.plan.ports[] | [.relay,.guest] | @tsv' | while IFS="$(printf '\t')" read -r RELAY GUEST; do
+  socat "TCP-LISTEN:$RELAY,reuseaddr,fork" "TCP:$IP:$GUEST" >> "$STATE/current.log" 2>&1 &
+  echo $! >> "$STATE/relay.pids"
+done
+
+printf '%s' "$REQ" | jq -r '.plan.env | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+(
+  echo $$ > "$STATE/pid"
+  echo $$ > "$CG/cgroup.procs" 2>/dev/null || true
+  set --
+  while IFS="$(printf '\t')" read -r KEY VALUE; do
+    DECODED=$(printf '%s' "$VALUE" | base64 -d)
+    set -- "$@" --env "$KEY=$DECODED"
+  done < "$STATE/env.tsv"
+  set +e
+  ctr -n "$CTR_NS" run --rm --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  CODE=$?
+  echo "$CODE" > "$STATE/exit-code"
+  exit "$CODE"
+) >/dev/null 2>&1 &
+echo $! > "$STATE/pid"
+echo running > "$STATE/desired"
+echo '{"state":"running"}'
+"#;
+
+const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
+# k3s, registry, BuildKit, Node, or development toolchain is installed.
+rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
+mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
+echo "appliance-runtime: supervisor ready"
+"#;
+
 /// Build the apkovl (Alpine "local backup" overlay tarball): openrc
 /// runlevel wiring, networking config, the world file driving package
 /// installs at boot, and the appliance.start bootstrap.
@@ -1333,7 +1484,7 @@ fn build_apkovl(
         mount,
         docker,
         egress_port,
-        if agent_only { HostReadiness::Agent } else { HostReadiness::K3s },
+        readiness_for(agent_only, !agent_only, dev),
         project_id,
         host_port,
         bootstrap_token,
@@ -1356,6 +1507,7 @@ fn build_apkovl_for_readiness(
     apiserver: bool,
 ) -> Result<Vec<u8>> {
     let agent_only = readiness == HostReadiness::Agent;
+    let runtime = readiness == HostReadiness::Runtime;
     let cluster = readiness == HostReadiness::K3s;
     let gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     let mut tar = tar::Builder::new(gz);
@@ -1395,7 +1547,11 @@ fn build_apkovl_for_readiness(
     file(
         "etc/apk/world",
         0o644,
-        b"alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\n",
+        if runtime {
+            b"alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\ncontainerd\nrunc\niproute2\nnftables\njq\n"
+        } else {
+            b"alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\n"
+        },
     )?;
     file(
         "etc/apk/repositories",
@@ -1435,6 +1591,7 @@ fn build_apkovl_for_readiness(
                 "__K3S_PROVISION__",
                 &match readiness {
                     HostReadiness::Core => String::new(),
+                    HostReadiness::Runtime => String::new(),
                     HostReadiness::Agent => AGENT_HANDOFF.to_string(),
                     HostReadiness::K3s => format!("{K3S_MEDIA_COPY}{K3S_COMMON}"),
                 },
@@ -1484,6 +1641,7 @@ fn build_apkovl_for_readiness(
             .replace("__SHELL_VSOCK_PORT__", &SHELL_VSOCK_PORT.to_string())
             .replace("__APP_USER_PROVISION__", &app_user_provision)
             .replace("__DEV_PROVISION__", if dev { DEV_PROVISION } else { "" })
+            .replace("__RUNTIME_PROVISION__", if runtime { RUNTIME_PROVISION } else { "" })
             .replace("__DEV_MOUNT__", if dev && mount { DEV_MOUNT } else { "" })
             .replace("__DOCKER_PROVISION__", if docker { DOCKER_PROVISION } else { "" })
             .replace("__EGRESS_PORT__", &egress_port.to_string())
@@ -1504,6 +1662,11 @@ fn build_apkovl_for_readiness(
     // The vsock shell agent (socat EXEC target). Always present — every
     // VM gets a k3s-independent host shell.
     file("usr/local/bin/appliance-shell-agent", 0o755, SHELL_AGENT.as_bytes())?;
+    file(
+        "usr/local/bin/appliance-runtime-supervisor",
+        0o755,
+        RUNTIME_SUPERVISOR.as_bytes(),
+    )?;
     // Transparent tmux config for the agent's reattachable sessions.
     file("etc/appliance/tmux.conf", 0o644, TMUX_CONF.as_bytes())?;
     // The bootstrap token the guest api-server verifies create-key
@@ -1574,7 +1737,7 @@ pub fn build_boot_media(
     // api-server's base config for deploy-result URLs.
     host_port: u16,
 ) -> Result<BootMedia> {
-    let readiness = readiness_for(agent_only, cluster);
+    let readiness = readiness_for(agent_only, cluster, dev);
     let modloop = ensure_modloop()?;
     let k3s = if readiness == HostReadiness::K3s {
         Some(ensure_k3s()?.0)
@@ -1700,12 +1863,15 @@ pub fn guest_cmdline() -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HostReadiness {
     Core,
+    Runtime,
     Agent,
     K3s,
 }
 
-fn readiness_for(agent_only: bool, cluster: bool) -> HostReadiness {
-    if agent_only {
+fn readiness_for(agent_only: bool, cluster: bool, dev: bool) -> HostReadiness {
+    if agent_only && !dev {
+        HostReadiness::Runtime
+    } else if agent_only {
         HostReadiness::Agent
     } else if cluster {
         HostReadiness::K3s
@@ -1738,8 +1904,8 @@ struct HostServicePlan {
 fn plan_host_services(spec: &crate::spec::VmSpec) -> HostServicePlan {
     HostServicePlan {
         persist_guest_ip: true,
-        wire_k3s_forwards: readiness_for(spec.agent_only, spec.cluster) == HostReadiness::K3s,
-        readiness: readiness_for(spec.agent_only, spec.cluster),
+        wire_k3s_forwards: readiness_for(spec.agent_only, spec.cluster, spec.dev) == HostReadiness::K3s,
+        readiness: readiness_for(spec.agent_only, spec.cluster, spec.dev),
     }
 }
 
@@ -1840,6 +2006,21 @@ pub fn host_services(
         }
     };
 
+    // Runtime published ports terminate at unique guest-root relay
+    // ports. The relay then targets the selected principal /32, so two
+    // pooled apps may both declare (for example) guest port 3000.
+    for published in &spec.published {
+        match netstack {
+            Some(ns) => crate::net::spawn_proxy_netstack(published.host, published.container, ns.clone())
+                .map_err(|e| anyhow::anyhow!("{}\n{e:#}", bind_hint(published.host, "runtime published port")))?,
+            None => crate::net::spawn_proxy(
+                published.host,
+                SocketAddr::new(guest_ip, published.container),
+            )
+            .map_err(|e| anyhow::anyhow!("{}\n{e:#}", bind_hint(published.host, "runtime published port")))?,
+        }
+    }
+
     // Sasha #1 (acceptance criterion): agent-only STILL writes guest-ip —
     // NAT and the netstack lease attribution depend on it. The forwards are
     // skipped above, never the discovery/lease. `persist_guest_ip` is
@@ -1868,7 +2049,7 @@ pub fn host_services(
     fs::write(vm_dir.join("core-ready"), b"core-ready\n")?;
     crate::bringup::hostlog("core vsock shell ready");
 
-    if plan.readiness == HostReadiness::Core {
+    if matches!(plan.readiness, HostReadiness::Core | HostReadiness::Runtime) {
         crate::bringup::set(vm_dir, crate::bringup::Phase::Ready, None);
         return Ok(());
     }
@@ -2784,10 +2965,17 @@ mod tests {
         // Only the k3s forwards are dropped.
         let mut agent = crate::spec::VmSpec::defaults("sbx");
         agent.agent_only = true;
+        agent.dev = true;
         let plan = plan_host_services(&agent);
         assert!(plan.persist_guest_ip, "agent-only MUST still write guest-ip (Sasha #1)");
         assert!(!plan.wire_k3s_forwards, "agent-only skips the k3s host forwards");
         assert_eq!(plan.readiness, HostReadiness::Agent);
+
+        let runtime = crate::spec::VmSpec::runtime_defaults("appliance-runtime");
+        let plan = plan_host_services(&runtime);
+        assert!(plan.persist_guest_ip, "runtime VMs write guest-ip");
+        assert!(!plan.wire_k3s_forwards, "runtime VMs skip k3s host forwards");
+        assert_eq!(plan.readiness, HostReadiness::Runtime);
 
         // A normal (k3s) VM persists guest-ip AND wires the k3s forwards,
         // and gates on the kubeconfig handoff.

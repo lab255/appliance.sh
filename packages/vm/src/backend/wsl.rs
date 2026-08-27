@@ -720,6 +720,10 @@ fn build_bootstrap(
             "__DOCKER_PROVISION__",
             if spec.docker { crate::guest::DOCKER_PROVISION } else { "" },
         )
+        // WSL has no VirtioFS runtime-share implementation. Keep the
+        // marker explicit and fail closed in the backend follow-up
+        // rather than booting a partial supervisor profile.
+        .replace("__RUNTIME_PROVISION__", "")
         // BuildKit rides every k3s VM, exactly as on the vz backend —
         // injected before the port markers below so its nested
         // __REGISTRY_*__/__BUILDKITD_GUEST_PORT__ markers expand too.
