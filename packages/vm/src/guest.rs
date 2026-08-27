@@ -1317,14 +1317,50 @@ APP=$(printf '%s' "$REQ" | jq -r '.appId // .plan.appId // empty')
 case "$APP" in ''|*[!a-z0-9-]*) echo '{"state":"failed","message":"invalid app id"}'; exit 2;; esac
 STATE=/persist/runtime/apps/$APP
 NS=ap-$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+ROOT_IF=r$(printf '%s' "$APP" | sha256sum | cut -c1-10)
 CTR_NS=appliance-$APP
 CID=appliance-$APP
+MAX_LOG_BYTES=8388608
+
+task_pid() {
+  ctr -n "$CTR_NS" tasks list 2>/dev/null | awk -v id="$CID" '$1 == id { print $2; exit }'
+}
+
+cap_log() {
+  [ -f "$STATE/current.log" ] || return 0
+  SIZE=$(wc -c < "$STATE/current.log")
+  if [ "$SIZE" -gt "$MAX_LOG_BYTES" ]; then
+    DROP=$((SIZE - MAX_LOG_BYTES))
+    BASE=$(cat "$STATE/log-base" 2>/dev/null || echo 0)
+    tail -c "$MAX_LOG_BYTES" "$STATE/current.log" > "$STATE/current.log.trim"
+    cat "$STATE/current.log.trim" > "$STATE/current.log"
+    rm -f "$STATE/current.log.trim"
+    echo "$((BASE + DROP))" > "$STATE/log-base"
+  fi
+}
+
+cleanup_resources() {
+  if [ -f "$STATE/relay.pids" ]; then
+    while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+  fi
+  if [ -f "$STATE/logcap.pid" ]; then
+    kill "$(cat "$STATE/logcap.pid")" 2>/dev/null || true
+  fi
+  ip netns del "$NS" 2>/dev/null || true
+  ip link del "$ROOT_IF" 2>/dev/null || true
+  if [ -f "$STATE/request.json" ]; then
+    OLD_TAG=$(jq -r '.plan.share.tag // empty' "$STATE/request.json")
+    OLD_SHARE=/run/appliance/shares/$OLD_TAG
+    grep -qs " $OLD_SHARE " /proc/mounts && umount "$OLD_SHARE" || true
+  fi
+  rm -f "$STATE/relay.pids" "$STATE/logcap.pid"
+}
 
 status() {
   if [ -f "$STATE/exit-code" ]; then
     CODE=$(cat "$STATE/exit-code" 2>/dev/null || echo 1)
     printf '{"state":"exited","exitCode":%s}\n' "$CODE"
-  elif [ -s "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
+  elif [ -n "$(task_pid)" ]; then
     echo '{"state":"running"}'
   elif [ -d "$STATE" ]; then
     echo '{"state":"exited","exitCode":1}'
@@ -1335,7 +1371,30 @@ status() {
 
 case "$ACTION" in
   status) status; exit 0;;
-  logs) [ -f "$STATE/current.log" ] && cat "$STATE/current.log"; exit 0;;
+  logs)
+    OFFSET=$(printf '%s' "$REQ" | jq -r '.offset // 0')
+    case "$OFFSET" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid log offset"}'; exit 2;; esac
+    cap_log
+    SIZE=0
+    [ -f "$STATE/current.log" ] && SIZE=$(wc -c < "$STATE/current.log")
+    BASE=$(cat "$STATE/log-base" 2>/dev/null || echo 0)
+    RESET=false
+    if [ "$OFFSET" -lt "$BASE" ] || [ "$OFFSET" -gt "$((BASE + SIZE))" ]; then
+      OFFSET=$BASE
+      RESET=true
+    fi
+    LOCAL_OFFSET=$((OFFSET - BASE))
+    AVAILABLE=$((SIZE - LOCAL_OFFSET))
+    READ_BYTES=$AVAILABLE
+    [ "$READ_BYTES" -le 65536 ] || READ_BYTES=65536
+    if [ -f "$STATE/current.log" ]; then
+      DATA=$(tail -c "+$((LOCAL_OFFSET + 1))" "$STATE/current.log" | head -c "$READ_BYTES" | base64 | tr -d '\n')
+    else
+      DATA=
+    fi
+    printf '{"offset":%s,"reset":%s,"data":"%s"}\n' "$((OFFSET + READ_BYTES))" "$RESET" "$DATA"
+    exit 0
+    ;;
   stop)
     if [ ! -d "$STATE" ]; then echo '{"state":"missing"}'; exit 0; fi
     ctr -n "$CTR_NS" tasks kill -s SIGTERM "$CID" >/dev/null 2>&1 || true
@@ -1344,9 +1403,9 @@ case "$ACTION" in
       sleep 0.5
     done
     ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
-    [ -f "$STATE/relay.pids" ] && while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+    cleanup_resources
     [ -f "$STATE/pid" ] && kill "$(cat "$STATE/pid")" 2>/dev/null || true
-    ip netns del "$NS" 2>/dev/null || true
+    rm -f "$STATE/pid"
     echo stopped > "$STATE/desired"
     echo '{"state":"stopped"}'
     exit 0
@@ -1355,21 +1414,45 @@ case "$ACTION" in
   *) echo '{"state":"failed","message":"unknown runtime action"}'; exit 2;;
 esac
 
-if [ -s "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
+if [ -n "$(task_pid)" ]; then
   echo '{"state":"failed","message":"instance already running"}'
   exit 2
 fi
 mkdir -p "$STATE" /run/appliance/shares /sys/fs/cgroup/appliance
-rm -f "$STATE/exit-code" "$STATE/relay.pids" "$STATE/current.log"
+cleanup_resources
+rm -f "$STATE/exit-code" "$STATE/current.log" "$STATE/pid"
+echo 0 > "$STATE/log-base"
 printf '%s\n' "$REQ" > "$STATE/request.json"
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
 UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
 IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath')
+TAG_HEX=${TAG#ap-}
+case "$TAG" in ap-*) ;; *) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
+case "$TAG_HEX" in ''|*[!0-9a-f]*) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
+[ "${#TAG_HEX}" -le 32 ] || { echo '{"state":"failed","message":"invalid share tag"}'; exit 2; }
+case "$UID_NUM" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid uid"}'; exit 2;; esac
+[ "$UID_NUM" -ge 20000 ] && [ "$UID_NUM" -le 20239 ] || { echo '{"state":"failed","message":"invalid uid"}'; exit 2; }
+IP_PREFIX=${IP%.*}
+IP_LEAF=${IP##*.}
+case "$IP_LEAF" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;; esac
+[ "$IP_PREFIX" = 192.168.127 ] && [ "$IP_LEAF" -ge 10 ] && [ "$IP_LEAF" -le 239 ] || {
+  echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;
+}
+case "/$IMAGE_PATH/" in
+  /payload/*) ;;
+  *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;;
+esac
+case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+[ "$(printf '%s' "$REQ" | jq '.plan.ports | length')" -le 16 ] || {
+  echo '{"state":"failed","message":"too many published ports"}'; exit 2;
+}
+printf '%s' "$REQ" | jq -e --arg ip "$IP" '
+  .plan.ports | all(.target == $ip and (.relay | type == "number") and (.guest | type == "number"))
+' >/dev/null || { echo '{"state":"failed","message":"invalid published port target"}'; exit 2; }
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
-case "$IMAGE_PATH" in payload/*) ;; *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
 
 # A stable unprivileged identity exists even when the image config names
 # its own uid; ownership and audit records use this principal uid.
@@ -1399,7 +1482,6 @@ printf '%s\n' "$(printf '%s' "$REQ" | jq -r '.plan.resources.diskGib')" > "$STAT
 # veth ingress. Inter-app forwarding remains absent by default.
 ip netns del "$NS" 2>/dev/null || true
 ip netns add "$NS"
-ROOT_IF=r$(printf '%s' "$APP" | sha256sum | cut -c1-10)
 APP_IF=a$(printf '%s' "$APP" | sha256sum | cut -c1-10)
 ip link del "$ROOT_IF" 2>/dev/null || true
 ip link add "$ROOT_IF" type veth peer name "$APP_IF"
@@ -1410,32 +1492,87 @@ ip netns exec "$NS" ip link set lo up
 ip netns exec "$NS" ip addr add "$IP/32" dev "$APP_IF"
 ip netns exec "$NS" ip link set "$APP_IF" up
 ip netns exec "$NS" ip route add default dev "$APP_IF"
-sysctl -q -w net.ipv4.conf.eth0.proxy_arp=1
-nft add table inet appliance_runtime 2>/dev/null || true
-nft 'add chain inet appliance_runtime principal_ingress { type filter hook forward priority -10; policy accept; }' 2>/dev/null || true
-nft add rule inet appliance_runtime principal_ingress iifname "$ROOT_IF" ip saddr != "$IP" drop 2>/dev/null || true
+sysctl -q -w net.ipv4.ip_forward=1 "net.ipv4.conf.$ROOT_IF.proxy_arp=1"
+if ! nft list table inet appliance_runtime >/dev/null 2>&1; then
+  nft add table inet appliance_runtime
+fi
+if ! nft list chain inet appliance_runtime principal_input >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_input { type filter hook input priority -10; policy accept; }'
+  nft add rule inet appliance_runtime principal_input ct state established,related accept
+  nft add rule inet appliance_runtime principal_input iifname "r*" drop
+fi
+if ! nft list chain inet appliance_runtime principal_forward >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_forward { type filter hook forward priority -10; policy accept; }'
+  nft add rule inet appliance_runtime principal_forward iifname "r*" oifname != "eth0" drop
+fi
+if ! nft list chain inet appliance_runtime principal_spoof >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_spoof { type filter hook forward priority -11; policy accept; }'
+fi
+nft add rule inet appliance_runtime principal_spoof iifname "$ROOT_IF" ip saddr != "$IP" drop
+
+ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print address[1]; exit }')
+[ -n "$ETH0_IP" ] || { echo '{"state":"failed","message":"guest eth0 has no IPv4 address"}'; exit 2; }
 
 rc-service containerd start >/dev/null 2>&1 || true
 for _ in $(seq 1 50); do [ -S /run/containerd/containerd.sock ] && break; sleep 0.1; done
-ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" >> "$STATE/current.log" 2>&1
-IMAGE=$(ctr -n "$CTR_NS" images list -q | head -n 1)
-[ -n "$IMAGE" ] || { echo '{"state":"failed","message":"container image import produced no image"}'; exit 2; }
+set +e
+IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" 2>&1)
+IMPORT_CODE=$?
+set -e
+printf '%s\n' "$IMPORT_OUTPUT" >> "$STATE/current.log"
+[ "$IMPORT_CODE" -eq 0 ] || { echo '{"state":"failed","message":"container image import failed"}'; cleanup_resources; exit 2; }
+IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
+if [ -z "$IMAGE" ]; then
+  IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+fi
+[ -n "$IMAGE" ] || {
+  echo '{"state":"failed","message":"container image import produced no image"}'
+  cleanup_resources
+  exit 2
+}
 
 # Root-namespace relays are unique per app. Host listeners terminate at
 # these relay ports; each relay's final target is the app's /32.
-printf '%s' "$REQ" | jq -r '.plan.ports[] | [.relay,.guest] | @tsv' | while IFS="$(printf '\t')" read -r RELAY GUEST; do
-  # This loop executes in a pipeline subshell; detach each relay from that
-  # short-lived shell just like the workload launcher below.
-  nohup setsid socat "TCP-LISTEN:$RELAY,reuseaddr,fork" "TCP:$IP:$GUEST" </dev/null >> "$STATE/current.log" 2>&1 &
+printf '%s' "$REQ" | jq -r '.plan.ports[] | [.relay,.guest] | @tsv' > "$STATE/ports.tsv"
+while IFS="$(printf '\t')" read -r RELAY GUEST; do
+  export RELAY GUEST ETH0_IP IP STATE
+  nohup setsid sh -c 'exec socat "TCP-LISTEN:$RELAY,bind=$ETH0_IP,reuseaddr,fork" "TCP:$IP:$GUEST"' \
+    </dev/null >> "$STATE/current.log" 2>&1 &
   echo $! >> "$STATE/relay.pids"
-done
+done < "$STATE/ports.tsv"
+sleep 0.1
+if [ -f "$STATE/relay.pids" ]; then
+  while read -r P; do
+    kill -0 "$P" 2>/dev/null || {
+      echo '{"state":"failed","message":"published port relay failed closed"}'
+      cleanup_resources
+      exit 2
+    }
+  done < "$STATE/relay.pids"
+fi
 
 printf '%s' "$REQ" | jq -r '.plan.env | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
 # The lifecycle RPC is a one-shot vsock shell. Ignore its closing SIGHUP so
 # the pooled workload outlives that control connection, and let containerd
 # place the actual task (rather than this short-lived launcher) in the app's
-# cgroup. The outer PID write makes status reliable before the child runs.
-export STATE CTR_NS NS IMAGE CID CG APP
+# cgroup. Runtime status is task-based, and the child records its own PID
+# after setsid so teardown never races a short-lived wrapper.
+export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM
+nohup setsid sh -c '
+  echo $$ > "$STATE/logcap.pid"
+  while true; do
+    if [ -f "$STATE/current.log" ] && [ "$(wc -c < "$STATE/current.log")" -gt 8388608 ]; then
+      SIZE=$(wc -c < "$STATE/current.log")
+      DROP=$((SIZE - 8388608))
+      BASE=$(cat "$STATE/log-base" 2>/dev/null || echo 0)
+      tail -c 8388608 "$STATE/current.log" > "$STATE/current.log.trim"
+      cat "$STATE/current.log.trim" > "$STATE/current.log"
+      rm -f "$STATE/current.log.trim"
+      echo "$((BASE + DROP))" > "$STATE/log-base"
+    fi
+    sleep 1
+  done
+' </dev/null >/dev/null 2>&1 &
 nohup setsid sh -c '
   echo $$ > "$STATE/pid"
   set --
@@ -1444,12 +1581,38 @@ nohup setsid sh -c '
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
   set +e
-  ctr -n "$CTR_NS" run --rm --cgroup "appliance/$APP" --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --cap-drop ALL --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
   CODE=$?
   echo "$CODE" > "$STATE/exit-code"
+  if [ -f "$STATE/relay.pids" ]; then
+    while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+  fi
+  [ -f "$STATE/logcap.pid" ] && kill "$(cat "$STATE/logcap.pid")" 2>/dev/null || true
+  ip netns del "$NS" 2>/dev/null || true
+  ip link del "$ROOT_IF" 2>/dev/null || true
+  grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+  rm -f "$STATE/pid" "$STATE/relay.pids" "$STATE/logcap.pid"
   exit "$CODE"
 ' </dev/null >/dev/null 2>&1 &
-echo $! > "$STATE/pid"
+
+TASK_PID=
+for _ in $(seq 1 100); do
+  TASK_PID=$(task_pid)
+  [ -n "$TASK_PID" ] && break
+  [ -f "$STATE/exit-code" ] && break
+  sleep 0.1
+done
+if [ -z "$TASK_PID" ]; then
+  cleanup_resources
+  echo '{"state":"failed","message":"container task did not start"}'
+  exit 2
+fi
+if ! grep -qx "$TASK_PID" "$CG/cgroup.procs"; then
+  ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
+  cleanup_resources
+  echo '{"state":"failed","message":"container task escaped its cgroup"}'
+  exit 2
+fi
 echo running > "$STATE/desired"
 echo '{"state":"running"}'
 "#;
@@ -1458,6 +1621,7 @@ const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only worklo
 # k3s, registry, BuildKit, Node, or development toolchain is installed.
 rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
 mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
+find /persist/runtime/apps -type f \( -name pid -o -name relay.pids -o -name logcap.pid \) -delete
 for CONTROL in cpu memory pids; do
   grep -qw "$CONTROL" /sys/fs/cgroup/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/cgroup.subtree_control
   grep -qw "$CONTROL" /sys/fs/cgroup/appliance/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/appliance/cgroup.subtree_control
@@ -2056,21 +2220,6 @@ pub fn host_services(
             (guest_ip, guest_ip, KUBECONFIG_PORT)
         }
     };
-
-    // Runtime published ports terminate at unique guest-root relay
-    // ports. The relay then targets the selected principal /32, so two
-    // pooled apps may both declare (for example) guest port 3000.
-    for published in &spec.published {
-        match netstack {
-            Some(ns) => crate::net::spawn_proxy_netstack(published.host, published.container, ns.clone())
-                .map_err(|e| anyhow::anyhow!("{}\n{e:#}", bind_hint(published.host, "runtime published port")))?,
-            None => crate::net::spawn_proxy(
-                published.host,
-                SocketAddr::new(guest_ip, published.container),
-            )
-            .map_err(|e| anyhow::anyhow!("{}\n{e:#}", bind_hint(published.host, "runtime published port")))?,
-        }
-    }
 
     // Sasha #1 (acceptance criterion): agent-only STILL writes guest-ip —
     // NAT and the netstack lease attribution depend on it. The forwards are
@@ -3063,6 +3212,26 @@ mod tests {
         assert!(world.lines().any(|package| package == "nftables"));
         let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
         assert!(start.contains("cgroup.subtree_control"));
+    }
+
+    #[test]
+    fn runtime_supervisor_enforces_principal_isolation_and_bounded_logs() {
+        let supervisor = RUNTIME_SUPERVISOR;
+        assert!(supervisor.contains("--user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP\""));
+        assert!(supervisor.contains("--seccomp --cap-drop ALL"));
+        assert!(!supervisor.contains("echo $$ > \"$CG/cgroup.procs\""));
+        assert!(supervisor.contains("grep -qx \"$TASK_PID\" \"$CG/cgroup.procs\""));
+        assert!(supervisor.contains("net.ipv4.ip_forward=1"));
+        assert!(supervisor.contains("net.ipv4.conf.$ROOT_IF.proxy_arp=1"));
+        assert!(supervisor.contains("principal_input iifname \"r*\" drop"));
+        assert!(supervisor.contains("principal_forward iifname \"r*\" oifname != \"eth0\" drop"));
+        assert!(supervisor.contains("TCP-LISTEN:$RELAY,bind=$ETH0_IP"));
+        assert!(supervisor.contains("MAX_LOG_BYTES=8388608"));
+        assert!(supervisor.contains("$STATE/log-base"));
+
+        for line in supervisor.lines().filter(|line| line.trim_start().starts_with("nft ")) {
+            assert!(!line.contains("|| true"), "nft rule must fail closed: {line}");
+        }
     }
 
     #[test]

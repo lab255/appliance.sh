@@ -452,6 +452,13 @@ impl VmPaths {
     pub fn shell_sock(&self) -> PathBuf {
         self.dir.join("shell.sock")
     }
+    /// Owner-only control socket served by the resident Runtime host.
+    /// Reconciliation processes request published forwards here so new
+    /// apps do not require a pooled-VM restart merely to bind host ports.
+    #[cfg_attr(windows, allow(dead_code))]
+    pub fn runtime_forward_sock(&self) -> PathBuf {
+        self.dir.join("runtime-forward.sock")
+    }
 }
 
 /// Runtime status reported by `status`.

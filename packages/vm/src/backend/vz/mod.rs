@@ -15,6 +15,7 @@
 //! `scripts/sign-dev.sh` applies it ad-hoc for local builds.
 
 mod shell;
+mod runtime;
 
 use super::VmBackend;
 use crate::netstack::Netstack;
@@ -199,6 +200,12 @@ impl VmBackend for VzBackend {
                 crate::netstack::LinkConfig::for_guest_mac(&spec.name, &spec.mac),
             )
         });
+        if spec.runtime {
+            let runtime_netstack = netstack
+                .clone()
+                .ok_or_else(|| anyhow!("Runtime profile requires the host netstack"))?;
+            runtime::spawn_forward_control(runtime_netstack, paths.runtime_forward_sock())?;
+        }
 
         let queue = DispatchQueue::new(&format!("sh.appliance.vm.{}", spec.name), None);
         let vm = unsafe {
