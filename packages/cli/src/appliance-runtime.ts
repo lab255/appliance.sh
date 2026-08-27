@@ -447,17 +447,19 @@ function persistedRuntimeAllocation(
     const published = (spec.published ?? []).filter((port) => port.runtimeTarget?.principal === manifest.name);
     if (published.length !== expected.length || published.some((port) => !port.runtimeTarget?.address))
       return undefined;
-    const remaining = [...published];
-    const hostPorts = expected.map((port) => {
-      const index = remaining.findIndex((candidate) => candidate.container === port.guest);
-      const existing = index < 0 ? undefined : remaining.splice(index, 1)[0];
-      if (!existing || typeof existing.host !== 'number') throw new Error('published port shape changed');
-      return { name: port.name, host: existing.host, guest: port.guest, protocol: 'tcp' as const };
-    });
     const principalIp = published[0]?.runtimeTarget?.address;
     if (published.some((port) => port.runtimeTarget?.address !== principalIp)) return undefined;
     const leaf = Number.parseInt(principalIp?.split('.').slice(-1)[0] ?? '', 10);
     if (!principalIp || !Number.isInteger(leaf) || leaf < 10 || leaf > 239) return undefined;
+    const relayBase = 22000 + (leaf - 10) * 16;
+    const ordered = [...published].sort((a, b) => (a.container ?? 0) - (b.container ?? 0));
+    const hostPorts = expected.map((port, index) => {
+      const existing = ordered[index];
+      if (!existing || typeof existing.host !== 'number' || existing.container !== relayBase + index) {
+        throw new Error('published relay shape changed');
+      }
+      return { name: port.name, host: existing.host, guest: port.guest, protocol: 'tcp' as const };
+    });
     return { principalIp, uid: 20000 + leaf - 10, hostPorts };
   } catch {
     return undefined;

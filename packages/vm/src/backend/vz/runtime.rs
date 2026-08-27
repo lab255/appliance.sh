@@ -92,10 +92,10 @@ fn bind_forward(
     guest: u16,
 ) -> Result<()> {
     let octets = target.octets();
+    let runtime_target = octets[..3] == [192, 168, 127] && (10..=239).contains(&octets[3]);
     if !(20_000..=29_999).contains(&host)
         || guest == 0
-        || octets[..3] != [192, 168, 127]
-        || !(10..=239).contains(&octets[3])
+        || (target != crate::netstack::GUEST_IP && !runtime_target)
     {
         bail!("invalid Runtime forward {host}->{target}:{guest}");
     }

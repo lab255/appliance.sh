@@ -1265,7 +1265,7 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
                 }
                 spec.published.push(PublishedPort::for_runtime(
                     port.host,
-                    port.guest,
+                    port.relay,
                     &plan.app_id,
                     target,
                 )?);
@@ -1300,23 +1300,32 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
             validate_runtime_plan_against_spec(&name, &plan)?;
             let mut bound = Vec::new();
             for port in &plan.ports {
-                let target = port.target.parse().context("parse runtime principal target")?;
-                if let Err(error) = runtime_forward_request(&name, "bind", port.host, target, port.guest) {
+                if let Err(error) = runtime_forward_request(
+                    &name,
+                    "bind",
+                    port.host,
+                    netstack::GUEST_IP,
+                    port.relay,
+                ) {
                     for (host, target, guest) in bound {
                         let _ = runtime_forward_request(&name, "unbind", host, target, guest);
                     }
                     return Err(error);
                 }
-                bound.push((port.host, target, port.guest));
+                bound.push((port.host, netstack::GUEST_IP, port.relay));
             }
             let request = serde_json::json!({ "action": "start", "appId": plan.app_id, "plan": plan });
             let response = match guest_exec::runtime_request(&name, &request.to_string()) {
                 Ok(response) => response,
                 Err(error) => {
                     for port in &plan.ports {
-                        if let Ok(target) = port.target.parse() {
-                            let _ = runtime_forward_request(&name, "unbind", port.host, target, port.guest);
-                        }
+                        let _ = runtime_forward_request(
+                            &name,
+                            "unbind",
+                            port.host,
+                            netstack::GUEST_IP,
+                            port.relay,
+                        );
                     }
                     return Err(anyhow::anyhow!("runtime start RPC: {error}"));
                 }
@@ -1327,9 +1336,13 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
                 .is_some_and(|state| state == "running");
             if !started {
                 for port in &plan.ports {
-                    if let Ok(target) = port.target.parse() {
-                        let _ = runtime_forward_request(&name, "unbind", port.host, target, port.guest);
-                    }
+                    let _ = runtime_forward_request(
+                        &name,
+                        "unbind",
+                        port.host,
+                        netstack::GUEST_IP,
+                        port.relay,
+                    );
                 }
             }
             println!("{response}");
@@ -1451,7 +1464,7 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
     for port in &plan.ports {
         let matches = published.iter().any(|persisted| {
             persisted.host == port.host
-                && persisted.container == port.guest
+                && persisted.container == port.relay
                 && persisted.runtime_target.as_ref().is_some_and(|target| {
                     target.principal == plan.app_id && target.address.to_string() == port.target
                 })
@@ -1536,7 +1549,7 @@ fn runtime_app_forwards(name: &str, app: &str) -> Result<Vec<(u16, std::net::Ipv
             port.runtime_target
                 .as_ref()
                 .filter(|target| target.principal == app)
-                .map(|target| (port.host, target.address, port.container))
+                .map(|_| (port.host, netstack::GUEST_IP, port.container))
         })
         .collect())
 }
