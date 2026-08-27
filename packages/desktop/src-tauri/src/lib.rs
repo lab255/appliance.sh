@@ -537,8 +537,10 @@ fn seed_desktop_profiles(app: &AppHandle) -> Result<usize, HostError> {
 fn ingest_shared_into_legacy(
     app: &AppHandle,
     shared: SharedProfilesFile,
+    app_mode: Option<AppMode>,
 ) -> Result<PersistedConfig, HostError> {
     let mut cfg = PersistedConfig::default();
+    cfg.app_mode = app_mode;
     for (id, entry) in &shared.profiles {
         let cluster = Cluster {
             id: id.clone(),
@@ -623,7 +625,7 @@ fn read_persisted_config(app: &AppHandle) -> Result<PersistedConfig, HostError> 
     // CLI (or a previous version of this desktop) populated it.
     if let Some(shared) = read_shared_profiles() {
         if !shared.profiles.is_empty() {
-            return ingest_shared_into_legacy(app, shared);
+            return ingest_shared_into_legacy(app, shared, legacy.app_mode);
         }
     }
     Ok(legacy)
