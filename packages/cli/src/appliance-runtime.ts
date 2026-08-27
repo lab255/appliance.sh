@@ -151,7 +151,8 @@ function missingRuntimeTarget(
   platform: 'linux/amd64' | 'linux/arm64',
   branch: 'images' | 'targets'
 ): Error {
-  const nativeOnly = manifest.type === 'binary' && manifest.native?.macos ? ' macOS native targets are out of scope.' : '';
+  const nativeOnly =
+    manifest.type === 'binary' && manifest.native?.macos ? ' macOS native targets are out of scope.' : '';
   return new Error(
     `bundle '${manifest.name}' has no payload for host runtime platform ${platform}; ` +
       `add payload.${branch}["${platform}"] and repackage.${nativeOnly}`
