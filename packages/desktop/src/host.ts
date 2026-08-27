@@ -25,6 +25,7 @@ import type {
   BootstrapOptions,
   BootstrapResult,
   Cluster,
+  CatalogueFetchResult,
   ConsoleHost,
   HostConfig,
   LatestGhcrTagInput,
@@ -47,6 +48,14 @@ import type {
   TerminalSession,
   TerminalSessionInfo,
 } from '@appliance.sh/app';
+
+interface NativeCatalogueCache {
+  indexJson: string;
+  signatureJson: string;
+  fetchedAt: string;
+  highestGeneration: number;
+  maxSeenWallClock: string;
+}
 
 // Tauri host: each cluster's URL/name lives in a JSON config file
 // under the app config dir; each cluster's API key lives in the OS
@@ -90,6 +99,53 @@ export const tauriHost: ConsoleHost = {
     async set(mode: AppMode) {
       await invoke('set_app_mode', { mode });
     },
+  },
+
+  catalogue: {
+    async fetchCatalogue(): Promise<CatalogueFetchResult> {
+      const origin = 'https://www.appliance.sh';
+      const nativeCache = await invoke<NativeCatalogueCache | null>('get_catalogue_cache');
+      const cached: CatalogueFetchResult | null = nativeCache ? { ...nativeCache, source: 'cache' } : null;
+      try {
+        const [indexResponse, signatureResponse] = await Promise.all([
+          fetch(`${origin}/catalogue/index.json`, { headers: { Accept: 'application/json' } }),
+          fetch(`${origin}/catalogue/index.json.sig`, { headers: { Accept: 'application/json' } }),
+        ]);
+        if (!indexResponse.ok || !signatureResponse.ok) {
+          throw new Error(`catalogue refresh failed (${indexResponse.status}/${signatureResponse.status})`);
+        }
+        return {
+          indexJson: await indexResponse.text(),
+          signatureJson: await signatureResponse.text(),
+          fetchedAt: new Date().toISOString(),
+          source: 'network',
+          highestGeneration: cached?.highestGeneration,
+          maxSeenWallClock: cached?.maxSeenWallClock,
+        };
+      } catch (cause) {
+        if (!cached) throw cause;
+        return {
+          ...cached,
+          source: 'cache',
+          refreshError: cause instanceof Error ? cause.message : 'catalogue refresh failed',
+        };
+      }
+    },
+    async cacheVerified(pair: CatalogueFetchResult, generation: number, verifiedAt: string): Promise<void> {
+      // The native host writes the exact pair atomically under
+      // ~/.appliance/catalogue and advances both rollback floors monotonically.
+      await invoke('set_catalogue_cache', {
+        input: {
+          indexJson: pair.indexJson,
+          signatureJson: pair.signatureJson,
+          fetchedAt: pair.fetchedAt,
+          generation,
+          verifiedAt,
+        },
+      });
+    },
+    // AP-173 has not supplied a real `runtime install` implementation on
+    // this branch. Deliberately omit installBundle so the UI cannot fake it.
   },
 
   bootstrap: {

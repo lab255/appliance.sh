@@ -8,6 +8,7 @@ import type {
   BootstrapEvent,
   BootstrapResult,
   Cluster,
+  CatalogueFetchResult,
   ConsoleHost,
   HostConfig,
   LocalPreflightCheck,
@@ -31,6 +32,10 @@ import type {
 //   user-mode     persisted User mode with local + cloud workspaces
 //   user-mode-no-vm persisted User mode before the local sandbox exists
 //   developer-mode persisted Developer mode
+//   catalogue      verified signed free catalogue
+//   catalogue-unverified signature failure / fail-closed empty state
+//   catalogue-loading    fetch pending / verification loading state
+//   catalogue-stale expired-but-previously-verified read-only catalogue
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
 // lines) so spinners, disabled states, and progress UI are exercised
@@ -46,7 +51,11 @@ type Scenario =
   | 'first-run'
   | 'user-mode'
   | 'user-mode-no-vm'
-  | 'developer-mode';
+  | 'developer-mode'
+  | 'catalogue'
+  | 'catalogue-unverified'
+  | 'catalogue-stale'
+  | 'catalogue-loading';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -80,7 +89,11 @@ function scenario(): Scenario {
     s === 'first-run' ||
     s === 'user-mode' ||
     s === 'user-mode-no-vm' ||
-    s === 'developer-mode'
+    s === 'developer-mode' ||
+    s === 'catalogue' ||
+    s === 'catalogue-unverified' ||
+    s === 'catalogue-stale' ||
+    s === 'catalogue-loading'
     ? s
     : 'ready';
 }
@@ -99,6 +112,132 @@ const MOCK_CURRENT_VERSION = '1.48.0';
 // gate (no host `claude` → install guidance / use an API key).
 const mockAgentCreds = new Map<string, AgentAuthKind>();
 const MOCK_HAS_HOST_CLAUDE = true;
+
+function base64url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function signedCatalogueFixture(): Promise<CatalogueFetchResult> {
+  const { catalogueSigningInput } = await import('@appliance.sh/sdk');
+  const keys = (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+  const publicKey = new Uint8Array(await crypto.subtle.exportKey('raw', keys.publicKey));
+  const keyDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', publicKey));
+  const keyId = `ed25519:sha256:${Array.from(keyDigest, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  const now = Date.now();
+  const stale = scenario() === 'catalogue-stale';
+  const issuedAt = new Date(now - (stale ? 20 : 1) * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(issuedAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const common = {
+    publisher: { name: 'Lab 255', keyId },
+    tier: 'known-publisher',
+  } as const;
+  const index = {
+    schema: 'appliance.catalogue-index/v1',
+    generation: 7,
+    issuedAt: issuedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    entries: [
+      {
+        ...common,
+        id: 'journal',
+        name: 'Journal',
+        version: '1.2.0',
+        description: 'Private daily notes with end-to-end local storage.',
+        license: 'MIT',
+        category: 'Productivity',
+        url: 'https://journal.appliance.zip',
+        digest: `sha256:${'1'.repeat(64)}`,
+      },
+      {
+        ...common,
+        id: 'photos',
+        name: 'Photos',
+        version: '3.1.2',
+        description: 'Self-hosted photo library with on-device face grouping.',
+        license: 'GPL-3.0',
+        category: 'Media',
+        url: 'https://photos.appliance.zip',
+        digest: `sha256:${'2'.repeat(64)}`,
+      },
+      {
+        ...common,
+        id: 'reader',
+        name: 'Reader',
+        version: '0.14.0',
+        description: 'RSS and newsletter reader, offline-first.',
+        license: 'MIT',
+        category: 'Productivity',
+        url: 'https://reader.appliance.zip',
+        digest: `sha256:${'3'.repeat(64)}`,
+      },
+      {
+        ...common,
+        id: 'bookmarks',
+        name: 'Bookmarks',
+        version: '2.0.3',
+        description: 'Link archive with full-page snapshots and tags.',
+        license: 'Apache-2.0',
+        category: 'Productivity',
+        url: 'https://bookmarks.appliance.zip',
+        digest: `sha256:${'4'.repeat(64)}`,
+      },
+      {
+        ...common,
+        id: 'metrics',
+        name: 'Metrics',
+        version: '1.8.0',
+        description: 'Private dashboards for local service data.',
+        license: 'MIT',
+        category: 'Data',
+        url: 'https://metrics.appliance.zip',
+        digest: `sha256:${'5'.repeat(64)}`,
+      },
+      {
+        ...common,
+        id: 'toolbox',
+        name: 'Toolbox',
+        version: '5.2.1',
+        description: 'Developer utilities in an isolated workspace.',
+        license: 'AGPL-3.0',
+        category: 'Dev tools',
+        url: 'https://toolbox.appliance.zip',
+        digest: `sha256:${'6'.repeat(64)}`,
+      },
+      {
+        ...common,
+        id: 'paid-hidden',
+        name: 'Paid Hidden',
+        version: '1.0.0',
+        description: 'This must never enter rendered state.',
+        license: 'MIT',
+        category: 'Data',
+        url: 'https://paid-hidden.appliance.zip',
+        digest: `sha256:${'7'.repeat(64)}`,
+        paid: true,
+      },
+    ],
+  };
+  const signature = new Uint8Array(
+    await crypto.subtle.sign(
+      { name: 'Ed25519' },
+      keys.privateKey,
+      (await catalogueSigningInput(index, 'index')).slice().buffer
+    )
+  );
+  if (scenario() === 'catalogue-unverified') signature[0] ^= 0xff;
+  return {
+    indexJson: JSON.stringify(index),
+    signatureJson: JSON.stringify({ alg: 'ed25519', keyId, role: 'index', sig: base64url(signature) }),
+    fetchedAt: new Date().toISOString(),
+    source: 'mock',
+    developmentTrustPolicy: {
+      keys: { [keyId]: `ed25519:${base64url(publicKey)}` },
+      generationFloor: 1,
+    },
+  };
+}
 
 /** Bump the minor of a semver string for the mock update feed. */
 function bumpMinor(version: string): string {
@@ -248,6 +387,8 @@ function preflight(): LocalPreflightCheck[] {
 // ---- host ---------------------------------------------------------------
 
 export function createMockHost(): ConsoleHost {
+  const catalogueFixture = signedCatalogueFixture();
+  let catalogueCache: CatalogueFetchResult | null = null;
   return {
     async getConfig(): Promise<HostConfig> {
       const state = readState();
@@ -298,10 +439,29 @@ export function createMockHost(): ConsoleHost {
       async get(): Promise<AppMode | null> {
         const stored = sessionStorage.getItem(APP_MODE_KEY);
         if (stored === 'user' || stored === 'developer') return stored;
+        if (scenario().startsWith('catalogue')) return 'user';
         return scenario() === 'first-run' ? null : 'developer';
       },
       async set(mode: AppMode): Promise<void> {
         sessionStorage.setItem(APP_MODE_KEY, mode);
+      },
+    },
+
+    catalogue: {
+      async fetchCatalogue() {
+        if (scenario() === 'catalogue-loading') await sleep(60_000);
+        return catalogueFixture;
+      },
+      async cacheVerified(pair, generation, verifiedAt) {
+        catalogueCache = {
+          ...pair,
+          source: 'mock',
+          highestGeneration: Math.max(catalogueCache?.highestGeneration ?? 0, generation),
+          maxSeenWallClock:
+            !catalogueCache?.maxSeenWallClock || Date.parse(verifiedAt) > Date.parse(catalogueCache.maxSeenWallClock)
+              ? verifiedAt
+              : catalogueCache.maxSeenWallClock,
+        };
       },
     },
 

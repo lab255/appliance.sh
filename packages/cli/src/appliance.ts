@@ -167,8 +167,8 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('stop', process.argv.slice(2)),
   },
   search: {
-    description: 'search for packaged apps (coming in a later release)',
-    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('search'),
+    description: 'search the signed free-app catalogue',
+    load: async () => (await import('./appliance-runtime-search.js')).runRuntimeSearch(process.argv.slice(2)),
   },
   entitlements: {
     description: 'manage packaged-app entitlements (coming in a later release)',
@@ -439,6 +439,11 @@ async function main(): Promise<void> {
         console.error();
         showNamespaceHelp('runtime');
         process.exit(1);
+      }
+      if (verb === 'search') {
+        const { runRuntimeSearch } = await import('./appliance-runtime-search.js');
+        await runRuntimeSearch(args.slice(2));
+        return;
       }
       const { runRuntimeCommand } = await import('./appliance-runtime.js');
       await runRuntimeCommand(verb, args.slice(2));
