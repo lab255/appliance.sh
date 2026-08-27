@@ -620,3 +620,39 @@ deny records, so the surface is QA-able in a browser with no microVM host.
 Denied attempts, click Allow, confirm it now connects) is **owed-live** —
 the surface is implemented, typechecked, and build-verified, but the
 end-to-end GUI pass against a running Netstack VM has not been run.
+
+## 11. Packaged-app runtime policies
+
+Packaged apps do not inherit the development VM's baked allowlist. Each
+runnable app/service has a stable `192.168.127.0/24` source `/32` and an
+effective policy record under `~/.appliance/runtime/<app>/effective.json`.
+The engine reserves `.0`-`.9` for gateway/root/infrastructure use and accepts
+runtime principal addresses `.10`-`.254` (the chosen initial infrastructure
+range pending a shared allocator constant).
+The runtime controller installs a validated principal record with:
+
+```sh
+appliance-vm runtime-policy set <vm> <app-or-app/service> < effective-principal.json
+appliance-vm runtime-policy get <vm> <app-or-app/service>
+```
+
+The input identifies `version`, `app`, optional `service`, `vm`, `principal`,
+`source`, an `EgressPolicy`-shaped `policy`, and `allowPorts`, whose keys must
+exactly match the normalized allow suffixes and whose values are the granted
+TCP ports. The engine normalizes DNS
+suffixes, rejects URLs, IP/CIDR literals, ports, and public-suffix-only names,
+and always forces `default: deny`. Missing/invalid files and unknown source
+addresses fail closed. Effective files are atomically replaced with mode 0600
+and may contain multiple service-principal records for one compound app.
+
+Allowed HTTPS is inspected when `policy.mitm && allowed`; this runtime path is
+inspection-only and never calls credential capture/injection or rewrites HTTP
+bytes. It offers HTTP/1.1 ALPN only. A user may set `mitm: false` without
+weakening destination enforcement.
+
+App events are kept separately at
+`~/.appliance/runtime/<app>/egress-events.jsonl` as a newest-records 512 KiB
+ring. Records contain timestamp, app/service/principal, decision and reason,
+host/port/transport, and—when observed—SNI, TLS version, HTTP method,
+query/fragment-stripped path, status, bytes in/out, and duration. Headers,
+cookies, authorization values, query values, and bodies are never persisted.
