@@ -67,6 +67,52 @@ the installed entry; the warning returns after 30 days. CLI automation must pass
 `--accept-unknown-publisher` for each invocation and does not update the
 remembered time.
 
+For a manifest with `ui.type: web`, **Open** starts the app with the same
+`runtime run --detach --json` path used by the CLI, waits up to eight seconds
+for the manifest's named `ui.port`, and creates one native window labelled
+`app-<appId>` and titled `<App> — Appliance`. Window size is remembered per
+app. The window is an Appliance-owned wrapper containing the app in a
+cross-origin iframe and a 28 px status strip:
+
+```text
+sandboxed · egress: 2 hosts allowed · port 20421
+```
+
+The iframe keeps the app's `http://127.0.0.1:<published-port>` origin separate
+from the desktop origin. The wrapper installs a restrictive CSP whose
+`frame-src` names only that loopback origin. It does not inject scripts into or
+read content from the app. The host count comes from the installed effective
+Runtime policy (falling back to the recorded controls summary), and the strip
+refreshes while the window is open.
+
+Closing an app window keeps its Runtime process running by default, matching
+`appliance runtime ps`; the native close policy also supports an explicit
+`stop-on-close` mode. A Desktop restart reconciles the Runtime registry but
+does not reopen app windows until the user asks. If the app exits or is stopped,
+its window becomes a plain **App exited** page with **Reopen**, and its Installed
+Apps card reports `Exited (N)` when the supervisor supplied an exit code.
+
+Manifests with no `ui` or with a non-web UI show **No UI** and a Logs action on
+their card. Their lifecycle remains available through `runtime ps`, `logs`, and
+`stop`.
+
+### `appliance runtime open`
+
+```sh
+appliance runtime open Journal
+appliance runtime open Journal --target local
+appliance runtime open Journal --print
+```
+
+`runtime open` starts a stopped app, waits for its UI port, then checks the
+private Desktop rendezvous file at
+`~/.appliance/runtime/desktop-ipc.json`. A running Desktop accepts a
+token-authenticated request over loopback and opens the dedicated app window.
+If Desktop is absent or the bounded IPC connection fails, the CLI opens the
+same loopback URL in the operating system's default browser. The rendezvous
+contains no app data or credentials and is mode `0600`; a stale file only
+causes the browser fallback.
+
 The current Runtime supports container bundles in the pooled VM. Binary and
 compound execution remain separate runtime work; their manifests can be stored
 and displayed, including the compound service count, but `runtime run` reports
