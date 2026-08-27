@@ -720,15 +720,18 @@ start, curl, ps, restart recovery, and stop timings.
 The shared-VM controls default for this increment is explicit: payload,
 environment, task, cgroup, health, restart, state, and logs are leaf-scoped.
 All leaves retain one app principal `/32` and netns, so host-enforced egress is
-the sorted app-level union of leaf grants. Host publication is narrower: only
-compound leaf ports marked both `expose: "host"` and `primary: true` receive a
-host listener. `isolation: "vm"` is rejected as `not yet supported`; dedicated
-placement and upgrades remain follow-ups.
+declared once at the compound root. A leaf-level `network.egress` is rejected
+with guidance to move it to the top level; there is no per-leaf grant union.
+Host publication is narrower: only compound leaf ports marked both
+`expose: "host"` and `primary: true` receive a host listener. `isolation: "vm"`
+is rejected as `not yet supported`; dedicated placement and upgrades remain
+follow-ups.
 
 **NOTE:** v1 starts the deterministic topological sequence serially, with
-lexical service-name tie-breaking for simultaneously ready leaves. Parallel
-launch of independent leaves is intentionally deferred; dependency ordering
-and failure semantics do not depend on scheduler timing.
+lexical service-name tie-breaking for simultaneously ready leaves and a 300 s
+readiness cap per leaf. Optional-leaf restart exhaustion degrades the app but
+does not stop its dependents. Parallel launch of independent leaves and
+dependent teardown after optional exhaustion are intentionally deferred.
 
 ### Pool survival and expected timings
 

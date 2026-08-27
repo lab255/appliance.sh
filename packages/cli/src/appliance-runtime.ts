@@ -98,13 +98,7 @@ export interface EffectiveRuntimePolicy {
 
 export function manifestToRuntimePolicy(manifest: ApplianceV2, principalIp: string): EffectiveRuntimePolicy {
   const allowed = new Map<string, Set<number>>();
-  const rules =
-    manifest.type === 'compound'
-      ? [
-          ...(manifest.network?.egress ?? []),
-          ...compoundLeaves(manifest).flatMap(({ service }) => service.network?.egress ?? []),
-        ]
-      : (manifest.network?.egress ?? []);
+  const rules = manifest.network?.egress ?? [];
   for (const rule of rules) {
     const host = rule.host.startsWith('*.') ? rule.host.slice(2) : rule.host;
     const ports = allowed.get(host) ?? new Set<number>();
@@ -167,22 +161,15 @@ export function manifestToRuntimePlan(
   let published: Array<{ name: string; guest: number; protocol: 'tcp' | 'udp' }>;
   if (manifest.type === 'compound') {
     const leaves = compoundLeaves(manifest);
+    const leafEgress = leaves.find(({ service }) => service.network?.egress !== undefined);
+    if (leafEgress) {
+      throw new Error(
+        'compound apps declare network.egress at the root (shared principal); ' +
+          `move ${leafEgress.path.join('.')}.network.egress to the top level`
+      );
+    }
     const isolated = leaves.find(({ isolation }) => isolation === 'vm');
     if (isolated) throw new Error(`service '${isolated.name}' requests isolation: vm, which is not yet supported`);
-    const discovery = Object.fromEntries(
-      leaves.flatMap(({ name, service }) => {
-        const ports = service.ports ?? [];
-        const primary = ports.find((port) => port.primary);
-        const prefix = `APPLIANCE_SVC_${name.replace(/-/g, '_').toUpperCase()}`;
-        return [
-          ...(primary ? [[`${prefix}_URL`, `http://127.0.0.1:${primary.guest}`] as const] : []),
-          ...ports.map(
-            (port) =>
-              [`${prefix}_${port.name.replace(/-/g, '_').toUpperCase()}_URL`, `http://127.0.0.1:${port.guest}`] as const
-          ),
-        ];
-      })
-    );
     const services = leaves.map(({ name, path: servicePath, service }) => {
       const ports = service.ports ?? [];
       const healthConfig = service.health;
@@ -214,7 +201,7 @@ export function manifestToRuntimePlan(
           diskGib: serviceResources.diskGib ?? 2,
           pids: 256,
         },
-        ...workloadFor(service, { ...service.env, ...discovery }),
+        ...workloadFor(service, { ...service.env }),
       } satisfies RuntimeServicePlan;
     });
     workload = { kind: 'compound', services };
@@ -401,10 +388,9 @@ async function runtimeRun(args: string[]): Promise<void> {
     );
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
-    // Binary payloads must not race the asynchronous VZ shutdown: their
-    // custom-rootfs share has to be attached at the very next boot. Keep the
-    // established container reconciliation path unchanged in this stacked PR.
-    if (plan.kind === 'compound' || planContainsBinary(plan)) await waitForRuntimePoolStop();
+    // Workloads must not race the asynchronous VZ shutdown: the next boot
+    // must attach the reconciled share regardless of payload kind.
+    await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
@@ -486,7 +472,11 @@ function runtimePs(args: string[]): void {
   if (json) {
     console.log(
       JSON.stringify(
-        kept.map((record) => ({ ...record, services: statuses.get(record.appId)?.services ?? [] })),
+        kept.map((record) => ({
+          ...record,
+          culprit: statuses.get(record.appId)?.culprit,
+          services: statuses.get(record.appId)?.services ?? [],
+        })),
         null,
         2
       )
@@ -499,7 +489,14 @@ function runtimePs(args: string[]): void {
   }
   console.log('APP\tVERSION\tSTATE\tPRINCIPAL\tPORTS\tSIGNATURE\tUPTIME\tPOOL');
   for (const record of kept) {
-    const state = record.state === 'exited' ? `exited (${record.exitCode ?? '?'})` : record.state;
+    const status = statuses.get(record.appId);
+    const culprit = typeof status?.culprit === 'string' ? status.culprit : undefined;
+    const state =
+      record.state === 'exited'
+        ? `exited (${record.exitCode ?? '?'})`
+        : record.state === 'failed' && culprit
+          ? `failed (culprit: ${culprit}, exit: ${record.exitCode ?? '?'})`
+          : record.state;
     const ports = record.hostPorts.map((port) => `${port.name}=127.0.0.1:${port.host}->${port.guest}`).join(',') || '-';
     const signature = record.signatureKeyId
       ? record.signatureValid
@@ -592,7 +589,8 @@ async function followLogs(appId: string, follow: boolean, selectedService?: stri
     if (status.state === 'exited' || status.state === 'failed') {
       const exitCode = numberOrUndefined(status.exitCode) ?? 1;
       updateRuntimeRecord(appId, { state: status.state, exitCode });
-      if (follow) console.log(chalk.yellow(`${appId} ${status.state} (${exitCode})`));
+      const culprit = typeof status.culprit === 'string' ? `, culprit: ${status.culprit}` : '';
+      if (follow) console.log(chalk.yellow(`${appId} ${status.state} (${exitCode}${culprit})`));
       return exitCode;
     }
     if (!follow) return undefined;
@@ -613,6 +611,7 @@ interface RuntimeServiceStatus {
 interface RuntimeAppStatus extends Record<string, unknown> {
   state?: unknown;
   exitCode?: unknown;
+  culprit?: unknown;
   services?: RuntimeServiceStatus[];
 }
 
@@ -802,12 +801,6 @@ function publishedManifestPorts(
   );
 }
 
-function planContainsBinary(plan: RuntimePlan): boolean {
-  return (
-    plan.kind === 'binary' || (plan.kind === 'compound' && plan.services.some((service) => service.kind === 'binary'))
-  );
-}
-
 function portIsFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
@@ -864,7 +857,7 @@ async function waitForRuntimePoolStop(timeoutMs = 30_000): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  fail(`timed out waiting for ${RUNTIME_POOL_VM} to stop for binary payload share reconciliation`, 1);
+  fail(`timed out waiting for ${RUNTIME_POOL_VM} to stop for payload share reconciliation`, 1);
 }
 
 function formatUptime(startedAt: string): string {

@@ -13,8 +13,8 @@ case "$(uname -m)" in
   x86_64|amd64) OCI_ARCH=amd64 ;;
   *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
-command -v docker >/dev/null 2>&1 || {
-  echo "docker with buildx is required to build the source-only service images" >&2
+command -v docker >/dev/null 2>&1 && docker buildx version >/dev/null 2>&1 || {
+  echo "Docker required: install Docker with Buildx to build the source-only service images" >&2
   exit 1
 }
 

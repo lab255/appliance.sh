@@ -1,4 +1,5 @@
 import { applianceV2Input } from '@appliance.sh/sdk';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   manifestToRuntimePlan,
@@ -170,7 +171,7 @@ describe('manifest to pooled runtime plan', () => {
     ).toThrow('add payload.targets["linux/amd64"] and repackage');
   });
 
-  it('flattens a compound graph, resolves health ports, injects discovery, and publishes only the primary host port', () => {
+  it('flattens a compound graph, resolves health ports, and publishes only the primary host port', () => {
     const plan = manifestToRuntimePlan(
       compoundManifest(),
       '/tmp/notes-suite',
@@ -185,11 +186,7 @@ describe('manifest to pooled runtime plan', () => {
     expect(plan.services.find((service) => service.name === 'web')).toMatchObject({
       dependsOn: ['api'],
       health: { type: 'http', port: 3000, path: '/healthz' },
-      env: {
-        APPLIANCE_SVC_API_URL: 'http://127.0.0.1:9000',
-        APPLIANCE_SVC_API_API_URL: 'http://127.0.0.1:9000',
-        APPLIANCE_SVC_WEB_URL: 'http://127.0.0.1:3000',
-      },
+      env: {},
     });
     expect(plan.ports).toMatchObject([{ name: 'web.http', guest: 3000, host: 20000 }]);
   });
@@ -198,6 +195,33 @@ describe('manifest to pooled runtime plan', () => {
     expect(() =>
       manifestToRuntimePlan(compoundManifest('vm'), '/tmp/notes-suite', '192.168.127.10', 20000, [], 'x64')
     ).toThrow('isolation: vm, which is not yet supported');
+  });
+
+  it('rejects leaf-level egress because compound leaves share one principal', () => {
+    const value = compoundManifest();
+    value.services.api.network = { egress: [{ host: 'api.example.com', ports: [443] }] };
+    expect(() => manifestToRuntimePlan(value, '/tmp/notes-suite', '192.168.127.10', 20000, [], 'x64')).toThrow(
+      'compound apps declare network.egress at the root (shared principal); move api.network.egress to the top level'
+    );
+  });
+
+  it('translates the source-only notes-suite example without Docker', () => {
+    const value = applianceV2Input.parse(
+      JSON.parse(readFileSync(new URL('../../../examples/runtime/notes-suite/appliance.json', import.meta.url), 'utf8'))
+    );
+    const plan = manifestToRuntimePlan(
+      value,
+      '/tmp/notes-suite',
+      '192.168.127.10',
+      20000,
+      [{ name: 'web.http', host: 20000, guest: 3000, protocol: 'tcp' }],
+      'x64'
+    );
+    expect(plan).toMatchObject({
+      kind: 'compound',
+      services: [{ name: 'api' }, { name: 'web' }],
+      ports: [{ name: 'web.http', host: 20000, guest: 3000 }],
+    });
   });
 });
 

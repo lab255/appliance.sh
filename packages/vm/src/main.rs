@@ -284,7 +284,7 @@ struct RuntimePlan {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "lowercase", rename_all_fields = "camelCase")]
 enum RuntimePlanWorkload {
     Container {
         image_path: String,
@@ -1482,13 +1482,13 @@ fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
     match &plan.workload {
         RuntimePlanWorkload::Container { image_path, env } => {
             validate_runtime_payload_path(image_path, "image")?;
-            validate_runtime_env(env)?;
+            validate_runtime_env(env, false)?;
         }
         RuntimePlanWorkload::Binary { target } => {
             validate_runtime_payload_path(&target.path, "binary target")?;
             validate_runtime_relative_path(&target.entrypoint, "binary entrypoint", false)?;
             validate_runtime_relative_path(&target.cwd, "binary working directory", true)?;
-            validate_runtime_env(&target.env)?;
+            validate_runtime_env(&target.env, false)?;
             if target.args.iter().any(|argument| argument.contains('\0')) {
                 bail!("runtime binary arguments must not contain NUL bytes");
             }
@@ -1586,13 +1586,13 @@ fn validate_runtime_service_workload(workload: &RuntimeServiceWorkload, service:
     match workload {
         RuntimeServiceWorkload::Container { image_path, env } => {
             validate_runtime_payload_path(image_path, &format!("service '{service}' image"))?;
-            validate_runtime_env(env)?;
+            validate_runtime_env(env, true)?;
         }
         RuntimeServiceWorkload::Binary { target } => {
             validate_runtime_payload_path(&target.path, &format!("service '{service}' binary target"))?;
             validate_runtime_relative_path(&target.entrypoint, "binary entrypoint", false)?;
             validate_runtime_relative_path(&target.cwd, "binary working directory", true)?;
-            validate_runtime_env(&target.env)?;
+            validate_runtime_env(&target.env, true)?;
             if target.args.iter().any(|argument| argument.contains('\0')) {
                 bail!("runtime binary arguments must not contain NUL bytes");
             }
@@ -1770,12 +1770,15 @@ fn validate_runtime_relative_path(value: &str, label: &str, allow_dot: bool) -> 
     Ok(())
 }
 
-fn validate_runtime_env(env: &std::collections::BTreeMap<String, String>) -> Result<()> {
+fn validate_runtime_env(env: &std::collections::BTreeMap<String, String>, compound_leaf: bool) -> Result<()> {
     for (name, value) in env {
         let mut bytes = name.bytes();
         let valid_first = bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_');
         if !valid_first || !bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_') {
             bail!("invalid runtime environment name '{name}'");
+        }
+        if compound_leaf && name.starts_with("APPLIANCE_SVC_") {
+            bail!("compound service environment name '{name}' uses reserved APPLIANCE_SVC_ prefix");
         }
         if value.contains('\0') {
             bail!("runtime environment value for '{name}' must not contain NUL bytes");
@@ -2424,6 +2427,24 @@ mod tests {
     }
 
     #[test]
+    fn runtime_container_plan_round_trips_camelcase_image_path() {
+        let workload: RuntimePlanWorkload = serde_json::from_str(
+            r#"{"kind":"container","imagePath":"payload/images/linux-arm64.tar","env":{}}"#,
+        )
+        .unwrap();
+        let RuntimePlanWorkload::Container { image_path, env } = workload else {
+            panic!("expected container workload");
+        };
+        assert_eq!(image_path, "payload/images/linux-arm64.tar");
+        assert!(env.is_empty());
+
+        let json = serde_json::to_value(valid_runtime_plan()).unwrap();
+        assert_eq!(json["kind"], "container");
+        assert_eq!(json["imagePath"], "payload/images/journal.oci.tar");
+        assert!(json.get("image_path").is_none());
+    }
+
+    #[test]
     fn runtime_binary_plan_validates_target_entrypoint_env_and_cwd() {
         let mut plan = valid_runtime_plan();
         plan.workload = RuntimePlanWorkload::Binary {
@@ -2554,6 +2575,18 @@ mod tests {
     fn compound_restart_backoff_is_deterministic_and_capped() {
         assert_eq!((1..=7).map(|attempt| runtime_backoff_seconds(2, attempt)).collect::<Vec<_>>(), [2, 4, 8, 16, 30, 30, 30]);
         assert_eq!(runtime_backoff_seconds(60, 1), 30);
+    }
+
+    #[test]
+    fn compound_plan_reserves_service_discovery_environment_names() {
+        let mut plan = valid_runtime_plan();
+        let mut service = runtime_service("api", &[]);
+        let RuntimeServiceWorkload::Container { env, .. } = &mut service.workload else {
+            unreachable!();
+        };
+        env.insert("APPLIANCE_SVC_WEB_URL".to_string(), "http://attacker.invalid".to_string());
+        plan.workload = RuntimePlanWorkload::Compound { services: vec![service] };
+        assert!(validate_runtime_plan(&plan).unwrap_err().to_string().contains("reserved APPLIANCE_SVC_ prefix"));
     }
 
     #[test]
