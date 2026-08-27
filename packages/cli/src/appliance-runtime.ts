@@ -4,9 +4,10 @@ import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
 import type { ApplianceV2 } from '@appliance.sh/sdk';
-import { loadRuntimeBundle, unpackRuntimeBundle } from './appliance-runtime-bundle.js';
 import { ensurePooledRuntime, runVm, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
+import { computeBundleDigest } from './utils/bundle-digest.js';
+import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
 import {
   readRuntimeRegistry,
   removeRuntimeRecord,
@@ -32,6 +33,8 @@ export interface RuntimePlan {
   resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
 }
 
+type LoadedRuntimeBundle = VerifyBundleResult;
+
 export function manifestToRuntimePlan(
   manifest: ApplianceV2,
   installDir: string,
@@ -47,6 +50,7 @@ export function manifestToRuntimePlan(
   const ports = manifest.ports ?? [];
   const published = ports.filter((port) => port.expose === 'host');
   if (published.some((port) => port.protocol !== 'tcp')) throw new Error('UDP published ports are not yet supported');
+  if (published.length > 16) throw new Error('runtime apps may publish at most 16 ports');
   if (hostPorts.length !== published.length) throw new Error('host port allocation does not match manifest');
   const shareTag = `ap-${createHash('sha256').update(`${manifest.name}/payload`).digest('hex').slice(0, 32)}`;
   return {
@@ -106,9 +110,11 @@ async function runtimeRun(args: string[]): Promise<void> {
   if (/^https?:\/\//.test(input))
     fail('runtime run URLs are not yet supported; download the bundle and pass a local path', 2);
   const bundlePath = path.resolve(input);
-  let loaded: ReturnType<typeof loadRuntimeBundle>;
+  let loaded: LoadedRuntimeBundle;
   try {
-    loaded = loadRuntimeBundle(bundlePath);
+    const bounded = readBundleManifest(bundlePath);
+    if (bounded.classification !== 'runnable') throw new Error('runtime run requires a manifest v2 runnable bundle');
+    loaded = verifyBundle(bundlePath);
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error), 2);
   }
@@ -122,7 +128,7 @@ async function runtimeRun(args: string[]): Promise<void> {
 
   const installDir = path.join(runtimeRoot(), 'apps', loaded.manifest.name, loaded.manifest.version);
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
-  unpackRuntimeBundle(bundlePath, installDir, loaded);
+  installRuntimeBundle(bundlePath, installDir, loaded);
   const records = readRuntimeRegistry().filter((entry) => entry.appId !== loaded.manifest.name);
   const persisted = persistedRuntimeAllocation(loaded.manifest);
   const principalIp = persisted?.principalIp ?? allocatePrincipalIp(records);
@@ -150,6 +156,8 @@ async function runtimeRun(args: string[]): Promise<void> {
     installDir,
     shareTag: plan.share.tag,
     uid,
+    signatureKeyId: loaded.signature?.keyId,
+    signatureValid: loaded.signature?.valid,
   };
   upsertRuntimeRecord(record);
 
@@ -191,7 +199,8 @@ async function runtimeRun(args: string[]): Promise<void> {
   };
   process.once('SIGINT', stopOnSignal);
   try {
-    await followLogs(plan.appId, true);
+    const exitCode = await followLogs(plan.appId, true);
+    if (exitCode !== undefined) process.exitCode = exitCode;
   } finally {
     process.removeListener('SIGINT', stopOnSignal);
   }
@@ -205,7 +214,18 @@ function runtimePs(args: string[]): void {
   const json = args.includes('--json');
   const kept: RuntimeRecord[] = [];
   for (const record of readRuntimeRegistry()) {
-    const status = vmJson(['runtime', 'status', record.poolVm, record.appId], true);
+    const queried = runVmCapture(['runtime', 'status', record.poolVm, record.appId]);
+    if (queried.status !== 0) {
+      kept.push(record);
+      continue;
+    }
+    let status: Record<string, unknown>;
+    try {
+      status = JSON.parse(queried.stdout) as Record<string, unknown>;
+    } catch {
+      kept.push(record);
+      continue;
+    }
     if (status.state === 'missing') continue;
     const state = status.state === 'running' ? 'running' : status.state === 'exited' ? 'exited' : record.state;
     const updated: RuntimeRecord = {
@@ -226,13 +246,18 @@ function runtimePs(args: string[]): void {
     console.log('No runtime apps.');
     return;
   }
-  console.log('APP\tVERSION\tSTATE\tPRINCIPAL\tPORTS\tUPTIME\tPOOL');
+  console.log('APP\tVERSION\tSTATE\tPRINCIPAL\tPORTS\tSIGNATURE\tUPTIME\tPOOL');
   for (const record of kept) {
     const state = record.state === 'exited' ? `exited (${record.exitCode ?? '?'})` : record.state;
     const ports = record.hostPorts.map((port) => `${port.name}=127.0.0.1:${port.host}->${port.guest}`).join(',') || '-';
+    const signature = record.signatureKeyId
+      ? record.signatureValid
+        ? `valid:${record.signatureKeyId}`
+        : `unverified:${record.signatureKeyId}`
+      : 'unsigned';
     const pending = record.poolRestartPending ? ' · pool restart pending' : '';
     console.log(
-      `${record.appId}\t${record.version}\t${state}\t${record.principalIp}\t${ports}\t${formatUptime(record.startedAt)}\t${record.poolVm}${pending}`
+      `${record.appId}\t${record.version}\t${state}\t${record.principalIp}\t${ports}\t${signature}\t${formatUptime(record.startedAt)}\t${record.poolVm}${pending}`
     );
   }
 }
@@ -264,27 +289,113 @@ async function runtimeLogs(args: string[]): Promise<void> {
   await followLogs(appId, args.includes('-f') || args.includes('--follow'));
 }
 
-async function followLogs(appId: string, follow: boolean): Promise<void> {
-  let seen = '';
+async function followLogs(appId: string, follow: boolean): Promise<number | undefined> {
+  let offset = 0;
   for (;;) {
     const record = readRuntimeRegistry().find((entry) => entry.appId === appId);
-    if (!record) return;
-    const logs = runVmCapture(['runtime', 'logs', record.poolVm, appId]);
+    if (!record) return undefined;
+    const logs = runVmCapture(['runtime', 'logs', record.poolVm, appId, String(offset)]);
+    let receivedData = false;
     if (logs.status === 0) {
-      const next = logs.stdout;
-      const delta = next.startsWith(seen) ? next.slice(seen.length) : next;
-      if (delta) process.stdout.write(delta + (delta.endsWith('\n') ? '' : '\n'));
-      seen = next;
+      try {
+        const chunk = JSON.parse(logs.stdout) as { offset?: unknown; data?: unknown };
+        if (typeof chunk.offset === 'number' && typeof chunk.data === 'string') {
+          offset = chunk.offset;
+          const decoded = Buffer.from(chunk.data, 'base64').toString('utf8');
+          receivedData = decoded.length > 0;
+          const safe = sanitizeRuntimeLog(decoded);
+          if (safe) process.stdout.write(safe + (safe.endsWith('\n') ? '' : '\n'));
+        }
+      } catch {
+        // A malformed log response is transient; status below still reports
+        // the task outcome without replaying unsafe bytes.
+      }
     }
+    if (receivedData) continue;
     const status = vmJson(['runtime', 'status', record.poolVm, appId], true);
     if (status.state === 'exited') {
       const exitCode = numberOrUndefined(status.exitCode) ?? 1;
       updateRuntimeRecord(appId, { state: 'exited', exitCode });
       if (follow) console.log(chalk.yellow(`${appId} exited (${exitCode})`));
-      return;
+      return exitCode;
     }
-    if (!follow) return;
+    if (!follow) return undefined;
     await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+export function sanitizeRuntimeLog(value: string): string {
+  const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g');
+  const withoutAnsi = value.replace(ansi, '');
+  let safe = '';
+  for (const character of withoutAnsi) {
+    const code = character.charCodeAt(0);
+    if (character === '\n' || character === '\t' || code >= 0x20) safe += character;
+  }
+  return safe.split(String.fromCharCode(0x7f)).join('');
+}
+
+function installRuntimeBundle(bundlePath: string, destination: string, verified: LoadedRuntimeBundle): void {
+  const parent = path.dirname(destination);
+  fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
+  if (runtimeInstallMatches(destination, verified.digest)) {
+    removePreviousRuntimeInstalls(destination);
+    return;
+  }
+
+  const staging = `${destination}.staging-${process.pid}-${Date.now()}`;
+  const previous = `${destination}.previous-${process.pid}-${Date.now()}`;
+  try {
+    unpackBundle(bundlePath, staging);
+    if (!runtimeInstallMatches(staging, verified.digest)) {
+      throw new Error('unpacked Runtime bundle digest does not match verified archive');
+    }
+    if (fs.existsSync(destination)) fs.renameSync(destination, previous);
+    fs.renameSync(staging, destination);
+    if (fs.existsSync(previous)) fs.rmSync(previous, { recursive: true, force: true });
+    removePreviousRuntimeInstalls(destination);
+  } catch (error) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    if (!fs.existsSync(destination) && fs.existsSync(previous)) fs.renameSync(previous, destination);
+    throw error;
+  }
+}
+
+function runtimeInstallMatches(destination: string, digest: string): boolean {
+  try {
+    const root = fs.realpathSync(destination);
+    if (!fs.lstatSync(root).isDirectory()) return false;
+    if (fs.readFileSync(path.join(root, 'digest'), 'utf8') !== `${digest}\n`) return false;
+    const entries: Array<{ path: string; data: Buffer }> = [];
+    const walk = (directory: string): void => {
+      for (const name of fs.readdirSync(directory)) {
+        const absolute = path.join(directory, name);
+        const stat = fs.lstatSync(absolute);
+        if (stat.isSymbolicLink()) throw new Error('installed Runtime bundle contains a symlink');
+        if (stat.isDirectory()) {
+          walk(absolute);
+        } else if (stat.isFile()) {
+          const relative = path.relative(root, absolute).split(path.sep).join('/');
+          if (relative !== 'digest' && relative !== 'signature.sig') {
+            entries.push({ path: relative, data: fs.readFileSync(absolute) });
+          }
+        } else {
+          throw new Error('installed Runtime bundle contains an unsupported file type');
+        }
+      }
+    };
+    walk(root);
+    return computeBundleDigest(entries) === digest;
+  } catch {
+    return false;
+  }
+}
+
+function removePreviousRuntimeInstalls(destination: string): void {
+  const parent = path.dirname(destination);
+  const prefix = `${path.basename(destination)}.previous-`;
+  for (const name of fs.readdirSync(parent)) {
+    if (name.startsWith(prefix)) fs.rmSync(path.join(parent, name), { recursive: true, force: true });
   }
 }
 

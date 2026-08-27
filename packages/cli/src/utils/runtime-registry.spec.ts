@@ -62,4 +62,13 @@ describe('runtime registry', () => {
     fs.writeFileSync(file, '{broken');
     expect(readRuntimeRegistry(file)).toEqual([]);
   });
+
+  it('round-trips bundle signature verification state', () => {
+    const file = tempRegistry();
+    upsertRuntimeRecord({ ...record('journal'), signatureKeyId: 'publisher-1', signatureValid: true }, file);
+    expect(readRuntimeRegistry(file)[0]).toMatchObject({
+      signatureKeyId: 'publisher-1',
+      signatureValid: true,
+    });
+  });
 });

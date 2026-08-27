@@ -1,6 +1,6 @@
 import { applianceV2Input } from '@appliance.sh/sdk';
 import { describe, expect, it } from 'vitest';
-import { manifestToRuntimePlan } from './appliance-runtime.js';
+import { manifestToRuntimePlan, sanitizeRuntimeLog } from './appliance-runtime.js';
 
 function manifest(resources: Record<string, number> = {}) {
   return applianceV2Input.parse({
@@ -52,5 +52,31 @@ describe('manifest to pooled runtime plan', () => {
         { name: 'http', host: 20000, guest: 3000, protocol: 'tcp' },
       ]).resources
     ).toEqual({ cpus: 1, memoryMib: 512, diskGib: 2, pids: 256 });
+  });
+
+  it('bounds relay allocation to one 16-port principal slice', () => {
+    const value = manifest();
+    value.ports = Array.from({ length: 17 }, (_, index) => ({
+      name: `p${index}`,
+      guest: 3000 + index,
+      protocol: 'tcp' as const,
+      expose: 'host' as const,
+      primary: index === 0,
+    }));
+    expect(() =>
+      manifestToRuntimePlan(
+        value,
+        '/tmp/journal',
+        '192.168.127.10',
+        20000,
+        value.ports.map((port, index) => ({ ...port, host: 20000 + index }))
+      )
+    ).toThrow('at most 16 ports');
+  });
+});
+
+describe('runtime log rendering', () => {
+  it('strips ANSI and terminal control bytes while preserving lines and tabs', () => {
+    expect(sanitizeRuntimeLog('\u001b[31mred\u001b[0m\u0000\u0007\tline\nnext\u007f')).toBe('red\tline\nnext');
   });
 });

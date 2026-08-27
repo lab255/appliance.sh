@@ -26,6 +26,8 @@ export interface RuntimeRecord {
   installDir: string;
   shareTag: string;
   uid: number;
+  signatureKeyId?: string;
+  signatureValid?: boolean;
 }
 
 interface RuntimeRegistryFile {
@@ -102,6 +104,8 @@ function isRuntimeRecord(value: unknown): value is RuntimeRecord {
     typeof record.poolRestartPending === 'boolean' &&
     typeof record.installDir === 'string' &&
     typeof record.shareTag === 'string' &&
-    typeof record.uid === 'number'
+    typeof record.uid === 'number' &&
+    (record.signatureKeyId === undefined || typeof record.signatureKeyId === 'string') &&
+    (record.signatureValid === undefined || typeof record.signatureValid === 'boolean')
   );
 }
