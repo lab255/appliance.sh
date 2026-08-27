@@ -25,6 +25,7 @@ import type {
   BootstrapOptions,
   BootstrapResult,
   Cluster,
+  CatalogueFetchResult,
   ConsoleHost,
   HostConfig,
   LatestGhcrTagInput,
@@ -90,6 +91,58 @@ export const tauriHost: ConsoleHost = {
     async set(mode: AppMode) {
       await invoke('set_app_mode', { mode });
     },
+  },
+
+  catalogue: {
+    async fetchCatalogue(): Promise<CatalogueFetchResult> {
+      const configured = (import.meta.env as Record<string, string | undefined>).APPLIANCE_CATALOGUE_URL;
+      const origin = (configured?.trim() || 'https://www.appliance.sh').replace(/\/$/, '');
+      const cachedRaw = localStorage.getItem('appliance.catalogue.verified-pair/v1');
+      const cached = cachedRaw ? (JSON.parse(cachedRaw) as CatalogueFetchResult) : null;
+      try {
+        const [indexResponse, signatureResponse] = await Promise.all([
+          fetch(`${origin}/catalogue/index.json`, { headers: { Accept: 'application/json' } }),
+          fetch(`${origin}/catalogue/index.json.sig`, { headers: { Accept: 'application/json' } }),
+        ]);
+        if (!indexResponse.ok || !signatureResponse.ok) {
+          throw new Error(`catalogue refresh failed (${indexResponse.status}/${signatureResponse.status})`);
+        }
+        return {
+          indexJson: await indexResponse.text(),
+          signatureJson: await signatureResponse.text(),
+          fetchedAt: new Date().toISOString(),
+          source: 'network',
+          highestGeneration: cached?.highestGeneration,
+          maxSeenWallClock: cached?.maxSeenWallClock,
+        };
+      } catch (cause) {
+        if (!cached) throw cause;
+        return {
+          ...cached,
+          source: 'cache',
+          refreshError: cause instanceof Error ? cause.message : 'catalogue refresh failed',
+        };
+      }
+    },
+    async cacheVerified(pair: CatalogueFetchResult, generation: number, verifiedAt: string): Promise<void> {
+      // A single localStorage value preserves index+signature atomicity. The
+      // shared app calls this only after signature/schema/time verification.
+      localStorage.setItem(
+        'appliance.catalogue.verified-pair/v1',
+        JSON.stringify({
+          ...pair,
+          source: 'cache',
+          refreshError: undefined,
+          highestGeneration: Math.max(pair.highestGeneration ?? 0, generation),
+          maxSeenWallClock:
+            !pair.maxSeenWallClock || Date.parse(verifiedAt) > Date.parse(pair.maxSeenWallClock)
+              ? verifiedAt
+              : pair.maxSeenWallClock,
+        })
+      );
+    },
+    // AP-173 has not supplied a real `runtime install` implementation on
+    // this branch. Deliberately omit installBundle so the UI cannot fake it.
   },
 
   bootstrap: {

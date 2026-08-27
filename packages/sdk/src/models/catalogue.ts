@@ -29,7 +29,7 @@ export const catalogueEntrySchema = z.strictObject({
         !url.username &&
         !url.password &&
         url.port === '' &&
-        /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.appliance\.zip$/.test(url.hostname)
+        /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.appliance\.zip$/.test(url.hostname)
       );
     }, 'must be an HTTPS appliance.zip host'),
   digest,
@@ -76,4 +76,3 @@ export type CatalogueEntry = z.infer<typeof catalogueEntrySchema>;
 export type CatalogueIndex = z.infer<typeof catalogueIndexSchema>;
 export type CatalogueBlacklist = z.infer<typeof catalogueBlacklistSchema>;
 export type SignatureEnvelope = z.infer<typeof signatureEnvelopeSchema>;
-

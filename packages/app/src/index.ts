@@ -5,6 +5,8 @@ export type {
   ConsoleHost,
   AppMode,
   AppModeHost,
+  CatalogueHost,
+  CatalogueFetchResult,
   HostConfig,
   Cluster,
   AddClusterInput,

@@ -379,6 +379,9 @@ importers:
       '@appliance.sh/cli':
         specifier: workspace:*
         version: link:../cli
+      '@appliance.sh/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@tauri-apps/cli':
         specifier: ^2.1.0
         version: 2.10.1
