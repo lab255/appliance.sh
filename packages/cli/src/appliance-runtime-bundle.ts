@@ -125,6 +125,19 @@ export function unpackRuntimeBundle(
   destination: string,
   loaded = loadRuntimeBundle(bundlePath)
 ): void {
+  // A boot-configured VirtioFS share pins this directory inode. Replacing an
+  // already verified installation with an identical staging rename makes the
+  // live read-only share stale (VZ then returns EPERM). Preserve it when the
+  // exact bundle is already installed; new versions still get distinct paths.
+  if (fs.existsSync(destination)) {
+    try {
+      verifyExtractedTree(destination, loaded.entries);
+      if (digestExtractedBundle(destination, loaded.entries) === loaded.digest) return;
+    } catch {
+      // Fall through to the atomic replacement path for incomplete/tampered
+      // installs. The replacement is attached on the pool's next boot.
+    }
+  }
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
   const staging = `${destination}.staging-${process.pid}-${Date.now()}`;

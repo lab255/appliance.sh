@@ -1,10 +1,11 @@
 import chalk from 'chalk';
 import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
 import type { ApplianceV2 } from '@appliance.sh/sdk';
 import { loadRuntimeBundle, unpackRuntimeBundle } from './appliance-runtime-bundle.js';
-import { ensurePooledRuntime, runVm } from './utils/microvm-up.js';
+import { ensurePooledRuntime, runVm, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import {
   readRuntimeRegistry,
@@ -123,9 +124,10 @@ async function runtimeRun(args: string[]): Promise<void> {
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
   unpackRuntimeBundle(bundlePath, installDir, loaded);
   const records = readRuntimeRegistry().filter((entry) => entry.appId !== loaded.manifest.name);
-  const principalIp = allocatePrincipalIp(records);
-  const uid = allocateUid(records);
-  const hostPorts = await allocatePublishedPorts(loaded.manifest, records);
+  const persisted = persistedRuntimeAllocation(loaded.manifest);
+  const principalIp = persisted?.principalIp ?? allocatePrincipalIp(records);
+  const uid = persisted?.uid ?? allocateUid(records);
+  const hostPorts = persisted?.hostPorts ?? (await allocatePublishedPorts(loaded.manifest, records));
   let plan: RuntimePlan;
   try {
     plan = manifestToRuntimePlan(loaded.manifest, installDir, principalIp, uid, hostPorts);
@@ -283,6 +285,37 @@ async function followLogs(appId: string, follow: boolean): Promise<void> {
     }
     if (!follow) return;
     await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+function persistedRuntimeAllocation(
+  manifest: ApplianceV2
+): { principalIp: string; uid: number; hostPorts: RuntimeHostPort[] } | undefined {
+  if (manifest.type !== 'container') return undefined;
+  try {
+    const spec = JSON.parse(fs.readFileSync(path.join(vmDir(RUNTIME_POOL_VM), 'vm.json'), 'utf8')) as {
+      published?: Array<{
+        host?: number;
+        name?: string;
+        principal?: string;
+        target?: string;
+        guest?: number;
+      }>;
+    };
+    const expected = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+    const published = (spec.published ?? []).filter((port) => port.principal === manifest.name);
+    if (published.length !== expected.length || published.some((port) => !port.target)) return undefined;
+    const hostPorts = expected.map((port) => {
+      const existing = published.find((candidate) => candidate.name === port.name && candidate.guest === port.guest);
+      if (!existing || typeof existing.host !== 'number') throw new Error('published port shape changed');
+      return { name: port.name, host: existing.host, guest: port.guest, protocol: 'tcp' as const };
+    });
+    const principalIp = published[0]?.target;
+    const leaf = Number.parseInt(principalIp?.split('.').slice(-1)[0] ?? '', 10);
+    if (!principalIp || !Number.isInteger(leaf) || leaf < 10 || leaf > 239) return undefined;
+    return { principalIp, uid: 20000 + leaf - 10, hostPorts };
+  } catch {
+    return undefined;
   }
 }
 
