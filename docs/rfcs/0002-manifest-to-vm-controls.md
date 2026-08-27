@@ -13,6 +13,11 @@ by a runnable bundle's root `appliance.json` into host-enforced runtime state.
 RFC 0001 owns JSON shapes; this RFC owns semantics, defaults, override limits,
 and the mapping to the current microVM engine.
 
+The control input is the verified `appliance.json` covered by RFC 0001's
+unified signature envelope. Its required publisher identity is audit metadata,
+not an extra capability. Entries in the name-keyed `services` map produce
+stable `<app>/<service-name>` principals; array position is never identity.
+
 The default topology is one pooled Linux microVM, `appliance-runtime`, for all
 apps and all services whose isolation is `shared`. A sub-appliance declaring
 `isolation: vm` receives a dedicated Linux microVM. The manifest does not size
@@ -58,32 +63,23 @@ The target pooled `VmSpec` is core-only:
   network path; and
 - the image is a pinned Appliance Runtime Linux image, not a payload target.
 
-The current engine enforces `agent_only implies dev`. The Runtime must split
-"core agent/supervisor ready" from "development toolchain ready" so this pool
-can be `agent_only = true, dev = false`. Until that change exists, the Runtime
-must not pretend that a normal dev VM is the production pool contract.
+The current CLI paths in `main.rs` enforce `agent_only implies dev`, and the
+agent handoff in `guest.rs` waits for `.dev-ready`. The Runtime must split "core
+agent/supervisor ready" from "development toolchain ready" so this pool can be
+`agent_only = true, dev = false`. Until then, a normal dev VM is not the
+production pool contract.
 
 Initial pool sizing uses the current conservative VM defaults: 2 vCPUs,
 4096 MiB memory, and a 10 GiB sparse data disk. This is host configuration,
 not a reduction or sum of manifest `resources`.
 
-The default growth policy is:
-
-1. CPU/memory tiers are 2/4 GiB, 4/8 GiB, then 8/16 GiB.
-2. Sustained cgroup pressure for 60 seconds marks the next tier recommended.
-3. A tier change occurs automatically only while no app is running; otherwise
-   `runtime ps` reports `pool resize pending` and the next clean restart grows
-   it.
-4. CPU is capped at `max(2, min(8, host CPUs - 2))`; memory is capped at the
-   lower of 16 GiB or 50% of host RAM.
-5. The sparse disk grows by 10 GiB when free space falls below 20%, only when
-   at least 20 GiB remains free on the host, and never beyond 100 GiB without
-   an explicit user override.
-6. The pool never shrinks automatically. App data remains subject to its own
-   quota even when the pool disk grows.
-
-NOTE: these sizing caps are a sane default because no owner sizing profile was
-given. They are called out in Open for owner.
+Growth tiers are 2/4 GiB, 4/8 GiB, then 8/16 GiB. Sustained cgroup pressure for
+60 seconds recommends the next tier. Resizing occurs automatically only with no
+app running; otherwise `runtime ps` shows `pool resize pending`. CPU is capped
+at `max(2, min(8, host CPUs - 2))` and memory at 16 GiB or 50% of host RAM.
+The sparse disk grows 10 GiB below 20% free only if the host has 20 GiB free,
+and is capped at 100 GiB without an override. It never shrinks automatically.
+NOTE: these are sane defaults pending the owner decision below.
 
 ### Dedicated sub-appliance VM
 
@@ -98,7 +94,8 @@ The manifest's `vm` isolation is a locked minimum. A user may strengthen a
 ### Per-app enforcement inside the pool
 
 The unit of policy is a control principal: `<app>` for a simple app and
-`<app>/<service>` for a compound service. Every principal receives:
+`<app>/<service-name>` for each entry in a compound app's name-keyed service
+map. Every runnable leaf, including an RFC 0003 sub-appliance leaf, receives:
 
 - a stable, unprivileged Linux UID/GID;
 - a cgroup v2 subtree;
@@ -111,10 +108,15 @@ namespace, or user-controlled privileged container flags. User namespaces are
 not used as a substitute for the VM boundary.
 
 The guest root namespace connects each app network namespace with a veth pair.
-It routes the app subnet to the VM NIC without source NAT. An nftables rule at
-each veth ingress requires the assigned `/32` source address and rejects
-spoofed or unknown sources. Inter-app traffic is denied by default. Compound
-siblings may reach only the target service ports declared `internal`.
+Principal `/32`s are allocated inside the existing `192.168.127.0/24`, excluding
+the host gateway `.1`, root lease `.2`, and a reserved infrastructure range.
+The root namespace routes them to the VM NIC without source NAT and uses proxy
+ARP so the host netstack can return frames without learning a non-link subnet.
+This preserves smoltcp's current single `/24`, default route, and `any_ip`
+configuration; no smoltcp routing change is required. An nftables rule at each
+veth ingress requires the assigned `/32` source and rejects spoofed or unknown
+sources. Inter-app traffic is denied by default. Compound siblings may reach
+only the target service ports declared `internal`.
 
 The host netstack carries an atomically updated mapping of
 `(vm id, source address) -> control principal`. DHCP/DNS and every terminated
@@ -123,10 +125,12 @@ or stale source addresses fail closed. This source address is the attribution
 token used by the host egress proxy; `SO_MARK` is not used because skb marks do
 not cross the virtio boundary.
 
-The current netstack already sees the source address in DNS and TCP frames,
-but discards it when it calls the VM-scoped policy guard. The implementation
-must retain it through `Flow`, DNS dispatch, policy selection, logging, and
-inbound routing.
+The current netstack already sees the source address in DNS and TCP frames.
+The smallest host change threads TCP `flow.tuple.0` into `serve_outbound` and
+the DNS `src_ip` into `spawn_dns`, then selects `policy_for(vm, src)`. Inbound
+connects and the interception peer check replace hard-coded `GUEST_IP` with the
+selected principal address. RFC 0003 may rely on this per-leaf source-IP
+identity; unknown or stale leaf addresses fail closed.
 
 Namespace isolation is not a second VM boundary. A guest-kernel compromise
 can defeat UID, namespace, cgroup, and source-address anti-spoofing controls.
@@ -151,10 +155,10 @@ Paths in the source column are semantic references to RFC 0001's
 | `image`         | fixed runtime release                  | Pinned Linux runtime kernel/initramfs image. `payload.targets` selects app payload only.                                              |
 | `cmdline`       | fixed runtime release                  | Engine-generated runtime guest command line; n/a to manifest.                                                                         |
 | `mac`           | engine allocation                      | Random locally administered unicast MAC persisted at VM creation.                                                                     |
-| `host_port`     | host allocation                        | Pool ingress/router listener, default 8081 if free; not an app port grant.                                                            |
+| `host_port`     | host allocation                        | Pool supervisor-router listener from the non-default VM's allocated 8100+ block; not an app port grant.                               |
 | `api_port`      | fixed required slot                    | Allocated with the VM port block but no listener because `cluster = false`; n/a to manifest.                                          |
 | `registry_port` | fixed required slot                    | Allocated but unused; packaged payloads do not gain a host registry.                                                                  |
-| `egress_port`   | host allocation                        | Pool netstack/control endpoint; app attribution is by namespace source address, not this single field.                                |
+| `egress_port`   | host allocation                        | Allocated legacy CONNECT-proxy listener slot (`main.rs`), not a netstack/control endpoint; runtime principals do not use it.          |
 | `buildkit_port` | fixed required slot                    | Allocated but unused; runtime execution performs no build.                                                                            |
 | `dev`           | fixed                                  | `false`; requires removal of the current `agent_only implies dev` invariant.                                                          |
 | `dev_mount`     | fixed                                  | `None`; it is a legacy single workspace mount and cannot represent app grants.                                                        |
@@ -175,13 +179,13 @@ Paths in the source column are semantic references to RFC 0001's
 | `ports[].primary`              | `ports[].primary`                       | Selects UI/open behavior; grants no additional reachability.                                                                                        |
 | `ports[].expose`               | `ports[].expose`                        | `public` creates a host listener; `internal` permits only declared compound siblings; a declared port defaults to `public` when exposure is absent. |
 | port protocol                  | `ports[].protocol` if present           | TCP only in this runtime version; an unsupported declaration fails validation rather than widening.                                                 |
-| mount slot id                  | `mounts[].name`                         | Required stable name, unique within the principal; used in grants and mount tags.                                                                   |
+| mount slot id                  | `mounts[].name`                         | Required stable name, unique within the principal; its tag is a short hash of `<principal>/<slot>`.                                                 |
 | guest mount point              | `mounts[].guest`                        | Manifest-locked absolute guest path. It must not shadow `/proc`, `/sys`, `/dev`, runtime control paths, payload, or another slot.                   |
 | suggested host path            | `mounts[].suggestedDefault`             | Display-only suggestion. It is never opened, resolved, or mounted before user confirmation/edit.                                                    |
 | confirmed host path            | user grant                              | Canonical host path/bookmark persisted in `effective.json`; no manifest value can grant it.                                                         |
 | mount write mode               | `mounts[].rw` plus user grant           | Read-only by default. `rw: true` is only a request; user must grant write. User may downgrade to read-only.                                         |
 | `EgressPolicy.default`         | runtime fixed                           | `Deny` for every runtime principal, including when `network.egress` is absent.                                                                      |
-| `EgressPolicy.allow`           | granted subset of `network.egress`      | Normalized granted hostname suffixes only; no baked agent/dev allowlist in an app policy.                                                           |
+| `EgressPolicy.allow`           | granted subset of `network.egress`      | Normalized granted hostname suffixes only; IP/CIDR entries are rejected and no baked agent/dev allowlist is inherited.                              |
 | `EgressPolicy.deny`            | user revocations / runtime safety rules | Explicit revocations and host safety blocks; deny wins. The publisher cannot remove these.                                                          |
 | `EgressPolicy.mitm`            | user/global runtime setting             | `true` by default in inspection-only mode; never sourced from the manifest.                                                                         |
 | `CredentialRule` (entire type) | n/a                                     | Out of scope; no `appliance.json` key or composition in this RFC. Existing VM broker remains untouched.                                             |
@@ -217,17 +221,21 @@ principal.
 ### Allowlist semantics
 
 Each `network.egress` entry is a DNS hostname suffix. The Runtime lowercases,
-IDNA-normalizes, removes a trailing dot, and rejects schemes, paths, userinfo,
-ports, empty labels, and public-suffix-only entries. `example.com` matches
-`example.com` and `api.example.com`, but not `badexample.com`. A leading `*.`
-is normalized to the same suffix behavior rather than treated as a regex.
+IDNA-normalizes, removes a trailing dot, and rejects IP/CIDR literals, schemes,
+paths, userinfo, ports, empty labels, and public-suffix-only entries, even
+though today's `EgressPolicy.allow` can accept IP/CIDR entries. `example.com`
+matches itself and `api.example.com`, but not `badexample.com`. A leading `*.`
+is normalized to suffix behavior rather than treated as a regex.
 
 DNS for an app is answered by the host netstack in that app's policy context.
 Denied names fail fast. Allowed names are host-resolved, but private,
 loopback, link-local, host-LAN, multicast, and reserved answers are rejected.
 For TCP/443 the netstack classifies SNI; for TCP/80 it classifies `Host`.
-Missing or malformed classification fails closed. Non-DNS UDP, ICMP, QUIC,
-raw IP, and arbitrary protocols are denied in v2.
+Non-80/443 TCP is allowed only when its destination IP has a fresh DNS
+back-reference to an allowed name resolved by that same principal; `Resolved`
+is keyed by principal so one app cannot lend another its answer. Missing or
+malformed classification fails closed. Non-DNS UDP, ICMP, QUIC, raw-IP
+manifest entries, and arbitrary protocols are denied in v2.
 
 The current `netstack_policy()` always merges `NETSTACK_ALLOWLIST`; that is
 correct for agent/dev VMs and wrong for packaged apps. Runtime policy lookup
@@ -236,17 +244,23 @@ must accept a policy context and skip the baked list for app principals.
 ### Inspection mode
 
 Inspection is enabled for allowed HTTPS by default. The host reuses the CA and
-leaf-minting primitives in `mitm.rs`, but keys CA material by control principal
-and exposes only that principal's CA in its mount namespace. If inspection
-material cannot be created or trusted, the allowed TLS flow fails closed with
-an actionable error; it must not silently become a blind tunnel.
+leaf-minting primitives in `mitm.rs` with one CA per VM, then bind-mounts its
+trust material only into app namespaces where inspection is on. Per-principal
+CA keying adds no protection under this VM/namespace threat model. If trust
+material cannot be created or mounted, the flow fails closed rather than
+silently becoming a blind tunnel.
 
 Inspection-only means the proxy may terminate and re-originate TLS and parse
 protocol metadata, but forwards application bytes without adding, deleting,
 or changing headers, query parameters, body bytes, or response bytes. The
-existing `force_connection_close`, capture, and injection path is not suitable
-for this mode and must be split from a non-mutating observer. HTTP/1.1 and h2
-must preserve streaming behavior.
+runtime intercept decision is `policy.mitm && allowed`; it drops the current
+`has_cred_rule` dependency while leaving legacy broker behavior untouched.
+The existing capture/injection rewrite path must be split from this observer.
+
+V2 inspection is HTTP/1.1-only and offers only `http/1.1` via ALPN. HTTP/2
+observation is a follow-up requiring an h2 frame parser, multiplexed stream
+lifecycle/accounting, and bidirectional backpressure instead of the current
+single-request, `Connection: close`, `io::copy` implementation.
 
 Each principal writes a bounded host-side log at
 `~/.appliance/runtime/<app>/egress-events.jsonl`; compound service records carry
@@ -261,6 +275,10 @@ An inspection record contains:
 - HTTP method and path with query and fragment removed;
 - response status, byte counts, and duration when observable; and
 - no headers, cookies, authorization data, query values, or body content.
+
+TLS version, response status, byte counts, and duration require new parsing in
+`mitm.rs`. Its current `record()` call passes the raw target including query;
+the `traffic.rs` work below must sanitize before persistence.
 
 When the user disables inspection, destination enforcement remains on and the
 log contains connection metadata only: timestamp, principal, decision, host,
@@ -278,12 +296,19 @@ The host canonicalizes the selected path after consent and persists a stable
 platform identity/bookmark where available. It revalidates identity before
 each start so a symlink replacement cannot silently redirect a grant.
 
-The VM backend exports each confirmed path as a separately tagged VirtioFS
-share. Guest root mounts shares under a supervisor-only staging directory,
-then bind-mounts only that app's tags into its mount namespace at the locked
-guest paths. Apps cannot enumerate the staging directory or another app's
-shares. Read-only is enforced at both the VirtioFS export and bind mount;
-`rw: true` takes effect only after an explicit write grant.
+The VM backend exports each confirmed path as a boot-configured VirtioFS share.
+Each tag is ASCII `ap-` plus a 32-hex-character hash of `<principal>/<slot>`
+(35 bytes, below VZ's 36-byte limit); the persisted mapping detects collisions.
+Guest root stages shares in a supervisor-only directory, then bind-mounts only
+that app's tags into its mount namespace. Apps cannot enumerate another app's
+shares. Read-only is enforced at export and bind mount; `rw: true` still needs
+an explicit write grant.
+
+VZ directory-sharing devices cannot be added to a running VM. Therefore
+**mount grant changes apply on next pool restart; `runtime ps` shows `pool
+restart pending`**. Existing apps keep running without the new or changed
+mount until then; applying it briefly stops every pooled app. KVM has no
+VirtioFS support today and requires new `virtiofsd` integration.
 
 `VmSpec.dev_mount` stays `None`: its single `/persist/workspace` contract would
 make a host tree visible VM-wide and cannot safely represent multiple apps.
@@ -307,10 +332,12 @@ identify the control principal and app namespace target. The current pair of
 declare port 3000. The inbound netstack connects to the selected app source
 address and guest port, not the VM root address.
 
-Primary web ports may additionally share the pool's HTTP front door at 8081,
-routed by `<app>.appliance.localhost`. The named route and the raw allocated
-port both target the same declared principal/guest port; the router cannot
-create a route to an undeclared port.
+Primary web ports may additionally share the pool's `host_port` from its 8100+
+VM block, routed by `<app>.appliance.localhost`. Because `cluster = false`
+provides no in-guest port 80 ingress, this is a new runtime-supervisor-owned
+HTTP router, not k3s or the default `appliance` VM's 8081 listener. The named
+route and raw allocated port target the same declared principal/guest port;
+the router cannot create a route to an undeclared port.
 
 An `internal` port creates no host listener. Guest nftables permits it only
 from declared compound sibling principals. Unrelated apps in the pool cannot
@@ -338,25 +365,14 @@ limit, and quota events are attributed to the principal and surfaced by
 The manifest is the maximum publisher-requested capability. Effective policy
 is the intersection of that ceiling, runtime safety rules, and user grants.
 
-Users may:
+Users may revoke egress, ports, or mounts; disable inspection globally/per app;
+choose a mount host path or downgrade it to read-only; select a free host port
+or bind address; adjust resource limits within host policy; and strengthen
+`shared` isolation to `vm`.
 
-- revoke any egress host, port, or mount;
-- disable TLS inspection globally or per app;
-- choose/edit a mount's host path and downgrade requested write access to
-  read-only;
-- select a free host port or explicit bind address for a declared public port;
-- lower or raise cgroup/storage limits within host policy; and
-- strengthen `shared` isolation to `vm`.
-
-Users may not through ordinary install/run controls:
-
-- add an egress destination absent from `network.egress`;
-- publish an undeclared guest port or turn an internal port public;
-- add an undeclared mount slot, change its guest destination, or upgrade a
-  read-only declaration to writable;
-- disable source attribution, the host netstack, private-range rejection, or
-  deny-by-default; or
-- weaken `isolation: vm` to `shared`.
+Users may not add undeclared egress, publish an undeclared/internal port, add an
+undeclared mount or alter its guest path/write ceiling, disable attribution or
+network safety controls, or weaken `isolation: vm` to `shared`.
 
 The Runtime persists the complete resolved state at
 `~/.appliance/runtime/<app>/effective.json`, mode 0600, using atomic
@@ -370,8 +386,7 @@ write-and-rename. It contains no secrets. At minimum it records:
   "topology": { "vm": "appliance-runtime", "principals": {} },
   "requested": { "egress": [], "mounts": [], "ports": [], "resources": {} },
   "effective": { "egress": {}, "mounts": [], "ports": [], "resources": {} },
-  "overrides": { "inspection": "inherit", "isolation": {} },
-  "updatedAt": "2026-08-27T00:00:00Z"
+  "overrides": { "inspection": "inherit", "isolation": {} }
 }
 ```
 
@@ -416,41 +431,46 @@ The Desktop status strip uses the mock's compact wording:
 
 Selecting the strip opens requested/effective/source details plus the per-app
 egress log. A dedicated service displays `isolated VM`; pooled rows display
-`shared runtime`. If a pool resize is pending, both CLI and Desktop say so
-without presenting app resource hints as VM size.
+`shared runtime`. If a pool resize or mount-grant restart is pending, both CLI
+and Desktop say `pool resize pending` or `pool restart pending` without
+presenting app resource hints as VM size.
 
 ## Engine changes required
 
-- `packages/vm/src/spec.rs` — add runtime-target identity to published ports,
-  a multi-share runtime mount structure, and a core-only readiness profile
-  that permits `agent_only = true, dev = false`.
+- `packages/vm/src/spec.rs` — add runtime-target identity to published ports
+  and a boot-configured multi-share runtime mount structure.
 - `packages/vm/src/store.rs` — add runtime principal/state lookup without
   changing existing per-VM dev/agent policy files.
-- `packages/vm/src/guest.rs` — add the runtime supervisor bootstrap for stable
-  users, network/mount namespaces, cgroup v2, nftables, app payloads, and
-  per-principal CA trust.
-- `packages/vm/src/backend/vz/mod.rs` — attach multiple tagged VirtioFS shares
-  and preserve routed app-subnet frames on the single Netstack NIC.
-- `packages/vm/src/backend/kvm.rs` — provide equivalent multi-share and routed
-  app-subnet behavior for the Linux/KVM backend.
-- `packages/vm/src/netstack/engine.rs` — retain source address on TCP/DNS flows,
-  fail closed on unknown principals, and route inbound published ports to an
-  app namespace address.
-- `packages/vm/src/netstack/guard.rs` — select an app-scoped `EgressPolicy`,
-  omit `NETSTACK_ALLOWLIST` for runtime principals, and pass principal identity
-  through allow/deny/inspection logging.
+- `packages/vm/src/guest.rs` — add the runtime supervisor, HTTP hostname router,
+  stable users, proxy-ARP network/mount namespaces, cgroups, nftables, payloads,
+  per-namespace CA trust binds, and a core-ready gate independent of `.dev-ready`.
+- `packages/vm/src/images.rs` — define a newly pinned Appliance Runtime image
+  set separate from dev/cluster boot artifacts.
+- `packages/vm/src/backend/vz/mod.rs` — attach hashed-tag VirtioFS shares at
+  boot and surface restart-required reconciliation for mount changes.
+- `packages/vm/src/backend/kvm.rs` — add new `virtiofsd` integration for runtime
+  shares; this backend has no equivalent VirtioFS support today.
+- `packages/vm/src/netstack/engine.rs` — thread `flow.tuple.0` into outbound
+  policy, pass DNS source to `policy_for(vm, src)`, and replace inbound
+  `cfg.guest_ip` targeting with the selected principal address.
+- `packages/vm/src/netstack/guard.rs` — select `policy_for(vm, src)`, key
+  `Resolved` by principal, replace the interception `GUEST_IP` with that source,
+  omit `NETSTACK_ALLOWLIST`, and intercept when `policy.mitm && allowed`.
 - `packages/vm/src/netstack/dns.rs` — evaluate and record DNS per source
   principal while retaining private/internal/host-LAN answer rejection.
-- `packages/vm/src/egress.rs` — separate VM policy storage from app policy
-  contexts and expose inspection-only forwarding without credential hooks.
-- `packages/vm/src/mitm.rs` — add non-mutating HTTP/1.1 and h2 observation that
-  preserves streaming and keys CA material per control principal.
+- `packages/vm/src/egress.rs` — separate VM/app policy contexts and remove the
+  runtime-principal `has_cred_rule` interception gate without changing legacy
+  CONNECT proxy or broker behavior.
+- `packages/vm/src/mitm.rs` — add non-mutating HTTP/1.1-only observation,
+  `http/1.1` ALPN, and parsing for TLS/status/bytes/duration using the per-VM CA.
 - `packages/vm/src/traffic.rs` — move runtime events to per-app logs and extend
-  records with principal, reason, redacted path, status, bytes, and duration.
+  records with principal, reason, query-stripped path, status, bytes, and
+  duration; never persist the current raw request target.
 - `packages/vm/src/net.rs` — forward a published host listener to a selected
   principal address/guest port instead of the VM's single guest address.
-- `packages/vm/src/main.rs` — add runtime pool lifecycle/control commands while
-  leaving existing `vm egress` and credential broker behavior untouched.
+- `packages/vm/src/main.rs` — add runtime pool lifecycle/control commands and
+  stop forcing `dev` for the runtime `agent_only` profile while leaving the
+  existing credential broker untouched.
 - `packages/cli/src/utils/microvm-up.ts` — create/reconcile the fixed pooled VM
   profile without k3s, Docker, or development-toolchain readiness.
 - `packages/cli/src/appliance-vm.ts` — expose structured runtime-principal
@@ -470,14 +490,11 @@ No change to `packages/vm/src/creds.rs` is part of these tasks.
 
 1. **Pool growth caps.** Default: use the 2/4, 4/8, 8/16 tiers, 50% host
    memory cap, and 100 GiB disk cap specified above.
-2. **Automatic stronger isolation.** Default: honor `shared` for both binaries
-   and containers; warn that namespaces are not a VM boundary, but do not
-   silently promote binaries to `vm`.
-3. **Host mount identity across platforms.** Default: persist a security-scoped
-   bookmark on macOS and canonical path plus device/inode on Linux; re-prompt
-   when identity cannot be proven.
-4. **Non-loopback published ports.** Default: allow only through an explicit
-   user override on each grant, with a LAN-exposure warning; never inherit it
-   from a prior app.
+2. **Stronger isolation.** Default: honor `shared`; warn but do not silently
+   promote binaries to `vm`.
+3. **Mount identity.** Default: macOS bookmark or Linux path/device/inode;
+   re-prompt when identity cannot be proven.
+4. **Non-loopback ports.** Default: explicit per-grant user override with a LAN
+   warning; never inherit it from another app.
 5. **Inspection retention.** Default: 512 KiB per app, path without query,
    connection metadata retained even when TLS inspection is disabled.
