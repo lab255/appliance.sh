@@ -245,9 +245,6 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
             } else if (event.key === 'End') {
               event.preventDefault();
               focusItem(itemRefs.current.length - 1);
-            } else if (event.key === 'Enter') {
-              event.preventDefault();
-              itemRefs.current[activeIndex]?.click();
             }
           }}
           className="absolute left-0 top-full z-10 mt-1 w-80 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] shadow-lg"

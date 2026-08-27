@@ -35,8 +35,8 @@ describe('workspace switcher presentation', () => {
     expect(source).toContain('aria-label={workspacePresentation ? `Workspace: ${currentName}`');
     expect(source).toContain('role="menu"');
     expect(source).toContain('role="menuitemradio"');
+    expect(source).toContain('type="button"');
     expect(source).toContain("event.key === 'ArrowDown'");
-    expect(source).toContain("event.key === 'Enter'");
     expect(source).toContain("e.key === 'Escape'");
   });
 });
