@@ -31,6 +31,12 @@ describe('CatalogueContent', () => {
     );
     expect(html).toContain('Verified index ✓ signed');
     expect(html).toContain('Journal');
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain('role="radio"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-label="Install Journal"');
+    expect(html).toContain('role="status">1 apps');
+    expect(html).not.toContain('aria-live');
     expect(html).not.toContain('Paid Hidden');
   });
 
@@ -38,6 +44,7 @@ describe('CatalogueContent', () => {
     const html = renderToStaticMarkup(<CatalogueContent data={null} error="bad signature" />);
     expect(html).toContain('Unverified');
     expect(html).toContain('No catalogue apps are shown');
+    expect(html).toContain('Reason: Bad signature.');
     expect(html).not.toContain('Journal');
   });
 

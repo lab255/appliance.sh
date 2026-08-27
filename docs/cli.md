@@ -20,7 +20,8 @@ All Runtime verbs except `search` are placeholders in this release. They print
 free-app index as the desktop; stale results are labelled and paid entries are
 discarded before matching or output. Set `APPLIANCE_CATALOGUE_URL` to override
 the default `https://www.appliance.sh` origin; non-local overrides must use
-HTTPS. Existing colliding top-level commands remain unchanged.
+HTTPS. Blacklist evaluation is deferred to AP-173 and gates installation.
+Existing colliding top-level commands remain unchanged.
 
 ## `install` versus `deploy`
 

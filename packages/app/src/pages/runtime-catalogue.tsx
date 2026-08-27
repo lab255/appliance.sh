@@ -90,6 +90,23 @@ export function CataloguePage() {
 type Category = 'All' | NonNullable<CatalogueEntry['category']>;
 const CATEGORIES: Category[] = ['All', 'Productivity', 'Media', 'Data', 'Dev tools'];
 
+function relativeVerifiedAt(value: string, now = Date.now()): string {
+  const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(value)) / 1000));
+  if (elapsedSeconds < 60) return 'just now';
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function verificationReason(reason: string): string {
+  const trimmed = reason.trim().replace(/\.+$/, '');
+  const capitalised = `${trimmed.slice(0, 1).toLocaleUpperCase()}${trimmed.slice(1)}`;
+  return `${capitalised}.`;
+}
+
 export function CatalogueContent({
   data,
   error,
@@ -104,6 +121,7 @@ export function CatalogueContent({
   );
   const [category, setCategory] = React.useState<Category>('All');
   const [installMessage, setInstallMessage] = React.useState<string | null>(null);
+  const categoryRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const entries = React.useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return (data?.entries ?? []).filter((entry) => {
@@ -132,7 +150,9 @@ export function CatalogueContent({
             <span>Free and open-source apps that run on this Mac.</span>
             <StatusPill tone={status.tone} label={status.label} dot={false} />
             {data ? (
-              <span className="text-xs tabular-nums">· verified {new Date(data.verifiedAt).toLocaleString()}</span>
+              <span className="text-xs tabular-nums" title={new Date(data.verifiedAt).toLocaleString()}>
+                · verified {relativeVerifiedAt(data.verifiedAt)}
+              </span>
             ) : null}
           </span>
         }
@@ -177,8 +197,13 @@ export function CatalogueContent({
             </span>
             <h2 className="text-sm font-semibold">Catalogue could not be verified</h2>
             <p className="mt-1 max-w-md text-xs leading-4 text-[var(--color-muted-foreground)]">
-              No catalogue apps are shown because the signed index could not be verified. {error}
+              No catalogue apps are shown because the signed index could not be verified.
             </p>
+            {error ? (
+              <p className="mt-2 max-w-md font-mono text-micro text-[var(--color-muted-foreground)]">
+                Reason: {verificationReason(error)}
+              </p>
+            ) : null}
           </div>
         </SectionCard>
       ) : (
@@ -199,14 +224,28 @@ export function CatalogueContent({
             </label>
             <div
               className="inline-flex flex-wrap rounded-md border border-[var(--color-border)] p-0.5"
+              role="radiogroup"
               aria-label="Catalogue category"
             >
-              {CATEGORIES.map((item) => (
+              {CATEGORIES.map((item, index) => (
                 <button
                   key={item}
+                  ref={(element) => {
+                    categoryRefs.current[index] = element;
+                  }}
                   type="button"
-                  aria-pressed={category === item}
+                  role="radio"
+                  aria-checked={category === item}
+                  tabIndex={category === item ? 0 : -1}
                   onClick={() => setCategory(item)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                    event.preventDefault();
+                    const direction = event.key === 'ArrowLeft' ? -1 : 1;
+                    const nextIndex = (index + direction + CATEGORIES.length) % CATEGORIES.length;
+                    setCategory(CATEGORIES[nextIndex]!);
+                    categoryRefs.current[nextIndex]?.focus();
+                  }}
                   className={`rounded px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] ${
                     category === item
                       ? 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
@@ -219,14 +258,16 @@ export function CatalogueContent({
             </div>
           </div>
 
+          <p className="sr-only" role="status">
+            {entries.length === 0 ? 'No apps match' : `${entries.length} apps`}
+          </p>
+
           {entries.length === 0 ? (
             <SectionCard>
-              <p className="py-16 text-center text-sm text-[var(--color-muted-foreground)]">
-                No free apps match this search.
-              </p>
+              <p className="py-16 text-center text-sm text-[var(--color-muted-foreground)]">No free apps match.</p>
             </SectionCard>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {entries.map((entry) => (
                 <article
                   key={entry.id}
@@ -261,8 +302,9 @@ export function CatalogueContent({
                     <Button
                       size="sm"
                       disabled={data.stale}
+                      aria-label={`Install ${entry.name}`}
                       onClick={() =>
-                        setInstallMessage('Install arrives with AP-173. Appliance did not report a successful install.')
+                        setInstallMessage('Installing from the catalogue arrives with AP-173. Nothing was installed.')
                       }
                     >
                       Install

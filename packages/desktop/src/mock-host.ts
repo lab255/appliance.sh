@@ -33,6 +33,7 @@ import type {
 //   developer-mode persisted Developer mode
 //   catalogue      verified signed free catalogue
 //   catalogue-unverified signature failure / fail-closed empty state
+//   catalogue-loading    fetch pending / verification loading state
 //   catalogue-stale expired-but-previously-verified read-only catalogue
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
@@ -51,7 +52,8 @@ type Scenario =
   | 'developer-mode'
   | 'catalogue'
   | 'catalogue-unverified'
-  | 'catalogue-stale';
+  | 'catalogue-stale'
+  | 'catalogue-loading';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -84,7 +86,8 @@ function scenario(): Scenario {
     s === 'developer-mode' ||
     s === 'catalogue' ||
     s === 'catalogue-unverified' ||
-    s === 'catalogue-stale'
+    s === 'catalogue-stale' ||
+    s === 'catalogue-loading'
     ? s
     : 'ready';
 }
@@ -357,6 +360,7 @@ function preflight(): LocalPreflightCheck[] {
 
 export function createMockHost(): ConsoleHost {
   const catalogueFixture = signedCatalogueFixture();
+  let catalogueCache: CatalogueFetchResult | null = null;
   return {
     async getConfig(): Promise<HostConfig> {
       const state = readState();
@@ -417,7 +421,19 @@ export function createMockHost(): ConsoleHost {
 
     catalogue: {
       async fetchCatalogue() {
+        if (scenario() === 'catalogue-loading') await sleep(60_000);
         return catalogueFixture;
+      },
+      async cacheVerified(pair, generation, verifiedAt) {
+        catalogueCache = {
+          ...pair,
+          source: 'mock',
+          highestGeneration: Math.max(catalogueCache?.highestGeneration ?? 0, generation),
+          maxSeenWallClock:
+            !catalogueCache?.maxSeenWallClock || Date.parse(verifiedAt) > Date.parse(catalogueCache.maxSeenWallClock)
+              ? verifiedAt
+              : catalogueCache.maxSeenWallClock,
+        };
       },
     },
 

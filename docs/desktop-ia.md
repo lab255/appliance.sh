@@ -28,10 +28,10 @@ that boundary. A valid current index shows **Verified index ✓ signed**; a bad
 pair shows no apps; an expired previously verified pair is labelled **Stale**
 and remains browseable with installs disabled. The desktop retains only a pair
 that passed verification, atomically, and a failed refresh keeps that prior
-pair. `APPLIANCE_CATALOGUE_URL` changes the catalogue origin from the default
-`https://www.appliance.sh` (HTTPS is required outside localhost development).
-The Runtime installer itself remains owned by AP-173, so this page reports that
-handoff explicitly and never simulates a successful install.
+pair under `~/.appliance/catalogue/`; the production desktop origin is fixed at
+`https://www.appliance.sh`. Blacklist evaluation is deferred to AP-173 and gates
+installation. The Runtime installer itself remains owned by AP-173, so this page
+reports that handoff explicitly and never simulates a successful install.
 
 Status: **plan** (no feature code). This is the blueprint phases **I1–I5** build to.
 Scope: the Appliance **desktop app** (`packages/app`, the shared `Console`). The same
