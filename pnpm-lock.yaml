@@ -263,6 +263,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
+      '@noble/ed25519':
+        specifier: ^3.1.0
+        version: 3.1.0
       '@types/archiver':
         specifier: ^7.0.0
         version: 7.0.0
