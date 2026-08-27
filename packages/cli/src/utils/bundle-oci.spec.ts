@@ -6,6 +6,7 @@ describe('OCI image-layout validation', () => {
   it('accepts a valid image whose config matches the declared platform', () => {
     expect(() => validateOciImageTar(tinyOciTar('linux/amd64'), 'linux/amd64')).not.toThrow();
     expect(() => validateOciImageTar(tinyOciTar('linux/arm64'), 'linux/arm64')).not.toThrow();
+    expect(() => validateOciImageTar(tinyOciTar('linux/arm64', true), 'linux/arm64')).not.toThrow();
   });
 
   it('rejects malformed archives and config platform mismatches', () => {
