@@ -28,7 +28,8 @@ import type {
 //   daemon-manual docker installed, VM stopped, NOT auto-startable
 //   missing        kubectl not installed, docker guidance-only
 //   first-run     no stored app mode; show the audience choice
-//   user-mode     persisted User mode
+//   user-mode     persisted User mode with local + cloud workspaces
+//   user-mode-no-vm persisted User mode before the local sandbox exists
 //   developer-mode persisted Developer mode
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
@@ -44,6 +45,7 @@ type Scenario =
   | 'missing'
   | 'first-run'
   | 'user-mode'
+  | 'user-mode-no-vm'
   | 'developer-mode';
 
 const SCENARIO_KEY = 'mock-host:scenario';
@@ -59,7 +61,10 @@ export function mockHostEnabled(): boolean {
     if (scenario) {
       sessionStorage.setItem(SCENARIO_KEY, scenario);
       if (scenario === 'first-run') sessionStorage.removeItem(APP_MODE_KEY);
-      if (scenario === 'user-mode') sessionStorage.setItem(APP_MODE_KEY, 'user');
+      if (scenario === 'user-mode' || scenario === 'user-mode-no-vm') {
+        sessionStorage.setItem(APP_MODE_KEY, 'user');
+        configureWorkspaceScenario(scenario);
+      }
       if (scenario === 'developer-mode') sessionStorage.setItem(APP_MODE_KEY, 'developer');
     }
   }
@@ -74,6 +79,7 @@ function scenario(): Scenario {
     s === 'missing' ||
     s === 'first-run' ||
     s === 'user-mode' ||
+    s === 'user-mode-no-vm' ||
     s === 'developer-mode'
     ? s
     : 'ready';
@@ -120,6 +126,28 @@ function readState(): PersistedState {
 
 function writeState(state: PersistedState): void {
   sessionStorage.setItem(CLUSTERS_KEY, JSON.stringify(state));
+}
+
+function configureWorkspaceScenario(s: 'user-mode' | 'user-mode-no-vm'): void {
+  const cloud = {
+    id: 'mock-acme-prod',
+    name: 'acme-prod',
+    apiServerUrl: 'https://appliance.acme.example',
+    createdAt: '2026-08-27T00:00:00.000Z',
+    apiKey: { id: 'apikey_cloud', secret: 'sk_cloud' },
+  };
+  if (s === 'user-mode-no-vm') {
+    writeState({ clusters: [cloud], selectedClusterId: cloud.id });
+    return;
+  }
+  const local = {
+    id: 'microvm',
+    name: 'Dev Machine',
+    apiServerUrl: 'https://127.0.0.1:8443',
+    createdAt: '2026-08-27T00:00:00.000Z',
+    apiKey: { id: 'apikey_local', secret: 'sk_local' },
+  };
+  writeState({ clusters: [local, cloud], selectedClusterId: local.id });
 }
 
 // ---- runtime state machine ---------------------------------------------
@@ -482,6 +510,7 @@ export function createMockHost(): ConsoleHost {
     vm: {
       async list() {
         await sleep(80);
+        if (scenario() === 'user-mode-no-vm') return [];
         return Object.values(microVms).map((vm) => ({
           name: vm.name,
           running: vm.running,
