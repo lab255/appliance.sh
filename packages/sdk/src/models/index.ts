@@ -13,3 +13,4 @@ export * from './workloads';
 export * from './stack';
 export * from './catalogue';
 export * from './catalogue-trust';
+export * from './installed-app';

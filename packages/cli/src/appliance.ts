@@ -155,8 +155,8 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('run', process.argv.slice(2)),
   },
   uninstall: {
-    description: 'uninstall a packaged app (coming in a later release)',
-    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('uninstall'),
+    description: 'uninstall a packaged app from the current workspace target',
+    load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('uninstall', process.argv.slice(2)),
   },
   ps: {
     description: 'list running packaged apps',
@@ -404,7 +404,7 @@ function showNamespaceHelp(namespace: 'builder' | 'runtime'): void {
   }
   if (namespace === 'runtime') {
     console.log();
-    console.log('Container run/ps/stop/logs are available; the remaining verbs are staged for later releases.');
+    console.log('Container run/ps/stop/logs are available; install/list/uninstall are available per workspace target.');
   }
   console.log();
   console.log(`Run \`appliance ${namespace} <verb> --help\` for command-specific options.`);

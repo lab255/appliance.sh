@@ -10,6 +10,18 @@ import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
 import {
+  currentWorkspaceTarget,
+  resolveInstalledApp,
+} from './utils/installed-apps.js';
+import {
+  markUnknownPublisherWarned,
+  promptForUnknownPublisher,
+  runRuntimeInstallCommand,
+  runRuntimeListCommand,
+  runRuntimeUninstallCommand,
+  unknownPublisherWarningDue,
+} from './appliance-runtime-install.js';
+import {
   readRuntimeRegistry,
   removeRuntimeRecord,
   runtimeRoot,
@@ -108,6 +120,15 @@ export function manifestToRuntimePlan(
 
 export async function runRuntimeCommand(verb: string, args: string[]): Promise<void> {
   switch (verb) {
+    case 'install':
+      await runRuntimeInstallCommand(args);
+      return;
+    case 'uninstall':
+      await runRuntimeUninstallCommand(args, (appId) => runtimeStop([appId], false));
+      return;
+    case 'list':
+      runRuntimeListCommand(args);
+      return;
     case 'run':
       await runtimeRun(args);
       return;
@@ -133,33 +154,68 @@ export async function runRuntimeCommand(verb: string, args: string[]): Promise<v
 async function runtimeRun(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Usage: appliance runtime run <path-to-app.appliance.zip>');
+    console.log('The argument may also be an installed app name; use --accept-unknown-publisher for headless opens.');
     console.log('Runs one container-type bundle in the pooled appliance-runtime VM; Ctrl-C stops the app.');
     return;
   }
-  const input = args.find((arg) => !arg.startsWith('-'));
+  const input = firstPositional(args, ['--target']);
   if (!input) fail('Usage: appliance runtime run <path-to-app.appliance.zip>', 2);
   if (/^https?:\/\//.test(input))
     fail('runtime run URLs are not yet supported; download the bundle and pass a local path', 2);
-  const bundlePath = path.resolve(input);
+  const target = currentWorkspaceTarget(optionValue(args, '--target'));
+  const installed = !fs.existsSync(path.resolve(input)) ? resolveInstalledApp(input, target) : null;
+  if (installed && unknownPublisherWarningDue(installed)) {
+    const accepted =
+      args.includes('--accept-unknown-publisher') ||
+      (await promptForUnknownPublisher(
+        {
+          appId: installed.appId,
+          name: installed.name,
+          version: installed.version,
+          license: installed.license,
+          source: installed.source,
+          digest: installed.digest,
+          signature: installed.verification.signature === 'unsigned' ? 'unsigned' : 'invalid',
+          publisher: installed.publisher.name,
+          controlsSummary: installed.controlsSummary,
+        },
+        'open'
+      ));
+    if (!accepted) fail('Unknown Publisher acknowledgement required; pass --accept-unknown-publisher for this run', 2);
+    markUnknownPublisherWarned(installed, target);
+  }
+  const originalBundlePath = installed?.bundlePath ?? path.resolve(input);
+  const bundlePath = stageRuntimeOpenCopy(originalBundlePath);
   let loaded: LoadedRuntimeBundle;
   try {
     const bounded = readBundleManifest(bundlePath);
     if (bounded.classification !== 'runnable') throw new Error('runtime run requires a manifest v2 runnable bundle');
     loaded = verifyBundle(bundlePath);
   } catch (error) {
+    fs.rmSync(bundlePath, { force: true });
     fail(error instanceof Error ? error.message : String(error), 2);
   }
   if (loaded.manifest.type !== 'container') {
+    fs.rmSync(bundlePath, { force: true });
     fail(`${loaded.manifest.type} runnable bundle '${loaded.manifest.name}' is not yet supported`, 2);
+  }
+  if (installed && loaded.digest !== installed.digest) {
+    fs.rmSync(bundlePath, { force: true });
+    fail(`installed bundle integrity check failed for '${installed.name}'`, 2);
   }
   const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
   if (existing && (existing.state === 'starting' || existing.state === 'running')) {
+    fs.rmSync(bundlePath, { force: true });
     fail(`runtime instance '${existing.appId}' is already running in ${existing.poolVm}`, 2);
   }
 
   const installDir = path.join(runtimeRoot(), 'apps', loaded.manifest.name, loaded.manifest.version);
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
-  installRuntimeBundle(bundlePath, installDir, loaded);
+  try {
+    installRuntimeBundle(bundlePath, installDir, loaded);
+  } finally {
+    fs.rmSync(bundlePath, { force: true });
+  }
   const records = readRuntimeRegistry().filter((entry) => entry.appId !== loaded.manifest.name);
   const persisted = persistedRuntimeAllocation(loaded.manifest);
   const principalIp = persisted?.principalIp ?? allocatePrincipalIp(records);
@@ -183,7 +239,7 @@ async function runtimeRun(args: string[]): Promise<void> {
     updatedAt: now,
     poolVm: RUNTIME_POOL_VM,
     poolRestartPending: false,
-    bundlePath,
+    bundlePath: originalBundlePath,
     installDir,
     shareTag: plan.share.tag,
     uid,
@@ -294,7 +350,7 @@ function runtimePs(args: string[]): void {
   }
 }
 
-function runtimeStop(args: string[], print = true): void {
+export function runtimeStop(args: string[], print = true): void {
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Usage: appliance runtime stop <app>');
     return;
@@ -307,6 +363,35 @@ function runtimeStop(args: string[], print = true): void {
   if (result.state !== 'stopped' && result.state !== 'missing') fail(`failed to stop '${appId}'`, 1);
   removeRuntimeRecord(appId);
   if (print) console.log(`${chalk.green('✓')} stopped ${appId}; pooled VM ${record.poolVm} remains running`);
+}
+
+function stageRuntimeOpenCopy(source: string): string {
+  const directory = path.join(runtimeRoot(), 'preopen');
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  fs.chmodSync(directory, 0o700);
+  const destination = path.join(
+    directory,
+    `open-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.appliance.zip`
+  );
+  fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(destination, 0o400);
+  return destination;
+}
+
+function optionValue(args: string[], option: string): string | undefined {
+  const index = args.indexOf(option);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+function firstPositional(args: string[], valueOptions: string[]): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    if (valueOptions.includes(args[index]!)) {
+      index += 1;
+      continue;
+    }
+    if (!args[index]!.startsWith('-')) return args[index];
+  }
+  return undefined;
 }
 
 async function runtimeLogs(args: string[]): Promise<void> {

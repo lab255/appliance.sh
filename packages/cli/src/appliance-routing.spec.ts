@@ -123,8 +123,8 @@ describe('appliance umbrella routing', () => {
 
   it('keeps runtime install separate from cluster-defaulting top-level install', () => {
     const runtime = appliance('runtime', 'install');
-    expect(runtime.status).toBe(2);
-    expect(runtime.stderr).toContain('coming in a later release');
+    expect(runtime.status).toBe(1);
+    expect(runtime.stderr).toContain('Usage: appliance runtime install <path|https-url>');
 
     const installHelp = appliance('install', '--help');
     const deployHelp = appliance('deploy', '--help');
