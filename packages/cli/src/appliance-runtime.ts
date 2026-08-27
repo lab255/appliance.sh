@@ -1,6 +1,5 @@
 import chalk from 'chalk';
 import { createHash } from 'node:crypto';
-import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
 import type { ApplianceV2 } from '@appliance.sh/sdk';
