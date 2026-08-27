@@ -256,10 +256,9 @@ async function runtimeRun(args: string[]): Promise<void> {
     );
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
-    // Binary payloads must not race the asynchronous VZ shutdown: their
-    // custom-rootfs share has to be attached at the very next boot. Keep the
-    // established container reconciliation path unchanged in this stacked PR.
-    if (loaded.manifest.type === 'binary') await waitForRuntimePoolStop();
+    // Workloads must not race the asynchronous VZ shutdown: the next boot
+    // must attach the reconciled share regardless of payload kind.
+    await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
