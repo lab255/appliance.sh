@@ -532,3 +532,50 @@ on a real `net_link=Netstack` VM under default-deny — the owed-live validation
 is satisfied and the **F4 default-flip** (`net_link` default `Nat → Netstack`,
 `EgressPolicy::default()` already `Deny`) is safe to land. A red box in §3.B, or
 any sign of the brokered credential reaching the guest, **blocks the flip**.
+
+---
+
+## Runtime pooled-VM proof (AP-163 / AP-167)
+
+This proof uses the repository engine and CLI, creates a tiny OCI bundle, and
+records each phase. The Runtime pool is separate from `$SBX`: its fixed name is
+`appliance-runtime`, it is 2 vCPU / 4096 MiB, and it reaches core supervisor
+readiness without k3s, Docker, BuildKit, Node, or the dev toolchain.
+
+```sh
+cd ~/Workspaces/appliance.sh
+pnpm --filter @appliance.sh/cli run build
+
+cd packages/vm
+cargo build
+./scripts/sign-dev.sh
+cd ../..
+
+# The script commits only source; the OCI tar and zip stay generated/ignored.
+examples/runtime/journal/build-bundle.sh
+
+# Terminal A: validates, unpacks, reconciles/restarts the pool when its
+# boot-time VirtioFS share changes, starts journal, and follows logs.
+time packages/cli/dist/appliance runtime run \
+  examples/runtime/journal/journal.appliance.zip
+
+# Terminal B, while Terminal A follows logs:
+time curl -fsS -D /tmp/journal.headers http://127.0.0.1:20000/ -o /tmp/journal.body
+grep -q '200 OK' /tmp/journal.headers
+grep -q 'journal runtime proof' /tmp/journal.body
+time packages/cli/dist/appliance runtime ps
+time packages/cli/dist/appliance runtime logs journal
+time packages/cli/dist/appliance runtime stop journal
+packages/cli/dist/appliance runtime ps
+packages/vm/target/debug/appliance-vm status appliance-runtime
+packages/vm/target/debug/appliance-vm timings appliance-runtime
+```
+
+**PASS:** curl returns HTTP 200; `runtime ps` shows `journal`, its
+`192.168.127.x` principal and `127.0.0.1:20000 -> 3000`; logs contain the
+request; stop removes the app row; the final VM status remains `running: true`.
+Record validation/unpack, cold/warm pool boot, supervisor start, curl, ps, and
+stop timings from `time` plus `appliance-vm timings`.
+
+Ctrl-C in Terminal A is an equivalent stop proof: it stops `journal`, exits
+130, and deliberately leaves the pooled VM running.
