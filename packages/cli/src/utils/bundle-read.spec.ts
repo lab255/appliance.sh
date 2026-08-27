@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readBundleManifest, unpackBundle, verifyBundle } from './bundle-read.js';
 import { readDevSigningKey } from './bundle-sign.js';
 import { writeBundle } from './bundle-write.js';
+import { tinyOciTar } from './bundle-oci-fixture.js';
 
 const tempDirs: string[] = [];
 
@@ -29,7 +30,7 @@ function containerManifest() {
   } as const;
 }
 
-async function validBundle(dir: string, data: Uint8Array = Buffer.from('tiny tar fixture')): Promise<string> {
+async function validBundle(dir: string, data: Uint8Array = tinyOciTar()): Promise<string> {
   const outputPath = path.join(dir, 'fixture.appliance.zip');
   await writeBundle({
     outputPath,
@@ -77,7 +78,7 @@ describe('bundle reading and verification', () => {
     expect(verified.signature).toBeUndefined();
     const unpacked = path.join(dir, 'unpacked');
     unpackBundle(bundle, unpacked);
-    expect(fs.readFileSync(path.join(unpacked, 'payload/images/test.oci.tar'), 'utf8')).toBe('tiny tar fixture');
+    expect(fs.readFileSync(path.join(unpacked, 'payload/images/test.oci.tar'))).toEqual(tinyOciTar());
   });
 
   it('signs a bundle and verifies it with the matching public key', async () => {
@@ -89,7 +90,7 @@ describe('bundle reading and verification', () => {
     const written = await writeBundle({
       outputPath,
       manifest: containerManifest(),
-      files: [{ path: 'payload/images/test.oci.tar', data: Buffer.from('tar') }],
+      files: [{ path: 'payload/images/test.oci.tar', data: tinyOciTar() }],
       signingKeyPath: keyPath,
     });
     const devKey = readDevSigningKey(keyPath);

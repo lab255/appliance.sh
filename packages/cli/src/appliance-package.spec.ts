@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { verifyBundle } from './utils/bundle-read.js';
+import { tinyOciTar } from './utils/bundle-oci-fixture.js';
 
 const dirs: string[] = [];
 
@@ -16,7 +17,7 @@ describe('appliance package', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-package-cli-'));
     dirs.push(dir);
     const tarPath = path.join(dir, 'tiny.oci.tar');
-    fs.writeFileSync(tarPath, Buffer.from('CI-generated tiny OCI tar placeholder'));
+    fs.writeFileSync(tarPath, tinyOciTar());
     fs.writeFileSync(
       path.join(dir, 'appliance.json'),
       JSON.stringify({

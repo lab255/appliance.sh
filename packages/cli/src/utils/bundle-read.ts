@@ -13,6 +13,7 @@ import { inflateRawSync } from 'node:zlib';
 import { applianceV2Input, type ApplianceV2, type ApplianceV2Service } from '@appliance.sh/sdk';
 import { canonicalJsonBytes, computeBundleDigest } from './bundle-digest.js';
 import { validateEnvelope, verifyEnvelope, type DevSigningKey } from './bundle-sign.js';
+import { validateOciImageTar } from './bundle-oci.js';
 
 export interface BundleLimits {
   maxCompressedBytes: number;
@@ -133,7 +134,7 @@ export function verifyBundle(filePath: string, options: VerifyBundleOptions = {}
   if (actualDigest !== recordedDigest) {
     throw new Error(`Bundle digest mismatch: expected ${recordedDigest}, computed ${actualDigest}.`);
   }
-  validateReferencedPayloads(parsed.data, zip.byName);
+  validateReferencedPayloads(parsed.data, zip);
 
   const result: VerifyBundleResult = { digest: actualDigest, manifest: parsed.data };
   const signatureEntry = zip.byName.get('signature.sig');
@@ -340,7 +341,8 @@ function readEntry(zip: InspectedZip, entry: ZipEntry): Buffer {
   }
 }
 
-function validateReferencedPayloads(manifest: ApplianceV2, entries: Map<string, ZipEntry>): void {
+function validateReferencedPayloads(manifest: ApplianceV2, zip: InspectedZip): void {
+  const entries = zip.byName;
   const requireFile = (entryPath: string) => {
     const entry = entries.get(entryPath);
     if (!entry || entry.isDirectory) throw new Error(`Manifest references a missing regular file: ${entryPath}`);
@@ -354,7 +356,10 @@ function validateReferencedPayloads(manifest: ApplianceV2, entries: Map<string, 
   };
   const visit = (node: ApplianceV2 | ApplianceV2Service) => {
     if (node.type === 'container') {
-      for (const image of Object.values(node.payload.images)) requireFile(image.path);
+      for (const [platform, image] of Object.entries(node.payload.images)) {
+        requireFile(image.path);
+        validateOciImageTar(readEntry(zip, entries.get(image.path)!), platform);
+      }
     } else if (node.type === 'binary') {
       for (const target of Object.values(node.payload.targets)) requireTarget(target.root, target.entrypoint);
     } else {

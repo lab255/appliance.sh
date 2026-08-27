@@ -5,6 +5,7 @@ import { applianceV2Input } from '@appliance.sh/sdk';
 import { afterEach, describe, expect, it } from 'vitest';
 import { packageRunnableAppliance } from './build-package.js';
 import { unpackBundle, verifyBundle } from './bundle-read.js';
+import { tinyOciTar } from './bundle-oci-fixture.js';
 
 const dirs: string[] = [];
 
@@ -51,7 +52,7 @@ describe('runnable payload packaging', () => {
   it('collects compound container and nested binary leaves into one payload tree', async () => {
     const dir = projectDir();
     const tarPath = path.join(dir, 'web-test.tar');
-    fs.writeFileSync(tarPath, 'tiny tar');
+    fs.writeFileSync(tarPath, tinyOciTar());
     fs.mkdirSync(path.join(dir, 'payload/worker/bin'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'payload/worker/bin/worker'), 'worker');
     const manifest = applianceV2Input.parse({
