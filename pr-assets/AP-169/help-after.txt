@@ -1,0 +1,67 @@
+Usage: appliance <command> [options]
+
+Builder:
+  builder       build and ship your own apps (`appliance builder <verb>`)
+  init          first-time setup: boot the managed VM and guide your first deploy (after that, `appliance dev`)
+  dev           run your app locally with live rebuild + logs (Ctrl+C leaves apps running)
+  build         builds the appliance in the current working directory
+  install       install the linked (or named) project to the local VM cluster (--cluster <name> to override) — or the whole stack in a stack folder
+  deploy        deploy the linked (or named) project to the active cluster (see `appliance cluster`; usually cloud)
+  destroy       destroy the linked (or named) project/environment (alias: remove)
+  configure     configures the appliance in the current working directory
+  env           manage per-environment variables (set/list/unset)
+  link          link this folder to a project/environment
+  unlink        remove the local project/environment link
+  stack         scaffold/inspect/destroy a multi-app stack (`appliance deploy` in a stack folder deploys it)
+  deployment    manage deployments
+  manifest      evaluate a programmatic appliance manifest in a sandbox
+  test          run connection and signing diagnostics
+  logs          stream a deployment's container logs (local engines)
+  open          open the latest deployment URL in a browser
+
+Cluster & machine:
+  up            build + run this project (Dockerfile, compose, or devcontainer) in the managed microVM
+  down          stop and remove this project's sandbox container
+  shell         enter this project's sandbox (devcontainer exec, or the VM host shell)
+  vm            manage the microVM (the one `appliance` VM runs deploys, dev sessions, and agents)
+  cluster       list, switch, and forget clusters (shared with the desktop app)
+  status        alias for `appliance app status`
+  bootstrap     provision a new Appliance installation on AWS (alias: `appliance cloud bootstrap`)
+  teardown      destroy a cloud installation (alias: `appliance cloud teardown`)
+  cloud         umbrella: `appliance cloud install|update|bootstrap|teardown`
+  keys          manage the cluster API key lifecycle (rotate)
+  doctor        run first-run preflight checks (use --fix to auto-resolve the safe ones)
+  upgrade       show how to update this CLI (per install channel; prints, never executes)
+
+Agents:
+  agent         run a coding agent (Claude Code, Copilot, Codex) inside the sandbox microVM
+  mcp           serve Appliance over the Model Context Protocol (stdio) so AI agents can deploy and debug
+
+Account:
+  login         authenticate with the appliance API
+  whoami        show active profile, server URL, and linked project
+  app           manage applications (setup, status, list) (alias: application)
+  setup         alias for `appliance app setup`
+  list          alias for `appliance app list`
+
+Runtime:
+  runtime       run packaged apps in microVMs (`appliance runtime <verb>`)
+  run           run a packaged app (coming in a later release)
+  uninstall     uninstall a packaged app (coming in a later release)
+  ps            list running packaged apps (coming in a later release)
+  stop          stop a packaged app (coming in a later release)
+  search        search for packaged apps (coming in a later release)
+  entitlements  manage packaged-app entitlements (coming in a later release)
+
+The three journeys:
+  1. Build & run your app(s):   appliance dev            (deploy + logs + rebuild on save;
+                                multi-service via appliance.stack.json — same command)
+  2. Dev environment + agents:  appliance up  →  appliance agent login  →  appliance agent start
+  3. Ship the same app to AWS:  appliance cloud install  →  provision edge  →  appliance deploy
+
+Environment variables:
+  APPLIANCE_PROFILE               credential profile to use (overrides the active profile)
+  APPLIANCE_API_URL               override the api-server URL from the profile
+  APPLIANCE_TRUST_MANIFEST=1      skip the programmatic-manifest trust prompt (CI)
+
+Run `appliance <command> --help` for command-specific options.

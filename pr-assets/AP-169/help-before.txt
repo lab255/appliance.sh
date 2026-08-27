@@ -1,0 +1,56 @@
+Usage: appliance <command> [options]
+
+Getting started & everyday:
+  init        first-time setup: boot the managed VM and guide your first deploy (after that, `appliance dev`)
+  dev         run your app locally with live rebuild + logs (Ctrl+C leaves apps running)
+  deploy      deploy the linked (or named) project/environment (alias: install)
+  logs        stream a deployment's container logs (local engines)
+  open        open the latest deployment URL in a browser
+  status      alias for `appliance app status`
+  agent       run a coding agent (Claude Code, Copilot, Codex) inside the sandbox microVM
+  up          build + run this project (Dockerfile, compose, or devcontainer) in the managed microVM
+  shell       enter this project's sandbox (devcontainer exec, or the VM host shell)
+  down        stop and remove this project's sandbox container
+
+Configuration (profiles, environments, project links):
+  configure   configures the appliance in the current working directory
+  env         manage per-environment variables (set/list/unset)
+  link        link this folder to a project/environment
+  unlink      remove the local project/environment link
+  stack       scaffold/inspect/destroy a multi-app stack (`appliance deploy` in a stack folder deploys it)
+  app         manage applications (setup, status, list) (alias: application)
+  cluster     list, switch, and forget clusters (shared with the desktop app)
+  login       authenticate with the appliance API
+  whoami      show active profile, server URL, and linked project
+
+Advanced (cloud installs, machine & diagnostics):
+  bootstrap   provision a new Appliance installation on AWS (alias: `appliance cloud bootstrap`)
+  teardown    destroy a cloud installation (alias: `appliance cloud teardown`)
+  vm          manage the microVM (the one `appliance` VM runs deploys, dev sessions, and agents)
+  deployment  manage deployments
+  keys        manage the cluster API key lifecycle (rotate)
+  doctor      run first-run preflight checks (use --fix to auto-resolve the safe ones)
+  test        run connection and signing diagnostics
+  mcp         serve Appliance over the Model Context Protocol (stdio) so AI agents can deploy and debug
+  manifest    evaluate a programmatic appliance manifest in a sandbox
+  build       builds the appliance in the current working directory
+  destroy     destroy the linked (or named) project/environment (alias: remove)
+  upgrade     show how to update this CLI (per install channel; prints, never executes)
+
+Shortcuts:
+  list        alias for `appliance app list`
+  setup       alias for `appliance app setup`
+  cloud       umbrella: `appliance cloud install|update|bootstrap|teardown`
+
+The three journeys:
+  1. Build & run your app(s):   appliance dev            (deploy + logs + rebuild on save;
+                                multi-service via appliance.stack.json — same command)
+  2. Dev environment + agents:  appliance up  →  appliance agent login  →  appliance agent start
+  3. Ship the same app to AWS:  appliance cloud install  →  provision edge  →  appliance deploy
+
+Environment variables:
+  APPLIANCE_PROFILE               credential profile to use (overrides the active profile)
+  APPLIANCE_API_URL               override the api-server URL from the profile
+  APPLIANCE_TRUST_MANIFEST=1      skip the programmatic-manifest trust prompt (CI)
+
+Run `appliance <command> --help` for command-specific options.
