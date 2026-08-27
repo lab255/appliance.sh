@@ -99,7 +99,7 @@ export function ClusterSwitcher() {
       // per-cluster ids and just refetch, so stay put instead of
       // yanking the user off the page they were reading.
       const segments = window.location.pathname.split('/').filter(Boolean);
-      const stayable = ['projects', 'machine', 'cloud', 'settings', 'agents', 'deployments'];
+      const stayable = ['apps', 'catalogue', 'projects', 'machine', 'cloud', 'settings', 'agents', 'deployments'];
       if (segments.length !== 1 || !stayable.includes(segments[0])) {
         navigate('/');
       }
