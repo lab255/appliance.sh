@@ -6,11 +6,13 @@
 //!   /appliance.apkovl.tar.gz    our config overlay (openrc wiring +
 //!                               the appliance.start bootstrap script)
 //!   /k3s                        pinned k3s binary (arm64/amd64)
+//!   /apks/{main,community}      Runtime's signed local Alpine repos
 //!
 //! Boot flow: the netboot initramfs (ip=dhcp) finds the FAT volume on
 //! the second virtio-blk disk, mounts the modloop from it, applies the
 //! apkovl, installs the apkovl's /etc/apk/world packages from the
-//! network repo, then pivots to the real root where openrc runs
+//! selected repo (Runtime uses local signed media; other profiles use
+//! the network), then pivots to the real root where openrc runs
 //! /etc/local.d/appliance.start — which formats/mounts the persistent
 //! data disk (vda) on first boot and starts k3s with its state there.
 //!
@@ -1358,7 +1360,7 @@ if [ -s "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; then
   exit 2
 fi
 mkdir -p "$STATE" /run/appliance/shares /sys/fs/cgroup/appliance
-rm -f "$STATE/exit-code" "$STATE/relay.pids"
+rm -f "$STATE/exit-code" "$STATE/relay.pids" "$STATE/current.log"
 printf '%s\n' "$REQ" > "$STATE/request.json"
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
@@ -1377,6 +1379,10 @@ id "$USER_NAME" >/dev/null 2>&1 || adduser -D -H -u "$UID_NUM" -G "$USER_NAME" "
 
 # Per-principal cgroup v2 controls. Hints never resize the pooled VM.
 CG=/sys/fs/cgroup/appliance/$APP
+for CONTROL in cpu memory pids; do
+  grep -qw "$CONTROL" /sys/fs/cgroup/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/cgroup.subtree_control
+  grep -qw "$CONTROL" /sys/fs/cgroup/appliance/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/appliance/cgroup.subtree_control
+done
 mkdir -p "$CG"
 CPUS=$(printf '%s' "$REQ" | jq -r '.plan.resources.cpus')
 MEM=$(printf '%s' "$REQ" | jq -r '.plan.resources.memoryMib')
@@ -1418,25 +1424,31 @@ IMAGE=$(ctr -n "$CTR_NS" images list -q | head -n 1)
 # Root-namespace relays are unique per app. Host listeners terminate at
 # these relay ports; each relay's final target is the app's /32.
 printf '%s' "$REQ" | jq -r '.plan.ports[] | [.relay,.guest] | @tsv' | while IFS="$(printf '\t')" read -r RELAY GUEST; do
-  socat "TCP-LISTEN:$RELAY,reuseaddr,fork" "TCP:$IP:$GUEST" >> "$STATE/current.log" 2>&1 &
+  # This loop executes in a pipeline subshell; detach each relay from that
+  # short-lived shell just like the workload launcher below.
+  nohup setsid socat "TCP-LISTEN:$RELAY,reuseaddr,fork" "TCP:$IP:$GUEST" </dev/null >> "$STATE/current.log" 2>&1 &
   echo $! >> "$STATE/relay.pids"
 done
 
 printf '%s' "$REQ" | jq -r '.plan.env | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
-(
+# The lifecycle RPC is a one-shot vsock shell. Ignore its closing SIGHUP so
+# the pooled workload outlives that control connection, and let containerd
+# place the actual task (rather than this short-lived launcher) in the app's
+# cgroup. The outer PID write makes status reliable before the child runs.
+export STATE CTR_NS NS IMAGE CID CG APP
+nohup setsid sh -c '
   echo $$ > "$STATE/pid"
-  echo $$ > "$CG/cgroup.procs" 2>/dev/null || true
   set --
   while IFS="$(printf '\t')" read -r KEY VALUE; do
     DECODED=$(printf '%s' "$VALUE" | base64 -d)
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
   set +e
-  ctr -n "$CTR_NS" run --rm --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  ctr -n "$CTR_NS" run --rm --cgroup "appliance/$APP" --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
   CODE=$?
   echo "$CODE" > "$STATE/exit-code"
   exit "$CODE"
-) >/dev/null 2>&1 &
+' </dev/null >/dev/null 2>&1 &
 echo $! > "$STATE/pid"
 echo running > "$STATE/desired"
 echo '{"state":"running"}'
@@ -1446,6 +1458,10 @@ const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only worklo
 # k3s, registry, BuildKit, Node, or development toolchain is installed.
 rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
 mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
+for CONTROL in cpu memory pids; do
+  grep -qw "$CONTROL" /sys/fs/cgroup/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/cgroup.subtree_control
+  grep -qw "$CONTROL" /sys/fs/cgroup/appliance/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/appliance/cgroup.subtree_control
+done
 echo "appliance-runtime: supervisor ready"
 "#;
 
@@ -1544,23 +1560,20 @@ fn build_apkovl_for_readiness(
     // libstdc++/libgcc back the bun-compiled api-server binary; unzip
     // (zipinfo included) backs its server-side build pipeline. All three
     // are small and ride every VM so the world file stays static.
-    file(
-        "etc/apk/world",
-        0o644,
-        if runtime {
-            b"alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\ncontainerd\nrunc\niproute2\nnftables\njq\n"
-        } else {
-            b"alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\n"
-        },
-    )?;
-    file(
-        "etc/apk/repositories",
-        0o644,
+    let world = if runtime {
+        format!("{}\n", crate::images::RUNTIME_WORLD.join("\n"))
+    } else {
+        "alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\n".to_string()
+    };
+    file("etc/apk/world", 0o644, world.as_bytes())?;
+    let apk_repositories = if runtime {
+        "/media/vdb/apks/main\n/media/vdb/apks/community\n".to_string()
+    } else {
         format!(
             "https://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/main\nhttps://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/community\n"
         )
-        .as_bytes(),
-    )?;
+    };
+    file("etc/apk/repositories", 0o644, apk_repositories.as_bytes())?;
     // cgroups v2 unified hierarchy — kubelet requires it.
     file(
         "etc/rc.conf",
@@ -1738,7 +1751,14 @@ pub fn build_boot_media(
     host_port: u16,
 ) -> Result<BootMedia> {
     let readiness = readiness_for(agent_only, cluster, dev);
+    let (alpine_arch, _) = arch_tuple()?;
     let modloop = ensure_modloop()?;
+    let runtime_repositories = if readiness == HostReadiness::Runtime {
+        crate::bringup::hostlog("mirroring signed Alpine packages into Runtime boot media");
+        crate::images::ensure_runtime_apk_repositories()?
+    } else {
+        Vec::new()
+    };
     let k3s = if readiness == HostReadiness::K3s {
         Some(ensure_k3s()?.0)
     } else {
@@ -1799,7 +1819,13 @@ pub fn build_boot_media(
         + k3s_data.as_ref().map_or(0, Vec::len)
         + apkovl.len()
         + apiserver_data.as_ref().map_or(0, Vec::len)
-        + console_data.as_ref().map_or(0, Vec::len);
+        + console_data.as_ref().map_or(0, Vec::len)
+        + runtime_repositories.iter().map(|repository| {
+            fs::metadata(&repository.index).map(|metadata| metadata.len() as usize).unwrap_or(0)
+                + repository.packages.iter().map(|package| {
+                    fs::metadata(package).map(|metadata| metadata.len() as usize).unwrap_or(0)
+                }).sum::<usize>()
+        }).sum::<usize>();
     let volume_bytes = ((content as u64 + 64 * 1024 * 1024) / (16 * 1024 * 1024) + 1) * (16 * 1024 * 1024);
 
     let image_path = vm_dir.join("boot-media.img");
@@ -1828,6 +1854,24 @@ pub fn build_boot_media(
         f.write_all(&modloop_data)?;
         let mut f = root.create_file("appliance.apkovl.tar.gz")?;
         f.write_all(&apkovl)?;
+        if !runtime_repositories.is_empty() {
+            let apks = root.create_dir("apks")?;
+            for repository in &runtime_repositories {
+                let directory = apks.create_dir(&repository.name)?;
+                directory.create_file(".boot_repository")?;
+                // `apk --repository <base>` appends its architecture, just
+                // like Alpine's own ISO layout (`apks/aarch64/...`).
+                let architecture = directory.create_dir(alpine_arch)?;
+                let mut index = architecture.create_file("APKINDEX.tar.gz")?;
+                index.write_all(&fs::read(&repository.index)?)?;
+                for package in &repository.packages {
+                    let filename = package.file_name().and_then(|name| name.to_str())
+                        .context("Runtime APK path has no UTF-8 filename")?;
+                    let mut output = architecture.create_file(filename)?;
+                    output.write_all(&fs::read(package)?)?;
+                }
+            }
+        }
         if let Some(data) = &k3s_data {
             let mut f = root.create_file("k3s")?;
             f.write_all(data)?;
@@ -1857,6 +1901,13 @@ pub fn guest_cmdline() -> String {
     format!(
         "console=hvc0 ip=dhcp alpine_repo=https://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/main modloop=/media/vdb/boot/modloop-virt"
     )
+}
+
+/// Runtime auto-discovers the signed local repositories copied into its FAT media.
+/// DHCP remains enabled for the Netstack link, but no package/rootfs bytes
+/// traverse that boundary before the supervisor is ready.
+pub fn runtime_guest_cmdline() -> String {
+    "console=hvc0 ip=dhcp alpine_repo=auto modloop=/media/vdb/boot/modloop-virt".to_string()
 }
 
 /// Which independently observable guest layer `host_services` gates on.
@@ -2985,6 +3036,33 @@ mod tests {
         assert!(plan.persist_guest_ip, "k3s VMs write guest-ip too");
         assert!(plan.wire_k3s_forwards, "k3s VMs wire the api/ingress/registry forwards");
         assert_eq!(plan.readiness, HostReadiness::K3s);
+    }
+
+    #[test]
+    fn runtime_overlay_selects_only_local_signed_repositories() {
+        let overlay = build_apkovl_for_readiness(
+            8102,
+            None,
+            false,
+            false,
+            false,
+            8103,
+            HostReadiness::Runtime,
+            "",
+            8100,
+            "",
+            false,
+        )
+        .unwrap();
+        let repositories = apkovl_file(&overlay, "etc/apk/repositories").unwrap();
+        assert_eq!(repositories, "/media/vdb/apks/main\n/media/vdb/apks/community\n");
+        assert!(!repositories.contains("https://"));
+        let world = apkovl_file(&overlay, "etc/apk/world").unwrap();
+        assert!(world.lines().any(|package| package == "containerd"));
+        assert!(world.lines().any(|package| package == "containerd-ctr"));
+        assert!(world.lines().any(|package| package == "nftables"));
+        let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
+        assert!(start.contains("cgroup.subtree_control"));
     }
 
     #[test]

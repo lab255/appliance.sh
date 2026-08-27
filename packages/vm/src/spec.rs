@@ -248,6 +248,7 @@ impl VmSpec {
         spec.cluster = false;
         spec.net_link = NetLink::Netstack;
         spec.image = crate::images::RUNTIME_IMAGE.to_string();
+        spec.cmdline = crate::guest::runtime_guest_cmdline();
         spec
     }
 
@@ -735,6 +736,7 @@ mod tests {
         assert!(!spec.cluster);
         assert_eq!(spec.net_link, NetLink::Netstack);
         assert_eq!(spec.image, crate::images::RUNTIME_IMAGE);
+        assert!(spec.cmdline.contains("alpine_repo=auto"));
     }
 
     #[test]

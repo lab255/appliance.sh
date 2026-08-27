@@ -664,6 +664,8 @@ fn run() -> Result<()> {
                 spec.runtime = true;
                 spec.agent_only = true;
                 spec.net_link = NetLink::Netstack;
+                spec.image = images::RUNTIME_IMAGE.to_string();
+                spec.cmdline = guest::runtime_guest_cmdline();
             } else if agent_only {
                 spec.agent_only = true;
                 spec.dev = true;
@@ -1187,6 +1189,8 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
             spec.docker = false;
             spec.cluster = false;
             spec.net_link = NetLink::Netstack;
+            spec.image = images::RUNTIME_IMAGE.to_string();
+            spec.cmdline = guest::runtime_guest_cmdline();
 
             spec.runtime_shares.retain(|share| share.app_id != plan.app_id);
             spec.runtime_shares.push(RuntimeShare {
