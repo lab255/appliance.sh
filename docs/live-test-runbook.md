@@ -535,16 +535,28 @@ any sign of the brokered credential reaching the guest, **blocks the flip**.
 
 ---
 
-## Runtime pooled-VM proof (AP-163 / AP-164 / AP-167)
+## Runtime live test
 
-This proof uses the repository engine and CLI, creates a tiny OCI bundle, and
-records each phase. The Runtime pool is separate from `$SBX`: its fixed name is
-`appliance-runtime`, it is 2 vCPU / 4096 MiB, and it reaches core supervisor
-readiness without k3s, Docker, BuildKit, Node, or the dev toolchain.
+This proof covers the source-only [journal](../examples/runtime/journal/)
+container, [dashboard](../examples/runtime/dashboard/) binary, and
+[notes-suite](../examples/runtime/notes-suite/) compound samples. The Runtime
+pool is separate from `$SBX`: its fixed name is `appliance-runtime`, it is 2
+vCPU / 4096 MiB, and it reaches core supervisor readiness without k3s, Docker,
+BuildKit, Node, or the dev toolchain.
+
+Prerequisites are macOS with Virtualization.framework, Docker with Buildx,
+Node/pnpm/Bun, and the repository's Rust and JavaScript toolchains. The sample
+script commits no generated OCI archives, executables, or zip files. It invokes
+`appliance builder package` for every bundle; that command calls `verifyBundle`
+before returning success and the wrapper also asserts every exit status and
+embedded digest.
 
 ```sh
 cd ~/Workspaces/appliance.sh
-pnpm --filter @appliance.sh/cli run build
+export OUT="${TMPDIR:-/tmp}/appliance-runtime-samples"
+scripts/build-runtime-samples.sh --require-docker
+
+pnpm exec nx run @appliance.sh/cli:build
 
 cd packages/vm
 cargo build --release
@@ -552,19 +564,20 @@ cargo build --release
 cd ../..
 export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
 
-# The script commits only source; the OCI tar and zip stay generated/ignored.
-examples/runtime/journal/build-bundle.sh
-
 # Serialize the engine restart: `vm stop` requests shutdown asynchronously,
 # so wait for `running: false` before booting the rebuilt binary.
 packages/cli/dist/appliance vm stop --name appliance-runtime
-packages/vm/target/release/appliance-vm status appliance-runtime
+while packages/vm/target/release/appliance-vm status appliance-runtime | grep -q '"running":true'; do sleep 0.25; done
 time packages/cli/dist/appliance vm up --name appliance-runtime
+```
 
+### Journal container
+
+```sh
 # Terminal A: validates, unpacks, reconciles the already-booted pool, starts
 # journal, and follows logs.
 time packages/cli/dist/appliance runtime run \
-  examples/runtime/journal/journal.appliance.zip
+  "$OUT/journal.appliance.zip"
 
 # Terminal B, while Terminal A follows logs:
 curl -fsS -D /tmp/journal.headers -o /tmp/journal.body \
@@ -575,8 +588,8 @@ time packages/cli/dist/appliance runtime ps
 time packages/cli/dist/appliance runtime logs journal
 time packages/cli/dist/appliance runtime stop journal
 packages/cli/dist/appliance runtime ps
-packages/vm/target/debug/appliance-vm status appliance-runtime
-packages/vm/target/debug/appliance-vm timings appliance-runtime
+packages/vm/target/release/appliance-vm status appliance-runtime
+packages/vm/target/release/appliance-vm timings appliance-runtime
 ```
 
 **PASS:** curl returns HTTP 200; `runtime ps` shows `journal`, its
@@ -594,7 +607,7 @@ Observed on the final macOS VZ proof (2026-08-28): serialized cold pool boot
 (repeat `0.040435s`); explicit app teardown `12.7s`. The explicit-stop and
 Ctrl-C cycles both left the same pool PID running and core-ready.
 
-### Binary payload, entrypoint, and exit-code proof (AP-164)
+### Dashboard binary
 
 The dashboard fixture commits no executable. Its build script uses
 `docker run --rm ... golang:1.22-alpine go build` to generate static amd64 and
@@ -602,34 +615,11 @@ arm64 ELF files in a temporary directory, then packages that directory with
 `appliance builder package`. This optional proof is CI-skippable when Docker is
 unavailable.
 
-Rebuild the engine and stop/up the Runtime pool before testing: the running VZ
-engine and its guest boot media do not pick up `guest.rs` changes in place.
-
-```sh
-cd ~/Workspaces/appliance.sh
-pnpm --filter @appliance.sh/cli run build
-
-cd packages/vm
-cargo build --release
-./scripts/sign-dev.sh --release
-cd ../..
-export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
-
-examples/runtime/dashboard/build-bundle.sh serve \
-  examples/runtime/dashboard/dashboard.appliance.zip
-examples/runtime/dashboard/build-bundle.sh exit7 \
-  examples/runtime/dashboard/dashboard-exit7.appliance.zip
-
-packages/cli/dist/appliance vm stop --name appliance-runtime
-packages/vm/target/release/appliance-vm status appliance-runtime
-time packages/cli/dist/appliance vm up --name appliance-runtime
-```
-
 In Terminal A, run the HTTP server and follow its shared Runtime log pipeline:
 
 ```sh
 time packages/cli/dist/appliance runtime run \
-  examples/runtime/dashboard/dashboard.appliance.zip
+  "$OUT/dashboard.appliance.zip"
 ```
 
 In Terminal B, discover the allocated host port, curl it, inspect state/logs,
@@ -647,13 +637,14 @@ time packages/cli/dist/appliance runtime logs dashboard
 time packages/cli/dist/appliance runtime stop dashboard
 ```
 
-Finally prove that the declared arguments reach the binary and status 7 flows
-through the supervisor, CLI process, registry, and `runtime ps` rendering:
+The sample's own `build-bundle.sh exit7` mode can additionally prove declared
+arguments and status propagation through the supervisor, CLI, registry, and
+`runtime ps` rendering:
 
 ```sh
 set +e
-time packages/cli/dist/appliance runtime run \
-  examples/runtime/dashboard/dashboard-exit7.appliance.zip
+examples/runtime/dashboard/build-bundle.sh exit7 "$OUT/dashboard-exit7.appliance.zip"
+time packages/cli/dist/appliance runtime run "$OUT/dashboard-exit7.appliance.zip"
 RUN_STATUS=$?
 set -e
 test "$RUN_STATUS" -eq 7
@@ -674,38 +665,19 @@ host curl `status=200 total=0.035151s`; `runtime ps` `0.49s`; app stop `1.07s`;
 exit fixture cold reconcile/run `11.14s`, with CLI status `7`, `runtime ps`
 rendering `exited (7)`, and the pool remaining core-ready.
 
-### Compound shared-VM lifecycle proof (AP-166)
+### Notes Suite compound app
 
 `notes-suite` is source-only and Docker-builds two OCI leaves at package time.
 `api` has no host listener; `web` depends on its HTTP health check and owns the
 single primary host port. The runtime injects
 `APPLIANCE_SVC_API_URL=http://127.0.0.1:9000` into both leaves.
 
-Rebuild the engine and guest media, then serialize the pool restart before the
-live claim. A running pool never picks up an edited supervisor in place.
-
-```sh
-cd ~/Workspaces/appliance.sh
-pnpm --filter @appliance.sh/cli run build
-
-cd packages/vm
-cargo build --release
-./scripts/sign-dev.sh --release
-cd ../..
-export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
-
-examples/runtime/notes-suite/build-bundle.sh
-packages/cli/dist/appliance vm stop --name appliance-runtime
-while packages/vm/target/release/appliance-vm status appliance-runtime | grep -q '"running":true'; do sleep 0.25; done
-time packages/cli/dist/appliance vm up --name appliance-runtime
-```
-
 In Terminal A, start the app and follow all leaf logs. Every emitted line has a
 `[service]` prefix; Ctrl-C is also a stop-as-a-unit proof.
 
 ```sh
 time packages/cli/dist/appliance runtime run \
-  examples/runtime/notes-suite/notes-suite.appliance.zip
+  "$OUT/notes-suite.appliance.zip"
 ```
 
 In Terminal B, prove the primary host path, service rows, service log filter,
@@ -763,3 +735,28 @@ placement and upgrades remain follow-ups.
 lexical service-name tie-breaking for simultaneously ready leaves. Parallel
 launch of independent leaves is intentionally deferred; dependency ordering
 and failure semantics do not depend on scheduler timing.
+
+### Pool survival and expected timings
+
+For any sample, pressing Ctrl-C in the `runtime run` terminal must stop the app
+as a unit, return status 130, and leave the pool alive. Explicit `runtime stop`
+must do the same without stopping the VM. After either path, assert
+`appliance-vm status appliance-runtime` contains `"running":true`; a subsequent
+`runtime run` is the warm-start check. For notes-suite, the SIGKILL sequence
+above is the restart-recovery check: only the API leaf is killed, it returns
+healthy with `restarts=1`, and the web leaf and pool survive.
+
+These are the recorded macOS VZ values from 2026-08-28. “First byte” uses the
+recorded curl total as the available upper bound. A dash means the source proof
+did not isolate that measurement; no value is inferred.
+
+| Kind                 | Commands used                                                                                                              | Cold boot |                                  Warm start |  First byte |   Stop |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------: | ------------------------------------------: | ----------: | -----: |
+| Journal container    | `time appliance vm up`; `time appliance runtime run`; `curl -w '%{time_total}'`; `time appliance runtime stop journal`     |    10.33s |                                     <=1.01s | <=0.035827s |  12.7s |
+| Dashboard binary     | `time appliance vm up`; `time appliance runtime run`; `curl -w '%{time_total}'`; `time appliance runtime stop dashboard`   |    10.36s | — (exit fixture cold reconcile/run: 11.14s) | <=0.035151s |  1.07s |
+| Notes Suite compound | `time appliance vm up`; `time appliance runtime run`; `curl -w '%{time_total}'`; `time appliance runtime stop notes-suite` |    10.34s |                       <=1s timestamp bucket |     <=0.04s | 10.61s |
+
+The notes-suite recovery check (`ctr ... tasks kill -s SIGKILL ...` followed by
+the `runtime ps` loop) returned healthy within 9s. Its cached source bundle
+build was 2.85s. Recorded `runtime ps` times were 0.29s (journal), 0.49s
+(dashboard), and 0.33s (notes-suite).
