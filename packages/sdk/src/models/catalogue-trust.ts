@@ -10,8 +10,7 @@ export const CATALOGUE_BLACKLIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 // currently shipped catalogue pin until owners publish a root-authorised
 // production delegation. Never add a private key alongside this value.
 export const RFC0001_FIXTURE_PUBLIC_KEY = 'ed25519:A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg';
-export const RFC0001_FIXTURE_KEY_ID =
-  'ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c';
+export const RFC0001_FIXTURE_KEY_ID = 'ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c';
 
 export interface CatalogueTrustPolicy {
   keys: Readonly<Record<string, string>>;
@@ -130,12 +129,7 @@ export async function catalogueSigningInput(payload: unknown, role: SignatureEnv
 async function verifyEd25519(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): Promise<boolean> {
   try {
     const key = await crypto.subtle.importKey('raw', publicKey.slice().buffer, { name: 'Ed25519' }, false, ['verify']);
-    return await crypto.subtle.verify(
-      { name: 'Ed25519' },
-      key,
-      signature.slice().buffer,
-      message.slice().buffer
-    );
+    return await crypto.subtle.verify({ name: 'Ed25519' }, key, signature.slice().buffer, message.slice().buffer);
   } catch {
     // Safari versions without WebCrypto Ed25519 use noble. Noble is audited,
     // constant-time where JavaScript permits, and receives raw bytes only.
@@ -182,7 +176,10 @@ function parseJson(bytes: Uint8Array): unknown {
 function checkGeneration(generation: number, policy: CatalogueTrustPolicy): void {
   const floor = Math.max(policy.generationFloor, policy.highestGeneration ?? 0);
   if (generation < floor) {
-    throw new CatalogueTrustError('generation-below-floor', `catalogue generation ${generation} is below floor ${floor}`);
+    throw new CatalogueTrustError(
+      'generation-below-floor',
+      `catalogue generation ${generation} is below floor ${floor}`
+    );
   }
 }
 
@@ -196,7 +193,12 @@ function checkValidity(
   const issuedAt = Date.parse(issuedAtValue);
   const expiresAt = Date.parse(expiresAtValue);
   const current = now.getTime();
-  if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt || expiresAt - issuedAt > maxSpan) {
+  if (
+    !Number.isFinite(issuedAt) ||
+    !Number.isFinite(expiresAt) ||
+    expiresAt <= issuedAt ||
+    expiresAt - issuedAt > maxSpan
+  ) {
     throw new CatalogueTrustError('invalid-validity', 'catalogue validity window exceeds its RFC cap');
   }
   if (issuedAt > current) throw new CatalogueTrustError('invalid-validity', 'catalogue index is not valid yet');

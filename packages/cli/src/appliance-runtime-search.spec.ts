@@ -39,6 +39,11 @@ it('searches only free entries after verifying the pair', async () => {
   const fetcher = async () => responses.shift()!;
 
   await expect(
-    searchCatalogue('', { origin: 'https://example.test', fetch: fetcher, policy, now: new Date('2026-08-27T00:00:00Z') })
+    searchCatalogue('', {
+      origin: 'https://example.test',
+      fetch: fetcher,
+      policy,
+      now: new Date('2026-08-27T00:00:00Z'),
+    })
   ).resolves.toMatchObject({ entries: [{ id: 'journal' }] });
 });

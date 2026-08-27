@@ -75,4 +75,3 @@ export async function runRuntimeSearch(argv = process.argv.slice(2)): Promise<vo
   }
   console.error(`Verified signed index at ${result.verifiedAt}.`);
 }
-

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 const dnsLabel = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/);
-const semver = z.string().regex(/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
+const semver = z
+  .string()
+  .regex(/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
 const digest = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const keyId = z.string().regex(/^ed25519:sha256:[0-9a-f]{64}$/);
 const base64url = z.string().regex(/^[A-Za-z0-9_-]+$/);
@@ -17,21 +19,22 @@ export const catalogueEntrySchema = z.strictObject({
   name: z.string().trim().min(1).max(120),
   version: semver,
   description: z.string().trim().min(1).max(500),
-  license: z.string().trim().regex(/^[A-Za-z0-9-.+]+$/),
+  license: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9-.+]+$/),
   publisher: cataloguePublisherSchema,
   tier: z.enum(['first-party', 'verified-account', 'known-publisher']),
-  url: z
-    .url()
-    .refine((value) => {
-      const url = new URL(value);
-      return (
-        url.protocol === 'https:' &&
-        !url.username &&
-        !url.password &&
-        url.port === '' &&
-        /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.appliance\.zip$/.test(url.hostname)
-      );
-    }, 'must be an HTTPS appliance.zip host'),
+  url: z.url().refine((value) => {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      url.port === '' &&
+      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.appliance\.zip$/.test(url.hostname)
+    );
+  }, 'must be an HTTPS appliance.zip host'),
   digest,
   paid: z.boolean().optional(),
   icon: z.url().optional(),

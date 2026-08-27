@@ -131,7 +131,9 @@ export function CatalogueContent({
           <span className="inline-flex flex-wrap items-center gap-2">
             <span>Free and open-source apps that run on this Mac.</span>
             <StatusPill tone={status.tone} label={status.label} dot={false} />
-            {data ? <span className="text-xs tabular-nums">· verified {new Date(data.verifiedAt).toLocaleString()}</span> : null}
+            {data ? (
+              <span className="text-xs tabular-nums">· verified {new Date(data.verifiedAt).toLocaleString()}</span>
+            ) : null}
           </span>
         }
       />
@@ -148,14 +150,22 @@ export function CatalogueContent({
         </Banner>
       ) : null}
       {installMessage ? (
-        <Banner tone="info" title="Installation is not available yet" className="mb-4" onDismiss={() => setInstallMessage(null)}>
+        <Banner
+          tone="info"
+          title="Installation is not available yet"
+          className="mb-4"
+          onDismiss={() => setInstallMessage(null)}
+        >
           {installMessage}
         </Banner>
       ) : null}
 
       {loading ? (
         <SectionCard>
-          <div className="flex min-h-52 items-center justify-center text-sm text-[var(--color-muted-foreground)]" role="status">
+          <div
+            className="flex min-h-52 items-center justify-center text-sm text-[var(--color-muted-foreground)]"
+            role="status"
+          >
             Fetching and verifying the signed index…
           </div>
         </SectionCard>
@@ -176,7 +186,10 @@ export function CatalogueContent({
           <div className="mb-5 flex flex-wrap items-center gap-2">
             <label className="relative min-w-56 flex-1">
               <span className="sr-only">Search catalogue apps</span>
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[var(--color-muted-foreground)]" aria-hidden />
+              <Search
+                className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[var(--color-muted-foreground)]"
+                aria-hidden
+              />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -184,7 +197,10 @@ export function CatalogueContent({
                 className="pl-9"
               />
             </label>
-            <div className="inline-flex flex-wrap rounded-md border border-[var(--color-border)] p-0.5" aria-label="Catalogue category">
+            <div
+              className="inline-flex flex-wrap rounded-md border border-[var(--color-border)] p-0.5"
+              aria-label="Catalogue category"
+            >
               {CATEGORIES.map((item) => (
                 <button
                   key={item}
@@ -205,33 +221,49 @@ export function CatalogueContent({
 
           {entries.length === 0 ? (
             <SectionCard>
-              <p className="py-16 text-center text-sm text-[var(--color-muted-foreground)]">No free apps match this search.</p>
+              <p className="py-16 text-center text-sm text-[var(--color-muted-foreground)]">
+                No free apps match this search.
+              </p>
             </SectionCard>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
               {entries.map((entry) => (
-                <article key={entry.id} className="flex min-h-48 flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+                <article
+                  key={entry.id}
+                  className="flex min-h-48 flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold" aria-hidden>
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-semibold"
+                        aria-hidden
+                      >
                         {entry.name.slice(0, 1).toUpperCase()}
                       </span>
                       <div className="min-w-0">
                         <h2 className="truncate text-sm font-semibold">{entry.name}</h2>
-                        <div className="font-mono text-xs tabular-nums text-[var(--color-muted-foreground)]">v{entry.version}</div>
+                        <div className="font-mono text-xs tabular-nums text-[var(--color-muted-foreground)]">
+                          v{entry.version}
+                        </div>
                       </div>
                     </div>
                     <span className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 text-micro font-medium text-[var(--color-muted-foreground)]">
                       {entry.license}
                     </span>
                   </div>
-                  <p className="mt-3 flex-1 text-xs leading-4 text-[var(--color-muted-foreground)]">{entry.description}</p>
+                  <p className="mt-3 flex-1 text-xs leading-4 text-[var(--color-muted-foreground)]">
+                    {entry.description}
+                  </p>
                   <div className="mt-4 flex items-center justify-between gap-2">
-                    <span className="truncate text-micro text-[var(--color-muted-foreground)]">{entry.publisher.name}</span>
+                    <span className="truncate text-micro text-[var(--color-muted-foreground)]">
+                      {entry.publisher.name}
+                    </span>
                     <Button
                       size="sm"
                       disabled={data.stale}
-                      onClick={() => setInstallMessage('Install arrives with AP-173. Appliance did not report a successful install.')}
+                      onClick={() =>
+                        setInstallMessage('Install arrives with AP-173. Appliance did not report a successful install.')
+                      }
                     >
                       Install
                     </Button>

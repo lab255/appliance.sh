@@ -128,4 +128,3 @@ describe('catalogue trust', () => {
     await expect(verifyCatalogueIndexPair(options)).rejects.toMatchObject({ code: 'invalid-validity' });
   });
 });
-
