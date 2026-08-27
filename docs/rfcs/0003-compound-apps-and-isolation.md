@@ -7,11 +7,9 @@
 
 ## Summary
 
-An Appliance Runtime bundle may describe a compound app: one signed top-level
-appliance containing a bounded graph of runnable container or Linux binary
-services. The bundle manifest remains `appliance.json`, the same filename used
-by source appliances today. RFC 0001 owns the complete v2 manifest and payload
-shapes; this RFC defines only the graph and lifecycle fields it must adopt.
+An Appliance Runtime bundle may describe a compound app: one digest-covered
+top-level appliance containing a bounded graph of container or Linux binary
+services. Its manifest is `appliance.json`; RFC 0001 owns every field shape.
 
 The runtime has two execution topologies:
 
@@ -20,9 +18,8 @@ The runtime has two execution topologies:
 2. A first-level sub-appliance with `isolation: "vm"` runs in a dedicated,
    core-only VM. Its descendants, if any, inherit that VM.
 
-The pool is separate from the existing development/deploy VM and has no
-workspace mount, k3s, BuildKit, or Docker daemon. Its default name is
-`appliance-runtime`; isolated VM names are not a stable public interface.
+The pool is separate from the development/deploy VM, has no workspace mount,
+k3s, BuildKit, or Docker, and defaults to the name `appliance-runtime`.
 
 Inside a VM, a small Appliance runtime supervisor manages both OCI containers
 through containerd and arbitrary Linux binaries as unprivileged, namespaced
@@ -34,21 +31,14 @@ VM failure is necessarily a shared failure domain.
 The graph is limited to top-level app -> sub-appliance -> service and 16
 runnable leaves. Validation rejects deeper or larger graphs before extraction.
 
-Shared discovery uses stable loopback ports injected as
-`APPLIANCE_SVC_<NAME>_URL`; cross-VM discovery uses runtime-owned
-`.appliance.internal` names and host-only netstack relays.
-
-This is a packaging and runtime unit, not a replacement spelling for today's
-client-side stacks. `appliance stack` remains useful for source-level fleets of
-independent projects and cloud environments; it is not the implementation of
-compound bundles.
+Shared discovery injects stable loopback `APPLIANCE_SVC_<NAME>_URL` values;
+cross-VM discovery uses `.appliance.internal` and host-only netstack relays.
 
 ## Manifest additions
 
-RFC 0001 should adopt the following exact field names. Definitions here are
-normative for composition semantics, while RFC 0001 remains normative for the
-full manifest schema, common identity fields, payloads, ports, mounts, egress,
-resources, signatures, and bundle layout.
+RFC 0001 is normative for every field shape, including the lifecycle fields it
+adopts from this spike. This section fixes their placement and names; this RFC
+is normative only for graph and lifecycle semantics.
 
 ### Compound discriminator and graph
 
@@ -56,24 +46,20 @@ Add `"compound"` to the v2 `type` discriminator and add:
 
 ```ts
 interface CompoundFields {
-  services: Service[];
+  services: Record<string, Service>;
 }
 ```
 
-`services[]` is an ordered serialization of a dependency graph, not an implied
-start order. Each item is a nested runnable manifest fragment. It reuses the
-RFC 0001 `name`, `type`, `version`, `payload`, `ports`, `mounts`, `egress`, and
-`resources` shapes and adds the lifecycle fields below.
+`services` is a name-keyed map of a dependency graph. Each DNS-label map key is
+the nested service name; entries do not repeat `name`. Entries reuse RFC 0001's
+nested runnable shapes and add the lifecycle fields below. JSON key order has
+no lifecycle meaning.
 
 A service with `type: "compound"` is a structural sub-appliance and has its
-own `services[]`. A service with `type: "container"` or `type: "binary"` is a
-runnable leaf and may not contain `services[]`. A top-level compound may also
+own `services` map. A service with `type: "container"` or `type: "binary"` is a
+runnable leaf and may not contain `services`. A top-level compound may also
 contain runnable leaves directly; that is the one-level shorthand for apps
 that do not need structural sub-appliance grouping.
-
-This RFC does not add an `appliance` wrapper around each service. The service
-entry is the nested manifest fragment. This keeps the shape small and lets RFC
-0001 reuse its runnable discriminated union recursively with a depth check.
 
 ### Dependency and lifecycle fields
 
@@ -104,7 +90,7 @@ interface ServiceRestart {
 }
 ```
 
-`dependsOn` contains service `name` values in the same top-level app. A
+`dependsOn` contains runnable service map keys in the same top-level app. A
 dependency is satisfied only when the target is healthy, or running when it
 has no explicit `health` check. Array position has no lifecycle meaning.
 
@@ -122,7 +108,7 @@ seconds clears its rolling failure count.
 
 ### Isolation field
 
-First-level entries in the top-level `services[]` add:
+First-level values in the top-level `services` map add:
 
 ```ts
 interface ServiceIsolationFields {
@@ -140,30 +126,30 @@ there.
 
 ### Service identity
 
-Every service and structural sub-appliance name uses RFC 0001's DNS-safe name
-schema. Runnable leaf names must be unique across the whole top-level app, not
-just within a structural parent. This makes dependency references, CLI
-selectors, log prefixes, and `APPLIANCE_SVC_<NAME>_URL` unambiguous.
+Every `services` map key uses RFC 0001's DNS-label schema. Runnable leaf keys
+must be unique across the whole top-level app, not just within a structural
+parent. This makes dependency references, CLI selectors, log prefixes, and
+`APPLIANCE_SVC_<NAME>_URL` unambiguous.
 
-Structural names are sibling-unique. Storage and diagnostics use the full path,
-for example `notes-suite/search/indexer`.
+Structural keys are sibling-unique; storage uses full paths such as `notes-suite/search/indexer`.
 
 ## Validation rules
 
 Validation completes before extraction, VM creation, grants, or listeners and
 reports every graph error it can find in one pass.
 
-1. `type: "compound"` requires a non-empty `services[]`.
-2. Only v2 top-level or nested compound entries may contain `services[]`.
+1. `type: "compound"` requires a non-empty `services` map.
+2. Only v2 top-level or nested compound entries may contain a `services` map.
 3. A top-level app may contain first-level entries, and a first-level compound
    may contain runnable leaves. A second-level compound is rejected.
 4. There may be at most 16 runnable leaves after flattening. Structural
    compound entries do not count toward 16.
-5. Runnable leaf names are globally unique within the top-level app.
-6. Every `dependsOn` target exists, names a runnable leaf, is not self, and is
-   in the same top-level app.
-7. The dependency graph is acyclic. An error prints at least one complete cycle
-   such as `web -> indexer -> web`.
+5. Every map key is a DNS label; duplicate JSON keys are rejected before map
+   materialization, and runnable leaf keys are globally unique within the app.
+6. Every `dependsOn` value resolves to a runnable leaf key in the same top-level
+   app and is not the declaring key.
+7. The key-referenced dependency graph is acyclic. An error prints at least one
+   complete cycle such as `web -> indexer -> web`.
 8. `dependsOn`, `health`, `restart`, and `required` are rejected on structural
    compound entries; lifecycle belongs to runnable leaves.
 9. `isolation` is accepted only on first-level entries and is inherited by
@@ -186,10 +172,9 @@ reports every graph error it can find in one pass.
     each primary/named port they use and fails before start if the host cannot
     allocate the route.
 
-**NOTE — service counting default:** the owner limit says "16 services". This
-RFC counts runnable leaves, because structural compound nodes consume no
-process slot. A future schema may impose a separate, lower structural-node
-limit without changing runtime capacity.
+**NOTE — service counting default:** RFC 0001 adopts the owner-approved limit
+of 16 runnable leaves; structural compound nodes consume no process slot. A
+future schema may add a separate structural-node limit.
 
 **NOTE — direct leaves default:** allowing direct runnable leaves under the
 top-level compound preserves the mock's simple two-service form. Publishers
@@ -219,8 +204,8 @@ status, and logs even when it shares the pool.
 
 ### Start
 
-1. The host verifies the signed top-level bundle and validates the entire
-   graph before contacting a VM.
+1. The host verifies the digest and signature status (unsigned means the
+   Unknown Publisher flow in RFC 0004), then validates the graph before VM I/O.
 2. It materializes each payload in a content-addressed, read-only directory and
    allocates stable service identities, loopback ports, data directories, and
    network namespaces.
@@ -233,8 +218,8 @@ status, and logs even when it shares the pool.
    optional leaf is either healthy/running or terminally failed without
    blocking a required leaf.
 
-Start order is dependency-declared and parallel where possible; array order
-only breaks ties in output.
+Start order is dependency-declared and parallel where possible; status and logs
+use lexical service-key order when they need a stable tie-breaker.
 
 ### Health and restart
 
@@ -301,8 +286,9 @@ netstack synthesizes an address for
 `<service>.<app>.appliance.internal`; an internal-route table then rewrites a
 connection for that address and named service port to the target's loopback
 relay. The relay pumps bytes into the destination VM's netstack. For a target
-in the pooled VM, the last leg is the same inbound netstack connection to the
-service's stable guest-loopback proxy.
+in the pooled VM, the last leg uses `Netstack::connect` to the guest tap address
+and a stable runtime proxy bound on `0.0.0.0:<runtime-port>`, not guest
+`127.0.0.1`; `Netstack::connect` always dials `guest_ip:port`.
 
 This route is symmetric: VM-B reaches a service in VM-A through the same
 synthetic name -> source-netstack -> host relay -> target-netstack sequence.
@@ -316,6 +302,13 @@ to host loopback and accept only netstack-originated connections tagged with
 the same top-level app. Internal routes bypass public egress allowlists but may
 reach only declared service ports in their own compound app.
 
+None of the synthetic DNS, route table, or app-tagged relay exists today. The
+engine must add a verified-synthetic-answer path that bypasses `dns.rs`'
+`answer_ok_and_record` anti-private-answer filter only for runtime-owned
+`.appliance.internal` records. `engine.rs` must run the internal-route hook
+before its ordinary egress classifier so a private internal endpoint is neither
+dropped nor mistaken for publisher-requested Internet egress.
+
 Apps see a stable private URL, never host or peer-guest addresses. Undeclared
 ports, cross-app names, UDP, broadcast, and direct guest-IP routes are denied.
 
@@ -327,10 +320,10 @@ For example, `search-api` becomes `APPLIANCE_SVC_SEARCH_API_URL`.
 
 For services in the same VM, the value is
 `http://127.0.0.1:<stable-runtime-port>`. The supervisor persists one loopback
-port per app/service and proxies it into the target's network namespace and
-declared primary port. Runtime allocation avoids collisions between apps whose
-containers both listen on `3000`; stability across restarts keeps configs and
-connection pools predictable.
+port per app/service and installs a caller-namespace loopback listener. Its
+host/peer ingress side binds the guest tap address (`0.0.0.0`) so host
+`Netstack::connect` reaches it; it then dispatches to the target namespace and
+primary port. Runtime allocation avoids collisions and remains stable.
 
 For a cross-VM target, the value is
 `http://<service>.<app>.appliance.internal:<declared-port>`. Named non-primary
@@ -349,11 +342,14 @@ hosts and mount slots as a top-level consent summary, but it stores the grant
 against each fully qualified service path.
 
 Each leaf's effective egress list is its own declaration; omission means deny.
-The supervisor already creates a network namespace and veth identity per leaf,
-so RFC 0002 can cheaply key host-netstack policy by source identity. An
-isolated sub-appliance gets the same map, enforced at its VM netstack. If a
-platform cannot preserve source identity, it must reject mixed-policy shared
-placement rather than widen to the union.
+No supervisor exists today, and the host netstack currently sees one guest
+lease. The required design gives each leaf network namespace a stable source IP
+from a reserved per-VM tap subnet and preserves it to the host without SNAT;
+the netstack registers that IP-to-service mapping and keys policy by it. This is
+an RFC 0002 dependency. A supervisor-to-host identity side-channel is an
+acceptable fallback only if it binds every flow before policy evaluation. A
+platform unable to preserve identity must reject mixed-policy shared placement
+rather than widen to the union.
 
 Mounts are materialized only in the declaring leaf's mount namespace. A volume
 or user-granted host slot requested by one service is not visible to siblings.
@@ -379,10 +375,11 @@ and `--follow` filter the host-fanned supervisor streams across all VMs.
 
 ## Upgrades and data
 
-A publisher replaces one sub-appliance by shipping a newly signed top-level
-bundle whose nested `version` and payload digest changed. The runtime never
-accepts an unsigned loose nested payload. It verifies and stages the whole
-bundle, then computes the changed service and reverse-dependent closure.
+A publisher replaces one sub-appliance by shipping a new top-level bundle whose
+nested `version` and payload digest changed. The runtime never accepts a nested
+payload outside a digest-covered top-level bundle. It verifies digest and
+signature status, stages the bundle, then computes the changed reverse-dependent
+closure.
 
 An in-place upgrade stops that closure in reverse dependency order, switches
 content-addressed payload pointers, and restarts it. Independent services keep
@@ -405,55 +402,58 @@ payloads. `search` is the first-level isolated sub-appliance; `web` and
 ```json
 {
   "manifest": "v2",
+  "kind": "runnable",
   "type": "compound",
   "name": "notes-suite",
   "version": "2.0.0",
   "license": "AGPL-3.0-only",
-  "ui": { "type": "web", "service": "web" },
-  "services": [
-    {
-      "name": "frontend",
+  "publisher": {
+    "name": "Lab 255",
+    "keyId": "ed25519:sha256:6d4d0c8f6b9c5be36d4d0c8f6b9c5be36d4d0c8f6b9c5be36d4d0c8f6b9c5be3"
+  },
+  "ui": { "type": "web", "service": "web", "port": "http", "path": "/" },
+  "services": {
+    "frontend": {
       "type": "compound",
-      "services": [
-        {
-          "name": "web",
+      "version": "2.0.0",
+      "services": {
+        "web": {
           "type": "container",
           "version": "2.0.0",
-          "payload": { "image": "payload/web/image.oci.tar" },
-          "ports": [{ "name": "http", "guest": 3000, "primary": true }],
+          "payload": { "images": { "linux/arm64": { "path": "payload/web/web-linux-arm64.oci.tar" } } },
+          "ports": [{ "name": "http", "guest": 3000, "protocol": "tcp", "expose": "host", "primary": true }],
           "dependsOn": ["indexer"],
           "health": { "type": "http", "port": "http", "path": "/healthz" },
           "restart": { "policy": "on-failure", "maxAttempts": 5 },
           "required": true,
-          "egress": { "allow": ["fonts.gstatic.com"] }
+          "network": { "egress": [{ "host": "fonts.gstatic.com", "ports": [443] }] }
         }
-      ]
+      }
     },
-    {
-      "name": "search",
+    "search": {
       "type": "compound",
       "version": "4.1.0",
       "isolation": "vm",
-      "services": [
-        {
-          "name": "indexer",
+      "services": {
+        "indexer": {
           "type": "binary",
           "version": "4.1.0",
           "payload": {
-            "entrypoint": "payload/indexer/linux-arm64/indexer",
-            "args": ["serve"]
+            "targets": {
+              "linux/arm64": { "root": "payload/indexer/linux-arm64", "entrypoint": "bin/indexer", "args": ["serve"] }
+            }
           },
-          "ports": [{ "name": "api", "guest": 9000, "primary": true }],
+          "ports": [{ "name": "api", "guest": 9000, "protocol": "tcp", "expose": "internal", "primary": true }],
           "dependsOn": [],
           "health": { "type": "tcp", "port": "api" },
           "restart": { "policy": "always" },
           "required": true,
-          "mounts": [{ "name": "index", "guest": "/data", "kind": "volume" }],
-          "egress": { "allow": [] }
+          "mounts": [{ "name": "index", "source": "volume", "guest": "/data", "readOnly": false }],
+          "network": { "egress": [] }
         }
-      ]
+      }
     }
-  ]
+  }
 }
 ```
 
@@ -477,15 +477,15 @@ apps own signing, lifecycle, isolation, upgrades, and data as one runtime unit.
 
 ## Engine/CLI changes required
 
-- `packages/sdk/src/models/appliance.ts` — let RFC 0001 add `compound` and these graph/lifecycle fields.
+- `packages/sdk/src/models/appliance-v2.ts` (new, per RFC 0001) — add compound and graph/lifecycle fields.
 - `packages/cli/src/utils/common.ts` — detect v2 runtime content while retaining `appliance.json`.
 - `packages/cli/src/appliance-runtime.ts` — add runtime lifecycle, graph status, logs, and upgrades.
 - `packages/cli/src/utils/microvm-up.ts` — manage the core-only pool and isolation VMs.
 - `packages/vm/src/spec.rs` — add a runtime role, placement, and internal published ports.
 - `packages/vm/src/guest.rs` — install and boot the runtime supervisor in core-only media.
 - `packages/vm/src/guest_exec.rs` — delegate structured lifecycle RPC to a framed vsock client.
-- `packages/vm/src/netstack/engine.rs` — route tagged internal flows before ordinary egress.
-- `packages/vm/src/netstack/dns.rs` — synthesize authorized `.appliance.internal` records.
+- `packages/vm/src/netstack/engine.rs` — hook tagged internal routes before the egress classifier.
+- `packages/vm/src/netstack/dns.rs` — synthesize authorized internal records and bypass private-answer filtering for them.
 - `packages/vm/src/net.rs` — generalize proxies into tagged, loopback-only VM relays.
 - `packages/cli/src/utils/stack.ts` and `packages/cli/src/appliance-stack.ts` — redirect packaged-composition guidance.
 - `ARCHITECTURE.md` and `docs/stacks.md` — document the pool, isolation VMs, and stack boundary.
@@ -495,6 +495,6 @@ apps own signing, lifecycle, isolation, upgrades, and data as one runtime unit.
 1. **Pool sizing:** default to 2 vCPU / 4 GiB and reject over-admission; resizing requires explicit operator action.
 2. **Restart jitter:** default to deterministic exponential backoff; add jitter only if restart storms appear.
 3. **Exec health:** default to allow safe argv execution inside service namespaces; omit if it delays v1.
-4. **Partial upgrades:** default to require a complete, newly signed top-level bundle.
+4. **Partial upgrades:** default to require a complete, digest-covered top-level bundle with verified signature status.
 5. **Non-UI public ports:** default to internal-only until RFC 0001 defines explicit public grants.
 6. **Data cleanup:** default to explicit `runtime uninstall --purge-data`; never age data out automatically.
