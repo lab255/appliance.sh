@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "http-message-signatures": "^1.0.4",
+    "spdx-license-ids": "3.0.23",
     "uuidv7": "^1.1.0",
     "zod": "^4.1.13",
     "zod-to-ts": "^2.0.0"
