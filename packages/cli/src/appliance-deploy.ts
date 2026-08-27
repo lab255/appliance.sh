@@ -11,6 +11,7 @@ import { printCliError } from './utils/errors.js';
 import chalk from 'chalk';
 import { ensureLocalRuntime, LEGACY_MICROVM_PROFILE, LOCAL_PROFILE } from './utils/microvm-up.js';
 import { readProfiles } from './utils/profile-store.js';
+import { selectDeployCluster } from './utils/cluster-registry.js';
 
 // Thin commander wrapper around the shared deploy engine in
 // utils/deploy-core.ts. In a stack folder (appliance.stack.json) a
@@ -19,7 +20,15 @@ import { readProfiles } from './utils/profile-store.js';
 
 const program = new Command();
 
+// The umbrella dispatcher normalizes argv[1] to appliance-<command>.
+// Both spellings share this thin wrapper over runDeploy; only target-profile
+// selection and help copy differ.
+const command = process.argv[1]?.endsWith('appliance-install') ? 'install' : 'deploy';
+
 attachProfileOption(program);
+if (command === 'install') {
+  program.option('--cluster <name>', 'cluster to install to (defaults to local; see `appliance cluster list`)');
+}
 
 /** Bare `appliance deploy` in a stack folder deploys the whole stack.
  *  Any explicit target/build flag opts back into single-app mode. */
@@ -51,7 +60,11 @@ async function maybeDeployStack(opts: {
 }
 
 registerManifestOptions(program)
-  .description('deploy the linked (or named) project/environment — or the whole stack in a stack folder')
+  .description(
+    command === 'install'
+      ? 'install the linked (or named) project/environment to a selected cluster (defaults to local)'
+      : 'deploy the linked (or named) project/environment using the selected/active cluster (usually cloud) — or the whole stack in a stack folder'
+  )
   .argument('[project]', 'project name (defaults to the linked project, then to the manifest `name`)')
   .argument('[environment]', 'environment name (defaults to the linked environment)')
   .option('-a, --build <path>', 'appliance.zip build to deploy', DEFAULT_BUILD_OUTPUT)
@@ -69,6 +82,8 @@ registerManifestOptions(program)
       file?: string;
       directory?: string;
       variant?: string;
+      profile?: string;
+      cluster?: string;
       yes: boolean;
     }>();
 
@@ -81,11 +96,24 @@ registerManifestOptions(program)
     // explicitly selected local profile, promotes the core VM through a
     // full --cluster re-up before any credential/client resolution.
     // Explicit/active remote profiles remain untouched.
+    if (opts.cluster && opts.profile) {
+      console.error(chalk.red('Provide either --cluster or --profile, not both.'));
+      process.exit(1);
+    }
+
     const profiles = readProfiles();
-    const selectedProfile = getActiveProfileOverride() ?? process.env.APPLIANCE_PROFILE ?? profiles.activeProfile;
+    const selectedProfile = selectDeployCluster({
+      command,
+      cluster: opts.cluster,
+      profile: getActiveProfileOverride(),
+      envProfile: process.env.APPLIANCE_PROFILE,
+      activeProfile: profiles.activeProfile,
+    });
     if (!selectedProfile || selectedProfile === LOCAL_PROFILE || selectedProfile === LEGACY_MICROVM_PROFILE) {
       await ensureLocalRuntime();
       setActiveProfileOverride(LOCAL_PROFILE);
+    } else if (command === 'install') {
+      setActiveProfileOverride(selectedProfile);
     }
 
     await maybeDeployStack({
