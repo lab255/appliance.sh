@@ -72,6 +72,7 @@ type RuntimeLeafWorkload =
 export type RuntimeServicePlan = RuntimeLeafWorkload & {
   name: string;
   path: string[];
+  isolation: 'shared' | 'vm';
   dependsOn: string[];
   required: boolean;
   health?: RuntimeHealth;
@@ -187,6 +188,7 @@ export function manifestToRuntimePlan(
       return {
         name,
         path: servicePath,
+        isolation: 'shared',
         dependsOn: [...service.dependsOn],
         required: service.required,
         health,

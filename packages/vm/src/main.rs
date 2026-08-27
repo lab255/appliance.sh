@@ -291,6 +291,78 @@ enum RuntimePlanWorkload {
     Binary {
         target: RuntimeBinaryTarget,
     },
+    Compound {
+        services: Vec<RuntimeServicePlan>,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeServicePlan {
+    name: String,
+    path: Vec<String>,
+    isolation: String,
+    depends_on: Vec<String>,
+    required: bool,
+    health: Option<RuntimeServiceHealth>,
+    restart: RuntimeServiceRestart,
+    ports: Vec<RuntimeServicePort>,
+    resources: RuntimePlanResources,
+    #[serde(flatten)]
+    workload: RuntimeServiceWorkload,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum RuntimeServiceWorkload {
+    Container {
+        image_path: String,
+        env: std::collections::BTreeMap<String, String>,
+    },
+    Binary {
+        target: RuntimeBinaryTarget,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum RuntimeServiceHealth {
+    Http {
+        port: u16,
+        path: String,
+        interval_seconds: u16,
+        timeout_seconds: u16,
+        failure_threshold: u8,
+    },
+    Tcp {
+        port: u16,
+        interval_seconds: u16,
+        timeout_seconds: u16,
+        failure_threshold: u8,
+    },
+    Exec {
+        command: Vec<String>,
+        interval_seconds: u16,
+        timeout_seconds: u16,
+        failure_threshold: u8,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeServiceRestart {
+    policy: String,
+    max_attempts: u16,
+    backoff_seconds: u16,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeServicePort {
+    name: String,
+    guest: u16,
+    protocol: String,
+    primary: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1316,8 +1388,9 @@ fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
             Ok(())
         }
         RuntimeCmd::Start { name, plan } => {
-            let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime start plan")?;
+            let mut plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime start plan")?;
             validate_runtime_plan(&plan)?;
+            normalize_runtime_service_order(&mut plan)?;
             ensure_runtime_running(&name)?;
             validate_runtime_plan_against_spec(&name, &plan)?;
             let mut bound = Vec::new();
@@ -1418,6 +1491,7 @@ fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
                 bail!("runtime binary arguments must not contain NUL bytes");
             }
         }
+        RuntimePlanWorkload::Compound { services } => validate_runtime_services(services)?,
     }
     let ip: std::net::Ipv4Addr = plan.principal_ip.parse().context("parse runtime principal IP")?;
     let octets = ip.octets();
@@ -1454,6 +1528,212 @@ fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
         bail!("runtime resource hints must be positive");
     }
     Ok(())
+}
+
+fn validate_runtime_services(services: &[RuntimeServicePlan]) -> Result<()> {
+    use std::collections::HashSet;
+
+    if services.is_empty() || services.len() > 16 {
+        bail!("compound runtime plans require 1-16 runnable leaves");
+    }
+    let mut names = HashSet::new();
+    for service in services {
+        validate_runtime_app_id(&service.name)
+            .with_context(|| format!("invalid compound service key '{}'", service.name))?;
+        if !names.insert(service.name.as_str()) {
+            bail!("duplicate compound service key '{}'", service.name);
+        }
+        if !(1..=2).contains(&service.path.len())
+            || service.path.last() != Some(&service.name)
+            || service.path.iter().any(|part| validate_runtime_app_id(part).is_err())
+        {
+            bail!("compound service '{}' exceeds depth two or has an invalid path", service.name);
+        }
+        if service.isolation != "shared" {
+            bail!("service '{}' requests isolation: vm, which is not yet supported", service.name);
+        }
+        validate_runtime_service_workload(&service.workload, &service.name)?;
+        validate_runtime_resources(&service.resources)?;
+        validate_runtime_service_ports(service)?;
+        validate_runtime_health(service)?;
+        if !matches!(service.restart.policy.as_str(), "never" | "on-failure" | "always")
+            || service.restart.max_attempts > 100
+            || !(1..=60).contains(&service.restart.backoff_seconds)
+        {
+            bail!("invalid restart policy for service '{}'", service.name);
+        }
+        let mut dependencies = HashSet::new();
+        for dependency in &service.depends_on {
+            if dependency == &service.name || !dependencies.insert(dependency.as_str()) {
+                bail!("invalid dependency '{dependency}' for service '{}'", service.name);
+            }
+        }
+    }
+    for service in services {
+        for dependency in &service.depends_on {
+            if !names.contains(dependency.as_str()) {
+                bail!("service '{}' depends on unknown leaf '{dependency}'", service.name);
+            }
+        }
+    }
+    runtime_topological_order(services)?;
+    Ok(())
+}
+
+fn validate_runtime_service_workload(workload: &RuntimeServiceWorkload, service: &str) -> Result<()> {
+    match workload {
+        RuntimeServiceWorkload::Container { image_path, env } => {
+            validate_runtime_payload_path(image_path, &format!("service '{service}' image"))?;
+            validate_runtime_env(env)?;
+        }
+        RuntimeServiceWorkload::Binary { target } => {
+            validate_runtime_payload_path(&target.path, &format!("service '{service}' binary target"))?;
+            validate_runtime_relative_path(&target.entrypoint, "binary entrypoint", false)?;
+            validate_runtime_relative_path(&target.cwd, "binary working directory", true)?;
+            validate_runtime_env(&target.env)?;
+            if target.args.iter().any(|argument| argument.contains('\0')) {
+                bail!("runtime binary arguments must not contain NUL bytes");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_runtime_resources(resources: &RuntimePlanResources) -> Result<()> {
+    if resources.cpus == 0
+        || resources.memory_mib == 0
+        || resources.disk_gib == 0
+        || resources.pids == 0
+    {
+        bail!("runtime resource hints must be positive");
+    }
+    Ok(())
+}
+
+fn validate_runtime_service_ports(service: &RuntimeServicePlan) -> Result<()> {
+    use std::collections::HashSet;
+
+    let mut names = HashSet::new();
+    let mut sockets = HashSet::new();
+    let mut primary = 0usize;
+    for port in &service.ports {
+        validate_runtime_app_id(&port.name).with_context(|| {
+            format!("invalid port name '{}' on service '{}'", port.name, service.name)
+        })?;
+        if port.guest == 0
+            || !matches!(port.protocol.as_str(), "tcp" | "udp")
+            || !names.insert(port.name.as_str())
+            || !sockets.insert((port.guest, port.protocol.as_str()))
+        {
+            bail!("invalid or duplicate port '{}' on service '{}'", port.name, service.name);
+        }
+        primary += usize::from(port.primary);
+    }
+    if !service.ports.is_empty() && primary != 1 {
+        bail!("service '{}' must declare exactly one primary port", service.name);
+    }
+    Ok(())
+}
+
+fn validate_runtime_health(service: &RuntimeServicePlan) -> Result<()> {
+    let Some(health) = &service.health else {
+        return Ok(());
+    };
+    let (interval, timeout, threshold) = match health {
+        RuntimeServiceHealth::Http {
+            port,
+            path,
+            interval_seconds,
+            timeout_seconds,
+            failure_threshold,
+        } => {
+            if *port == 0
+                || !service.ports.iter().any(|declared| declared.guest == *port && declared.protocol == "tcp")
+                || !path.starts_with('/')
+                || path.starts_with("//")
+                || path.contains(['?', '#'])
+            {
+                bail!("invalid HTTP health probe for service '{}'", service.name);
+            }
+            (*interval_seconds, *timeout_seconds, *failure_threshold)
+        }
+        RuntimeServiceHealth::Tcp { port, interval_seconds, timeout_seconds, failure_threshold } => {
+            if *port == 0
+                || !service.ports.iter().any(|declared| declared.guest == *port && declared.protocol == "tcp")
+            {
+                bail!("invalid TCP health probe for service '{}'", service.name);
+            }
+            (*interval_seconds, *timeout_seconds, *failure_threshold)
+        }
+        RuntimeServiceHealth::Exec { command, interval_seconds, timeout_seconds, failure_threshold } => {
+            if command.is_empty() || command.iter().any(|argument| argument.contains('\0')) {
+                bail!("invalid exec health probe for service '{}'", service.name);
+            }
+            (*interval_seconds, *timeout_seconds, *failure_threshold)
+        }
+    };
+    if !(1..=300).contains(&interval)
+        || !(1..=60).contains(&timeout)
+        || timeout > interval
+        || !(1..=20).contains(&threshold)
+    {
+        bail!("invalid health timing for service '{}'", service.name);
+    }
+    Ok(())
+}
+
+fn runtime_topological_order(services: &[RuntimeServicePlan]) -> Result<Vec<String>> {
+    use std::collections::{BTreeSet, HashMap};
+
+    let mut indegree: HashMap<&str, usize> = services.iter().map(|service| (service.name.as_str(), 0)).collect();
+    let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
+    for service in services {
+        *indegree.entry(service.name.as_str()).or_default() += service.depends_on.len();
+        for dependency in &service.depends_on {
+            dependents.entry(dependency.as_str()).or_default().push(service.name.as_str());
+        }
+    }
+    let mut ready: BTreeSet<&str> = indegree
+        .iter()
+        .filter_map(|(name, count)| (*count == 0).then_some(*name))
+        .collect();
+    let mut order = Vec::with_capacity(services.len());
+    while let Some(name) = ready.pop_first() {
+        order.push(name.to_string());
+        for dependent in dependents.get(name).into_iter().flatten() {
+            let count = indegree.get_mut(dependent).expect("validated dependency key");
+            *count -= 1;
+            if *count == 0 {
+                ready.insert(dependent);
+            }
+        }
+    }
+    if order.len() != services.len() {
+        let cycle = services
+            .iter()
+            .find(|service| !order.contains(&service.name))
+            .map(|service| service.name.as_str())
+            .unwrap_or("unknown");
+        bail!("compound dependency graph contains a cycle involving '{cycle}'");
+    }
+    Ok(order)
+}
+
+fn normalize_runtime_service_order(plan: &mut RuntimePlan) -> Result<()> {
+    let RuntimePlanWorkload::Compound { services } = &mut plan.workload else {
+        return Ok(());
+    };
+    let order = runtime_topological_order(services)?;
+    let positions: std::collections::HashMap<_, _> =
+        order.iter().enumerate().map(|(index, name)| (name.as_str(), index)).collect();
+    services.sort_by_key(|service| positions[service.name.as_str()]);
+    Ok(())
+}
+
+#[cfg(test)]
+fn runtime_backoff_seconds(base: u16, attempt: u16) -> u16 {
+    let exponent = u32::from(attempt.saturating_sub(1)).min(15);
+    base.saturating_mul(1u16 << exponent).min(30)
 }
 
 fn validate_runtime_payload_path(value: &str, label: &str) -> Result<()> {
@@ -2193,6 +2473,97 @@ mod tests {
         assert!(json.contains("\"target\":{"));
         let decoded: RuntimePlan = serde_json::from_str(&json).unwrap();
         validate_runtime_plan(&decoded).unwrap();
+    }
+
+    fn runtime_service(name: &str, depends_on: &[&str]) -> RuntimeServicePlan {
+        RuntimeServicePlan {
+            name: name.to_string(),
+            path: vec![name.to_string()],
+            isolation: "shared".to_string(),
+            depends_on: depends_on.iter().map(|dependency| (*dependency).to_string()).collect(),
+            required: true,
+            health: Some(RuntimeServiceHealth::Tcp {
+                port: 9_000,
+                interval_seconds: 5,
+                timeout_seconds: 2,
+                failure_threshold: 3,
+            }),
+            restart: RuntimeServiceRestart {
+                policy: "on-failure".to_string(),
+                max_attempts: 5,
+                backoff_seconds: 2,
+            },
+            ports: vec![RuntimeServicePort {
+                name: "http".to_string(),
+                guest: 9_000,
+                protocol: "tcp".to_string(),
+                primary: true,
+            }],
+            resources: RuntimePlanResources { cpus: 1, memory_mib: 512, disk_gib: 2, pids: 256 },
+            workload: RuntimeServiceWorkload::Container {
+                image_path: format!("payload/{name}/{name}.oci.tar"),
+                env: std::collections::BTreeMap::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn compound_plan_orders_dependencies_lexically_and_rejects_cycles_and_vm_isolation() {
+        let mut plan = valid_runtime_plan();
+        plan.workload = RuntimePlanWorkload::Compound {
+            services: vec![
+                runtime_service("web", &["api", "cache"]),
+                runtime_service("cache", &[]),
+                runtime_service("api", &[]),
+            ],
+        };
+        validate_runtime_plan(&plan).unwrap();
+        normalize_runtime_service_order(&mut plan).unwrap();
+        let RuntimePlanWorkload::Compound { services } = &plan.workload else {
+            unreachable!();
+        };
+        assert_eq!(services.iter().map(|service| service.name.as_str()).collect::<Vec<_>>(), ["api", "cache", "web"]);
+
+        let mut cycle = plan.clone();
+        let RuntimePlanWorkload::Compound { services } = &mut cycle.workload else {
+            unreachable!();
+        };
+        services[0].depends_on = vec!["web".to_string()];
+        assert!(validate_runtime_plan(&cycle).unwrap_err().to_string().contains("cycle"));
+
+        let mut isolated = plan;
+        let RuntimePlanWorkload::Compound { services } = &mut isolated.workload else {
+            unreachable!();
+        };
+        services[0].isolation = "vm".to_string();
+        assert!(validate_runtime_plan(&isolated).unwrap_err().to_string().contains("not yet supported"));
+    }
+
+    #[test]
+    fn compound_restart_backoff_is_deterministic_and_capped() {
+        assert_eq!((1..=7).map(|attempt| runtime_backoff_seconds(2, attempt)).collect::<Vec<_>>(), [2, 4, 8, 16, 30, 30, 30]);
+        assert_eq!(runtime_backoff_seconds(60, 1), 30);
+    }
+
+    #[test]
+    fn compound_plan_rejects_depth_and_health_ranges_at_the_engine_boundary() {
+        let mut plan = valid_runtime_plan();
+        let mut service = runtime_service("api", &[]);
+        service.path = vec!["too".to_string(), "deep".to_string(), "api".to_string()];
+        plan.workload = RuntimePlanWorkload::Compound { services: vec![service] };
+        assert!(validate_runtime_plan(&plan).unwrap_err().to_string().contains("depth two"));
+
+        let RuntimePlanWorkload::Compound { services } = &mut plan.workload else {
+            unreachable!();
+        };
+        services[0].path = vec!["api".to_string()];
+        services[0].health = Some(RuntimeServiceHealth::Tcp {
+            port: 9_000,
+            interval_seconds: 1,
+            timeout_seconds: 2,
+            failure_threshold: 3,
+        });
+        assert!(validate_runtime_plan(&plan).unwrap_err().to_string().contains("health timing"));
     }
 
     #[test]
