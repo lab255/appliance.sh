@@ -282,6 +282,15 @@ fn poisoned<T>(_: T) -> io::Error {
 /// own half-close, and any error aborts the flow so the other half
 /// unblocks.
 pub fn bridge_pump(bridge: BridgeStream, tcp: std::net::TcpStream) {
+    // Runtime forwards accept from a nonblocking listener so the resident
+    // service can notice unbind requests. On macOS the accepted stream keeps
+    // that mode; `io::copy` would then treat the first WouldBlock as a fatal
+    // error and reset the guest before a request-gated relay can answer.
+    // Each connection has its own worker, so normalize it to blocking I/O.
+    if tcp.set_nonblocking(false).is_err() {
+        bridge.abort();
+        return;
+    }
     let tcp_w = match tcp.try_clone() {
         Ok(s) => s,
         Err(_) => {

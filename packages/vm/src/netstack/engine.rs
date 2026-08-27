@@ -876,6 +876,164 @@ mod tests {
         );
     }
 
+    #[test]
+    fn runtime_inbound_nonblocking_forward_survives_two_hop_relay() {
+        const RELAY_PORT: u16 = 22_000;
+        const REQUEST: &[u8] = b"GET /relay HTTP/1.1\r\nHost: app.test\r\n\r\n";
+        const RESPONSE: &[u8] =
+            b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\nrelay-ok";
+
+        // Model the app namespace endpoint behind the root-namespace relay.
+        // It deliberately waits for the complete request before replying.
+        let onward_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        onward_listener.set_nonblocking(true).unwrap();
+        let onward_addr = onward_listener.local_addr().unwrap();
+        let onward = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut stream = loop {
+                match onward_listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "relay never dialed upstream");
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(error) => panic!("relay upstream accept failed: {error}"),
+                }
+            };
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut buf = [0u8; 1024];
+                let count = stream.read(&mut buf).unwrap();
+                assert_ne!(count, 0, "relay upstream closed before the request");
+                request.extend_from_slice(&buf[..count]);
+            }
+            assert_eq!(request, REQUEST);
+            std::thread::sleep(Duration::from_millis(25));
+            stream.write_all(RESPONSE).unwrap();
+            stream.shutdown(Shutdown::Write).unwrap();
+        });
+
+        let (host_fd, vz_fd) = make_link().unwrap();
+        unsafe {
+            let flags = libc::fcntl(vz_fd, libc::F_GETFL);
+            libc::fcntl(vz_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+        let guest_mac = [0x52, 0x54, 0x00, 0xaa, 0xbb, 0xde];
+        let cfg = LinkConfig::for_guest_mac("runtime-relay-test", "52:54:00:aa:bb:de");
+        let netstack = start(host_fd, cfg);
+
+        // Model the guest's root-namespace listener (.2:22000). Once it has
+        // the request it dials the app endpoint onward, waits for that reply,
+        // and only then returns bytes on the originated connection.
+        let guest = std::thread::spawn(move || {
+            let mut device = FdDevice {
+                fd: vz_fd,
+                rx: VecDeque::new(),
+            };
+            let mut config = Config::new(HardwareAddress::Ethernet(EthernetAddress(guest_mac)));
+            config.random_seed = 8;
+            let started = Instant::now();
+            let mut iface = Interface::new(config, &mut device, smol_now(started));
+            iface.update_ip_addrs(|addrs| {
+                let _ = addrs.push(IpCidr::new(
+                    IpAddress::Ipv4(super::super::GUEST_IP),
+                    super::super::PREFIX_LEN,
+                ));
+            });
+            let _ = iface
+                .routes_mut()
+                .add_default_ipv4_route(super::super::GATEWAY_IP);
+
+            let mut sockets = SocketSet::new(Vec::new());
+            let relay = sockets.add(tcp_socket(flow_idle_timeout()));
+            sockets
+                .get_mut::<tcp::Socket>(relay)
+                .listen(IpListenEndpoint {
+                    addr: Some(IpAddress::Ipv4(super::super::GUEST_IP)),
+                    port: RELAY_PORT,
+                })
+                .unwrap();
+
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut request = Vec::new();
+            let mut response = None;
+            let mut response_sent = false;
+            loop {
+                for frame in read_frames(vz_fd) {
+                    device.rx.push_back(frame);
+                }
+                iface.poll(smol_now(started), &mut device, &mut sockets);
+
+                {
+                    let socket = sockets.get_mut::<tcp::Socket>(relay);
+                    while socket.can_recv() {
+                        let mut buf = [0u8; 1024];
+                        let count = socket.recv_slice(&mut buf).unwrap();
+                        if count == 0 {
+                            break;
+                        }
+                        request.extend_from_slice(&buf[..count]);
+                    }
+                    if response.is_none() && request.ends_with(b"\r\n\r\n") {
+                        let mut upstream = TcpStream::connect(onward_addr).unwrap();
+                        upstream.write_all(&request).unwrap();
+                        upstream.shutdown(Shutdown::Write).unwrap();
+                        let mut reply = Vec::new();
+                        upstream.read_to_end(&mut reply).unwrap();
+                        response = Some(reply);
+                    }
+                    if !response_sent && socket.can_send() {
+                        if let Some(reply) = response.as_deref() {
+                            socket.send_slice(reply).unwrap();
+                            socket.close();
+                            response_sent = true;
+                        }
+                    }
+                }
+
+                iface.poll(smol_now(started), &mut device, &mut sockets);
+                let socket = sockets.get::<tcp::Socket>(relay);
+                if response_sent
+                    && socket.send_queue() == 0
+                    && matches!(socket.state(), tcp::State::Closed | tcp::State::TimeWait)
+                {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "guest relay timed out");
+                wait_readable(vz_fd, 2);
+            }
+            unsafe { libc::close(vz_fd) };
+            request
+        });
+
+        // The production Runtime listener is nonblocking so it can service
+        // unbinds. Force the accepted stream into that exact mode and let the
+        // pump start before curl-like request bytes arrive.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let (accepted, _) = listener.accept().unwrap();
+        accepted.set_nonblocking(true).unwrap();
+        let bridge = netstack.connect(RELAY_PORT).unwrap();
+        let pump = std::thread::spawn(move || super::super::bridge_pump(bridge, accepted));
+
+        std::thread::sleep(Duration::from_millis(10));
+        client.write_all(REQUEST).unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        drop(client);
+
+        pump.join().unwrap();
+        onward.join().unwrap();
+        assert_eq!(guest.join().unwrap(), REQUEST);
+        assert_eq!(
+            response, RESPONSE,
+            "relay response must reach the host client"
+        );
+    }
+
     /// Drive the engine over a real socketpair: write a DHCP DISCOVER as
     /// the "guest" and read back the OFFER the engine builds. Exercises
     /// the whole loop — fd I/O, classification, the DHCP responder, and
