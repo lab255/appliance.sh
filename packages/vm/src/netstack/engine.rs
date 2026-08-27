@@ -381,6 +381,10 @@ fn engine_loop(host_fd: RawFd, cfg: LinkConfig, connect_rx: Receiver<ConnectRequ
                 .filter(|p| *p != 0)
                 .unwrap_or(49152);
             let remote = IpEndpoint::new(IpAddress::Ipv4(req.target_ip), req.port);
+            let local = IpListenEndpoint {
+                addr: Some(IpAddress::Ipv4(cfg.gateway_ip)),
+                port: local,
+            };
             match sock.connect(iface.context(), remote, local) {
                 Ok(()) => {
                     let handle = sockets.add(sock);
@@ -805,6 +809,7 @@ mod tests {
             let deadline = Instant::now() + Duration::from_secs(5);
             let mut request = Vec::new();
             let mut responded = false;
+            let mut observed_peer = None;
             loop {
                 for frame in read_frames(vz_fd) {
                     device.rx.push_back(frame);
@@ -813,6 +818,7 @@ mod tests {
 
                 {
                     let socket = sockets.get_mut::<tcp::Socket>(server);
+                    observed_peer = observed_peer.or_else(|| socket.remote_endpoint());
                     while socket.can_recv() {
                         let mut buf = [0u8; 1024];
                         let count = socket.recv_slice(&mut buf).unwrap();
@@ -840,7 +846,7 @@ mod tests {
                 wait_readable(vz_fd, 2);
             }
             unsafe { libc::close(vz_fd) };
-            request
+            (request, observed_peer)
         });
 
         // Model the published localhost listener/client pair, then splice its
@@ -861,7 +867,13 @@ mod tests {
 
         pump.join().unwrap();
         assert_eq!(response, RESPONSE, "half-close must not drop the reply");
-        assert_eq!(guest.join().unwrap(), REQUEST);
+        let (request, peer) = guest.join().unwrap();
+        assert_eq!(request, REQUEST);
+        assert_eq!(
+            peer.expect("guest observed originated peer").addr,
+            IpAddress::Ipv4(super::super::GATEWAY_IP),
+            "originated flow must come from the host gateway, never VM .2"
+        );
     }
 
     /// Drive the engine over a real socketpair: write a DHCP DISCOVER as
