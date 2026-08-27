@@ -93,4 +93,61 @@ describe('runnable payload packaging', () => {
     const verified = verifyBundle(outputPath);
     expect(verified.manifest.type).toBe('compound');
   });
+
+  it.each(['missing.tar', 'images/missing', 'images\\missing'])(
+    'treats a missing path-shaped --image value as a tar error: %s',
+    async (image) => {
+      const dir = projectDir();
+      const manifest = applianceV2Input.parse({
+        manifest: 'v2',
+        kind: 'runnable',
+        type: 'container',
+        name: 'missing-image',
+        version: '1.0.0',
+        license: 'MIT',
+        publisher: { name: 'Fixture' },
+        payload: { images: { 'linux/amd64': { path: 'payload/image.oci.tar' } } },
+      });
+
+      await expect(
+        packageRunnableAppliance({
+          manifest,
+          projectDir: dir,
+          outputPath: path.join(dir, 'missing.appliance.zip'),
+          images: [image],
+        })
+      ).rejects.toThrow(`image tar not found: ${image}`);
+    }
+  );
+
+  it('reports when docker is not installed for an image reference', async () => {
+    const dir = projectDir();
+    const emptyPath = path.join(dir, 'empty-path');
+    fs.mkdirSync(emptyPath);
+    const manifest = applianceV2Input.parse({
+      manifest: 'v2',
+      kind: 'runnable',
+      type: 'container',
+      name: 'missing-docker',
+      version: '1.0.0',
+      license: 'MIT',
+      publisher: { name: 'Fixture' },
+      payload: { images: { 'linux/amd64': { path: 'payload/image.oci.tar' } } },
+    });
+    const previousPath = process.env.PATH;
+    process.env.PATH = emptyPath;
+    try {
+      await expect(
+        packageRunnableAppliance({
+          manifest,
+          projectDir: dir,
+          outputPath: path.join(dir, 'missing-docker.appliance.zip'),
+          images: ['fixture:latest'],
+        })
+      ).rejects.toThrow('docker is not installed or not on PATH');
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
 });

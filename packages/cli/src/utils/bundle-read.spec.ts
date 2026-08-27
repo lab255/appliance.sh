@@ -4,8 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import archiver from 'archiver';
 import { afterEach, describe, expect, it } from 'vitest';
+import { canonicalJsonBytes, computeBundleDigest } from './bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle } from './bundle-read.js';
-import { readDevSigningKey } from './bundle-sign.js';
+import { readDevSigningKey, signEnvelope } from './bundle-sign.js';
 import { writeBundle } from './bundle-write.js';
 import { tinyOciTar } from './bundle-oci-fixture.js';
 
@@ -51,6 +52,25 @@ async function sourceBundle(dir: string): Promise<string> {
   archive.pipe(output);
   archive.append(JSON.stringify({ manifest: 'v1', type: 'container', name: 'source' }), { name: 'appliance.json' });
   archive.append('FROM scratch', { name: 'Dockerfile' });
+  await archive.finalize();
+  await closed;
+  return outputPath;
+}
+
+async function rawZip(
+  dir: string,
+  filename: string,
+  entries: Array<{ name: string; data: string | Uint8Array }>
+): Promise<string> {
+  const outputPath = path.join(dir, filename);
+  const output = fs.createWriteStream(outputPath);
+  const archive = archiver('zip');
+  const closed = new Promise<void>((resolve, reject) => {
+    output.on('close', resolve);
+    archive.on('error', reject);
+  });
+  archive.pipe(output);
+  for (const entry of entries) archive.append(Buffer.from(entry.data), { name: entry.name, store: true });
   await archive.finalize();
   await closed;
   return outputPath;
@@ -128,6 +148,60 @@ describe('bundle reading and verification', () => {
     expect(() => readBundleManifest(bundle)).toThrow('not a regular file or directory');
   });
 
+  it('rejects ZIP64 entry counts', async () => {
+    const dir = tempDir();
+    const bundle = await validBundle(dir);
+    markAsZip64EntryCount(bundle);
+    expect(() => readBundleManifest(bundle)).toThrow('ZIP64 entry counts');
+  });
+
+  it('rejects encrypted entries', async () => {
+    const dir = tempDir();
+    const bundle = await validBundle(dir);
+    markCentralEntryAsEncrypted(bundle, 'payload/images/test.oci.tar');
+    expect(() => readBundleManifest(bundle)).toThrow('Encrypted ZIP entries');
+  });
+
+  it.each([
+    ['duplicate', 'README.md', 'README.md', 'Duplicate ZIP entry'],
+    ['case-colliding', 'README.md', 'readme.md', 'Case-colliding ZIP entry'],
+  ])('rejects %s names', async (_label, firstName, secondName, expected) => {
+    const dir = tempDir();
+    const bundle = await rawZip(dir, 'colliding.zip', [
+      { name: 'appliance.json', data: canonicalJsonBytes(containerManifest()) },
+      { name: firstName, data: 'first' },
+      { name: secondName, data: 'second' },
+    ]);
+    expect(() => readBundleManifest(bundle)).toThrow(expected);
+  });
+
+  it('rejects a signature keyId that differs from publisher.keyId', async () => {
+    const dir = tempDir();
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const keyPath = path.join(dir, 'mismatched-key.pem');
+    fs.writeFileSync(keyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+    const devKey = readDevSigningKey(keyPath);
+    const manifest = {
+      ...containerManifest(),
+      publisher: { name: 'Fixture Publisher', keyId: `ed25519:sha256:${'0'.repeat(64)}` },
+    };
+    const manifestBytes = canonicalJsonBytes(manifest);
+    const image = tinyOciTar();
+    const digest = computeBundleDigest([
+      { path: 'appliance.json', data: manifestBytes },
+      { path: 'payload/images/test.oci.tar', data: image },
+    ]);
+    const signature = signEnvelope({ digest }, 'bundle', devKey);
+    const bundle = await rawZip(dir, 'mismatched-signature.zip', [
+      { name: 'appliance.json', data: manifestBytes },
+      { name: 'payload/images/test.oci.tar', data: image },
+      { name: 'digest', data: `${digest}\n` },
+      { name: 'signature.sig', data: `${canonicalJsonBytes(signature).toString('utf8')}\n` },
+    ]);
+
+    expect(() => verifyBundle(bundle)).toThrow('Signature keyId does not match appliance.json publisher.keyId');
+  });
+
   it('does not traverse a symlink already present in the unpack destination', async () => {
     const dir = tempDir();
     const bundle = await validBundle(dir);
@@ -164,5 +238,26 @@ function markCentralEntryAsSymlink(filePath: string, name: string): void {
   expect(data.readUInt32LE(central)).toBe(0x02014b50);
   data.writeUInt16LE((3 << 8) | 20, central + 4);
   data.writeUInt32LE((0o120777 << 16) >>> 0, central + 38);
+  fs.writeFileSync(filePath, data);
+}
+
+function markCentralEntryAsEncrypted(filePath: string, name: string): void {
+  const data = fs.readFileSync(filePath);
+  const needle = Buffer.from(name);
+  const first = data.indexOf(needle);
+  const centralName = data.indexOf(needle, first + needle.length);
+  expect(centralName).toBeGreaterThan(46);
+  const central = centralName - 46;
+  expect(data.readUInt32LE(central)).toBe(0x02014b50);
+  data.writeUInt16LE(data.readUInt16LE(central + 8) | 0x1, central + 8);
+  fs.writeFileSync(filePath, data);
+}
+
+function markAsZip64EntryCount(filePath: string): void {
+  const data = fs.readFileSync(filePath);
+  const eocd = data.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  expect(eocd).toBeGreaterThanOrEqual(0);
+  data.writeUInt16LE(0xffff, eocd + 8);
+  data.writeUInt16LE(0xffff, eocd + 10);
   fs.writeFileSync(filePath, data);
 }

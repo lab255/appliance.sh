@@ -30,6 +30,7 @@ import archiver from 'archiver';
 import chalk from 'chalk';
 import { ApplianceType } from '@appliance.sh/sdk';
 import type { ApplianceFullInput, ApplianceV2, ApplianceV2Service } from '@appliance.sh/sdk';
+import { verifyBundle } from './bundle-read.js';
 import { writeBundle, type BundleFileInput, type WriteBundleResult } from './bundle-write.js';
 
 export interface BuildResult {
@@ -131,8 +132,9 @@ export async function packageRunnableAppliance(options: RunnablePackageOptions):
       const selected = selectedImages.get(leaf.path);
       const staged = path.join(stagingDir, `${files.length}.oci.tar`);
       if (selected) {
-        const localPath = path.resolve(projectDir, selected);
-        if (fs.existsSync(localPath)) {
+        if (isImageTarPath(selected)) {
+          const localPath = path.resolve(projectDir, selected);
+          if (!fs.existsSync(localPath)) throw new Error(`image tar not found: ${selected}`);
           const stat = fs.lstatSync(localPath);
           if (!stat.isFile() || stat.isSymbolicLink())
             throw new Error(`--image tar must be a regular file: ${selected}`);
@@ -155,15 +157,21 @@ export async function packageRunnableAppliance(options: RunnablePackageOptions):
 
     collectBinaryPayloads(options.manifest, projectDir, files);
     collectAssets(options.manifest, projectDir, files);
-    return await writeBundle({
+    const result = await writeBundle({
       outputPath: options.outputPath,
       manifest: options.manifest,
       files,
       signingKeyPath: options.signingKeyPath,
     });
+    verifyBundle(result.outputPath);
+    return result;
   } finally {
     fs.rmSync(stagingDir, { recursive: true, force: true });
   }
+}
+
+function isImageTarPath(value: string): boolean {
+  return value.includes('/') || value.includes('\\') || value.endsWith('.tar');
 }
 
 interface ImageLeaf {
@@ -229,12 +237,20 @@ function buildOciTar(projectDir: string, platform: string, destination: string, 
       input,
       stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
     });
-  } catch {
+  } catch (error) {
+    if (isErrnoException(error) && error.code === 'ENOENT') {
+      throw new Error('docker is not installed or not on PATH');
+    }
+    const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `OCI image build failed for ${platform}. Start a local Docker/buildkit engine, ` +
+      `OCI image build failed for ${platform}: ${detail}. Start a local Docker/buildkit engine, ` +
         `or pass --image ${platform}=<prebuilt-ref-or-tar>.`
     );
   }
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }
 
 function collectBinaryPayloads(manifest: ApplianceV2, projectDir: string, files: BundleFileInput[]): void {
