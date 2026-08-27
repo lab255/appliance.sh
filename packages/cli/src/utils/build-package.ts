@@ -23,11 +23,14 @@
 // one continuous log.
 
 import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import archiver from 'archiver';
 import chalk from 'chalk';
 import { ApplianceType } from '@appliance.sh/sdk';
-import type { ApplianceFullInput } from '@appliance.sh/sdk';
+import type { ApplianceFullInput, ApplianceV2, ApplianceV2Service } from '@appliance.sh/sdk';
+import { writeBundle, type BundleFileInput, type WriteBundleResult } from './bundle-write.js';
 
 export interface BuildResult {
   outputPath: string;
@@ -45,6 +48,19 @@ export interface BuildOptions {
    * standalone `appliance build` artifact deploys anywhere.
    */
   lambdaPrep?: boolean;
+}
+
+export interface RunnablePackageOptions {
+  manifest: ApplianceV2;
+  projectDir: string;
+  outputPath: string;
+  signingKeyPath?: string;
+  /**
+   * A selector can be `linux/amd64=<tar-or-ref>`,
+   * `<payload/image/path>=<tar-or-ref>`, or a bare value when the manifest
+   * contains exactly one image.
+   */
+  images?: string[];
 }
 
 const PYTHON_VENV_DIR = '.venv';
@@ -100,6 +116,178 @@ export async function buildApplianceZip(opts: BuildOptions): Promise<BuildResult
 
   const stats = fs.statSync(outputPath);
   return { outputPath, sizeBytes: stats.size };
+}
+
+/** Build/copy v2 payload leaves, then write one runnable bundle. */
+export async function packageRunnableAppliance(options: RunnablePackageOptions): Promise<WriteBundleResult> {
+  const projectDir = path.resolve(options.projectDir);
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-package-'));
+  const files: BundleFileInput[] = [];
+  const imageLeaves = collectImageLeaves(options.manifest);
+  const selectedImages = resolveImageSelections(options.images ?? [], imageLeaves);
+
+  try {
+    for (const leaf of imageLeaves) {
+      const selected = selectedImages.get(leaf.path);
+      const staged = path.join(stagingDir, `${files.length}.oci.tar`);
+      if (selected) {
+        const localPath = path.resolve(projectDir, selected);
+        if (fs.existsSync(localPath)) {
+          const stat = fs.lstatSync(localPath);
+          if (!stat.isFile() || stat.isSymbolicLink())
+            throw new Error(`--image tar must be a regular file: ${selected}`);
+          files.push({ path: leaf.path, sourcePath: localPath });
+        } else {
+          buildOciTar(projectDir, leaf.platform, staged, selected);
+          files.push({ path: leaf.path, sourcePath: staged });
+        }
+      } else {
+        if (options.manifest.type === 'compound') {
+          throw new Error(
+            `Compound container leaf ${leaf.path} needs --image ${leaf.platform}=<ref-or-tar>; ` +
+              'compound manifests do not declare per-leaf build contexts.'
+          );
+        }
+        buildOciTar(projectDir, leaf.platform, staged);
+        files.push({ path: leaf.path, sourcePath: staged });
+      }
+    }
+
+    collectBinaryPayloads(options.manifest, projectDir, files);
+    collectAssets(options.manifest, projectDir, files);
+    return await writeBundle({
+      outputPath: options.outputPath,
+      manifest: options.manifest,
+      files,
+      signingKeyPath: options.signingKeyPath,
+    });
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+  }
+}
+
+interface ImageLeaf {
+  platform: string;
+  path: string;
+}
+
+function collectImageLeaves(manifest: ApplianceV2): ImageLeaf[] {
+  const leaves: ImageLeaf[] = [];
+  const visit = (node: ApplianceV2 | ApplianceV2Service) => {
+    if (node.type === 'container') {
+      for (const [platform, image] of Object.entries(node.payload.images)) {
+        leaves.push({ platform, path: image.path });
+      }
+    } else if (node.type === 'compound') {
+      for (const service of Object.values(node.services)) visit(service);
+    }
+  };
+  visit(manifest);
+  return leaves;
+}
+
+function resolveImageSelections(values: string[], leaves: ImageLeaf[]): Map<string, string> {
+  const selected = new Map<string, string>();
+  for (const value of values) {
+    const equals = value.indexOf('=');
+    if (equals < 0) {
+      if (leaves.length !== 1) throw new Error('A bare --image value requires exactly one image in the manifest.');
+      selected.set(leaves[0].path, value);
+      continue;
+    }
+    const selector = value.slice(0, equals);
+    const image = value.slice(equals + 1);
+    if (!image) throw new Error(`--image has no ref or tar path: ${value}`);
+    const byPath = leaves.filter((leaf) => leaf.path === selector);
+    const matches = byPath.length > 0 ? byPath : leaves.filter((leaf) => leaf.platform === selector);
+    if (matches.length === 0) throw new Error(`--image selector does not match the manifest: ${selector}`);
+    if (matches.length > 1) {
+      throw new Error(`--image selector ${selector} is ambiguous; select the full payload image path instead.`);
+    }
+    selected.set(matches[0].path, image);
+  }
+  return selected;
+}
+
+function buildOciTar(projectDir: string, platform: string, destination: string, imageRef?: string): void {
+  const args = ['buildx', 'build', '--platform', platform, '--output', `type=oci,dest=${destination}`];
+  let input: string | undefined;
+  if (imageRef) {
+    args.push('--file', '-', projectDir);
+    input = `FROM ${imageRef}\n`;
+    console.log(chalk.dim(`Exporting ${imageRef} for ${platform} as an OCI image tar.`));
+  } else {
+    if (!fs.existsSync(path.join(projectDir, 'Dockerfile'))) {
+      throw new Error('Container runnable packaging needs a Dockerfile or --image <ref-or-tar>.');
+    }
+    args.push(projectDir);
+    console.log(chalk.dim(`Building ${platform} as an OCI image tar with the local Docker/buildkit engine.`));
+  }
+  try {
+    execFileSync('docker', args, {
+      cwd: projectDir,
+      input,
+      stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
+    });
+  } catch {
+    throw new Error(
+      `OCI image build failed for ${platform}. Start a local Docker/buildkit engine, ` +
+        `or pass --image ${platform}=<prebuilt-ref-or-tar>.`
+    );
+  }
+}
+
+function collectBinaryPayloads(manifest: ApplianceV2, projectDir: string, files: BundleFileInput[]): void {
+  const roots = new Set<string>();
+  const visit = (node: ApplianceV2 | ApplianceV2Service) => {
+    if (node.type === 'binary') {
+      for (const target of Object.values(node.payload.targets)) {
+        if (!roots.has(target.root)) {
+          roots.add(target.root);
+          addDirectoryFiles(projectDir, target.root, files);
+        }
+        const entrypoint = path.join(projectDir, ...target.root.split('/'), ...target.entrypoint.split('/'));
+        if (!fs.existsSync(entrypoint) || !fs.lstatSync(entrypoint).isFile()) {
+          throw new Error(`Binary entrypoint is missing or not a regular file: ${target.root}/${target.entrypoint}`);
+        }
+      }
+    } else if (node.type === 'compound') {
+      for (const service of Object.values(node.services)) visit(service);
+    }
+  };
+  visit(manifest);
+}
+
+function collectAssets(manifest: ApplianceV2, projectDir: string, files: BundleFileInput[]): void {
+  for (const asset of [manifest.assets?.icon, manifest.assets?.readme]) {
+    if (!asset) continue;
+    const sourcePath = path.join(projectDir, ...asset.split('/'));
+    if (!fs.existsSync(sourcePath) || !fs.lstatSync(sourcePath).isFile()) {
+      throw new Error(`Manifest asset is missing or not a regular file: ${asset}`);
+    }
+    files.push({ path: asset, sourcePath });
+  }
+}
+
+function addDirectoryFiles(projectDir: string, root: string, files: BundleFileInput[]): void {
+  const sourceRoot = path.join(projectDir, ...root.split('/'));
+  if (!fs.existsSync(sourceRoot) || !fs.lstatSync(sourceRoot).isDirectory()) {
+    throw new Error(`Binary target root is missing or not a directory: ${root}`);
+  }
+  const walk = (directory: string) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) throw new Error(`Binary payload may not contain symlinks: ${absolute}`);
+      if (entry.isDirectory()) walk(absolute);
+      else if (entry.isFile()) {
+        const relative = path.relative(projectDir, absolute).split(path.sep).join('/');
+        files.push({ path: relative, sourcePath: absolute });
+      } else {
+        throw new Error(`Binary payload may contain only regular files and directories: ${absolute}`);
+      }
+    }
+  };
+  walk(sourceRoot);
 }
 
 type FrameworkAppliance = Extract<ApplianceFullInput, { type: 'framework' }>;

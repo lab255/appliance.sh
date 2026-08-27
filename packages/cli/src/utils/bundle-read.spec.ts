@@ -126,6 +126,18 @@ describe('bundle reading and verification', () => {
     markCentralEntryAsSymlink(bundle, 'payload/images/test.oci.tar');
     expect(() => readBundleManifest(bundle)).toThrow('not a regular file or directory');
   });
+
+  it('does not traverse a symlink already present in the unpack destination', async () => {
+    const dir = tempDir();
+    const bundle = await validBundle(dir);
+    const unpacked = path.join(dir, 'unpacked');
+    const outside = path.join(dir, 'outside');
+    fs.mkdirSync(unpacked);
+    fs.mkdirSync(outside);
+    fs.symlinkSync(outside, path.join(unpacked, 'payload'));
+    expect(() => unpackBundle(bundle, unpacked)).toThrow('destination contains');
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
 });
 
 function replaceAllSameLength(filePath: string, before: string, after: string): void {

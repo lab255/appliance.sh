@@ -67,6 +67,8 @@ interface ZipEntry {
 
 interface InspectedZip {
   filePath: string;
+  archiveSize: number;
+  dataEndOffset: number;
   entries: ZipEntry[];
   byName: Map<string, ZipEntry>;
   limits: BundleLimits;
@@ -85,19 +87,20 @@ export function readBundleManifest(filePath: string, limits: Partial<BundleLimit
 
 export function unpackBundle(filePath: string, destination: string, limits: Partial<BundleLimits> = {}): void {
   const zip = inspectZip(filePath, limits);
-  const root = path.resolve(destination);
-  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(path.resolve(destination), { recursive: true });
+  const root = fs.realpathSync(path.resolve(destination));
   for (const entry of zip.entries) {
     const outputPath = path.resolve(root, ...entry.name.replace(/\/$/, '').split('/'));
     if (outputPath !== root && !outputPath.startsWith(`${root}${path.sep}`)) {
       throw new Error(`Bundle entry escapes destination: ${entry.name}`);
     }
     if (entry.isDirectory) {
-      fs.mkdirSync(outputPath, { recursive: true });
+      ensureSafeDirectory(root, outputPath);
       continue;
     }
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, readEntry(zip, entry), { mode: 0o600 });
+    ensureSafeDirectory(root, path.dirname(outputPath));
+    if (fs.existsSync(outputPath)) throw new Error(`Refusing to overwrite during bundle unpack: ${entry.name}`);
+    fs.writeFileSync(outputPath, readEntry(zip, entry), { mode: 0o600, flag: 'wx' });
   }
 }
 
@@ -184,7 +187,7 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
   try {
     const tailLength = Math.min(stat.size, 65_557);
     const tail = Buffer.allocUnsafe(tailLength);
-    fs.readSync(descriptor, tail, 0, tail.length, stat.size - tail.length);
+    readExactly(descriptor, tail, stat.size - tail.length, 'ZIP EOCD');
     const eocdOffsetInTail = lastSignatureOffset(tail, EOCD_SIGNATURE);
     if (eocdOffsetInTail < 0 || eocdOffsetInTail + 22 > tail.length) throw new Error('Invalid ZIP: EOCD not found.');
     const commentLength = tail.readUInt16LE(eocdOffsetInTail + 20);
@@ -203,7 +206,7 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
     const absoluteEocdOffset = stat.size - tail.length + eocdOffsetInTail;
     if (centralOffset + centralSize > absoluteEocdOffset) throw new Error('Invalid ZIP central directory bounds.');
     const central = Buffer.allocUnsafe(centralSize);
-    fs.readSync(descriptor, central, 0, central.length, centralOffset);
+    readExactly(descriptor, central, centralOffset, 'ZIP central directory');
 
     const entries: ZipEntry[] = [];
     const byName = new Map<string, ZipEntry>();
@@ -262,6 +265,9 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
         localHeaderOffset: central.readUInt32LE(cursor + 42),
         isDirectory,
       };
+      if (entry.localHeaderOffset === 0xffffffff || entry.localHeaderOffset + 30 > centralOffset) {
+        throw new Error(`Invalid local ZIP header offset: ${name}`);
+      }
       entries.push(entry);
       byName.set(name, entry);
       cursor += recordLength;
@@ -278,7 +284,7 @@ function inspectZip(filePath: string, overrides: Partial<BundleLimits> = {}): In
     if (manifest.uncompressedSize > limits.maxManifestBytes) {
       throw new Error(`appliance.json exceeds the ${limits.maxManifestBytes}-byte limit.`);
     }
-    return { filePath: absolute, entries, byName, limits };
+    return { filePath: absolute, archiveSize: stat.size, dataEndOffset: centralOffset, entries, byName, limits };
   } finally {
     fs.closeSync(descriptor);
   }
@@ -304,19 +310,22 @@ function readEntry(zip: InspectedZip, entry: ZipEntry): Buffer {
   const descriptor = fs.openSync(zip.filePath, 'r');
   try {
     const header = Buffer.allocUnsafe(30);
-    fs.readSync(descriptor, header, 0, header.length, entry.localHeaderOffset);
+    readExactly(descriptor, header, entry.localHeaderOffset, `local ZIP header for ${entry.name}`);
     if (header.readUInt32LE(0) !== LOCAL_SIGNATURE) throw new Error(`Invalid local ZIP header: ${entry.name}`);
     if ((header.readUInt16LE(6) & 0x1) !== 0) throw new Error(`Encrypted ZIP entry: ${entry.name}`);
     const nameLength = header.readUInt16LE(26);
     const extraLength = header.readUInt16LE(28);
     const nameBytes = Buffer.allocUnsafe(nameLength);
-    fs.readSync(descriptor, nameBytes, 0, nameLength, entry.localHeaderOffset + 30);
+    readExactly(descriptor, nameBytes, entry.localHeaderOffset + 30, `local ZIP name for ${entry.name}`);
     if (decodeUtf8(nameBytes, 'local ZIP entry name') !== entry.name) {
       throw new Error(`ZIP local/central path mismatch: ${entry.name}`);
     }
     const dataOffset = entry.localHeaderOffset + 30 + nameLength + extraLength;
+    if (dataOffset + entry.compressedSize > zip.dataEndOffset || dataOffset + entry.compressedSize > zip.archiveSize) {
+      throw new Error(`ZIP entry data exceeds archive bounds: ${entry.name}`);
+    }
     const compressed = Buffer.allocUnsafe(entry.compressedSize);
-    fs.readSync(descriptor, compressed, 0, compressed.length, dataOffset);
+    readExactly(descriptor, compressed, dataOffset, `ZIP entry data for ${entry.name}`);
     const data =
       entry.compression === 0
         ? compressed
@@ -394,6 +403,31 @@ function lastSignatureOffset(buffer: Buffer, signature: number): number {
     if (buffer.readUInt32LE(offset) === signature) return offset;
   }
   return -1;
+}
+
+function readExactly(descriptor: number, buffer: Buffer, position: number, label: string): void {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const read = fs.readSync(descriptor, buffer, offset, buffer.length - offset, position + offset);
+    if (read === 0) throw new Error(`Truncated ${label}.`);
+    offset += read;
+  }
+}
+
+function ensureSafeDirectory(root: string, directory: string): void {
+  const relative = path.relative(root, directory);
+  let current = root;
+  for (const segment of relative ? relative.split(path.sep) : []) {
+    current = path.join(current, segment);
+    if (!fs.existsSync(current)) {
+      fs.mkdirSync(current);
+      continue;
+    }
+    const stat = fs.lstatSync(current);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw new Error(`Bundle unpack destination contains a non-directory or symlink: ${current}`);
+    }
+  }
 }
 
 function makeCrcTable(): Uint32Array {

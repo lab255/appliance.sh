@@ -10,6 +10,7 @@ import { buildApplianceZip } from './build-package.js';
 import { readLink, writeLink } from './link.js';
 import { pollDeploymentUntilDone, extractDeploymentUrl } from './deploy-poll.js';
 import { startProgressLine, BRAND } from './progress.js';
+import { readBundleManifest } from './bundle-read.js';
 import chalk from 'chalk';
 
 // The deploy engine, shared by `appliance deploy` (single app in cwd)
@@ -28,6 +29,14 @@ export class PrintedError extends Error {
 
 export function isPrintedError(err: unknown): err is PrintedError {
   return err instanceof Error && (err as PrintedError).printed === true;
+}
+
+/** Bounded pre-upload discriminator. Existing v1 bytes remain untouched. */
+export function assertSourceBundleForDeploy(buildPath: string): void {
+  const bundle = readBundleManifest(buildPath);
+  if (bundle.classification === 'runnable') {
+    throw new Error('runnable bundles deploy via the runtime; use appliance runtime run/install');
+  }
 }
 
 export interface DeployOptions {
@@ -279,6 +288,7 @@ async function resolveBuildId(
     console.log(chalk.green(`Built: ${built.outputPath} (${sizeMb} MB)`));
   }
 
+  assertSourceBundleForDeploy(buildPath);
   const buildData = fs.readFileSync(buildPath);
   const sizeMb = (buildData.length / 1024 / 1024).toFixed(1);
   console.log(chalk.dim(`Uploading build (${sizeMb} MB)...`));
