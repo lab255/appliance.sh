@@ -445,7 +445,8 @@ function persistedRuntimeAllocation(
     };
     const expected = (manifest.ports ?? []).filter((port) => port.expose === 'host');
     const published = (spec.published ?? []).filter((port) => port.runtimeTarget?.principal === manifest.name);
-    if (published.length !== expected.length || published.some((port) => !port.runtimeTarget?.address)) return undefined;
+    if (published.length !== expected.length || published.some((port) => !port.runtimeTarget?.address))
+      return undefined;
     const remaining = [...published];
     const hostPorts = expected.map((port) => {
       const index = remaining.findIndex((candidate) => candidate.container === port.guest);
