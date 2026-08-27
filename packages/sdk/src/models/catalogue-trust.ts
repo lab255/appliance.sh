@@ -126,16 +126,29 @@ export async function catalogueSigningInput(payload: unknown, role: SignatureEnv
   return concatBytes(encoder.encode(`appliance/${role}`), new Uint8Array([0]), hash);
 }
 
+let webCryptoEd25519Support: Promise<boolean> | undefined;
+
+function supportsWebCryptoEd25519(): Promise<boolean> {
+  webCryptoEd25519Support ??= crypto.subtle
+    .importKey('raw', new Uint8Array(32).buffer, { name: 'Ed25519' }, false, ['verify'])
+    .then(() => true)
+    .catch((cause: unknown) => {
+      if (cause instanceof DOMException && cause.name === 'NotSupportedError') return false;
+      throw cause;
+    });
+  return webCryptoEd25519Support;
+}
+
 async function verifyEd25519(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): Promise<boolean> {
-  try {
+  if (await supportsWebCryptoEd25519()) {
     const key = await crypto.subtle.importKey('raw', publicKey.slice().buffer, { name: 'Ed25519' }, false, ['verify']);
-    return await crypto.subtle.verify({ name: 'Ed25519' }, key, signature.slice().buffer, message.slice().buffer);
-  } catch {
-    // Safari versions without WebCrypto Ed25519 use noble. Noble is audited,
-    // constant-time where JavaScript permits, and receives raw bytes only.
-    const noble = await import('@noble/ed25519');
-    return noble.verifyAsync(signature, message, publicKey);
+    return crypto.subtle.verify({ name: 'Ed25519' }, key, signature.slice().buffer, message.slice().buffer);
   }
+
+  // Safari versions without WebCrypto Ed25519 use noble. Both implementations
+  // enforce strict RFC 8032 verification rather than accepting ZIP-215 points.
+  const noble = await import('@noble/ed25519');
+  return noble.verifyAsync(signature, message, publicKey, { zip215: false });
 }
 
 export async function verifySignatureEnvelope(
@@ -227,14 +240,15 @@ async function verifyPair<T extends { generation: number; issuedAt: string; expi
   if (options.payloadBytes.byteLength + options.envelopeBytes.byteLength > options.maxBytes) {
     throw new CatalogueTrustError('oversize', 'catalogue metadata exceeds its pre-parse size cap');
   }
-  const payload = options.parse(parseJson(options.payloadBytes));
+  const rawPayload = parseJson(options.payloadBytes);
   const envelopeValue = parseJson(options.envelopeBytes);
-  checkGeneration(payload.generation, options.policy);
   const envelopeResult = signatureEnvelopeSchema.safeParse(envelopeValue);
   if (!envelopeResult.success) throw new CatalogueTrustError('invalid-schema', 'signature envelope is malformed');
   const publicKey = options.policy.keys[envelopeResult.data.keyId];
   if (!publicKey) throw new CatalogueTrustError('unknown-key', 'catalogue signer is not pinned');
-  const envelope = await verifySignatureEnvelope(payload, envelopeValue, options.expectedRole, publicKey);
+  const envelope = await verifySignatureEnvelope(rawPayload, envelopeValue, options.expectedRole, publicKey);
+  const payload = options.parse(rawPayload);
+  checkGeneration(payload.generation, options.policy);
   const now = options.now ?? new Date();
   const stale = checkValidity(payload.issuedAt, payload.expiresAt, options.maxSpan, now, options.allowExpired ?? false);
   return { payload, envelope, stale, verifiedAt: now.toISOString() };

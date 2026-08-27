@@ -53,7 +53,7 @@ function index(overrides: Partial<CatalogueIndex> = {}): CatalogueIndex {
   };
 }
 
-async function pair(payload: CatalogueIndex, role: SignatureEnvelope['role'] = 'index') {
+async function pair(payload: unknown, role: SignatureEnvelope['role'] = 'index') {
   const signature = await signAsync(await catalogueSigningInput(payload, role), privateKey);
   const envelope: SignatureEnvelope = { alg: 'ed25519', keyId, role, sig: base64url(signature) };
   return {
@@ -68,6 +68,9 @@ describe('catalogue trust', () => {
   it('canonicalises and passes RFC 0001’s index signature vector', async () => {
     const payload = { generation: 1, schema: 'appliance.catalogue-index/v1' };
     expect(canonicaliseJson(payload)).toBe('{"generation":1,"schema":"appliance.catalogue-index/v1"}');
+    expect(Buffer.from(await catalogueSigningInput(payload, 'index')).toString('hex')).toBe(
+      '6170706c69616e63652f696e6465780040f2ae9c775126e40f60dd6337f5f024c7ecb9a1eae19e679b1a65c917d16a44'
+    );
     await expect(
       verifySignatureEnvelope(
         payload,
@@ -85,6 +88,14 @@ describe('catalogue trust', () => {
 
   it('accepts a valid bounded index', async () => {
     await expect(verifyCatalogueIndexPair(await pair(index()))).resolves.toMatchObject({ stale: false });
+  });
+
+  it('verifies the raw parsed object before schema parsing transforms values', async () => {
+    const payload = index();
+    payload.entries[0]!.name = ' Journal ';
+    await expect(verifyCatalogueIndexPair(await pair(payload))).resolves.toMatchObject({
+      payload: { entries: [{ name: 'Journal' }] },
+    });
   });
 
   it('rejects a bad signature', async () => {
