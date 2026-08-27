@@ -539,26 +539,8 @@ fn ingest_shared_into_legacy(
     shared: SharedProfilesFile,
     app_mode: Option<AppMode>,
 ) -> Result<PersistedConfig, HostError> {
-    let mut cfg = PersistedConfig::default();
-    cfg.app_mode = app_mode;
+    let cfg = build_ingested_config(&shared, app_mode);
     for (id, entry) in &shared.profiles {
-        let cluster = Cluster {
-            id: id.clone(),
-            name: entry.name.clone().unwrap_or_else(|| id.clone()),
-            api_server_url: entry.api_url.clone(),
-            created_at: entry
-                .created_at
-                .clone()
-                .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
-            state_backend_url: entry.state_backend_url.clone(),
-            last_bootstrap_input: entry.last_bootstrap_input.clone(),
-            install_generation: entry.install_generation.clone(),
-            cloud_formation_stack_name: entry.cloud_formation_stack_name.clone(),
-            aws_account_id: entry.aws_account_id.clone(),
-            aws_region: entry.aws_region.clone(),
-            // The keychain copy below comes from this very entry.
-            synced_key_id: Some(entry.key_id.clone()),
-        };
         // Only seed the Keychain when the shared entry actually carries a
         // secret. A macOS desktop-managed entry has an EMPTY secret (the
         // Keychain is canonical), so writing it here would clobber the
@@ -572,9 +554,7 @@ fn ingest_shared_into_legacy(
                 },
             );
         }
-        cfg.clusters.push(cluster);
     }
-    cfg.selected_cluster_id = shared.active_profile.clone();
 
     // Persist to the legacy file so this code path doesn't re-ingest
     // on every read.
@@ -582,6 +562,40 @@ fn ingest_shared_into_legacy(
     let raw = serde_json::to_string_pretty(&cfg)?;
     fs::write(legacy_path, raw)?;
     Ok(cfg)
+}
+
+/// Pure half of shared-profile adoption. Keeping mode propagation here
+/// makes it testable without a Tauri app handle or OS keychain.
+fn build_ingested_config(
+    shared: &SharedProfilesFile,
+    app_mode: Option<AppMode>,
+) -> PersistedConfig {
+    PersistedConfig {
+        clusters: shared
+            .profiles
+            .iter()
+            .map(|(id, entry)| Cluster {
+                id: id.clone(),
+                name: entry.name.clone().unwrap_or_else(|| id.clone()),
+                api_server_url: entry.api_url.clone(),
+                created_at: entry
+                    .created_at
+                    .clone()
+                    .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
+                state_backend_url: entry.state_backend_url.clone(),
+                last_bootstrap_input: entry.last_bootstrap_input.clone(),
+                install_generation: entry.install_generation.clone(),
+                cloud_formation_stack_name: entry.cloud_formation_stack_name.clone(),
+                aws_account_id: entry.aws_account_id.clone(),
+                aws_region: entry.aws_region.clone(),
+                // The keychain copy comes from this very entry.
+                synced_key_id: Some(entry.key_id.clone()),
+            })
+            .collect(),
+        selected_cluster_id: shared.active_profile.clone(),
+        app_mode,
+        ..Default::default()
+    }
 }
 
 /// Serializes every read-modify-write of the persisted config.
@@ -792,7 +806,15 @@ fn get_app_mode(app: AppHandle) -> Result<Option<AppMode>, HostError> {
     let _guard = config_lock();
     let mut persisted = read_persisted_config(&app)?;
     migrate_legacy(&app, &mut persisted)?;
-    Ok(persisted.app_mode)
+    Ok(effective_app_mode(&persisted))
+}
+
+/// Upgrades must preserve the historical developer shell. Only a machine
+/// with neither an explicit choice nor an existing cluster is truly fresh.
+fn effective_app_mode(persisted: &PersistedConfig) -> Option<AppMode> {
+    persisted
+        .app_mode
+        .or_else(|| (!persisted.clusters.is_empty()).then_some(AppMode::Developer))
 }
 
 #[tauri::command]
@@ -5976,6 +5998,37 @@ mod tests {
         let decoded: PersistedConfig =
             serde_json::from_str(&json).expect("deserialize persisted config");
         assert_eq!(decoded.app_mode, Some(AppMode::User));
+    }
+
+    #[test]
+    fn existing_config_defaults_to_developer_but_fresh_install_prompts() {
+        let configured = PersistedConfig {
+            clusters: vec![test_cluster("existing")],
+            ..Default::default()
+        };
+        assert_eq!(effective_app_mode(&configured), Some(AppMode::Developer));
+        assert_eq!(effective_app_mode(&PersistedConfig::default()), None);
+    }
+
+    #[test]
+    fn ingesting_shared_profiles_preserves_app_mode() {
+        let mut shared = SharedProfilesFile {
+            active_profile: Some("existing".to_string()),
+            ..Default::default()
+        };
+        shared.profiles.insert(
+            "existing".to_string(),
+            SharedProfileEntry {
+                api_url: "https://api.example.com".to_string(),
+                key_id: "key-1".to_string(),
+                ..Default::default()
+            },
+        );
+
+        let ingested = build_ingested_config(&shared, Some(AppMode::User));
+        assert_eq!(ingested.app_mode, Some(AppMode::User));
+        assert_eq!(ingested.selected_cluster_id.as_deref(), Some("existing"));
+        assert_eq!(ingested.clusters.len(), 1);
     }
 
     // ---- stage-1 credential seed (decide_seed) -------------------

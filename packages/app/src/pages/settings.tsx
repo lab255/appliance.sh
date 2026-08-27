@@ -57,10 +57,17 @@ export function SettingsPage() {
 
 function ModeSection() {
   const { mode, isLoading, isSaving, error, setMode } = useAppMode();
+  const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const options: Array<{ mode: AppMode; label: string }> = [
     { mode: 'user', label: 'Use apps' },
     { mode: 'developer', label: 'Build apps' },
   ];
+  const moveSelection = (index: number, direction: -1 | 1) => {
+    const nextIndex = (index + direction + options.length) % options.length;
+    const next = options[nextIndex];
+    optionRefs.current[nextIndex]?.focus();
+    void setMode(next.mode).catch(() => undefined);
+  };
   return (
     <Section title="Mode" description="Choose how much of the desktop workspace to show.">
       <div className="flex items-center justify-between gap-4">
@@ -72,17 +79,27 @@ function ModeSection() {
           </p>
         </div>
         <div
-          role="group"
+          role="radiogroup"
           aria-label="App mode"
           className="inline-flex shrink-0 overflow-hidden rounded-md border border-[var(--color-border)]"
         >
-          {options.map((option) => (
+          {options.map((option, index) => (
             <button
               key={option.mode}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
               type="button"
-              aria-pressed={mode === option.mode}
+              role="radio"
+              aria-checked={mode === option.mode}
+              tabIndex={mode === option.mode || (!mode && index === 0) ? 0 : -1}
               disabled={isLoading || isSaving}
               onClick={() => void setMode(option.mode).catch(() => undefined)}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                moveSelection(index, event.key === 'ArrowLeft' ? -1 : 1);
+              }}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-60',
                 mode === option.mode && 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
@@ -94,7 +111,9 @@ function ModeSection() {
         </div>
       </div>
       {error ? (
-        <p className="mt-2 text-xs text-[var(--color-destructive-foreground)]">Couldn't save the mode change.</p>
+        <p role="alert" className="mt-2 text-xs text-[var(--color-destructive-foreground)]">
+          Couldn't save the mode change.
+        </p>
       ) : null}
     </Section>
   );

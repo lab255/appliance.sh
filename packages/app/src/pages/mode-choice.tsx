@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import type { AppMode } from '@/lib/host';
 
 interface ModeChoicePageProps {
-  isSaving: boolean;
+  savingMode: AppMode | null;
   error: unknown;
   onSelect(mode: AppMode): void;
 }
@@ -40,7 +40,7 @@ const choices = [
   },
 ];
 
-export function ModeChoicePage({ isSaving, error, onSelect }: ModeChoicePageProps) {
+export function ModeChoicePage({ savingMode, error, onSelect }: ModeChoicePageProps) {
   return (
     <PageShell rail="focused" className="max-w-[760px] pt-12">
       <PageHeader
@@ -61,7 +61,7 @@ export function ModeChoicePage({ isSaving, error, onSelect }: ModeChoicePageProp
           <button
             key={choice.mode}
             type="button"
-            disabled={isSaving}
+            disabled={savingMode !== null}
             aria-label={`${choice.title}. ${choice.action}`}
             onClick={() => onSelect(choice.mode)}
             className={cn(
@@ -77,8 +77,8 @@ export function ModeChoicePage({ isSaving, error, onSelect }: ModeChoicePageProp
               {choice.mode === 'user' ? <StatusPill tone="success" dot={false} label="Recommended" /> : null}
             </div>
             <h2 className="text-base font-semibold">{choice.title}</h2>
-            <p className="text-[13px] leading-[18px] text-[var(--color-muted-foreground)]">{choice.description}</p>
-            <ul className="list-disc space-y-1 pl-4 text-[13px] leading-5 text-[var(--color-muted-foreground)]">
+            <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">{choice.description}</p>
+            <ul className="list-disc space-y-1 pl-4 text-xs leading-4 text-[var(--color-muted-foreground)]">
               {choice.bullets.map((bullet) => (
                 <li key={bullet}>{bullet}</li>
               ))}
@@ -91,7 +91,7 @@ export function ModeChoicePage({ isSaving, error, onSelect }: ModeChoicePageProp
                   : 'border-[var(--color-border)] text-[var(--color-foreground)]'
               )}
             >
-              {isSaving ? 'Saving…' : choice.action}
+              {savingMode === choice.mode ? 'Saving…' : choice.action}
             </span>
           </button>
         ))}

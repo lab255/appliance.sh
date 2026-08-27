@@ -59,23 +59,27 @@ export function AppShell() {
   // items would only manufacture dead ends.
   const { role } = useKeyRole();
   const isOperator = role === 'admin';
-  const { mode, isLoading: isModeLoading, isSaving, error: modeError, setMode } = useAppMode();
+  const { mode, isLoading: isModeLoading, savingMode, error: modeError, setMode } = useAppMode();
+
+  React.useEffect(() => {
+    if (mode !== 'user') return;
+    const isUserRoute = ['/apps', '/catalogue', '/settings'].some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`)
+    );
+    if (!isUserRoute) navigate('/apps', { replace: true });
+  }, [mode, navigate, pathname]);
 
   // User mode is the runner set. Developer mode appends the existing
   // build surfaces under a Develop label without weakening their role,
   // VM-capability, or configured-state gates.
-  const nav = isModeLoading
-    ? []
-    : getAppNavigation({
-        mode: mode ?? 'user',
-        isOperator,
-        hasVm,
-        configured,
-        isLoading,
-      });
-  if (mode === null) {
-    nav.unshift({ key: 'setup', to: '/setup', label: 'Setup', prominent: true });
-  }
+  const nav = getAppNavigation({
+    mode: mode ?? 'user',
+    isOperator,
+    hasVm,
+    configured,
+    isLoading,
+  });
+  const isChoosingMode = !isModeLoading && mode === null;
 
   return (
     // Below `sm` the sidebar collapses to an icon rail so narrow
@@ -111,26 +115,38 @@ export function AppShell() {
                     Develop
                   </div>
                 ) : null}
-                <NavLink
-                  to={item.to}
-                  title={item.label}
-                  // Hover only brightens the text; the filled background is
-                  // reserved for the active route so the two states never
-                  // read the same while the pointer rests on the sidebar.
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
-                      item.prominent
-                        ? 'text-[var(--color-foreground)] ring-1 ring-inset ring-[var(--color-border-strong)]'
-                        : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
-                      isActive && 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
-                    )
-                  }
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                  <span className="hidden sm:inline">{item.label}</span>
-                </NavLink>
+                {isChoosingMode ? (
+                  <span
+                    role="link"
+                    aria-disabled="true"
+                    tabIndex={-1}
+                    className="pointer-events-none flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-[var(--color-muted-foreground)] opacity-50"
+                  >
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </span>
+                ) : (
+                  <NavLink
+                    to={item.to}
+                    title={item.label}
+                    // Hover only brightens the text; the filled background is
+                    // reserved for the active route so the two states never
+                    // read the same while the pointer rests on the sidebar.
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
+                        item.prominent
+                          ? 'text-[var(--color-foreground)] ring-1 ring-inset ring-[var(--color-border-strong)]'
+                          : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
+                        isActive && 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
+                      )
+                    }
+                  >
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </NavLink>
+                )}
               </React.Fragment>
             );
           })}
@@ -157,7 +173,7 @@ export function AppShell() {
       >
         {isModeLoading ? null : mode === null ? (
           <ModeChoicePage
-            isSaving={isSaving}
+            savingMode={savingMode}
             error={modeError}
             onSelect={(nextMode) => {
               void setMode(nextMode)

@@ -37,6 +37,7 @@ export function useAppMode() {
     isLoading: query.isLoading,
     error: query.error ?? mutation.error,
     isSaving: mutation.isPending,
+    savingMode: mutation.isPending ? mutation.variables : null,
     setMode: mutation.mutateAsync,
   };
 }
