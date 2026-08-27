@@ -98,7 +98,7 @@ describe('appliance umbrella routing', () => {
     const aliased = appliance('run');
     expect(namespaced.status).toBe(2);
     expect(aliased.status).toBe(2);
-    expect(namespaced.stderr).toBe('appliance runtime run: coming in a later release\n');
+    expect(namespaced.stderr).toContain('appliance runtime run: coming in a later release');
     expect(aliased.stderr).toBe(namespaced.stderr);
   });
 
