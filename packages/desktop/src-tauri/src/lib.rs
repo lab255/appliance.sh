@@ -101,6 +101,13 @@ struct HostConfig {
     api_key: Option<ApiKey>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum AppMode {
+    User,
+    Developer,
+}
+
 // Persisted config supports both the new multi-cluster shape and the
 // legacy `apiServerUrl`-only shape. Legacy reads are migrated on first
 // `get_config` call (see `migrate_legacy`).
@@ -111,6 +118,8 @@ struct PersistedConfig {
     clusters: Vec<Cluster>,
     #[serde(default)]
     selected_cluster_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    app_mode: Option<AppMode>,
     // Legacy single-cluster field. Kept (skipped when serialising
     // the new shape) only as a migration source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -774,6 +783,23 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
         selected_cluster_id: persisted.selected_cluster_id,
         api_key,
     })
+}
+
+#[tauri::command]
+fn get_app_mode(app: AppHandle) -> Result<Option<AppMode>, HostError> {
+    let _guard = config_lock();
+    let mut persisted = read_persisted_config(&app)?;
+    migrate_legacy(&app, &mut persisted)?;
+    Ok(persisted.app_mode)
+}
+
+#[tauri::command]
+fn set_app_mode(app: AppHandle, mode: AppMode) -> Result<(), HostError> {
+    let _guard = config_lock();
+    let mut persisted = read_persisted_config(&app)?;
+    migrate_legacy(&app, &mut persisted)?;
+    persisted.app_mode = Some(mode);
+    write_persisted_config(&app, &persisted)
 }
 
 #[tauri::command]
@@ -5870,6 +5896,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
+            get_app_mode,
+            set_app_mode,
             add_cluster,
             select_cluster,
             remove_cluster,
@@ -5934,6 +5962,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_mode_round_trips_through_persisted_config() {
+        let config = PersistedConfig {
+            app_mode: Some(AppMode::User),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).expect("serialize persisted config");
+        assert!(json.contains("\"appMode\":\"user\""));
+        let decoded: PersistedConfig =
+            serde_json::from_str(&json).expect("deserialize persisted config");
+        assert_eq!(decoded.app_mode, Some(AppMode::User));
+    }
 
     // ---- stage-1 credential seed (decide_seed) -------------------
 
