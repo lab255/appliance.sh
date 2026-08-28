@@ -5,7 +5,7 @@ import type { AppWindowMetric, ConsoleHost } from '@appliance.sh/app';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import '@appliance.sh/app/styles.css';
-import { tauriHost } from './host';
+import { createTauriHost, tauriHost } from './host';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('#root element not found');
@@ -43,7 +43,7 @@ if (appWindow) {
       const { mockHostEnabled, createMockHost } = await import('./mock-host');
       if (mockHostEnabled()) return createMockHost();
     }
-    return tauriHost;
+    return createTauriHost();
   }
 
   resolveHost().then((host) => {

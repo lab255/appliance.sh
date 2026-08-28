@@ -54,6 +54,24 @@ describe('mock host app mode', () => {
   });
 });
 
+describe('mock host platform', () => {
+  beforeEach(() => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+  });
+
+  it.each(['macos', 'windows', 'linux'] as const)('reads ?platform=%s', (platform) => {
+    vi.stubGlobal('window', { location: { search: `?mock-host&platform=${platform}` } });
+    expect(mockHostEnabled()).toBe(true);
+    expect(createMockHost().platform).toBe(platform);
+  });
+
+  it.each(['?mock-host', '?mock-host&platform=plan9'])('defaults %s to macos', (search) => {
+    vi.stubGlobal('window', { location: { search } });
+    expect(mockHostEnabled()).toBe(true);
+    expect(createMockHost().platform).toBe('macos');
+  });
+});
+
 describe('mock host catalogue scenarios', () => {
   beforeEach(() => {
     vi.stubGlobal('sessionStorage', memoryStorage());

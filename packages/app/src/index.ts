@@ -25,6 +25,7 @@ export type {
 } from './lib/app-window';
 export type {
   ConsoleHost,
+  HostPlatform,
   AppMode,
   AppModeHost,
   CatalogueHost,

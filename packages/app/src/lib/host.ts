@@ -57,6 +57,21 @@ export interface HostConfig {
 /** Which audience the desktop shell is currently tailored for. */
 export type AppMode = 'user' | 'developer';
 
+/** Operating system reported once by the surrounding host. */
+export type HostPlatform = 'macos' | 'windows' | 'linux';
+
+/** Canonical user-facing label for the physical machine running Appliance. */
+export function localMachineLabel(platform: HostPlatform): string {
+  switch (platform) {
+    case 'macos':
+      return 'This Mac';
+    case 'windows':
+      return 'This PC';
+    case 'linux':
+      return 'This computer';
+  }
+}
+
 /**
  * Per-machine desktop preference for the app's audience mode. Optional:
  * browser/web consoles deliberately omit it and always use developer mode.
@@ -323,6 +338,8 @@ export interface UpdaterHost {
 // system tray, native notifications, bootstrap driver) are optional
 // fields so the web host can omit them entirely.
 export interface ConsoleHost {
+  /** Resolved once when the host is constructed so render-time copy stays synchronous. */
+  platform: HostPlatform;
   getConfig(): Promise<HostConfig>;
   /** Persist a new cluster + its key, and select it. Returns the stored Cluster. */
   addCluster(input: AddClusterInput): Promise<Cluster>;
