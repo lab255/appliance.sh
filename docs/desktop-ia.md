@@ -7,6 +7,18 @@
 > the historical blueprint — read its ①–⑤ areas and naming table as the
 > stepping stone to that IA, not the current state.
 
+## Current audience modes
+
+The desktop now asks once, per machine, whether to start in **User** or
+**Developer** mode. User mode keeps the workspace switcher and exposes only
+**Installed Apps · Catalogue · Settings**. Developer mode contains that same
+runner set, then appends **Setup · Projects · Agents · Machine · Cloud** under a
+**Develop** group; the existing role, VM-capability, and configured-state gates
+still apply. The choice can be changed immediately in **Settings → Mode**.
+
+Web/console hosts have no desktop preference capability, so they retain the
+historical developer mode without showing the first-run choice.
+
 Status: **plan** (no feature code). This is the blueprint phases **I1–I5** build to.
 Scope: the Appliance **desktop app** (`packages/app`, the shared `Console`). The same
 bundle is the web PWA, so every surface below is **host-capability gated** — the web

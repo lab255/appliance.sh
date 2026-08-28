@@ -53,6 +53,19 @@ export interface HostConfig {
   apiKey: { id: string; secret: string } | null;
 }
 
+/** Which audience the desktop shell is currently tailored for. */
+export type AppMode = 'user' | 'developer';
+
+/**
+ * Per-machine desktop preference for the app's audience mode. Optional:
+ * browser/web consoles deliberately omit it and always use developer mode.
+ * `null` means a desktop has not made its first-run choice yet.
+ */
+export interface AppModeHost {
+  get(): Promise<AppMode | null>;
+  set(mode: AppMode): Promise<void>;
+}
+
 export interface AddClusterInput {
   name: string;
   apiServerUrl: string;
@@ -253,6 +266,8 @@ export interface ConsoleHost {
   setClusterStateBackend?(clusterId: string, url: string | null): Promise<void>;
   openExternal(url: string): Promise<void>;
   notify?(opts: { title: string; body?: string }): Promise<void>;
+  /** Desktop-only persisted User / Developer shell preference. */
+  appMode?: AppModeHost;
   bootstrap?: BootstrapHost;
   /**
    * Local-runtime support surface: preflight, prerequisite installs,

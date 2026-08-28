@@ -13,6 +13,7 @@ import type {
   AgentLaunchInput,
   AgentAuthStatus,
   AgentAuthKind,
+  AppMode,
   AddClusterInput,
   ApiServerUpdateInput,
   ApiServerUpdateOptions,
@@ -80,6 +81,15 @@ export const tauriHost: ConsoleHost = {
 
   async notify({ title, body }) {
     await sendNotification({ title, body });
+  },
+
+  appMode: {
+    get() {
+      return invoke<AppMode | null>('get_app_mode');
+    },
+    async set(mode: AppMode) {
+      await invoke('set_app_mode', { mode });
+    },
   },
 
   bootstrap: {
