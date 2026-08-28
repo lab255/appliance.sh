@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/use-app-mode';
 import type { AppMode } from '@/lib/host';
 import type { EntitlementSuggestion } from '@appliance.sh/sdk';
+import { errorMessage } from '@/lib/installed-apps';
 
 // Settings follows the current navigation in docs/desktop-ia.md. Cluster CRUD
 // and the cloud-lifecycle panels moved to ②
@@ -73,7 +74,8 @@ function EntitlementsSection() {
       setSuggestions(await host.entitlements.suggestions(30));
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Entitlement suggestions could not be loaded.');
+      console.error('[settings] entitlement suggestions failed', cause);
+      setError(errorMessage(cause, 'Entitlement suggestions could not be loaded.'));
     } finally {
       setLoading(false);
     }
@@ -89,7 +91,8 @@ function EntitlementsSection() {
       setConfirming(null);
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The grant could not be revoked.');
+      console.error('[settings] entitlement revoke failed', cause);
+      setError(errorMessage(cause, 'The grant could not be revoked.'));
     } finally {
       setBusy(null);
     }
