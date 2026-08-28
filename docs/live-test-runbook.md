@@ -1,9 +1,8 @@
-# Live-test runbook — agent stack validation before the egress default-flip
+# Live-test runbook — agent stack validation
 
-**Audience:** the owner, on a real macOS machine with the `VzBackend`.
-**Goal:** copy-paste-run the live validations the three merged epics owe before
-the egress firewall default is flipped from default-**allow** to
-default-**deny** (the "Fflip" / F4 default-flip, `docs/egress-firewall.md` §7).
+**Audience:** contributors testing on a real macOS machine with the `VzBackend`.
+**Goal:** copy-paste-run the live validations for the default-deny egress
+firewall and credential broker.
 
 This is a **checklist**, not a tutorial. Each section is: the exact command(s),
 the **PASS** result, and how to capture/verify it. Where a command's exact form
@@ -12,8 +11,8 @@ closest real command and the intent — confirm it live rather than trusting it
 blind.
 
 **Sources this runbook is built from (read if a step is unclear):**
-`docs/agent-sandbox.md` (Phase-5 broker), `docs/agent-login.md` §7
-(interactive OAuth), `docs/egress-firewall.md` §9.3 (the live-test matrix).
+`docs/agent-sandbox.md` (credential broker), `docs/agent-login.md` §7
+(interactive OAuth), and [the egress guide](egress-firewall.md).
 
 **Conventions used below:**
 
@@ -28,7 +27,7 @@ blind.
   egress-firewall doc's shorthand `egress allow`/`egress denied` = `appliance
 vm egress allow`/`appliance vm egress denied`.
 - The egress proxy gateway is the netstack subnet `.1`, i.e.
-  `192.168.127.1:<egressPort>` (`docs/egress-firewall.md` §3); the default
+  `192.168.127.1:<egressPort>` (see [the egress guide](egress-firewall.md)); the default
   sandbox VM's egress port is allocated per-VM — read it with `appliance vm
 egress gateway --name "$SBX"`.
 
@@ -103,7 +102,7 @@ The egress firewall only enforces on a `net_link=Netstack` VM. There is **no
 CLI flag** for `net_link` — the persisted per-VM default is `Nat`, and the
 **only** supported test override is the global env `APPLIANCE_NETSTACK=1`,
 which forces the netstack link on at engine runtime
-(`packages/vm/src/spec.rs:180-183`; `docs/egress-firewall.md` §7). The override
+(`packages/vm/src/spec.rs:180-183`). The override
 only ever forces netstack **on**.
 
 **`<verify flag>`** — the override is read when the engine resolves the link,
@@ -171,7 +170,7 @@ No step invoked docker, buildctl, or crane on the host.
 
 ---
 
-## §1 Phase-5 broker wire-confirms (api-key path)
+## §1 Broker wire confirms (API-key path)
 
 Source: `docs/agent-sandbox.md` §3 (the broker spine) + §9 (what holds). The
 contract: the **Anthropic key never enters the VM** — it is injected host-side
@@ -277,7 +276,7 @@ appliance vm shell --name "$SBX" -- sh -c "
 A sibling VM must not be able to drive **this** VM's proxy to spend its
 brokered key. The netstack design closes this structurally — each VM has its
 own netstack + link, no host route between VM subnets
-(`docs/egress-firewall.md` §8.2); the pre-netstack guard is `peer_allowed`
+([egress guide](egress-firewall.md)); the pre-netstack guard is `peer_allowed`
 pinned to the exact guest IP (`egress.rs`).
 
 **`<verify flag>`** — intent: from a _second_ VM, try to reach VM-1's
@@ -388,10 +387,10 @@ real token never appears in the guest.
 
 ---
 
-## §3 Egress firewall (`net_link=Netstack`, default-deny) — §9.3 matrix
+## §3 Egress firewall (`net_link=Netstack`, default-deny) — validation matrix
 
-Source: `docs/egress-firewall.md` §9.3. Run on the **Netstack** `$SBX` from §0.4
-(default-deny + the §5 baked allowlist active — confirmed via `appliance vm
+Run on the **Netstack** `$SBX` from §0.4
+(default-deny + the built-in allowlist active — confirmed via `appliance vm
 egress list --name "$SBX"`). All in-guest commands run via `appliance vm shell
 --name "$SBX" -- …`.
 
@@ -433,7 +432,7 @@ kubectl --kubeconfig /tmp/sbx.kubeconfig run pod-a --image=alpine --restart=Neve
 **Watch the caps during 1–10:** the live pass should complete a heavy
 `npm`/`docker`/multi-pod run **without** the SYN-flood refusal log firing or
 flows stalling (concurrent-flow cap 1024, per-flow backpressure 256 KiB are
-sized well above dev workloads — `docs/egress-firewall.md` §9.3 caps note).
+sized well above dev workloads).
 
 ### 3.B Must be DENIED (adversarial)
 
@@ -504,10 +503,9 @@ proxy-dropped raw-IP attempt (C: a literal IP, not a name) surfaces in
   that _should_ be baked-in is missing, the §5 default allowlist in
   `docs/egress-firewall.md` needs widening — that's an egress-firewall
   follow-up, not a per-run `allow`.
-- **A must-DENY row (§3.B) is wrongly ALLOWED.** This is a **boundary breach** —
-  do **NOT** flip the default. File against the F2 SSRF/private-range filter
-  (§8.1 #1) for B, or the raw-IP default-deny path (§4) for A/C; the netstack
-  classifier let something through.
+- **A must-DENY row (§3.B) is wrongly ALLOWED.** This is a **boundary breach**.
+  Check private-range filtering for B or the raw-IP default-deny path for A/C;
+  the netstack classifier let something through.
 - **WC1–WC5 (broker) fails.** A 502 that should be 200 (or vice-versa) is a
   broker regression — check `configureBroker` wrote the rule
   (`appliance vm creds list --name "$SBX"` shows `api.anthropic.com` inject +
@@ -524,17 +522,6 @@ CLAUDE_CODE_OAUTH_TOKEN=…` line). Missing host `claude` → install it
 
 ---
 
-## After all green → the default-flip (Fflip) is safe
-
-When every box in §4.1 is ✓ — the broker wire-confirms (§1), the OAuth path
-(§2), and the **full** §9.3 matrix (§3.A must-WORK + §3.B must-DENY) all pass
-on a real `net_link=Netstack` VM under default-deny — the owed-live validation
-is satisfied and the **F4 default-flip** (`net_link` default `Nat → Netstack`,
-`EgressPolicy::default()` already `Deny`) is safe to land. A red box in §3.B, or
-any sign of the brokered credential reaching the guest, **blocks the flip**.
-
----
-
 ## Runtime live test
 
 This proof covers the source-only [journal](../examples/runtime/journal/)
@@ -544,8 +531,8 @@ pool is separate from `$SBX`: its fixed name is `appliance-runtime`, it is 2
 vCPU / 4096 MiB, and it reaches core supervisor readiness without k3s, Docker,
 BuildKit, Node, or the dev toolchain.
 
-**Board metric (2026-08-28): Command-to-first-byte (`time appliance runtime
-run` → first curl 200), cold (pool down) and warm (pool up), per sample.**
+**Recorded command-to-first-byte timings (2026-08-28): `time appliance runtime
+run` → first curl 200, cold (pool down) and warm (pool up), per sample.**
 Journal: `9.036s` cold / `0.815s` warm; dashboard: `9.022s` cold / `0.947s`
 warm; notes-suite: `9.406s` cold / `1.155s` warm.
 
@@ -724,14 +711,12 @@ declared once at the compound root. A leaf-level `network.egress` is rejected
 with guidance to move it to the top level; there is no per-leaf grant union.
 Host publication is narrower: only compound leaf ports marked both
 `expose: "host"` and `primary: true` receive a host listener. `isolation: "vm"`
-is rejected as `not yet supported`; dedicated placement and upgrades remain
-follow-ups.
+is rejected as unsupported.
 
 **NOTE:** v1 starts the deterministic topological sequence serially, with
 lexical service-name tie-breaking for simultaneously ready leaves and a 300 s
 readiness cap per leaf. Optional-leaf restart exhaustion degrades the app but
-does not stop its dependents. Parallel launch of independent leaves and
-dependent teardown after optional exhaustion are intentionally deferred.
+does not stop its dependents.
 
 ### Pool survival and expected timings
 
@@ -756,8 +741,7 @@ each stop range contains the cold-run and warm-run stop observations.
 Journal and notes-suite now use PID 1 wrappers that trap SIGTERM and forward it
 to BusyBox `httpd`. The engine's effective stop-grace constant remains about
 10 seconds, encoded by the `seq 1 20` × `sleep 0.5` loops in
-[`guest.rs`](../packages/vm/src/guest.rs); the engine owner can decide whether
-to shorten it independently of these samples.
+[`guest.rs`](../packages/vm/src/guest.rs).
 
 The notes-suite recovery check (`ctr ... tasks kill -s SIGKILL ...` followed by
 the `runtime ps` loop) returned healthy with `restarts=1` within 9s, and the
@@ -765,16 +749,16 @@ pool remained running.
 
 ---
 
-## Desktop app-window proof (AP-176)
+## Desktop app-window proof
 
 Build the signed Runtime engine and Journal fixture as above, then run Desktop
 with `pnpm --filter @appliance.sh/desktop exec tauri dev --no-watch`. Open the
 installed Journal app with `appliance runtime open journal --json`; use the
 Installed Apps card for the Stop and Reopen click paths. Measurements are
 written to the platform `desktop-metrics.jsonl` described in
-[Opening installed apps](runtime.md#opening-installed-apps).
+[Opening installed apps](runtime.md#open-an-app).
 
-Parker gates: warm `app_open_ttv` p95 ≤2 s, cold `app_open_ttv` p95 ≤15 s,
+Acceptance thresholds: warm `app_open_ttv` p95 ≤2 s, cold `app_open_ttv` p95 ≤15 s,
 and `app_stop_ttx` p95 ≤2 s. A complete native run is 5 warm, 3 cold, 3 stop,
 and 3 reopen samples, with one native capture each of the running and exited
 dedicated window.
