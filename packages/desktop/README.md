@@ -51,16 +51,14 @@ pnpm dev                 # Vite frontend dev server (1420)
 pnpm build               # Vite frontend build → dist/
 pnpm tauri dev           # Launch the Tauri window (runs `pnpm dev` first)
 pnpm tauri build         # Build installers for the current platform (dev re-sign)
-pnpm tauri:build:release # Release build: Developer ID sign + notarize + updater artifacts
+pnpm tauri:build:release # Release build: Developer ID sign + updater artifacts
 ```
 
 `tauri:build` is the day-to-day local build; it re-signs with the stable
-self-signed dev cert (below). `tauri:build:release` is what the GitHub
-Actions release workflow runs — it overlays `src-tauri/tauri.release.conf.json`
-(which turns on signed updater artifacts) and runs `scripts/notarize-macos.mjs`.
-Both release steps **no-op cleanly when their secrets are absent**, so you can
-run `tauri:build:release` locally and just get an unsigned, un-notarized
-bundle without errors.
+self-signed dev cert (below). `tauri:build:release` is what the GitHub Actions
+release workflow runs. It overlays `src-tauri/tauri.release.conf.json`, which
+turns on signed updater artifacts. Signing steps no-op cleanly when their
+secrets are absent, so contributors can run the command locally.
 
 ## Auto-update
 
@@ -124,58 +122,15 @@ When `TAURI_SIGNING_PRIVATE_KEY` is unset, `createUpdaterArtifacts` would make
 only the release overlay (`tauri.release.conf.json`) enables it, applied by the
 workflow.
 
-## macOS: production Developer ID signing + notarization
+## macOS production signing
 
-Release bundles must be signed with a real **Developer ID Application**
-identity, built with the **hardened runtime**, and **notarized** by Apple so
-Gatekeeper lets users open them without a right-click-Open dance. This is the
-production counterpart to the dev re-sign below, driven entirely by env vars
-and implemented in `scripts/notarize-macos.mjs`.
-
-The script **no-ops unless the credentials are present** (same contract as
-`scripts/sign-macos.mjs`), so local + unsigned-CI builds skip it cleanly. When
-the creds are set it: (1) re-signs the `.app` with `--options runtime`
-(hardened runtime), a secure timestamp, and `scripts/entitlements.plist`;
-(2) submits the `.app` and each `.dmg` to `notarytool --wait`; (3) staples the
-notarization ticket so the bundle passes Gatekeeper offline.
-
-Required environment / CI secrets:
-
-| Secret                        | Purpose                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `APPLE_CERTIFICATE`           | Base64 of the Developer ID Application `.p12` (cert + private key), imported into a temp keychain in CI |
-| `APPLE_CERTIFICATE_PASSWORD`  | Export password for that `.p12`                                                                         |
-| `APPLE_TEAM_ID`               | 10-char Apple Developer Team ID                                                                         |
-| `APPLE_ID` + `APPLE_PASSWORD` | Apple ID + an **app-specific** password for notarytool auth                                             |
-
-There is deliberately **no** `APPLE_SIGNING_IDENTITY` secret: the signing
-scripts derive the identity from whatever `Developer ID Application` cert is in
-the keychain search list (`scripts/macos-signing.mjs`) — in CI that's exactly
-the one the workflow imported from `APPLE_CERTIFICATE`. A hardcoded identity
-string goes stale on cert rotation and silently no-ops the signing scripts.
-Setting `APPLE_SIGNING_IDENTITY` in the env still overrides the derivation
-(useful on a machine with several Developer ID certs); `APPLE_TEAM_ID` also
-falls back to the `(TEAMID1234)` suffix of the derived identity when unset.
-
-Bundle **resources** need their own Developer ID signatures — Tauri signs the
-app shell and `externalBin` sidecars, but copies `bundle.resources` verbatim,
-and notarization rejects the whole archive over one ad-hoc Mach-O (this is
-exactly how the ad-hoc-signed `vm-bin/appliance-vm` used to sink every release
-build). `scripts/sign-staged.mjs` Developer-ID-signs every Mach-O staged under
-`src-tauri/` (hardened runtime + timestamp, per-binary entitlements), skipping
-non-Mach-O files like the Linux api-server guest binary. It runs as the release
-overlay's `beforeBundleCommand` — the only slot that works, because `tauri
-build`'s `beforeBuildCommand` (`pnpm build`) re-stages fresh ad-hoc-signed
-binaries and would clobber anything signed earlier in the chain.
-
-Alternatively, instead of `APPLE_ID`/`APPLE_PASSWORD`, notarization can use an
-App-Store-Connect API key — set `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, and
-`APPLE_API_KEY_PATH` (path to the `.p8`). The script prefers the API key when
-all three are present. Set `APPLE_NOTARIZE=0` to re-sign but skip the
-notarization round-trip (useful when iterating on the signing step).
-
-> None of this can be exercised without real Apple credentials. The code path
-> is implemented and gated; the release workflow wires the secrets in.
+The release workflow signs the app shell, sidecars, and staged Mach-O resources
+with a Developer ID Application identity, hardened runtime options, a secure
+timestamp, and the appropriate entitlements. `APPLE_CERTIFICATE` and
+`APPLE_CERTIFICATE_PASSWORD` provide the CI identity; the signing scripts derive
+its name from the temporary keychain. `APPLE_SIGNING_IDENTITY` remains available
+as a local override. Without a Developer ID identity, the signing step skips
+cleanly.
 
 ## macOS: stable code-signing for local dev
 

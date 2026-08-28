@@ -11,7 +11,7 @@
 Resolve the project type by checking, in order, relative to cwd:
 
 1. **docker-compose** — `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` (compose's own search order).
-2. **devcontainer** — `.devcontainer/devcontainer.json` or `.devcontainer.json`. Honors the owner's decision: run the official `@devcontainers/cli` in-guest (`docs/microvm.md:183-187`).
+2. **devcontainer** — `.devcontainer/devcontainer.json` or `.devcontainer.json`. Runs the official `@devcontainers/cli` in-guest (`docs/microvm.md:183-187`).
 3. **Dockerfile** — `Dockerfile` (then `Dockerfile.*` only via explicit `--file`).
 4. **appliance manifest** — `appliance.json`/manifest: _not run by `up`_; detected only to print "use `appliance deploy`" and exit 0.
 

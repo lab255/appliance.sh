@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import type { AgentInfo, MicroVmStatus, MicroVmSummary } from '@/lib/host';
 import { LaunchAgentButton } from './launch-agent-button';
 
-// ④ Agents — the first-class area (docs/desktop-ia.md §3). Three surfaces,
+// Agents is a primary area (docs/desktop-ia.md). Three surfaces are
 // assembled here: per-agent SIGN-IN (moved out of ⑤ Settings), the LAUNCHER
 // (moved out of ② cluster detail — pick a runtime + agent type + task), and a
 // RUNS list (each runtime's `agent.list`, the durable index behind the dock's
@@ -121,7 +121,7 @@ function onRadioGroupKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
   buttons[next]?.click();
 }
 
-// Per-agent sign-in (moved out of ⑤ Settings — docs/desktop-ia.md move-map 4b).
+// Per-agent sign-in (moved out of Settings; see docs/desktop-ia.md).
 // The agent-type picker + per-type "signed in" dots + the shared
 // `AgentLoginPanel`. Fully presentational: the signed-in map, the login
 // refresh, AND the selected `agentType` are owned by the page so this picker

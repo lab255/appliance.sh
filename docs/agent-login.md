@@ -37,7 +37,7 @@ MITM scope, same peer-pin. The token, like the key, **never enters the VM**.
 > subscription token) is out of bounds.** L1's "Sign in with Claude" copy
 > carries a short version of this caveat.
 >
-> **Correction (Sasha §4) — the "Claude-Code-only" posture is NOT
+> **Correction — the "Claude-Code-only" posture is NOT
 > broker-enforced.** Be precise about what the broker does: it injects the
 > Bearer (or api-key) header on **all** guest→`api.anthropic.com` traffic and
 > **cannot distinguish `claude`'s own calls from any other guest process** —
@@ -231,7 +231,7 @@ the one-year `sk-ant-oat01-` token, and stores it host-side **tagged `kind:'oaut
    `extractOAuthToken` pulls the `sk-ant-oat01-…` token out of the bare token or
    the whole `export CLAUDE_CODE_OAUTH_TOKEN=…` line — then
    `writeAgentKey(token, 'oauth')`. The token is **never echoed, never logged,
-   never written to a temp file** (Sasha §7.1): it goes straight from the prompt
+   never written to a temp file**: it goes straight from the prompt
    to the Keychain. **`claude setup-token` runs host-side, never in the VM**, and
    **requires `claude` installed on the host** + a Pro/Max/Team/Enterprise
    subscription — a missing host `claude` is detected (`hostHasClaude`) with an
@@ -392,7 +392,7 @@ with the value atomically in one item:
   credential before the request leaves the host. A captured placeholder is
   worthless.
 
-## 6. Security — for Sasha
+## 6. Security
 
 **What changes vs the A0/A2 design: one thing.** A **second auth mode** — a
 `header=authorization`, `Bearer`-scheme variant of the _same_ `api.anthropic.com`
@@ -440,7 +440,7 @@ L1–L3 must not add an API-gateway surface. The longer-lived OAuth token widens
 the at-rest blast radius of a **host** compromise (≈ a year of access) but adds
 **no new boundary** — same host-compromise threat model as the API key (§0).
 
-## 7. Empirical findings + remaining verify items (for Eliot / Sasha)
+## 7. Empirical findings + remaining verification items
 
 What L1/L2 confirmed on this host (`claude` 2.1.195), and what is still owed
 live (needs a Pro/Max account + a booted VM):
@@ -456,7 +456,7 @@ live (needs a Pro/Max account + a booted VM):
    the design's "grep stdout for `sk-ant-oat01-` while inheriting the TTY" is
    **not achievable** — one stdout fd cannot be both the Ink TTY and a capture
    pipe, a PTY tee would need a native dep (`node-pty`), and `script(1)` would
-   write the token to a temp file (forbidden by Sasha §7.1). **L1's capture
+   write the token to a temp file. **L1's capture
    therefore inherits the TTY for the native flow, then reads the token back
    via a HIDDEN in-process paste prompt** (`extractOAuthToken` pulls the
    `sk-ant-oat01-…` token out of the bare token OR the whole
@@ -464,8 +464,8 @@ live (needs a Pro/Max account + a booted VM):
    never echoed, never a temp file — honouring §7.1. (The token is shown inline,
    not on an alternate screen, so it stays in scrollback for the user to copy
    after `setup-token` exits.)
-2. **`setup-token` does NOT persist a second at-rest copy (Sasha §5 —
-   CHECKED at the source level; LIVE end-to-end owed).** The `setupTokenHandler`
+2. **`setup-token` does NOT persist a second at-rest copy — checked at the source
+   level; live end-to-end verification remains.** The `setupTokenHandler`
    in the `claude` binary is a **display-only** Ink flow ("you won't be able to
    see it again"); the credential-persisting code path
    (`claudeAiOauth.accessToken` written to the macOS login Keychain item
@@ -504,7 +504,7 @@ sk-ant-oat01-appliance-proxy` when `CLAUDE_CODE_OAUTH_TOKEN` is the inert
    → `print-key` exits 1 → proxy 502) on an **unparseable/truncated** envelope
    — it never hands the raw bytes of a broken envelope to the proxy as a key.
 
-Non-blocking / owner forks: whether to keep `api-key` as the default offered
+Non-blocking choices: whether to keep `api-key` as the default offered
 mode or lead with "Sign in with Claude"; whether the desktop indicator (L3)
 should show token expiry (one year out) as a re-login nudge.
 
@@ -512,7 +512,7 @@ should show token expiry (one year out) as a re-login nudge.
 
 ### Build-contract summary
 
-| Level | Owner surface                             | One-line contract                                                                                                                                                  |
+| Level | Implementation surface                    | One-line contract                                                                                                                                                  |
 | ----- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | L1    | `appliance agent login` / `print-key`     | login is a mode picker (API key OR Sign in with Claude → host `claude setup-token`); store the credential tagged by kind; `print-key` emits the right wire value.  |
 | L2    | runner + broker (`utils/agent.ts`)        | OAuth mode = cred rule `header=authorization` + in-guest `CLAUDE_CODE_OAUTH_TOKEN=<placeholder>` + `print-key` emits `Bearer <token>`; fail-closed/scope/pin hold. |

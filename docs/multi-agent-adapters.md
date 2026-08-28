@@ -1,9 +1,8 @@
 # Multi-agent adapters — N-agent generalization (Claude Code + Copilot + Codex)
 
-**Status:** Design (G0 spike). **Owner-locked.** This document is the contract
-**G1–G3 build to**; it writes **no feature code**. The decisions in **bold** are
-settled — do not relitigate them downstream, refine the _how_. **Branch:**
-`feat/multi-agent-adapters`.
+**Status:** Design. This document defines the adapter contract and writes **no
+feature code**. The decisions in **bold** are settled; implementation can refine
+the _how_.
 
 **Goal.** Generalize the Phase-5 agent adapter seam
 ([docs/agent-sandbox.md](agent-sandbox.md) §8b, [docs/agent-login.md](agent-login.md)
@@ -14,7 +13,7 @@ reattachable-session transport, and the autonomous result capture are **reused
 wholesale** — the only per-agent inputs are the strings + one enum in the
 adapter object. No new transport, no new broker, no new Rust on the inject path.
 
-**Owner-locked design decisions (do not relitigate).**
+**Design decisions.**
 
 1. **Copilot = PAT-broker.** The host brokers a fine-grained GitHub **PAT** onto
    Copilot's `api.github.com/copilot_internal/*` token-exchange leg. We **accept
@@ -370,7 +369,7 @@ still reconciles against the tmux session list.
   api-key path (never on argv). No host-side `loginCmd` — the user mints the PAT
   in GitHub settings and pastes it.
 
-  **SECURITY BOUND on host-keyed injection (Sasha's pre-ship guard).** The
+  **Security bound on host-keyed injection.** The
   fine-grained-only requirement is **not** a CLI-functionality nicety — it is
   the security bound. The broker injects this PAT on **every**
   `api.github.com` request from the guest (host-keyed, not path-keyed —
@@ -485,7 +484,7 @@ pinned versions on a booted `net_link=Netstack` VM:
 
 Pin the exact patch versions confirmed by this pass, and bump deliberately.
 
-## 7. Security — for Sasha
+## 7. Security
 
 **Per-agent broker model (what's identical to Claude).** Each agent gets **one
 host-injection cred rule on one host**, fed by a host-resolved `print-key`,
@@ -499,7 +498,7 @@ remains the only real isolation boundary; egress is cooperative unless
 `net_link=Netstack` (then host-enforced); a jailbroken guest can spend brokered
 billing but **cannot read the durable credential** — same posture as Claude.
 
-**Copilot — the bounded session-token-in-guest tradeoff (owner-accepted).**
+**Copilot — the bounded session-token-in-guest tradeoff.**
 Copilot is a **two-leg** flow:
 
 1. The CLI sends `Authorization: token <COPILOT_GITHUB_TOKEN>` to
@@ -565,33 +564,33 @@ it is three of the same host-injection rule on three hosts, with one extra schem
 (`token`) and a longer-lived at-rest secret blast radius for the PAT (same
 host-compromise threat model as the Anthropic OAuth token, §0 of agent-login).
 
-## 8. Open questions (for Eliot / Sasha)
+## 8. Open questions
 
-1. **Copilot interactive seeding (Eliot).** The autonomous argv is verified
+1. **Copilot interactive seeding.** The autonomous argv is verified
    (`-p … -s --allow-all-tools --no-ask-user`); whether interactive `copilot`
    accepts a positional task to seed the first prompt is **unverified** — G3
    leaves interactive as a bare TTY unless the live pass confirms a seed flag.
-2. **Codex JSONL stability (Eliot).** Pin to event-stream parsing
+2. **Codex JSONL stability.** Pin to event-stream parsing
    (`turn.completed` + `item.*`) or to `--output-schema`/`-o <file>`? The
    structured-schema path is more stable across 0.142.x bumps but constrains the
    result shape. Recommend: parse the event stream, fall back to `-o` if the
    schema churns. Confirm on the pinned version.
-3. **Copilot broker-host breadth (Sasha).** Accept host-keyed PAT injection on
+3. **Copilot broker-host breadth.** Accept host-keyed PAT injection on
    **all** `api.github.com` traffic (bounded by the fine-grained `Copilot
 Requests` scope, §7), or add a path-aware inject (`/copilot_internal/*` only)
    to `creds.rs`? Recommend: accept it for G1–G3 (the scope bounds it; a single-
    purpose Copilot sandbox is the posture), track path-aware inject + the
-   direct-Bearer follow-up as the hardening epic.
-4. **Direct-Bearer follow-up priority (owner).** Do we want the host-side
+   direct-Bearer follow-up as hardening work.
+4. **Direct-Bearer follow-up priority.** Should the host-side
    token-exchange broker (no session token in guest) before shipping Copilot, or
-   ship the bounded-tradeoff version first? Owner-locked to bounded for now;
-   flagging the sequencing.
+   ship the bounded-tradeoff version first? The current design uses the bounded
+   tradeoff.
 
 ---
 
 ### Build-contract summary
 
-| Phase | Owner surface                                      | One-line contract                                                                                                                                                                                                                   |
+| Phase | Implementation surface                             | One-line contract                                                                                                                                                                                                                   |
 | ----- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | G1    | adapter type + objects (`utils/agent.ts`)          | generalize `AgentAdapter`/`AuthMode` (`provider`, `install`, `egressHosts`, `captureMode`, `scheme:'token'`, `kind:'pat'`, `login`); add copilot + codex adapters; branch `classifyAutonomousResult` on `captureMode`.              |
 | G2    | broker + login (`agent.ts` + `appliance-agent.ts`) | per-agent store key (`provider`); `print-key --type <agent>` emits `<scheme> <secret>` from the resolved mode; `configureBroker` writes `apiHost`/`header`/`--type` helper; `agent login --type <agent>` (key / PAT / setup-token). |

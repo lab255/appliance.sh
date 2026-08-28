@@ -12,7 +12,7 @@ entry point lands as **root**: the vsock interactive shell, one-shot
 `devcontainer exec` (which all ride that same channel). We add a non-root
 `appliance` user and land those entry points as that user.
 
-**Locked decision (owner).** Add a non-root `appliance` user (uid/gid 1000 by
+**Design decision.** Add a non-root `appliance` user (uid/gid 1000 by
 default — see §6 fork). Land shells / agents / devcontainer exec as that user.
 **dockerd stays a root daemon** — rootless dockerd on diskless Alpine needs
 subuid/subgid + fuse-overlayfs plumbing that buys little when the blast radius
@@ -214,7 +214,7 @@ Every in-guest command from the TS CLI flows through
   (`appliance-up.ts`, `appliance-shell.ts:40-58`) — run as `appliance`; they
   shell out to `docker` (docker group). The container's **internal** user is
   still governed by the image / `devcontainer.json` `remoteUser`, untouched by
-  this epic.
+  this change.
 - Readiness probes `test -f /persist/.docker-ready`, `docker version`
   (`sandbox.ts:510-533`) — fine as `appliance`.
 
@@ -245,7 +245,7 @@ tree.
 defense-in-depth, NOT a privilege boundary.** Its actual value:
 
 - lets `--dangerously-skip-permissions` coding agents run at all (they refuse as
-  uid 0) — the concrete goal of this epic;
+  uid 0) — the concrete goal of this change;
 - removes casual "everything is root" mistakes in the interactive shell.
 
 It does **not** sandbox a hostile process: docker access (or `sudo`, or
@@ -266,16 +266,16 @@ passwordless sudo + `--root`" — i.e. **the same effective authority**
 `shell.sock` before could get a root shell, and still can. Keep `0600`, and
 adopt `docs/sandbox.md` §6's hardening (per-VM state dir `0700`,
 `store.rs:43`; optional `SO_PEERCRED` owner-uid check in the relay) — those are
-orthogonal to this epic but reinforce the only real host-side gate.
+orthogonal to this change but reinforce the only real host-side gate.
 
 **Net:** no change weakens the existing boundary. The clock-sync root token
 (§2.2) rides the same `0600` channel — no new surface. Adding `sudo` to every
 VM's package set is a trivial attack-surface delta given the guest is already
 all-root and throwaway.
 
-## 6. Forks needing sign-off
+## 6. Open questions
 
-1. **uid/gid on `--mount` VMs — owner + Sasha (genuine fork).** The locked
+1. **uid/gid on `--mount` VMs.** The
    decision says uid/gid `1000`. But on a `--mount` / dev VM the host folder is
    shared over VirtioFS at `/persist/workspace` (the user's HOME) and presents
    **host-side ownership** (the Mac user's uid, e.g. `501`). A non-root
@@ -290,19 +290,17 @@ all-root and throwaway.
      the host uid lines guest ownership up with the host so `appliance` reads
      and writes the shared tree exactly as the host user does. Security-neutral
      (root already writes that tree; matching uid only affects the share the
-     host user fully controls) — but it deviates from the flat "uid 1000", so it
-     needs the owner's nod and Sasha's confirmation.
+     host user fully controls) — but it deviates from the flat "uid 1000".
    - **Alternative (lower-effort, worse UX):** keep uid 1000 and accept a
      read-only / partially-writable shared workspace, or mount it `--mount`
      read-only (which `docs/sandbox.md` §6 already floats as a docker-escape
      mitigation). E2.x **must** verify actual write behavior of `appliance` on a
      `--mount` VM before committing — VZ virtiofs uid mapping/DAC behavior should
      be tested, not assumed.
-2. **Bother at all, given docker-group = root-equiv? — already locked, noted for
-   honesty.** Non-root buys little _isolation_ (§5). The owner has locked it for
-   the agent-compatibility reason, which is valid; just don't oversell it.
-   Sasha sign-off requested only on the framing ("not a boundary") and the
-   `0700` state-dir hardening, neither of which blocks E2.x.
+2. **Value despite docker-group being root-equivalent.** Non-root buys little
+   _isolation_ (§5), but provides agent compatibility; do not oversell it. The
+   "not a boundary" framing and `0700` state-dir hardening do not block the
+   implementation.
 
 ## 7. Downstream tasks (E2.1–E2.3)
 

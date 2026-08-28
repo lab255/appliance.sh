@@ -12,7 +12,7 @@ import { useTerminalSessions, mintAgentSessionId, agentSessionKey } from '@/prov
 import { cn } from '@/lib/utils';
 import type { AgentAuthStatus } from '@/lib/host';
 
-// The agent launcher — ④ Agents (docs/desktop-ia.md §3 / move-map 4a). Moved
+// The agent launcher lives under Agents (docs/desktop-ia.md). Moved
 // here out of `pages/local-runtime/index.tsx` (where it rode along inside ②
 // cluster detail until I4); ② now keeps only a thin "Run agent →" deep-link
 // into this area. The observe tab it opens still lives in the GLOBAL terminal

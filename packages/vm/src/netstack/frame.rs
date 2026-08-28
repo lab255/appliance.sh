@@ -1,8 +1,8 @@
 //! Raw Ethernet/IPv4 frame classification and synthesis for the
 //! host-side netstack.
 //!
-//! This is the hostile-frame parser the brief flags as an **F1
-//! acceptance gate** (docs/egress-firewall.md §8.1 #5): it ingests
+//! This is the hostile-frame parser at the boundary described in
+//! docs/egress-firewall.md: it ingests
 //! attacker-controlled L2 frames straight off the guest's virtio-net,
 //! so it MUST be bounded and panic-free on malformed/truncated/hostile
 //! input. We lean on smoltcp's own *checked* wire parsers

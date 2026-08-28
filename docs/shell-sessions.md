@@ -13,7 +13,7 @@ server socket (a separate root-owned socket for --root). Each desktop tab =
 one named tmux session `appliance-<id>`. Reattach = `tmux new-session -A`
 (attach-or-create); list = `tmux list-sessions`. tmux replays the screen on
 attach, which is the "navigate away / restart the app and come back to your
-live shell" UX the owner wants.
+live shell" UX.
 
 Protocol: extend the existing size-line handshake with a session token, so
 the vsock relay stays a dumb per-connect byte pipe and the durable state is
@@ -86,7 +86,7 @@ from `community`.
 | Key interception            | a prefix (`C-b`) + status bar — must be turned off to stay transparent | none — fully transparent passthrough                                                          |
 
 **Recommendation: tmux.** The decisive factors are (a) **replay on attach** —
-the owner's goal is to navigate away, or restart the app, and come back to the
+the goal is to navigate away, or restart the app, and come back to the
 _same shell as you left it_; tmux redraws the screen, dtach shows a blank line
 until you press Enter; (b) **`list-sessions`** gives E3.4's reconnect a clean
 enumeration primitive with zero host-side bookkeeping; (c) **`new-session -A`**
@@ -244,13 +244,13 @@ id)` → `terminal_kill_session` → `appliance vm sessions kill` for explicit
    **not** kill the guest session). The tab's `×` = detach **plus**
    `terminal.kill(...)` to destroy the guest session.
 
-## 5. Composition with Epic 2 (non-root user / `--root`) and the Channel transport
+## 5. Composition with the non-root user / `--root` and the Channel transport
 
 - **Non-root by default.** The agent runs tmux as `appliance` via
   `su -s /bin/sh -l appliance -c 'exec tmux …'`, so the session — like today's
   shell (`guest.rs:514`) — is non-root. `--root` keeps a root session on a
   **separate** socket (`-L appliance-root`), the existing escape hatch
-  (`shell.rs:35`, `guest.rs:507-514`). Two owner-isolated sockets mean a
+  (`shell.rs:35`, `guest.rs:507-514`). Two user-isolated sockets mean a
   privilege level can never cross-attach.
 - **One-shots + clock-sync unchanged.** They send no session token, so they keep
   the direct, non-tmux path and its exit-code sentinel
@@ -329,13 +329,13 @@ id)` → `terminal_kill_session` → `appliance vm sessions kill` for explicit
 - `packages/app/src/providers/terminal-sessions-provider.tsx` — on mount,
   `terminal.list()` → re-attach each id into a tab.
 
-## 7. Forks needing owner / manager confirmation
+## 7. Open questions
 
 1. **Multiplexer: tmux (recommended) vs dtach/abduco.** tmux = replay on
    attach + `list-sessions` + already-in-dev, ~1 MB; dtach = ~25 KB and fully
    transparent but **no screen replay and no session list**.
 2. **Privilege model: tmux as the `appliance` user (recommended), `--root` on a
-   separate root-owned socket.** Confirm we want two owner-isolated sockets
+   separate root-owned socket.** Compare two user-isolated sockets
    rather than one.
 3. **Scope: sessions per-VM (recommended; tmux server in the guest, ids
    host-minted)** vs a global cross-VM session registry.

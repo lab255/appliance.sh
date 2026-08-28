@@ -21,7 +21,7 @@ target" contract. Three BLOCKERs share this root cause.
   (routes.tsx:38). A core-booted VM registers no cluster, so every app open
   bounces back to `/setup` → `FirstRunWelcome`, as if nothing was set up. The
   booted machine only exists on `/machine`, which landing never points to.
-  → Fix (pending fable steer): either register the Dev Machine cluster at core
+  → Fix: either register the Dev Machine cluster at core
   boot, OR teach `LandingRedirect` + `useSelectedCluster` + cluster-switcher +
   the setup gate that "a core VM exists" == configured (route to `/machine`).
 
@@ -72,7 +72,7 @@ destroy` / `assertLegacyInstallation` throws for a CFN cluster added via
   at retired `appliance bootstrap`.
 - NOTE: decision-of-record #8 froze the legacy bootstrap for 2 releases, so the
   legacy PATH staying is intentional — but users should not see "deprecated"
-  streamed at them, and a CFN install UI is owed. **Scope/timing = fable + owner.**
+  streamed at them, and a CFN install UI is not yet implemented.
 
 ## Workstream 3 — cross-cutting friction batch
 

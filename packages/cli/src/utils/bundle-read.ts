@@ -5,7 +5,7 @@
  *   verifyBundle(path) -> { digest, signature?: { keyId, valid } }
  *
  * All three entry points inspect the ZIP central directory first and enforce
- * RFC 0001 bounds and path/type safety before reading or writing entry data.
+ * Runtime bundle bounds and path/type safety before reading or writing entry data.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

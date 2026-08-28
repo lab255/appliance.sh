@@ -1,253 +1,120 @@
-# Runtime
+# Packaged app runtime
 
-The packaged-app Runtime installs runnable `.appliance.zip` bundles per
-workspace target (the current cluster/profile), while sharing content-addressed
-bundle bytes across targets.
+**Appliance is building the runtime of the future — the fastest, easiest way to ship AI-native apps.**
 
-## Install, list, and uninstall
+## Install the CLI
+
+Install Appliance with pnpm, then confirm the command is available:
 
 ```sh
-appliance runtime install ./journal.appliance.zip
-appliance runtime install https://journal.appliance.zip/
+pnpm add --global appliance.sh
+appliance --version
+```
+
+The packaged app commands use manifest v2 `.appliance.zip` bundles. Run
+`appliance runtime <command> --help` for all flags.
+
+## Package an app
+
+From a manifest v2 project directory:
+
+```sh
+appliance builder package
+appliance builder package --out my-app.appliance.zip
+```
+
+The default output is `<name>.appliance.zip`. `appliance package` is the same
+command. Container projects need a local Docker or BuildKit engine unless you
+provide a prebuilt image with `--image`; binary projects must already contain
+their declared Linux payloads.
+
+## Run or install a bundle
+
+Run a local bundle immediately:
+
+```sh
+appliance runtime run ./my-app.appliance.zip
+```
+
+The command validates the bundle, starts it, and follows its logs. Ctrl-C stops
+the app but leaves the pooled VM running.
+
+Install a bundle for later use from a local path or HTTPS URL:
+
+```sh
+appliance runtime install ./my-app.appliance.zip
+appliance runtime install https://example.com/my-app.appliance.zip
 appliance runtime list
-appliance runtime list --all-targets
-appliance runtime run Journal
-appliance runtime uninstall Journal
-appliance runtime uninstall Journal --keep-data
+appliance runtime uninstall my-app
 ```
 
-`install` accepts local files and HTTPS URLs only. A URL must match an entry in
-the current, verified, non-stale catalogue index; its downloaded digest,
-manifest identity, version, license, publisher, and signature must match that
-entry. Local files do not need index evidence or a signature. An unsigned or
-otherwise unverified local bundle is labelled **Unknown Publisher** and requires
-`--accept-unknown-publisher` in headless use, or an explicit `y/N` decision on a
-TTY. The flag applies only to that invocation; it does not create permanent
-publisher trust.
+Installation records the app in the current workspace target. Use `--profile` for another target. The CLI shows publisher and requested
+control prompts before accepting grants when confirmation is required.
 
-Before recording an install, Runtime verifies the archive, checks the signed
-unsafe-app blacklist, copies the exact bytes to
-`~/.appliance/runtime/bundles/<sha256-digest>.appliance.zip`, makes that copy
-read-only, and verifies the copy again. Network installs fail closed without a
-usable verified blacklist. Local offline installs remain possible with a
-warning when no verified blacklist is available.
-
-Installed metadata lives at
-`~/.appliance/runtime/installed/<target>/apps.json`. The file is replaced
-atomically with mode `0600`; its parent is mode `0700`. Entries include bundle
-digest and immutable path, signature/index evidence, publisher tier, source,
-install time, license, and a controls summary. The summary is the AP-174 handoff
-for the signed entitlement record described below.
-
-The target is `APPLIANCE_PROFILE`, then the active profile, then `local` when no
-profile exists. Desktop passes the selected workspace id explicitly. Simple
-target names are used as their directory name; unusual names are represented by
-a stable SHA-256-derived directory key so path separators can never escape the
-store root.
-
-This precedence is specific to `runtime install`; the top-level builder
-`install` intentionally ignores `APPLIANCE_PROFILE` as documented in
-[CLI target selection](cli.md#install-versus-deploy).
-
-`uninstall` stops a running app first and removes its per-target record and app
-data. `--keep-data` retains the data directory. The immutable bundle remains
-while any other target references it and is deleted after the last reference is
-removed. Entitlement history is retained and marked uninstalled after the last
-target removes the app; reinstall never silently reactivates it.
-
-## Entitlements
-
-Every install creates a per-app grant in `~/.appliance/entitlements.json`. The
-file is mode `0600` in a mode `0700` directory. Each record contains the app id,
-manifest version and SPDX `license`, grant time, a random local installer id,
-the approved mounts, egress hosts and ports, published ports, resource limits,
-and last-use metadata keyed by stable grant id.
-
-CLI installs show a `GRANT` summary and default to no (`y/N`). Automation can
-approve the complete request with `--grant-all`. Desktop shows the same request
-as a dialog: egress, published ports, and resources are required and approved
-as one set; mounts have per-item checkboxes. This is the v1 default because the
-current manifest does not label required versus optional mounts. Declining a
-mount removes it from the effective request; a missing required control aborts
-install or open and the error names its stable grant id.
-
-An upgrade compares stable ids and canonical control values with the latest
-active record. It prompts only for additions or widenings (`UPGRADE DELTA`),
-never silently widens a grant, keeps unchanged approval timestamps, and drops
-removed requests from the new active snapshot while retaining signed history.
-
-Runtime writes the effective egress policy as the intersection of manifest
-controls and the active grant. It stamps last use after installing an allowed
-egress rule and after successfully publishing a host port. Timestamps never
-move backwards. The runtime enforcement layer does not currently attach
-manifest-declared data mounts, so it does not claim or stamp a mount attachment
-until that attachment actually exists.
-
-Inspect and revoke grants with:
+## Inspect and control running apps
 
 ```sh
-appliance runtime entitlements list
-appliance runtime entitlements show journal
-appliance runtime entitlements --suggest-revoke
-appliance runtime entitlements --suggest-revoke --days 14
-appliance runtime entitlements revoke journal egress:api.example.test
+appliance runtime ps
+appliance runtime ps --json
+appliance runtime logs my-app
+appliance runtime logs my-app --follow
+appliance runtime logs my-app --service api
+appliance runtime stop my-app
 ```
 
-Suggestions are derived only: an observable, active non-mount item appears
-after 30 unused days by default (minimum configurable threshold: one whole
-day), and nothing is automatically revoked. Mounts are excluded until Runtime
-implements attachment and can observe their use. Revoking egress immediately
-rewrites a running app's effective default-deny policy. Revoking a mount also
-rewrites the policy snapshot but does not stop the app; revoking a published
-port or resources stops it so the missing required control is enforced before
-another launch.
+`ps` shows app state and published host ports. Compound apps also show their
+services, health, and restart counts. `stop` removes the running instance while
+keeping the installed bundle and pooled VM.
 
-Records use the RFC 0001 Ed25519 envelope with role `entitlement`. Mutations
-take a cross-process lock, verify every prior record, compare the prior file
-hash immediately before a mode-`0600` atomic rename, and fail rather than
-proceed unlocked. Signed sequence and previous-record hashes detect insertion,
-deletion, or reordering within the history. A separate monotonic
-`{sequence, headHash}` anchor is advanced while the same lock is held before
-the store rename, so a crash between those writes fails closed. The anchor is
-a second Keychain item on macOS and a mode-`0600` file beside the device key on
-other platforms. Reads refuse a missing, truncated, or rolled-back store whose
-head is behind the intact anchor. Invalid bytes are preserved and controls
-remain denied for review.
-
-On macOS, the device Ed25519 key bytes are stored as a generic-password
-Keychain item. `/usr/bin/security` cannot sign with Ed25519 and Secure Enclave
-does not provide Ed25519, so this is not a non-exportable hardware key. Linux
-uses a mode-`0600` file beside the entitlement store; Windows uses the same
-per-user file location and relies on the current user's filesystem ACL. The
-signature provides same-user tamper evidence, not proof that a human consented,
-trusted time, user presence, or protection from malware running as that user.
-Rollback is detectable only while the anchor is intact; a same-user attacker
-who re-signs records or resets both the store and anchor is out of scope. The
-macOS `security add-generic-password` command has no seed-from-stdin form (`-w
--` stores a literal dash), so the one-time key creation passes the seed on its
-argument vector; it never uses `-U`, and a concurrent creator's existing key
-wins after a re-probe.
-
-## Opening installed apps
-
-`runtime run` accepts an installed app id or display name in addition to a
-bundle path. Before unpacking, Runtime copies the installed bytes into a private
-pre-open file, verifies that exact copy against the stored digest, and unpacks
-the same copy for the pooled VM.
-
-Unknown Publisher acknowledgements are digest-bound. Desktop offers **Open
-once** and **Open and remember for 30 days**. The latter writes `lastWarnedAt` to
-the installed entry; the warning returns after 30 days. CLI automation must pass
-`--accept-unknown-publisher` for each invocation and does not update the
-remembered time.
-
-For a manifest with `ui.type: web`, **Open** starts the app with the same
-`runtime run --detach --json` path used by the CLI, waits up to 15 seconds
-for the manifest's named `ui.port`, and creates one native window labelled
-`app-<sanitized-appId>-<short-hash>` and titled `<App> — Appliance`. The hash
-keeps ids such as `a.b` and `a-b` distinct; the same label keys the remembered
-window size. The window is an Appliance-owned wrapper containing the app in a
-cross-origin iframe and a 28 px status strip:
-
-```text
-sandboxed · egress: 2 hosts allowed · port 20421
-```
-
-The iframe keeps the app's `http://127.0.0.1:<published-port>` origin separate
-from the desktop origin. The wrapper installs a restrictive CSP whose
-`frame-src` names only that loopback origin. Desktop also denies top-level
-navigation away from that host/port and rejects `window.open`/`target=_blank`
-requests. It does not inject scripts into or read content from the app. The
-host count comes from the installed effective Runtime policy (falling back to
-the recorded controls summary), and the strip refreshes while the window is
-open.
-
-Closing an app window keeps its Runtime process running by default, matching
-`appliance runtime ps`. The Rust window command has a `stop-on-close` parameter
-for future settings work, but it is not yet user-configurable and every current
-Desktop caller uses keep-running. A Desktop restart reconciles the Runtime
-registry but does not reopen app windows until the user asks. If the app exits
-or is stopped, its window becomes a plain **App exited** page with **Reopen**,
-and its Installed Apps card reports `Exited (N)` when the supervisor supplied
-an exit code.
-
-Manifests with no `ui` or with a non-web UI show **No UI** and a Logs action on
-their card. Their lifecycle remains available through `runtime ps`, `logs`, and
-`stop`.
-
-### `appliance runtime open`
+## Open an app
 
 ```sh
-appliance runtime open Journal
-appliance runtime open Journal --target local
-appliance runtime open Journal --print
-appliance runtime open Journal --json
+appliance runtime open my-app
+appliance runtime open my-app --print
+appliance runtime open my-app --json
 ```
 
-`runtime open` starts a stopped app, waits for its UI port, then checks the
-private Desktop rendezvous file at
-`~/.appliance/runtime/desktop-ipc.json`. A running Desktop accepts a
-token-authenticated request over loopback and opens the dedicated app window.
-If Desktop is absent or the bounded IPC connection fails, the CLI opens the
-same loopback URL in the operating system's default browser. The rendezvous
-contains no app data or credentials and is mode `0600`; a stale file only
-causes the browser fallback.
+`open` starts a stopped installed app when necessary, then opens its declared
+web UI. `--print` prints the URL instead; `--json` prints the resolved app and
+route details.
 
-`--json` prints the resolved descriptor, chosen route, and the
-`metrics.appOpenTtv` context. Desktop completes that measurement on the iframe
-load event and records `app_open_ttv` (`cold`, `warm`, or `reopen`) plus
-`app_stop_ttx` in its platform log directory as `desktop-metrics.jsonl` (on
-macOS: `~/Library/Logs/sh.appliance.desktop/desktop-metrics.jsonl`). Targets
-are warm p95 ≤2 seconds, cold p95 ≤15 seconds, and stop-to-exited paint ≤2
-seconds.
+## The pooled sandbox VM
+
+Packaged apps run in one managed `appliance-runtime` VM. Apps are sandboxed by
+default, only manifest-declared ports are published to the host, outbound
+network access is denied unless the app declares and the user grants a host,
+and TLS inspection is on. Each app has its own runtime principal, payload,
+process controls, policy, state, and logs; compound services share the app's
+network principal.
+
+## Desktop screens
+
+**Installed Apps.** This screen lists apps for the selected workspace with
+version, license, publisher, state, service count, and egress-host count. Use it
+to install a local bundle, search installed apps, open or stop an app, and find
+the matching logs command.
+
+**Catalogue.** This screen shows entries from the verified signed index. Search
+by name, description, license, or publisher, filter by category, and install an
+entry. If only a stale verified cache is available, entries remain visible but
+new installs are disabled until refresh succeeds.
+
+**Entitlements.** In Settings, this section shows grants that have not been used
+for at least 30 days. Review each suggestion and either keep or revoke the
+grant; nothing is revoked automatically.
 
 ## Sample apps
 
-From the repository root, set `OUT` to a temporary directory and run
-`scripts/build-runtime-samples.sh --require-docker` to build all three
-source-only examples. `OUT` defaults to `$TMPDIR/appliance-runtime-samples`.
-CI requires Docker (`--require-docker`); local builds skip with a message. The
-script packages each bundle through the CLI's self-verifying `appliance builder
-package` path and prints its embedded SHA-256 digest. See the [Runtime live
-test](live-test-runbook.md#runtime-live-test) for the complete pooled-VM
-exercise.
+The repository includes three source-only samples:
 
-### [Journal container](../examples/runtime/journal/)
+- [Journal](../examples/runtime/journal/) — a single container with a web UI.
+- [Dashboard](../examples/runtime/dashboard/) — a static Linux binary with a
+  published HTTP port.
+- [Notes Suite](../examples/runtime/notes-suite/) — a compound app with an API
+  service and a web service.
 
-Journal is the smallest container Runtime example: Docker Buildx turns its
-static HTML and Dockerfile into a host-architecture OCI image, and the manifest
-publishes the HTTP service through the pooled VM. It is the quickest fixture
-for validating bundle import, container startup, logs, `ps`, stop, Ctrl-C, and
-pool survival.
+Build all three into a temporary output directory with:
 
-### [Dashboard binary](../examples/runtime/dashboard/)
-
-Dashboard exercises the binary payload path without committing an executable.
-Docker runs `go build` for static Linux amd64 and arm64 targets, then the bundle
-selects the matching payload, declared entrypoint, arguments, environment, and
-HTTP port. Its optional `exit7` mode also checks exact exit-code propagation.
-
-### [Notes Suite compound app](../examples/runtime/notes-suite/)
-
-Notes Suite packages two container leaves into one shared-VM app. The API must
-be healthy before the web leaf starts; the web leaf owns the only host port,
-while service discovery, per-leaf logs, restart policy, reverse-order stop, and
-one app-level network principal demonstrate the compound lifecycle.
-
-Compound egress is therefore an app-level control: declare `network.egress`
-only at the compound manifest root. A leaf-level declaration is rejected with
-`compound apps declare network.egress at the root (shared principal)` and a
-message naming the leaf whose grants must move to the top level. The runtime
-does not union leaf grants. Only leaf ports marked both `expose: "host"` and
-`primary: true` are published to the host.
-
-## Compound v1 deviations
-
-The v1 supervisor starts leaves sequentially in deterministic topological
-order, with a 300-second readiness cap for each leaf. Exhausting an optional
-leaf's restart budget degrades the app but does not stop that leaf's dependents.
-Parallel starts and dependent teardown for optional exhaustion are follow-ups.
-
-## Binary v1 deviations
-
-Per-target `env` and `cwd` support is tracked as follow-up AP-164b; binary workloads currently use manifest-level environment variables and the payload root as their working directory.
+```sh
+scripts/build-runtime-samples.sh --require-docker
+```

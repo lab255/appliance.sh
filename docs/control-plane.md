@@ -203,10 +203,8 @@ required for E4.3.
 
 ## 5. Credential unification (E4.4) — Keychain-first (IMPLEMENTED)
 
-**OWNER DECISION (overrides the spike).** This section originally recommended
-making `~/.appliance/profiles.json` the canonical secret store and demoting the
-Keychain to a derived cache. The owner reversed that: the canonical secret store
-is the **OS keystore (macOS Keychain) on macOS**, with **`~/.appliance/profiles.json`
+**Current behavior.** The canonical secret store is the **OS keystore (macOS
+Keychain) on macOS**, with **`~/.appliance/profiles.json`
 (mode `0600`) as the fallback on non-macOS** (Linux / cloud / CI). The goal is a
 cluster authed in the desktop being usable by the CLI and vice-versa, with the
 secret living in the Keychain where one exists and **never duplicated to
@@ -294,7 +292,7 @@ so a desktop↔CLI interleave remains last-writer-wins (both write atomically, s
 no half-written read). Having the desktop adopt the same lockfile is the
 remaining piece.
 
-### At-rest security posture (for Sasha)
+### At-rest security posture
 
 - **macOS:** the secret lives **only** in the OS-hardened, access-gated
   Keychain. profiles.json carries metadata with an empty secret — no cleartext

@@ -230,7 +230,7 @@ fn policy_path(name: &str) -> PathBuf {
 }
 
 /// The baked sane default allowlist for `net_link = Netstack` VMs
-/// (docs/egress-firewall.md §5; docs/multi-agent-adapters.md §5): the package
+/// (docs/egress-firewall.md; docs/multi-agent-adapters.md §5): the package
 /// mirrors, registries, git hosts, and the model APIs a fresh agent/dev VM
 /// needs, suffix-matched by [`host_matches`]. `githubusercontent.com` is the
 /// suffix form of the doc's `*.githubusercontent.com` wildcard;

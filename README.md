@@ -1,10 +1,10 @@
 # Appliance
 
-A platform for building, running, and shipping applications — locally and on the cloud — with **no Docker required anywhere**. Define your app in a manifest, run one command, and Appliance handles packaging, builds, infrastructure, and routing.
+**Appliance is building the runtime of the future — the fastest, easiest way to ship AI-native apps.**
 
 Everything local runs inside **one managed microVM**: a Kubernetes runtime, an image builder, the Appliance control plane (the same api-server that powers cloud installations, running as a plain binary in the guest), and the dev/agent sandbox. Your machine needs the `appliance` CLI and nothing else.
 
-**Supported platforms:** macOS (Virtualization.framework) and Windows (needs WSL2 — run `wsl --install` once and reboot if you don't have it). Linux support is coming soon.
+**Supported platforms:** macOS (Virtualization.framework) and Windows (needs WSL2 — run `wsl --install` once and reboot if you don't have it).
 
 ![The Appliance desktop app — Apps page](docs/images/desktop-apps.png)
 
@@ -83,7 +83,7 @@ The cloud api-server is the **same server** that runs inside your VM, deployed a
 
 Bootstrap needs an AWS account (credentials from `~/.aws`, SSO profiles work — pass `--aws-profile <name>`) and a domain for the installation; it walks you through both interactively.
 
-> **Coming soon:** server-side **container-image builds on the cloud base**. Until the cloud builder lands, cloud deploys of `container`-type apps need a pre-built image: `appliance deploy --image-uri ghcr.io/org/app:tag`. Local deploys of every type, and cloud deploys of zip-packaged framework apps, build server-side today.
+Cloud deploys of `container`-type apps use a pre-built image: `appliance deploy --image-uri ghcr.io/org/app:tag`. Local deploys of every type, and cloud deploys of zip-packaged framework apps, build server-side.
 
 ## How deploys work (every target, one pipeline)
 
@@ -137,7 +137,7 @@ Local deploys use the `local` profile, saved automatically when the VM first boo
 
 ## The managed VM
 
-`appliance vm up` (run implicitly by `init`, `dev`, `up`, and `agent`) boots an isolated microVM — Virtualization.framework on macOS, WSL2 on Windows; Linux (KVM) is coming soon — containing:
+`appliance vm up` (run implicitly by `init`, `dev`, `up`, and `agent`) boots an isolated microVM — Virtualization.framework on macOS and WSL2 on Windows — containing:
 
 - **k3s** (Kubernetes) with hostname-routed ingress: `http://<app>-<env>.appliance.localhost:8081`
 - **BuildKit** + an in-VM image registry: server-side builds with a persistent cache

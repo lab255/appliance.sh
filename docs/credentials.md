@@ -8,7 +8,7 @@ single source of truth.
 
 There are three places credential material currently lives:
 
-| Store                                                  | Owner                            | Holds                                               | Format            |
+| Store                                                  | Writer                           | Holds                                               | Format            |
 | ------------------------------------------------------ | -------------------------------- | --------------------------------------------------- | ----------------- |
 | `~/.appliance/profiles.json`                           | CLI (primary) + desktop (mirror) | apiUrl, keyId, **secret**, metadata, per-profile    | JSON, mode `0600` |
 | `~/.appliance/credentials.json`                        | CLI (legacy mirror)              | apiUrl, keyId, secret for the _active_ profile only | JSON, mode `0600` |
@@ -43,7 +43,7 @@ surfaces without a server round-trip from the desktop (below).
 
 ## API key rotation — `appliance keys rotate`
 
-Flagship of this epic. Implemented end-to-end:
+Implemented end-to-end:
 
 1. **Server** ([`packages/api-server/src/routes/keys/index.ts`](../packages/api-server/src/routes/keys/index.ts),
    [`api-key.service.ts`](../packages/api-server/src/services/api-key.service.ts)):
@@ -166,7 +166,7 @@ second source of truth.
 
 Non-destructive, staged — every step leaves an older binary working:
 
-1. **Today (this epic):** profiles.json is already the CLI's primary and
+1. **Current behavior:** profiles.json is already the CLI's primary and
    the desktop's mirror; CLI-managed entries are already one-way
    (CLI → Keychain). `appliance keys rotate` proves the
    profiles.json → Keychain path end-to-end.
