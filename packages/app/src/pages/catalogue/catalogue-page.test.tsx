@@ -27,6 +27,7 @@ describe('CatalogueContent', () => {
           generation: 1,
         }}
         error={null}
+        platform="macos"
       />
     );
     expect(html).toContain('Verified index ✓ signed');
@@ -41,7 +42,7 @@ describe('CatalogueContent', () => {
   });
 
   it('renders the unverified scenario fail-closed', () => {
-    const html = renderToStaticMarkup(<CatalogueContent data={null} error="bad signature" />);
+    const html = renderToStaticMarkup(<CatalogueContent data={null} error="bad signature" platform="macos" />);
     expect(html).toContain('Unverified');
     expect(html).toContain('No catalogue apps are shown');
     expect(html).toContain('Reason: Bad signature.');
@@ -53,10 +54,16 @@ describe('CatalogueContent', () => {
       <CatalogueContent
         data={{ entries: [entry], stale: true, verifiedAt: '2026-08-20T00:00:00Z', generation: 1 }}
         error={null}
+        platform="macos"
       />
     );
     expect(html).toContain('This catalogue index is stale');
     expect(html).toContain('Journal');
     expect(html).toContain('disabled=""');
+  });
+
+  it('uses the Windows machine label', () => {
+    const html = renderToStaticMarkup(<CatalogueContent data={null} error="bad signature" platform="windows" />);
+    expect(html).toContain('this PC');
   });
 });

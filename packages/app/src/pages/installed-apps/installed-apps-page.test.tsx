@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { InstalledRuntimeApp } from '@/lib/host';
+import { localMachineLabel, type InstalledRuntimeApp } from '@/lib/host';
 import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
 
@@ -35,6 +35,10 @@ function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntime
 }
 
 describe('Installed Apps mock scenarios', () => {
+  it('uses the Windows workspace label', () => {
+    expect(localMachineLabel('windows')).toBe('This PC');
+  });
+
   it('renders the installed-apps card contract from mock frame 2', () => {
     const html = renderToStaticMarkup(<InstalledAppCard item={fixture()} />);
     expect(html).toContain('Notes+Sync');

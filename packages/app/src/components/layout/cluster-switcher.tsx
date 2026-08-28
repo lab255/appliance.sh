@@ -5,7 +5,13 @@ import { ChevronDown, Check, Monitor, Plus } from 'lucide-react';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { cn } from '@/lib/utils';
-import { devMachineLabel, isMicroVmClusterId, localMachineLabel, microVmNameFromClusterId } from '@/lib/host';
+import {
+  devMachineLabel,
+  isMicroVmClusterId,
+  localMachineLabel,
+  localMachineLabelInline,
+  microVmNameFromClusterId,
+} from '@/lib/host';
 import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
 import type { Cluster, HostPlatform } from '@/lib/host';
 import { Tag } from '@/components/ui/tag';
@@ -314,7 +320,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                         {localLabel} <Tag>not set up</Tag>
                       </div>
                       <div className="text-xs leading-4 text-[var(--color-muted-foreground)]">
-                        Set up the sandbox on {localLabel.replace(/^This/, 'this')}
+                        Set up the sandbox on {localMachineLabelInline(host.platform)}
                       </div>
                     </div>
                   </button>

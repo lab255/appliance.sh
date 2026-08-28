@@ -3,7 +3,7 @@ import { Banner } from '@/components/ui/banner';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { StatusPill } from '@/components/ui/status-pill';
 import { cn } from '@/lib/utils';
-import { localMachineLabel, type AppMode, type HostPlatform } from '@/lib/host';
+import { localMachineLabelInline, type AppMode, type HostPlatform } from '@/lib/host';
 
 interface ModeChoicePageProps {
   savingMode: AppMode | null;
@@ -18,7 +18,7 @@ function choices(platform: HostPlatform) {
       mode: 'user' as const,
       title: 'Use apps',
       action: 'Continue as a user',
-      description: `Install free, open-source apps from the catalogue and run them privately on ${localMachineLabel(platform).replace(/^This/, 'this')}. No terminal, no cluster jargon.`,
+      description: `Install free, open-source apps from the catalogue and run them privately on ${localMachineLabelInline(platform)}. No terminal, no cluster jargon.`,
       bullets: [
         'Installed Apps · Catalogue · Settings',
         'Every app runs sandboxed with a per-app egress allowlist',

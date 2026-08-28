@@ -72,6 +72,10 @@ export function localMachineLabel(platform: HostPlatform): string {
   }
 }
 
+export function localMachineLabelInline(platform: HostPlatform): string {
+  return localMachineLabel(platform).replace(/^This/, 'this');
+}
+
 /**
  * Per-machine desktop preference for the app's audience mode. Optional:
  * browser/web consoles deliberately omit it and always use developer mode.

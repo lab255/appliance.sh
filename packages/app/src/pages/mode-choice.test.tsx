@@ -21,4 +21,11 @@ describe('ModeChoicePage', () => {
     expect(html.match(/Saving…/g)).toHaveLength(1);
     expect(html).toContain('Continue as a developer');
   });
+
+  it('uses the Windows machine label', () => {
+    const html = renderToStaticMarkup(
+      <ModeChoicePage platform="windows" savingMode={null} error={null} onSelect={() => undefined} />
+    );
+    expect(html).toContain('this PC');
+  });
 });

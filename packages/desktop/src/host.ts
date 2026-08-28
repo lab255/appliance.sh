@@ -608,7 +608,7 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
 
 /** Resolve immutable OS copy before the shared React tree is mounted. */
 export async function createTauriHost(): Promise<ConsoleHost> {
-  const platform = await invoke<HostPlatform>('host_platform');
+  const platform = await invoke<HostPlatform>('host_platform').catch((): HostPlatform => 'macos');
   return { ...tauriHost, platform };
 }
 
