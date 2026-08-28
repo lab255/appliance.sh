@@ -33,9 +33,30 @@ export function immutableBundlesDirectory(root = runtimeRoot()): string {
   return path.join(root, 'bundles');
 }
 
+export function assertNtfsSafeBundleBasename(basename: string): void {
+  if (/[<>:"/\\|?*]/.test(basename) || /[. ]$/.test(basename)) {
+    throw new Error('Cannot address a bundle with an NTFS-unsafe filename.');
+  }
+}
+
 export function immutableBundlePath(digest: string, root = runtimeRoot()): string {
+  const match = /^sha256:([0-9a-f]{64})$/.exec(digest);
+  if (!match) throw new Error('Cannot address a bundle with an invalid digest.');
+  const basename = `sha256-${match[1]}.appliance.zip`;
+  assertNtfsSafeBundleBasename(basename);
+  return path.join(immutableBundlesDirectory(root), basename);
+}
+
+function legacyImmutableBundlePath(digest: string, root = runtimeRoot()): string {
   if (!/^sha256:[0-9a-f]{64}$/.test(digest)) throw new Error('Cannot address a bundle with an invalid digest.');
   return path.join(immutableBundlesDirectory(root), `${digest}.appliance.zip`);
+}
+
+export function resolveImmutableBundlePath(digest: string, root = runtimeRoot()): string {
+  const canonical = immutableBundlePath(digest, root);
+  if (fs.existsSync(canonical)) return canonical;
+  const legacy = legacyImmutableBundlePath(digest, root);
+  return fs.existsSync(legacy) ? legacy : canonical;
 }
 
 export function installedAppDataDirectory(target: string, appId: string, root = runtimeRoot()): string {
@@ -57,7 +78,15 @@ export function readInstalledApps(target: string, root = runtimeRoot()): Install
   if (!parsed.success) {
     throw new Error(`Installed-app store is invalid: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`);
   }
-  return [...parsed.data.apps].sort((a, b) => a.name.localeCompare(b.name) || a.appId.localeCompare(b.appId));
+  return parsed.data.apps
+    .map((app) => {
+      const canonical = immutableBundlePath(app.digest, root);
+      const legacy = legacyImmutableBundlePath(app.digest, root);
+      const recorded = path.resolve(app.bundlePath);
+      if (recorded !== path.resolve(canonical) && recorded !== path.resolve(legacy)) return app;
+      return { ...app, bundlePath: resolveImmutableBundlePath(app.digest, root) };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name) || a.appId.localeCompare(b.appId));
 }
 
 export function writeInstalledApps(target: string, apps: InstalledApp[], root = runtimeRoot()): void {

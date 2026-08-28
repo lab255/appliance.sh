@@ -24,6 +24,7 @@ import {
   listInstalledTargets,
   readInstalledApps,
   removeInstalledApp,
+  resolveImmutableBundlePath,
   resolveInstalledApp,
   upsertInstalledApp,
   writeInstalledApps,
@@ -554,7 +555,7 @@ export async function uninstallInstalledApp(input: string, options: UninstallOpt
   if (!appStillInstalled) {
     fs.rmSync(extractedAppPath, { recursive: true, force: true });
   }
-  const expectedImmutablePath = immutableBundlePath(app.digest, root);
+  const expectedImmutablePath = resolveImmutableBundlePath(app.digest, root);
   if (
     path.resolve(app.bundlePath) === path.resolve(expectedImmutablePath) &&
     !isBundleReferenced(app.bundlePath, root)
