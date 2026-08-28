@@ -3,44 +3,46 @@ import { Banner } from '@/components/ui/banner';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { StatusPill } from '@/components/ui/status-pill';
 import { cn } from '@/lib/utils';
-import type { AppMode } from '@/lib/host';
+import { localMachineLabelInline, type AppMode, type HostPlatform } from '@/lib/host';
 
 interface ModeChoicePageProps {
   savingMode: AppMode | null;
   error: unknown;
+  platform: HostPlatform;
   onSelect(mode: AppMode): void;
 }
 
-const choices = [
-  {
-    mode: 'user' as const,
-    title: 'Use apps',
-    action: 'Continue as a user',
-    description:
-      'Install free, open-source apps from the catalogue and run them privately on this Mac. No terminal, no cluster jargon.',
-    bullets: [
-      'Installed Apps · Catalogue · Settings',
-      'Every app runs sandboxed with a per-app egress allowlist',
-      'Licenses recorded at install time',
-    ],
-    icon: Grid2X2,
-  },
-  {
-    mode: 'developer' as const,
-    title: 'Build apps',
-    action: 'Continue as a developer',
-    description:
-      'Deploy your own projects, run coding agents in the sandbox, manage the Dev Machine and cloud targets.',
-    bullets: [
-      'Adds Setup · Projects · Agents · Machine · Cloud',
-      'Terminal dock, egress firewall, credential broker',
-      'Everything in user mode is still here',
-    ],
-    icon: Code2,
-  },
-];
+function choices(platform: HostPlatform) {
+  return [
+    {
+      mode: 'user' as const,
+      title: 'Use apps',
+      action: 'Continue as a user',
+      description: `Install free, open-source apps from the catalogue and run them privately on ${localMachineLabelInline(platform)}. No terminal, no cluster jargon.`,
+      bullets: [
+        'Installed Apps · Catalogue · Settings',
+        'Every app runs sandboxed with a per-app egress allowlist',
+        'Licenses recorded at install time',
+      ],
+      icon: Grid2X2,
+    },
+    {
+      mode: 'developer' as const,
+      title: 'Build apps',
+      action: 'Continue as a developer',
+      description:
+        'Deploy your own projects, run coding agents in the sandbox, manage the Dev Machine and cloud targets.',
+      bullets: [
+        'Adds Setup · Projects · Agents · Machine · Cloud',
+        'Terminal dock, egress firewall, credential broker',
+        'Everything in user mode is still here',
+      ],
+      icon: Code2,
+    },
+  ];
+}
 
-export function ModeChoicePage({ savingMode, error, onSelect }: ModeChoicePageProps) {
+export function ModeChoicePage({ savingMode, error, platform, onSelect }: ModeChoicePageProps) {
   return (
     <PageShell rail="focused" className="max-w-[760px] pt-12">
       <PageHeader
@@ -57,7 +59,7 @@ export function ModeChoicePage({ savingMode, error, onSelect }: ModeChoicePagePr
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2" role="group" aria-label="Choose how you will use Appliance">
-        {choices.map((choice) => (
+        {choices(platform).map((choice) => (
           <button
             key={choice.mode}
             type="button"

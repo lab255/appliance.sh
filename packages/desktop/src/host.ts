@@ -29,6 +29,7 @@ import type {
   CatalogueFetchResult,
   ConsoleHost,
   HostConfig,
+  HostPlatform,
   InstalledRuntimeApp,
   RuntimeOpenResult,
   LatestGhcrTagInput,
@@ -67,7 +68,7 @@ interface NativeCatalogueCache {
 // Rust commands defined in src-tauri/src/lib.rs. Bootstrap runs
 // through a Node sidecar the Rust side spawns — progress events
 // stream back over a Tauri Channel.
-export const tauriHost: ConsoleHost = {
+export const tauriHost: Omit<ConsoleHost, 'platform'> = {
   async getConfig(): Promise<HostConfig> {
     return invoke<HostConfig>('get_config');
   },
@@ -604,6 +605,12 @@ export const tauriHost: ConsoleHost = {
     },
   },
 };
+
+/** Resolve immutable OS copy before the shared React tree is mounted. */
+export async function createTauriHost(): Promise<ConsoleHost> {
+  const platform = await invoke<HostPlatform>('host_platform').catch((): HostPlatform => 'macos');
+  return { ...tauriHost, platform };
+}
 
 // The Update handle resolved by the most recent `updater.check()`.
 // downloadAndInstall needs the same handle check() produced (it carries

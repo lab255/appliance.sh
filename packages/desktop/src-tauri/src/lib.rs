@@ -25,6 +25,17 @@ const KEYCHAIN_SERVICE: &str = "sh.appliance.desktop";
 const LEGACY_KEYCHAIN_ACCOUNT: &str = "api-key";
 const CONFIG_FILE: &str = "config.json";
 
+#[tauri::command]
+fn host_platform() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    }
+}
+
 fn cluster_keychain_account(cluster_id: &str) -> String {
     format!("cluster:{cluster_id}")
 }
@@ -6789,6 +6800,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            host_platform,
             get_config,
             get_app_mode,
             set_app_mode,

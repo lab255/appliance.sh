@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import type { ConsoleHost, InstalledRuntimeApp } from '@/lib/host';
+import { localMachineLabel, type ConsoleHost, type InstalledRuntimeApp } from '@/lib/host';
 import { HostProvider } from '@/providers/host-provider';
 import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState, InstalledAppsPage } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
@@ -51,7 +51,7 @@ async function installedAppsInstallMessage(rejection: unknown): Promise<string> 
     pickBundle: vi.fn().mockResolvedValue('C:\\x.zip'),
     installBundle: vi.fn().mockRejectedValue(rejection),
   };
-  const host = { installedApps } as unknown as ConsoleHost;
+  const host = { installedApps, platform: 'macos' } as unknown as ConsoleHost;
   const container = document.createElement('div');
   const root = createRoot(container);
   try {
@@ -82,6 +82,10 @@ async function installedAppsInstallMessage(rejection: unknown): Promise<string> 
 }
 
 describe('Installed Apps mock scenarios', () => {
+  it('uses the Windows workspace label', () => {
+    expect(localMachineLabel('windows')).toBe('This PC');
+  });
+
   it('shows a Tauri invoke string rejection in the installation banner', async () => {
     await expect(installedAppsInstallMessage('Bundle is not a regular file: C:\\x.zip')).resolves.toContain(
       'Bundle is not a regular file: C:\\x.zip'

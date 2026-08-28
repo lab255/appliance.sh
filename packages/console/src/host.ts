@@ -133,6 +133,8 @@ function randomId(): string {
 }
 
 export const webHost: ConsoleHost = {
+  // The web console has no local-machine surface; keep any accidental fallback OS-neutral.
+  platform: 'linux',
   async getConfig(): Promise<HostConfig> {
     const { clusters, selectedClusterId } = readPersisted();
     const apiKey = selectedClusterId ? readApiKey(selectedClusterId) : null;

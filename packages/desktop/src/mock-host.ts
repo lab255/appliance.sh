@@ -11,6 +11,7 @@ import type {
   CatalogueFetchResult,
   ConsoleHost,
   HostConfig,
+  HostPlatform,
   LocalPreflightCheck,
   InstalledRuntimeApp,
   RuntimeAppWindowDescriptor,
@@ -83,11 +84,17 @@ const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
 const CLUSTERS_KEY = 'mock-host:clusters';
 const APP_MODE_KEY = 'mock-host:app-mode';
+const PLATFORM_KEY = 'mock-host:platform';
 
 export function mockHostEnabled(): boolean {
   const params = new URLSearchParams(window.location.search);
   if (params.has('mock-host')) {
     sessionStorage.setItem(ENABLED_KEY, '1');
+    const platform = params.get('platform');
+    sessionStorage.setItem(
+      PLATFORM_KEY,
+      platform === 'windows' || platform === 'linux' || platform === 'macos' ? platform : 'macos'
+    );
     const scenario = params.get('scenario');
     if (scenario) {
       sessionStorage.setItem(SCENARIO_KEY, scenario);
@@ -113,6 +120,11 @@ export function mockHostEnabled(): boolean {
     }
   }
   return sessionStorage.getItem(ENABLED_KEY) === '1';
+}
+
+function mockPlatform(): HostPlatform {
+  const platform = sessionStorage.getItem(PLATFORM_KEY);
+  return platform === 'windows' || platform === 'linux' ? platform : 'macos';
 }
 
 function scenario(): Scenario {
@@ -586,6 +598,7 @@ export function createMockHost(): ConsoleHost {
         ]
       : [];
   return {
+    platform: mockPlatform(),
     async getConfig(): Promise<HostConfig> {
       const state = readState();
       const selected = state.clusters.find((c) => c.id === state.selectedClusterId) ?? null;

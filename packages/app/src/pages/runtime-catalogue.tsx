@@ -17,6 +17,7 @@ import {
   type UnknownPublisherPrompt,
 } from '@/lib/installed-apps';
 import { InstalledAppsPage, UnknownPublisherDialog } from '@/pages/installed-apps';
+import { localMachineLabelInline, type HostPlatform } from '@/lib/host';
 
 export { InstalledAppsPage };
 
@@ -99,7 +100,13 @@ export function CataloguePage() {
 
   return (
     <>
-      <CatalogueContent data={data} error={error} loading={!data && !error} onInstall={installEntry} />
+      <CatalogueContent
+        data={data}
+        error={error}
+        loading={!data && !error}
+        onInstall={installEntry}
+        platform={host.platform}
+      />
       {pending ? (
         <UnknownPublisherDialog
           prompt={pending.prompt}
@@ -138,11 +145,13 @@ export function CatalogueContent({
   error,
   loading = false,
   onInstall,
+  platform,
 }: {
   data: CatalogueViewData | null;
   error: string | null;
   loading?: boolean;
   onInstall?: (entry: CatalogueEntry) => Promise<string>;
+  platform: HostPlatform;
 }) {
   const [query, setQuery] = React.useState(() =>
     typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('q') ?? '')
@@ -175,7 +184,7 @@ export function CatalogueContent({
         title="Catalogue"
         description={
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>Free and open-source apps that run on this Mac.</span>
+            <span>Free and open-source apps that run on {localMachineLabelInline(platform)}.</span>
             <StatusPill tone={status.tone} label={status.label} dot={false} />
             {data ? (
               <span className="text-xs tabular-nums" title={new Date(data.verifiedAt).toLocaleString()}>

@@ -4,7 +4,9 @@ import { ModeChoicePage } from './mode-choice';
 
 describe('ModeChoicePage', () => {
   it('renders both choices as labelled native keyboard controls', () => {
-    const html = renderToStaticMarkup(<ModeChoicePage savingMode={null} error={null} onSelect={() => undefined} />);
+    const html = renderToStaticMarkup(
+      <ModeChoicePage platform="macos" savingMode={null} error={null} onSelect={() => undefined} />
+    );
     expect(html.match(/<button/g)).toHaveLength(2);
     expect(html).toContain('aria-label="Use apps. Continue as a user"');
     expect(html).toContain('aria-label="Build apps. Continue as a developer"');
@@ -13,8 +15,17 @@ describe('ModeChoicePage', () => {
   });
 
   it('only shows the saving label on the selected choice', () => {
-    const html = renderToStaticMarkup(<ModeChoicePage savingMode="user" error={null} onSelect={() => undefined} />);
+    const html = renderToStaticMarkup(
+      <ModeChoicePage platform="macos" savingMode="user" error={null} onSelect={() => undefined} />
+    );
     expect(html.match(/Saving…/g)).toHaveLength(1);
     expect(html).toContain('Continue as a developer');
+  });
+
+  it('uses the Windows machine label', () => {
+    const html = renderToStaticMarkup(
+      <ModeChoicePage platform="windows" savingMode={null} error={null} onSelect={() => undefined} />
+    );
+    expect(html).toContain('this PC');
   });
 });
