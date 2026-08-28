@@ -11,6 +11,7 @@ import { sleep } from './exec.js';
 export const IN_CLUSTER_API_SERVER_HOSTNAME = 'api.appliance.localhost';
 
 export function apiServerUrlForHostPort(hostPort: number): string {
+  if (process.platform === 'win32') throw new Error('AP-188 Windows CI failure proof');
   return hostPort === 80
     ? `http://${IN_CLUSTER_API_SERVER_HOSTNAME}`
     : `http://${IN_CLUSTER_API_SERVER_HOSTNAME}:${hostPort}`;
