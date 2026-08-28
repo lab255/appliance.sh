@@ -14,7 +14,12 @@ import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
-import { controlsSummaryForManifest, currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
+import {
+  controlsSummaryForManifest,
+  currentWorkspaceTarget,
+  removeImmutableFile,
+  resolveInstalledApp,
+} from './utils/installed-apps.js';
 import {
   assertIndexBinding,
   assertNotBlacklisted,
@@ -453,25 +458,25 @@ async function runtimeRun(args: string[]): Promise<void> {
       }
     }
   } catch (error) {
-    if (opened) fs.rmSync(opened.bundlePath, { force: true });
+    if (opened) removeImmutableFile(opened.bundlePath);
     fail(error instanceof Error ? error.message : String(error), 2);
   }
   if (!opened) fail('Runtime pre-open verification did not produce an immutable bundle copy.', 2);
   const { bundlePath, loaded } = opened;
   if (installed && loaded.digest !== installed.digest) {
-    fs.rmSync(bundlePath, { force: true });
+    removeImmutableFile(bundlePath);
     fail(`installed bundle integrity check failed for '${installed.name}'`, 2);
   }
   let effectiveGrants: EntitlementGrant[];
   try {
     effectiveGrants = assertRuntimeRunEntitled(loaded.manifest);
   } catch (error) {
-    fs.rmSync(bundlePath, { force: true });
+    removeImmutableFile(bundlePath);
     fail(error instanceof Error ? error.message : String(error), 2);
   }
   const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
   if (existing && (existing.state === 'starting' || existing.state === 'running')) {
-    fs.rmSync(bundlePath, { force: true });
+    removeImmutableFile(bundlePath);
     fail(`runtime instance '${existing.appId}' is already running in ${existing.poolVm}`, 2);
   }
 
@@ -481,7 +486,7 @@ async function runtimeRun(args: string[]): Promise<void> {
   try {
     installChanged = installRuntimeBundle(bundlePath, installDir, loaded);
   } finally {
-    fs.rmSync(bundlePath, { force: true });
+    removeImmutableFile(bundlePath);
   }
   const records = readRuntimeRegistry().filter((entry) => entry.appId !== loaded.manifest.name);
   const persisted = persistedRuntimeAllocation(loaded.manifest);
@@ -722,7 +727,7 @@ export function stageAndVerifyRuntimeOpenCopy(
     }
     return { bundlePath: destination, loaded };
   } catch (cause) {
-    fs.rmSync(destination, { force: true });
+    removeImmutableFile(destination);
     throw cause;
   }
 }

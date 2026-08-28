@@ -262,6 +262,7 @@ async function stageSource(
   if (!response.ok) throw new Error(`Bundle download failed (${response.status}).`);
   const descriptor = fs.openSync(staging, 'wx', 0o600);
   let received = 0;
+  let failed = false;
   try {
     if (!response.body) throw new Error('Bundle download returned no body.');
     const reader = response.body.getReader();
@@ -274,10 +275,11 @@ async function stageSource(
     }
     fs.fsyncSync(descriptor);
   } catch (cause) {
-    removeImmutableFile(staging);
+    failed = true;
     throw cause;
   } finally {
     fs.closeSync(descriptor);
+    if (failed) removeImmutableFile(staging);
   }
   return staging;
 }

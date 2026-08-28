@@ -141,19 +141,32 @@ describe('bundle reading and verification', () => {
     expect(() => readBundleManifest(bundle)).toThrow('Unsafe ZIP entry path');
   });
 
-  it.each(['CON', 'con', 'nul.txt', 'dir/COM1.log', 'LPT9', 'trailing.', 'trailing ', 'a/b./c'])(
-    'rejects the non-portable Windows path %j',
-    async (entryPath) => {
-      const dir = tempDir();
-      const bundle = await rawZip(dir, 'unsafe-windows-path.zip', [
-        { name: 'appliance.json', data: canonicalJsonBytes(containerManifest()) },
-        { name: entryPath, data: 'unsafe' },
-      ]);
-      expect(() => readBundleManifest(bundle)).toThrow('Unsafe ZIP entry path');
-    }
-  );
+  it.each([
+    'CON',
+    'con',
+    'nul.txt',
+    'dir/COM1.log',
+    'LPT9',
+    'notes.txt:evil.exe',
+    'sub/C:evil',
+    'a<b',
+    'q?.txt',
+    'COM¹',
+    'CONIN$',
+    'conout$.txt',
+    'trailing.',
+    'trailing ',
+    'a/b./c',
+  ])('rejects the non-portable Windows path %j', async (entryPath) => {
+    const dir = tempDir();
+    const bundle = await rawZip(dir, 'unsafe-windows-path.zip', [
+      { name: 'appliance.json', data: canonicalJsonBytes(containerManifest()) },
+      { name: entryPath, data: 'unsafe' },
+    ]);
+    expect(() => readBundleManifest(bundle)).toThrow('Unsafe ZIP entry path');
+  });
 
-  it.each(['console.txt', 'null', 'com10', 'lpt0'])('accepts the portable path %j', async (entryPath) => {
+  it.each(['console.txt', 'null', 'COM0', 'LPT0', 'com10'])('accepts the portable path %j', async (entryPath) => {
     const dir = tempDir();
     const bundle = await rawZip(dir, 'portable-windows-path.zip', [
       { name: 'appliance.json', data: canonicalJsonBytes(containerManifest()) },
@@ -248,7 +261,13 @@ describe('bundle reading and verification', () => {
     const unpacked = path.join(dir, 'unpacked');
     fs.mkdirSync(outside);
     fs.symlinkSync(outside, unpacked, process.platform === 'win32' ? 'junction' : 'dir');
-    expect(() => unpackBundle(bundle, unpacked)).toThrow('destination contains');
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      expect(() => unpackBundle(bundle, unpacked)).toThrow('destination contains');
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
     expect(fs.readdirSync(outside)).toEqual([]);
   });
 

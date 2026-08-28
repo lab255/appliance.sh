@@ -104,7 +104,7 @@ export function unpackBundle(filePath: string, destination: string, limits: Part
     fs.realpathSync.native(path.dirname(resolvedDestination)),
     path.basename(resolvedDestination)
   );
-  if (!sameFileSystemPath(directDestination, root)) {
+  if (process.platform === 'win32' && !sameFileSystemPath(directDestination, root)) {
     throw new Error(`Bundle unpack destination contains a symlink or junction: ${resolvedDestination}`);
   }
   for (const entry of zip.entries) {
@@ -423,8 +423,9 @@ function validateEntryPath(entryPath: string, maxBytes: number): void {
         segment === '' ||
         segment === '.' ||
         segment === '..' ||
+        /[<>:"|?*]/.test(segment) ||
         /[. ]$/.test(segment) ||
-        /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(segment)
+        /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(?:\..*)?$/i.test(segment)
     )
   ) {
     throw new Error(`Unsafe ZIP entry path: ${JSON.stringify(entryPath)}`);
@@ -473,7 +474,7 @@ function ensureSafeDirectory(root: string, directory: string): void {
     if (
       !stat.isDirectory() ||
       stat.isSymbolicLink() ||
-      !sameFileSystemPath(path.resolve(current), fs.realpathSync.native(current))
+      (process.platform === 'win32' && !sameFileSystemPath(path.resolve(current), fs.realpathSync.native(current)))
     ) {
       throw new Error(`Bundle unpack destination contains a non-directory, symlink, or junction: ${current}`);
     }
