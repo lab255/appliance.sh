@@ -19,11 +19,15 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::{Context, Result};
-use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose};
+use rcgen::{
+    BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose,
+};
 use rustls::pki_types::{PrivateKeyDer, ServerName};
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
-use rustls::{ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned};
+use rustls::{
+    ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned,
+};
 
 use crate::netstack::guard::is_forbidden_target;
 use crate::spec::VmPaths;
@@ -80,7 +84,8 @@ pub fn ensure_ca(name: &str) -> Result<Ca> {
     if let Some(parent) = cert_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&cert_path, &cert_pem).with_context(|| format!("write {}", cert_path.display()))?;
+    std::fs::write(&cert_path, &cert_pem)
+        .with_context(|| format!("write {}", cert_path.display()))?;
     std::fs::write(&key_path, key.serialize_pem())
         .with_context(|| format!("write {}", key_path.display()))?;
     #[cfg(unix)]
@@ -103,8 +108,8 @@ impl Ca {
         let chain = vec![leaf.der().clone()];
         let key_der = PrivateKeyDer::try_from(leaf_key.serialize_der())
             .map_err(|e| anyhow::anyhow!("leaf key der: {e}"))?;
-        let signing_key = rustls::crypto::ring::sign::any_supported_type(&key_der)
-            .context("leaf signing key")?;
+        let signing_key =
+            rustls::crypto::ring::sign::any_supported_type(&key_der).context("leaf signing key")?;
         Ok(CertifiedKey::new(chain, signing_key))
     }
 }
@@ -153,11 +158,12 @@ fn provider() -> Arc<rustls::crypto::CryptoProvider> {
 /// A server config that presents minted leaves for any SNI — the
 /// client (guest workload, trusting our CA) terminates TLS here.
 pub fn server_config(ca: Arc<Ca>) -> Result<Arc<ServerConfig>> {
-    let cfg = ServerConfig::builder_with_provider(provider())
+    let mut cfg = ServerConfig::builder_with_provider(provider())
         .with_safe_default_protocol_versions()
         .context("server tls versions")?
         .with_no_client_auth()
         .with_cert_resolver(Arc::new(MintingResolver::new(ca)));
+    cfg.alpn_protocols = vec![b"http/1.1".to_vec()];
     Ok(Arc::new(cfg))
 }
 
@@ -172,7 +178,8 @@ pub fn configs(name: &str) -> Result<(Arc<ServerConfig>, Arc<ClientConfig>)> {
 }
 
 /// The client config used to re-originate TLS to the real upstream,
-/// validating against the webpki trust roots. Built once.
+/// validating against the webpki trust roots. Built once. This shared config
+/// deliberately offers only HTTP/1.1, including on the legacy broker path.
 pub fn client_config() -> Result<Arc<ClientConfig>> {
     static CFG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
     if let Some(c) = CFG.get() {
@@ -181,11 +188,12 @@ pub fn client_config() -> Result<Arc<ClientConfig>> {
     let roots = RootCertStore {
         roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
     };
-    let cfg = ClientConfig::builder_with_provider(provider())
+    let mut cfg = ClientConfig::builder_with_provider(provider())
         .with_safe_default_protocol_versions()
         .context("client tls versions")?
         .with_root_certificates(roots)
         .with_no_client_auth();
+    cfg.alpn_protocols = vec![b"http/1.1".to_vec()];
     let arc = Arc::new(cfg);
     let _ = CFG.set(arc.clone());
     Ok(arc)
@@ -239,7 +247,11 @@ pub fn intercept<S: Read + Write>(
     client_cfg: Arc<ClientConfig>,
     log: bool,
 ) -> Result<()> {
-    let MitmTarget { host, port, upstream } = target;
+    let MitmTarget {
+        host,
+        port,
+        upstream,
+    } = target;
     let server_conn = ServerConnection::new(server_cfg).context("server tls conn")?;
     let mut client_tls = StreamOwned::new(server_conn, client_tcp);
 
@@ -287,7 +299,9 @@ pub fn intercept<S: Read + Write>(
         crate::creds::Injection::Resolved(header, value) => Some((header, value)),
         crate::creds::Injection::RuleButUnresolved => {
             if log {
-                eprintln!("egress mitm: {host} :: credential not configured — refusing (fail closed)");
+                eprintln!(
+                    "egress mitm: {host} :: credential not configured — refusing (fail closed)"
+                );
             }
             return write_cred_unconfigured(&mut client_tls, host);
         }
@@ -321,6 +335,179 @@ pub fn intercept<S: Read + Write>(
     Ok(())
 }
 
+/// Runtime-principal TLS observation. This path is intentionally separate
+/// from the legacy credential broker above: it preserves the HTTP/1.1 request
+/// and response bytes exactly and never calls capture/injection helpers. It
+/// observes one request/response only; a keep-alive client's second request
+/// sees EOF when this function returns.
+pub fn intercept_observe<S: Read + Write>(
+    _name: &str,
+    runtime: &crate::egress::RuntimePolicy,
+    client_tcp: S,
+    target: MitmTarget<'_>,
+    server_cfg: Arc<ServerConfig>,
+    client_cfg: Arc<ClientConfig>,
+    log: bool,
+) -> Result<()> {
+    let started = std::time::Instant::now();
+    let MitmTarget {
+        host,
+        port,
+        upstream,
+    } = target;
+    let server_conn = ServerConnection::new(server_cfg).context("server tls conn")?;
+    let mut client_tls = StreamOwned::new(server_conn, client_tcp);
+    let head_bytes = read_http_head_bytes(&mut client_tls)?;
+    let head = String::from_utf8_lossy(&head_bytes).into_owned();
+    let request_line = head.lines().next().unwrap_or_default();
+    let mut request_parts = request_line.split_whitespace();
+    let method = request_parts.next().unwrap_or_default();
+    let target_path = request_parts.next().unwrap_or("/");
+    let version = request_parts.next().unwrap_or_default();
+    if method.is_empty() || version != "HTTP/1.1" || request_parts.next().is_some() {
+        anyhow::bail!("runtime inspection supports HTTP/1.1 requests only");
+    }
+    if log {
+        eprintln!(
+            "egress inspect [{}]: {host} :: {request_line}",
+            runtime.principal
+        );
+    }
+    let tls_version = client_tls
+        .conn
+        .protocol_version()
+        .map(|value| format!("{value:?}"));
+
+    let upstream_tcp = dial_upstream(host, port, upstream)?;
+    let sni = ServerName::try_from(host.to_string()).context("server name")?;
+    let client_conn = ClientConnection::new(client_cfg, sni).context("client tls conn")?;
+    let mut up_tls = StreamOwned::new(client_conn, upstream_tcp);
+
+    // Byte-for-byte forwarding: unlike the broker path, do not add
+    // Connection: close and do not inspect or rewrite any header/body.
+    up_tls.write_all(&head_bytes)?;
+    let request_body = copy_request_body_count(&mut client_tls, &mut up_tls, &head)?;
+    up_tls.flush()?;
+
+    let response_head_bytes = read_http_head_bytes(&mut up_tls)?;
+    let response_head = String::from_utf8_lossy(&response_head_bytes).into_owned();
+    let status = response_head
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|value| value.parse::<u16>().ok());
+    client_tls.write_all(&response_head_bytes)?;
+    let response_body =
+        copy_response_body_count(&mut up_tls, &mut client_tls, &response_head, method, status)?;
+    client_tls.flush()?;
+
+    crate::traffic::record_runtime(
+        runtime,
+        host,
+        port,
+        method,
+        Some(target_path),
+        "inspect",
+        crate::traffic::TrafficDetails {
+            reason: Some("policy.mitm && allowed"),
+            tls_version: tls_version.as_deref(),
+            sni: Some(host),
+            status,
+            bytes_in: Some((head_bytes.len() as u64).saturating_add(request_body)),
+            bytes_out: Some((response_head_bytes.len() as u64).saturating_add(response_body)),
+            duration_ms: Some(started.elapsed().as_millis() as u64),
+        },
+    );
+    Ok(())
+}
+
+fn copy_request_body_count<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+    head: &str,
+) -> Result<u64> {
+    if header_value(head, "transfer-encoding")
+        .is_some_and(|value| value.to_ascii_lowercase().contains("chunked"))
+    {
+        return copy_chunked_count(reader, writer);
+    }
+    if let Some(len) =
+        header_value(head, "content-length").and_then(|value| value.parse::<u64>().ok())
+    {
+        return copy_n_count(reader, writer, len);
+    }
+    Ok(0)
+}
+
+fn copy_response_body_count<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+    head: &str,
+    method: &str,
+    status: Option<u16>,
+) -> Result<u64> {
+    if method.eq_ignore_ascii_case("HEAD")
+        || status.is_some_and(|code| (100..200).contains(&code) || matches!(code, 204 | 304))
+    {
+        return Ok(0);
+    }
+    if header_value(head, "transfer-encoding")
+        .is_some_and(|value| value.to_ascii_lowercase().contains("chunked"))
+    {
+        return copy_chunked_count(reader, writer);
+    }
+    if let Some(len) =
+        header_value(head, "content-length").and_then(|value| value.parse::<u64>().ok())
+    {
+        return copy_n_count(reader, writer, len);
+    }
+    std::io::copy(reader, writer).context("copy EOF-delimited response")
+}
+
+fn copy_n_count<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+    mut remaining: u64,
+) -> Result<u64> {
+    let original = remaining;
+    let mut buf = [0u8; 8192];
+    while remaining > 0 {
+        let want = remaining.min(buf.len() as u64) as usize;
+        let n = reader.read(&mut buf[..want])?;
+        if n == 0 {
+            break;
+        }
+        writer.write_all(&buf[..n])?;
+        remaining -= n as u64;
+    }
+    Ok(original - remaining)
+}
+
+fn copy_chunked_count<R: Read, W: Write>(reader: &mut R, writer: &mut W) -> Result<u64> {
+    let mut total = 0u64;
+    loop {
+        let size_line = read_line(reader)?;
+        writer.write_all(size_line.as_bytes())?;
+        total = total.saturating_add(size_line.len() as u64);
+        let hex = size_line.trim_end().split(';').next().unwrap_or("").trim();
+        let size = u64::from_str_radix(hex, 16).context("invalid chunk size")?;
+        if size == 0 {
+            loop {
+                let line = read_line(reader)?;
+                writer.write_all(line.as_bytes())?;
+                total = total.saturating_add(line.len() as u64);
+                if line == "\r\n" || line.is_empty() {
+                    return Ok(total);
+                }
+            }
+        }
+        total = total.saturating_add(copy_n_count(reader, writer, size)?);
+        let crlf = read_line(reader)?;
+        writer.write_all(crlf.as_bytes())?;
+        total = total.saturating_add(crlf.len() as u64);
+    }
+}
+
 /// The single first-choice upstream (the head of [`public_upstreams`]),
 /// gated by the §8.1 #1 private-range filter ([`is_forbidden_target`]):
 /// `None` when nothing public is available. `dial_upstream` now iterates
@@ -342,7 +529,11 @@ fn public_upstreams(validated: Option<SocketAddr>, resolved: &[SocketAddr]) -> V
     match validated {
         Some(addr) if !is_forbidden_target(addr.ip()) => vec![addr],
         Some(_) => Vec::new(),
-        None => resolved.iter().copied().filter(|a| !is_forbidden_target(a.ip())).collect(),
+        None => resolved
+            .iter()
+            .copied()
+            .filter(|a| !is_forbidden_target(a.ip()))
+            .collect(),
     }
 }
 
@@ -391,6 +582,13 @@ fn dial_upstream(host: &str, port: u16, validated: Option<SocketAddr>) -> Result
 
 /// Read an HTTP message head (through the blank line) from a stream.
 fn read_http_head<R: Read>(r: &mut R) -> Result<String> {
+    Ok(String::from_utf8_lossy(&read_http_head_bytes(r)?).into_owned())
+}
+
+/// Read an HTTP message head without decoding it. Runtime observation parses
+/// a lossy copy but forwards this original buffer so non-UTF-8 bytes are never
+/// rewritten to the UTF-8 replacement sequence.
+fn read_http_head_bytes<R: Read>(r: &mut R) -> Result<Vec<u8>> {
     let mut buf = Vec::with_capacity(512);
     let mut byte = [0u8; 1];
     loop {
@@ -406,7 +604,7 @@ fn read_http_head<R: Read>(r: &mut R) -> Result<String> {
             anyhow::bail!("request head too large");
         }
     }
-    Ok(String::from_utf8_lossy(&buf).into_owned())
+    Ok(buf)
 }
 
 /// Replace any Connection/Proxy-Connection headers with a single
@@ -468,7 +666,9 @@ fn copy_request_body<R: Read, W: Write>(reader: &mut R, writer: &mut W, head: &s
     {
         return copy_chunked(reader, writer);
     }
-    if let Some(len) = header_value(head, "content-length").and_then(|v| v.trim().parse::<u64>().ok()) {
+    if let Some(len) =
+        header_value(head, "content-length").and_then(|v| v.trim().parse::<u64>().ok())
+    {
         copy_n(reader, writer, len)?;
     }
     Ok(())
@@ -536,6 +736,55 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    fn test_ca() -> Arc<Ca> {
+        let mut params = CertificateParams::new(Vec::new()).unwrap();
+        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        params
+            .distinguished_name
+            .push(DnType::CommonName, "Appliance Test CA");
+        params.key_usages = vec![
+            KeyUsagePurpose::KeyCertSign,
+            KeyUsagePurpose::DigitalSignature,
+        ];
+        let key = KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        Arc::new(Ca { cert, key })
+    }
+
+    #[test]
+    fn observation_head_keeps_non_utf8_bytes_for_forwarding() {
+        let input = b"GET / HTTP/1.1\r\nX-Opaque: \xff\r\n\r\n".to_vec();
+        let raw = read_http_head_bytes(&mut Cursor::new(input.clone())).unwrap();
+        assert_eq!(raw, input);
+        let parsed = String::from_utf8_lossy(&raw);
+        assert!(parsed.contains('\u{fffd}'));
+    }
+
+    #[test]
+    fn h2_only_client_is_refused_by_http11_inspection_server() {
+        let server_cfg = server_config(test_ca()).unwrap();
+        let mut client_cfg = ClientConfig::builder_with_provider(provider())
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(RootCertStore::empty())
+            .with_no_client_auth();
+        client_cfg.alpn_protocols = vec![b"h2".to_vec()];
+        let mut client = ClientConnection::new(
+            Arc::new(client_cfg),
+            ServerName::try_from("example.com").unwrap(),
+        )
+        .unwrap();
+        let mut server = ServerConnection::new(server_cfg).unwrap();
+
+        let mut hello = Vec::new();
+        client.write_tls(&mut hello).unwrap();
+        server.read_tls(&mut Cursor::new(hello)).unwrap();
+        assert!(matches!(
+            server.process_new_packets(),
+            Err(rustls::Error::NoApplicationProtocol)
+        ));
+    }
+
     #[test]
     fn force_close_replaces_existing_connection_header() {
         let head = "GET / HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\nAccept: */*\r\n\r\n";
@@ -592,6 +841,34 @@ mod tests {
     }
 
     #[test]
+    fn observation_body_copies_are_byte_exact_and_counted() {
+        let request_head = "POST /upload HTTP/1.1\r\nContent-Length: 5\r\n\r\n";
+        let mut request = Cursor::new(b"a\0b\r\n".to_vec());
+        let mut request_out = Vec::new();
+        assert_eq!(
+            copy_request_body_count(&mut request, &mut request_out, request_head).unwrap(),
+            5
+        );
+        assert_eq!(request_out, b"a\0b\r\n");
+
+        let response_head = "HTTP/1.1 201 Created\r\nContent-Length: 4\r\n\r\n";
+        let mut response = Cursor::new(b"x\0y\n".to_vec());
+        let mut response_out = Vec::new();
+        assert_eq!(
+            copy_response_body_count(
+                &mut response,
+                &mut response_out,
+                response_head,
+                "POST",
+                Some(201),
+            )
+            .unwrap(),
+            4
+        );
+        assert_eq!(response_out, b"x\0y\n");
+    }
+
+    #[test]
     fn cred_unconfigured_is_actionable_and_keyless() {
         let mut out: Vec<u8> = Vec::new();
         write_cred_unconfigured(&mut out, "api.anthropic.com").unwrap();
@@ -619,7 +896,12 @@ mod tests {
         // addr that turns out private/internal is refused, so `intercept`
         // never originates to a forbidden target — and the dial fails
         // BEFORE the credential injection write, so no cred is disclosed.
-        for s in ["10.0.0.5:443", "127.0.0.1:443", "192.168.1.9:443", "169.254.1.1:443"] {
+        for s in [
+            "10.0.0.5:443",
+            "127.0.0.1:443",
+            "192.168.1.9:443",
+            "169.254.1.1:443",
+        ] {
             let addr: SocketAddr = s.parse().unwrap();
             assert_eq!(pick_upstream(Some(addr), &[]), None, "{s} must be refused");
         }
@@ -663,9 +945,15 @@ mod tests {
         let pub1: SocketAddr = "93.184.216.34:443".parse().unwrap();
         let pub2: SocketAddr = "198.51.100.7:443".parse().unwrap();
         // Legacy path: private entries dropped, public ones kept in order.
-        assert_eq!(public_upstreams(None, &[priv1, pub1, pub2]), vec![pub1, pub2]);
+        assert_eq!(
+            public_upstreams(None, &[priv1, pub1, pub2]),
+            vec![pub1, pub2]
+        );
         // A private record interleaved first is skipped, not selected.
-        assert_eq!(public_upstreams(None, &[pub1, priv1, pub2]), vec![pub1, pub2]);
+        assert_eq!(
+            public_upstreams(None, &[pub1, priv1, pub2]),
+            vec![pub1, pub2]
+        );
         // A validated private addr yields no candidates (refuse the dial).
         assert!(public_upstreams(Some(priv1), &[]).is_empty());
         // A validated public addr is the sole candidate.
@@ -683,7 +971,10 @@ mod tests {
         let got = dial_first(&[a, b], |addr| {
             attempted.push(addr);
             if addr == a {
-                Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "refused"))
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    "refused",
+                ))
             } else {
                 Ok(addr)
             }
@@ -694,10 +985,16 @@ mod tests {
 
         // All-fail surfaces the last real error, not a generic message.
         let err = dial_first(&[a, b], |_addr| -> std::io::Result<SocketAddr> {
-            Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "nope"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "nope",
+            ))
         })
         .unwrap_err();
-        assert!(err.to_string().contains("connect 93.184.216.34:443"), "got: {err}");
+        assert!(
+            err.to_string().contains("connect 93.184.216.34:443"),
+            "got: {err}"
+        );
     }
 
     #[test]

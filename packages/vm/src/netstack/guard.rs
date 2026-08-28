@@ -44,8 +44,8 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use crate::egress::{self, EgressPolicy};
 use super::{bridge_pump, BridgeStream};
+use crate::egress::{self, EgressPolicy};
 
 /// Cap on bytes peeked to classify one flow (the ClientHello / HTTP
 /// head). Bounds the fail-closed read (§8.1 #4).
@@ -69,9 +69,11 @@ const BACKREF_TTL: Duration = Duration::from_secs(120);
 /// it came from. Only **public** addresses are ever inserted (the
 /// resolver rejects private answers per #1), and the raw-IP hatch
 /// re-checks [`is_forbidden_target`] anyway.
+type ResolvedKey = (String, IpAddr, Option<u16>);
+
 #[derive(Clone, Default)]
 pub struct Resolved {
-    inner: Arc<Mutex<HashMap<IpAddr, Instant>>>,
+    inner: Arc<Mutex<HashMap<ResolvedKey, Instant>>>,
 }
 
 impl Resolved {
@@ -80,18 +82,38 @@ impl Resolved {
     }
 
     /// Remember a public resolved address (expires after [`BACKREF_TTL`]).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn insert(&self, ip: IpAddr) {
+        self.insert_for("vm", ip);
+    }
+
+    pub fn insert_for(&self, principal: &str, ip: IpAddr) {
+        self.insert_for_port(principal, ip, None);
+    }
+
+    pub fn insert_for_port(&self, principal: &str, ip: IpAddr, port: Option<u16>) {
         if let Ok(mut m) = self.inner.lock() {
-            m.insert(ip, Instant::now() + BACKREF_TTL);
+            m.insert((principal.to_string(), ip, port), Instant::now() + BACKREF_TTL);
         }
     }
 
     /// Was `ip` resolved for an allowlisted name within the TTL?
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn contains_fresh(&self, ip: IpAddr) -> bool {
+        self.contains_fresh_for("vm", ip)
+    }
+
+    pub fn contains_fresh_for(&self, principal: &str, ip: IpAddr) -> bool {
+        self.contains_fresh_for_port(principal, ip, None)
+    }
+
+    pub fn contains_fresh_for_port(&self, principal: &str, ip: IpAddr, port: Option<u16>) -> bool {
         if let Ok(mut m) = self.inner.lock() {
             let now = Instant::now();
             m.retain(|_, exp| *exp > now);
-            return m.contains_key(&ip);
+            let principal = principal.to_string();
+            return m.contains_key(&(principal.clone(), ip, port))
+                || m.contains_key(&(principal, ip, None));
         }
         false
     }
@@ -316,11 +338,19 @@ fn cidr_match(rule: &str, ip: IpAddr) -> bool {
     };
     match (addr.parse::<IpAddr>(), ip) {
         (Ok(IpAddr::V4(net)), IpAddr::V4(x)) if prefix <= 32 => {
-            let mask = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix) };
+            let mask = if prefix == 0 {
+                0
+            } else {
+                u32::MAX << (32 - prefix)
+            };
             (u32::from(net) & mask) == (u32::from(x) & mask)
         }
         (Ok(IpAddr::V6(net)), IpAddr::V6(x)) if prefix <= 128 => {
-            let mask = if prefix == 0 { 0 } else { u128::MAX << (128 - prefix) };
+            let mask = if prefix == 0 {
+                0
+            } else {
+                u128::MAX << (128 - prefix)
+            };
             (u128::from(net) & mask) == (u128::from(x) & mask)
         }
         _ => false,
@@ -349,6 +379,7 @@ pub enum Decision {
 /// executor ([`resolve_public`]). This function proves #3 (an allowed
 /// TLS/HTTP flow yields the validated *name*, never `dst`) and #4 (an
 /// un-parseable head is denied).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn decide(
     dst: SocketAddr,
     head: &[u8],
@@ -356,23 +387,63 @@ pub fn decide(
     policy: &EgressPolicy,
     resolved: &Resolved,
 ) -> Decision {
+    decide_for(dst, head, head_complete, policy, resolved, "vm", true)
+}
+
+pub fn decide_for(
+    dst: SocketAddr,
+    head: &[u8],
+    head_complete: bool,
+    policy: &EgressPolicy,
+    resolved: &Resolved,
+    principal: &str,
+    allow_ip_rules: bool,
+) -> Decision {
     let port = dst.port();
     match port {
         443 => {
             // Fail closed: incomplete/unparseable ClientHello ⇒ deny.
             let sni = if head_complete { parse_sni(head) } else { None };
             match sni {
-                Some(host) if name_is_allowed(&host, policy) => Decision::ForwardName { host, port, tls: true },
-                Some(host) => Decision::Deny { label: host, port, tls: true },
-                None => Decision::Deny { label: "<no-sni>".into(), port, tls: true },
+                Some(host) if name_is_allowed(&host, policy) => Decision::ForwardName {
+                    host,
+                    port,
+                    tls: true,
+                },
+                Some(host) => Decision::Deny {
+                    label: host,
+                    port,
+                    tls: true,
+                },
+                None => Decision::Deny {
+                    label: "<no-sni>".into(),
+                    port,
+                    tls: true,
+                },
             }
         }
         80 => {
-            let host = if head_complete { parse_host(head) } else { None };
+            let host = if head_complete {
+                parse_host(head)
+            } else {
+                None
+            };
             match host {
-                Some(h) if name_is_allowed(&h, policy) => Decision::ForwardName { host: h, port, tls: false },
-                Some(h) => Decision::Deny { label: h, port, tls: false },
-                None => Decision::Deny { label: "<no-host>".into(), port, tls: false },
+                Some(h) if name_is_allowed(&h, policy) => Decision::ForwardName {
+                    host: h,
+                    port,
+                    tls: false,
+                },
+                Some(h) => Decision::Deny {
+                    label: h,
+                    port,
+                    tls: false,
+                },
+                None => Decision::Deny {
+                    label: "<no-host>".into(),
+                    port,
+                    tls: false,
+                },
             }
         }
         _ => {
@@ -380,10 +451,17 @@ pub fn decide(
             // Both raw-IP hatches reject any private/internal/host-LAN
             // target (#1), then admit only a fresh back-ref or an
             // explicit IP/CIDR allow.
-            if !is_forbidden_target(ip) && (resolved.contains_fresh(ip) || ip_cidr_allows(policy, ip)) {
+            if !is_forbidden_target(ip)
+                && (resolved.contains_fresh_for_port(principal, ip, Some(port))
+                    || (allow_ip_rules && ip_cidr_allows(policy, ip)))
+            {
                 Decision::ForwardIp { addr: dst }
             } else {
-                Decision::Deny { label: ip.to_string(), port, tls: false }
+                Decision::Deny {
+                    label: ip.to_string(),
+                    port,
+                    tls: false,
+                }
             }
         }
     }
@@ -394,24 +472,63 @@ pub fn decide(
 /// Classify, decide, and forward-or-drop one terminated guest flow. Runs
 /// on its own thread (spawned by the engine), so the bounded peek +
 /// re-resolution + splice never block the netstack loop.
-pub fn serve_outbound(name: &str, dst: SocketAddr, ext: BridgeStream, resolved: &Resolved) {
+pub fn serve_outbound(
+    name: &str,
+    source: Ipv4Addr,
+    dst: SocketAddr,
+    ext: BridgeStream,
+    resolved: &Resolved,
+) {
     if is_excluded_ip(dst.ip()) {
         ext.abort();
         return;
     }
-    let policy = egress::netstack_policy(name);
+    let context = egress::policy_for(name, source);
+    let policy = context.policy();
+    let principal = context.principal();
+    if let egress::PolicyContext::Unknown { .. } = &context {
+        log_deny(
+            &context,
+            name,
+            &dst.ip().to_string(),
+            dst.port(),
+            "unknown-principal",
+        );
+        ext.abort();
+        return;
+    }
     let port = dst.port();
     let (head, complete) = match port {
         443 => ext.peek_until(PEEK_MAX, PEEK_TIMEOUT, tls_hello_ready),
         80 => ext.peek_until(PEEK_MAX, PEEK_TIMEOUT, http_head_ready),
         _ => (Vec::new(), true),
     };
-    match decide(dst, &head, complete, &policy, resolved) {
+    let decision = decide_for(
+        dst,
+        &head,
+        complete,
+        &policy,
+        resolved,
+        &principal,
+        !context.is_runtime(),
+    );
+    let decision = match (&context, decision) {
+        (
+            egress::PolicyContext::Runtime(runtime),
+            Decision::ForwardName { host, port, tls },
+        ) if !runtime.allows_host_port(&host, port) => Decision::Deny {
+            label: host,
+            port,
+            tls,
+        },
+        (_, decision) => decision,
+    };
+    match decision {
         Decision::ForwardName { host, port, tls } => {
-            forward_name(name, &host, port, tls, head, ext, &policy)
+            forward_name(name, &context, &host, port, tls, head, ext)
         }
-        Decision::ForwardIp { addr } => forward_ip(name, addr, ext),
-        Decision::Deny { label, port, tls } => deny(name, &label, port, tls, ext),
+        Decision::ForwardIp { addr } => forward_ip(name, &context, addr, ext),
+        Decision::Deny { label, port, tls } => deny(name, &context, &label, port, tls, ext),
     }
 }
 
@@ -419,17 +536,18 @@ pub fn serve_outbound(name: &str, dst: SocketAddr, ext: BridgeStream, resolved: 
 /// (#3). The guest-supplied `dst_ip` is never the connect target here.
 fn forward_name(
     name: &str,
+    context: &egress::PolicyContext,
     host: &str,
     port: u16,
     tls: bool,
     head: Vec<u8>,
     ext: BridgeStream,
-    policy: &EgressPolicy,
 ) {
+    let policy = context.policy();
     // Re-resolve host-side, bounded, and reject a non-public result
     // (allowlisted-name-resolves-internal ⇒ denied, #1).
     let Some(addr) = resolve_public(host, port, RESOLVE_TIMEOUT) else {
-        log_deny(name, host, port, "resolves-non-public");
+        log_deny(context, name, host, port, "resolves-non-public");
         ext.abort();
         return;
     };
@@ -439,11 +557,21 @@ fn forward_name(
     // this VM's own deterministic guest (the per-VM netstack link is
     // L2-isolated — there is no cross-VM peer to re-attribute), so the
     // exact-lease injection gate is satisfied by `super::GUEST_IP`.
-    if tls
-        && egress::should_intercept(name, std::net::IpAddr::V4(super::GUEST_IP), true, policy.mitm, host)
-    {
-        match crate::mitm::configs(name) {
-            Ok((server_cfg, client_cfg)) => {
+    let inspect = tls
+        && if context.is_runtime() {
+            egress::should_inspect_runtime(&policy, true)
+        } else {
+            egress::should_intercept(
+                name,
+                std::net::IpAddr::V4(source_for_context(context)),
+                true,
+                policy.mitm,
+                host,
+            )
+        };
+    if inspect {
+        match inspection_configs(name, context, host, port, &ext) {
+            Ok(Some((server_cfg, client_cfg))) => {
                 // Replay the peeked ClientHello into rustls, which drives
                 // the handshake from the first byte.
                 let client = Prefixed::new(head, ext.clone());
@@ -452,19 +580,37 @@ fn forward_name(
                 // upstream dial lands on the filtered target, NOT an
                 // independent re-resolution of `host` that a DNS rebind /
                 // multi-A private record could relocate (#1, brokered path).
-                let target = crate::mitm::MitmTarget { host, port, upstream: Some(addr) };
-                let _ = crate::mitm::intercept(name, client, target, server_cfg, client_cfg, false);
+                let target = crate::mitm::MitmTarget {
+                    host,
+                    port,
+                    upstream: Some(addr),
+                };
+                let result = match context {
+                    egress::PolicyContext::Runtime(runtime) => crate::mitm::intercept_observe(
+                        name, runtime, client, target, server_cfg, client_cfg, false,
+                    ),
+                    _ => {
+                        crate::mitm::intercept(name, client, target, server_cfg, client_cfg, false)
+                    }
+                };
+                let _ = result;
                 ext.mark_ext_fin();
                 return;
             }
-            Err(_) => {
-                // CA/material unavailable — fall through to a blind tunnel
-                // rather than fail the allowed flow.
-            }
+            Err(()) => return,
+            Ok(None) => {}
         }
     }
 
-    crate::traffic::record(name, host, port, if tls { "CONNECT" } else { "HTTP" }, None, "allow");
+    record_context(
+        context,
+        name,
+        host,
+        port,
+        if tls { "CONNECT" } else { "HTTP" },
+        "allow",
+        None,
+    );
     match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
         Ok(mut up) => {
             // Replay the peeked head (ClientHello / HTTP request line +
@@ -479,11 +625,54 @@ fn forward_name(
     }
 }
 
+type InspectionConfigs = (
+    std::sync::Arc<rustls::ServerConfig>,
+    std::sync::Arc<rustls::ClientConfig>,
+);
+
+/// Runtime inspection cannot degrade to a blind tunnel when CA/config
+/// material is unavailable. Legacy retains its historical blind fallback.
+fn inspection_configs(
+    name: &str,
+    context: &egress::PolicyContext,
+    host: &str,
+    port: u16,
+    ext: &BridgeStream,
+) -> std::result::Result<Option<InspectionConfigs>, ()> {
+    match crate::mitm::configs(name) {
+        Ok(configs) => Ok(Some(configs)),
+        Err(_) if context.is_runtime() => {
+            abort_inspection_unavailable(context, name, host, port, ext);
+            Err(())
+        }
+        Err(_) => Ok(None),
+    }
+}
+
+fn abort_inspection_unavailable(
+    context: &egress::PolicyContext,
+    name: &str,
+    host: &str,
+    port: u16,
+    ext: &BridgeStream,
+) {
+    log_deny(context, name, host, port, "inspection-unavailable");
+    ext.abort();
+}
+
 /// Forward an allowed raw-IP flow (a public-only hatch). Nothing was
 /// peeked, so there is no head to replay — connect to the (already
 /// public, already-validated) address and splice.
-fn forward_ip(name: &str, addr: SocketAddr, ext: BridgeStream) {
-    crate::traffic::record(name, &addr.ip().to_string(), addr.port(), "RAW", None, "allow");
+fn forward_ip(name: &str, context: &egress::PolicyContext, addr: SocketAddr, ext: BridgeStream) {
+    record_context(
+        context,
+        name,
+        &addr.ip().to_string(),
+        addr.port(),
+        "RAW",
+        "allow",
+        None,
+    );
     match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
         Ok(up) => bridge_pump(ext, up),
         Err(_) => ext.abort(),
@@ -493,8 +682,15 @@ fn forward_ip(name: &str, addr: SocketAddr, ext: BridgeStream) {
 /// Drop a denied flow and record the structured denied-egress event
 /// (F3 surfaces it). For plain HTTP we can answer a legible 403 over the
 /// cleartext stream; TLS/raw flows are simply reset.
-fn deny(name: &str, label: &str, port: u16, tls: bool, ext: BridgeStream) {
-    log_deny(name, label, port, "policy");
+fn deny(
+    name: &str,
+    context: &egress::PolicyContext,
+    label: &str,
+    port: u16,
+    tls: bool,
+    ext: BridgeStream,
+) {
+    log_deny(context, name, label, port, "policy");
     if !tls && port == 80 {
         let body = format!("egress blocked by policy: {label}\n");
         let resp = format!(
@@ -509,9 +705,60 @@ fn deny(name: &str, label: &str, port: u16, tls: bool, ext: BridgeStream) {
     }
 }
 
-fn log_deny(name: &str, label: &str, port: u16, reason: &str) {
-    crate::traffic::record(name, label, port, "DENY", None, "deny");
-    eprintln!("egress: DENY {label}:{port} ({reason})");
+fn source_for_context(context: &egress::PolicyContext) -> Ipv4Addr {
+    match context {
+        egress::PolicyContext::Runtime(runtime) => runtime.source,
+        _ => super::GUEST_IP,
+    }
+}
+
+fn record_context(
+    context: &egress::PolicyContext,
+    name: &str,
+    host: &str,
+    port: u16,
+    method: &str,
+    decision: &str,
+    reason: Option<&str>,
+) {
+    if let egress::PolicyContext::Runtime(runtime) = context {
+        crate::traffic::record_runtime(
+            runtime,
+            host,
+            port,
+            method,
+            None,
+            decision,
+            crate::traffic::TrafficDetails {
+                reason,
+                sni: (port == 443).then_some(host),
+                ..Default::default()
+            },
+        );
+    } else {
+        crate::traffic::record(name, host, port, method, None, decision);
+    }
+}
+
+fn log_deny(context: &egress::PolicyContext, name: &str, label: &str, port: u16, reason: &str) {
+    if let egress::PolicyContext::Unknown { source } = context {
+        crate::traffic::record_unknown(name, &context.principal(), label, port, "DENY", reason);
+        eprintln!("egress[{name}/unknown:{source}]: DENY {label}:{port} ({reason})");
+        return;
+    }
+    record_context(
+        context,
+        name,
+        label,
+        port,
+        "DENY",
+        "deny",
+        Some(reason),
+    );
+    eprintln!(
+        "egress[{name}/{}]: DENY {label}:{port} ({reason})",
+        context.principal()
+    );
 }
 
 /// Size of the shared resolver worker pool. A hung host `getaddrinfo`
@@ -577,7 +824,11 @@ fn resolver_pool() -> &'static mpsc::Sender<ResolveJob> {
 /// forbidden targets, fails, or times out (all ⇒ deny).
 fn resolve_public(host: &str, port: u16, timeout: Duration) -> Option<SocketAddr> {
     let (tx, rx) = mpsc::channel();
-    let job = ResolveJob { host: host.to_string(), port, reply: tx };
+    let job = ResolveJob {
+        host: host.to_string(),
+        port,
+        reply: tx,
+    };
     resolver_pool().send(job).ok()?;
     let addrs = rx.recv_timeout(timeout).ok()?;
     addrs.into_iter().find(|a| !is_forbidden_target(a.ip()))
@@ -596,7 +847,10 @@ struct Prefixed<S> {
 
 impl<S> Prefixed<S> {
     fn new(pre: Vec<u8>, inner: S) -> Self {
-        Prefixed { pre: pre.into(), inner }
+        Prefixed {
+            pre: pre.into(),
+            inner,
+        }
     }
 }
 
@@ -663,7 +917,8 @@ pub fn parse_sni(rec: &[u8]) -> Option<String> {
     if hs.first() != Some(&0x01) {
         return None; // not a ClientHello
     }
-    let hs_len = ((*hs.get(1)? as usize) << 16) | ((*hs.get(2)? as usize) << 8) | *hs.get(3)? as usize;
+    let hs_len =
+        ((*hs.get(1)? as usize) << 16) | ((*hs.get(2)? as usize) << 8) | *hs.get(3)? as usize;
     let body = hs.get(4..4usize.checked_add(hs_len)?)?;
 
     // client_version(2) + random(32)
@@ -713,7 +968,10 @@ fn parse_server_name_list(sn: &[u8]) -> Option<String> {
             return None;
         }
         if name_type == 0 {
-            let host = std::str::from_utf8(&list[start..end]).ok()?.trim().to_ascii_lowercase();
+            let host = std::str::from_utf8(&list[start..end])
+                .ok()?
+                .trim()
+                .to_ascii_lowercase();
             if host.is_empty() || host.len() > 253 || !host.bytes().all(valid_host_byte) {
                 return None;
             }
@@ -764,6 +1022,19 @@ mod tests {
             deny: Vec::new(),
             mitm,
         }
+    }
+
+    fn runtime_context(app: &str) -> egress::PolicyContext {
+        egress::PolicyContext::Runtime(egress::RuntimePolicy {
+            version: 1,
+            app: app.to_string(),
+            service: None,
+            vm: "appliance-runtime".to_string(),
+            principal: app.to_string(),
+            source: Ipv4Addr::new(192, 168, 127, 10),
+            policy: policy(&["example.com"], true),
+            allow_ports: std::collections::BTreeMap::from([("example.com".to_string(), vec![443])]),
+        })
     }
 
     /// Build a minimal but valid TLS ClientHello record carrying `sni`.
@@ -852,7 +1123,11 @@ mod tests {
         let d = decide(evil, &hello, true, &p, &Resolved::new());
         assert_eq!(
             d,
-            Decision::ForwardName { host: "api.anthropic.com".into(), port: 443, tls: true }
+            Decision::ForwardName {
+                host: "api.anthropic.com".into(),
+                port: 443,
+                tls: true
+            }
         );
     }
 
@@ -874,9 +1149,15 @@ mod tests {
         let p = policy(&["api.anthropic.com"], false);
         let dst: SocketAddr = "93.184.216.34:443".parse().unwrap();
         // Incomplete peek ⇒ deny.
-        assert!(matches!(decide(dst, b"\x16\x03\x01", false, &p, &Resolved::new()), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(dst, b"\x16\x03\x01", false, &p, &Resolved::new()),
+            Decision::Deny { .. }
+        ));
         // Complete but not a ClientHello ⇒ deny.
-        assert!(matches!(decide(dst, b"garbage-bytes-not-tls", true, &p, &Resolved::new()), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(dst, b"garbage-bytes-not-tls", true, &p, &Resolved::new()),
+            Decision::Deny { .. }
+        ));
     }
 
     #[test]
@@ -886,13 +1167,23 @@ mod tests {
         let allowed = b"GET / HTTP/1.1\r\nHost: codeload.github.com\r\n\r\n";
         assert_eq!(
             decide(dst, allowed, true, &p, &Resolved::new()),
-            Decision::ForwardName { host: "codeload.github.com".into(), port: 80, tls: false }
+            Decision::ForwardName {
+                host: "codeload.github.com".into(),
+                port: 80,
+                tls: false
+            }
         );
         let denied = b"GET / HTTP/1.1\r\nHost: evil.test\r\n\r\n";
-        assert!(matches!(decide(dst, denied, true, &p, &Resolved::new()), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(dst, denied, true, &p, &Resolved::new()),
+            Decision::Deny { .. }
+        ));
         // Missing Host ⇒ deny (#4).
         let nohost = b"GET / HTTP/1.1\r\nAccept: */*\r\n\r\n";
-        assert!(matches!(decide(dst, nohost, true, &p, &Resolved::new()), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(dst, nohost, true, &p, &Resolved::new()),
+            Decision::Deny { .. }
+        ));
     }
 
     #[test]
@@ -900,14 +1191,28 @@ mod tests {
         // §8.1 #1: every private/internal/link-local/CGNAT/ULA/loopback
         // range is non-public; only real public addresses pass.
         for s in [
-            "10.0.0.5", "10.42.0.1", "172.16.9.9", "172.31.255.1", "192.168.1.50",
-            "127.0.0.1", "169.254.1.1", "100.64.0.1", "100.127.255.255", "0.0.0.0",
-            "224.0.0.1", "240.0.0.1", "255.255.255.255",
+            "10.0.0.5",
+            "10.42.0.1",
+            "172.16.9.9",
+            "172.31.255.1",
+            "192.168.1.50",
+            "127.0.0.1",
+            "169.254.1.1",
+            "100.64.0.1",
+            "100.127.255.255",
+            "0.0.0.0",
+            "224.0.0.1",
+            "240.0.0.1",
+            "255.255.255.255",
         ] {
             assert!(!is_public_ip(s.parse().unwrap()), "{s} must be non-public");
         }
         for s in [
-            "::1", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:10.0.0.1",
+            "::1",
+            "fe80::1",
+            "fc00::1",
+            "fd12:3456::1",
+            "::ffff:10.0.0.1",
             // 6to4 embedding a private v4: 2002:0a00:0001:: == 10.0.0.1.
             "2002:0a00:0001::1",
             // NAT64 well-known prefix embedding a private v4:
@@ -937,7 +1242,10 @@ mod tests {
         let resolved = Resolved::new();
         resolved.insert("10.0.0.9".parse().unwrap()); // (shouldn't ever happen)
         let dst: SocketAddr = "10.0.0.9:8080".parse().unwrap();
-        assert!(matches!(decide(dst, &[], true, &p, &resolved), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(dst, &[], true, &p, &resolved),
+            Decision::Deny { .. }
+        ));
     }
 
     #[test]
@@ -949,9 +1257,37 @@ mod tests {
         let good: IpAddr = "93.184.216.34".parse().unwrap();
         resolved.insert(good);
         let dst: SocketAddr = "93.184.216.34:8443".parse().unwrap();
-        assert_eq!(decide(dst, &[], true, &p, &resolved), Decision::ForwardIp { addr: dst });
+        assert_eq!(
+            decide(dst, &[], true, &p, &resolved),
+            Decision::ForwardIp { addr: dst }
+        );
         let unknown: SocketAddr = "198.51.100.7:8443".parse().unwrap();
-        assert!(matches!(decide(unknown, &[], true, &p, &resolved), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(unknown, &[], true, &p, &resolved),
+            Decision::Deny { .. }
+        ));
+    }
+
+    #[test]
+    fn raw_ip_backrefs_are_isolated_by_principal() {
+        let p = policy(&[], false);
+        let resolved = Resolved::new();
+        let ip: IpAddr = "93.184.216.34".parse().unwrap();
+        let dst: SocketAddr = "93.184.216.34:8443".parse().unwrap();
+        resolved.insert_for_port("app-a", ip, Some(8443));
+        assert_eq!(
+            decide_for(dst, &[], true, &p, &resolved, "app-a", false),
+            Decision::ForwardIp { addr: dst }
+        );
+        assert!(matches!(
+            decide_for(dst, &[], true, &p, &resolved, "app-b", false),
+            Decision::Deny { .. }
+        ));
+        let wrong_port: SocketAddr = "93.184.216.34:9443".parse().unwrap();
+        assert!(matches!(
+            decide_for(wrong_port, &[], true, &p, &resolved, "app-a", false),
+            Decision::Deny { .. }
+        ));
     }
 
     #[test]
@@ -959,11 +1295,17 @@ mod tests {
         // §4b: an explicit IP/CIDR allow rule admits a public target...
         let p = policy(&["198.51.100.0/24"], false);
         let dst: SocketAddr = "198.51.100.9:9000".parse().unwrap();
-        assert_eq!(decide(dst, &[], true, &p, &Resolved::new()), Decision::ForwardIp { addr: dst });
+        assert_eq!(
+            decide(dst, &[], true, &p, &Resolved::new()),
+            Decision::ForwardIp { addr: dst }
+        );
         // ...but never a private one, even if a rule names it (#1).
         let p2 = policy(&["10.0.0.0/8"], false);
         let priv_dst: SocketAddr = "10.0.0.9:9000".parse().unwrap();
-        assert!(matches!(decide(priv_dst, &[], true, &p2, &Resolved::new()), Decision::Deny { .. }));
+        assert!(matches!(
+            decide(priv_dst, &[], true, &p2, &Resolved::new()),
+            Decision::Deny { .. }
+        ));
     }
 
     #[test]
@@ -987,7 +1329,11 @@ mod tests {
         for i in 0..jobs {
             let (tx, rx) = mpsc::channel();
             resolver_pool()
-                .send(ResolveJob { host: "localhost".into(), port: 80, reply: tx })
+                .send(ResolveJob {
+                    host: "localhost".into(),
+                    port: 80,
+                    reply: tx,
+                })
                 .unwrap();
             // Drop a few receivers immediately to model a timed-out caller.
             if i % 5 == 0 {
@@ -1031,15 +1377,43 @@ mod tests {
         let (probe, ext) = crate::netstack::testkit::bridge(&hello, true);
         let dst: SocketAddr = "93.184.216.34:443".parse().unwrap();
 
-        serve_outbound(name, dst, ext, &Resolved::new());
+        serve_outbound(name, crate::netstack::GUEST_IP, dst, ext, &Resolved::new());
 
         assert!(probe.aborted(), "denied flow must be reset");
         let events = crate::traffic::tail(name, 10);
-        let deny = events.iter().find(|e| e.decision == "deny").expect("a deny event");
+        let deny = events
+            .iter()
+            .find(|e| e.decision == "deny")
+            .expect("a deny event");
         assert_eq!(deny.host, "exfil.evil.test");
         assert_eq!(deny.port, 443);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unavailable_runtime_ca_aborts_and_logs_fail_closed() {
+        crate::egress::with_runtime_test_root("ca-unavailable", |_root| {
+            let name = "runtime-ca-unavailable-test";
+            let vm_dir = crate::spec::VmPaths::for_name(name).dir;
+            let _ = std::fs::remove_dir_all(&vm_dir);
+            let _ = std::fs::remove_file(&vm_dir);
+            std::fs::create_dir_all(vm_dir.parent().unwrap()).unwrap();
+            // A regular file where the CA directory must be is a portable,
+            // deterministic unwritable-directory failure.
+            std::fs::write(&vm_dir, b"not a directory").unwrap();
+            let context = runtime_context("journal-ca-failure");
+            let (probe, ext) = crate::netstack::testkit::bridge(&[], true);
+            assert!(inspection_configs(name, &context, "example.com", 443, &ext).is_err());
+            assert!(probe.aborted());
+            let events = crate::traffic::tail_runtime("journal-ca-failure", 10);
+            let denied = events.last().expect("inspection failure log");
+            assert_eq!(denied.decision, "deny");
+            assert_eq!(denied.principal.as_deref(), Some("journal-ca-failure"));
+            assert_eq!(denied.reason.as_deref(), Some("inspection-unavailable"));
+
+            std::fs::remove_file(vm_dir).unwrap();
+        });
     }
 
     #[test]
@@ -1052,8 +1426,18 @@ mod tests {
         // assert name exclusion via the HTTP path.)
         let head = b"GET / HTTP/1.1\r\nHost: kubernetes.default.svc\r\n\r\n";
         assert_eq!(
-            decide(SocketAddr::from(([93, 184, 216, 34], 80)), head, true, &p, &Resolved::new()),
-            Decision::ForwardName { host: "kubernetes.default.svc".into(), port: 80, tls: false }
+            decide(
+                SocketAddr::from(([93, 184, 216, 34], 80)),
+                head,
+                true,
+                &p,
+                &Resolved::new()
+            ),
+            Decision::ForwardName {
+                host: "kubernetes.default.svc".into(),
+                port: 80,
+                tls: false
+            }
         );
         let _ = dst;
     }

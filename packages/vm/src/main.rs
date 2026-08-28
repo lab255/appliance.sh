@@ -227,11 +227,24 @@ enum Cmd {
         #[command(subcommand)]
         action: EgressCmd,
     },
+    /// Load or inspect one app-scoped runtime policy context.
+    RuntimePolicy {
+        #[command(subcommand)]
+        action: RuntimePolicyCmd,
+    },
     /// Manage per-host credential capture/injection (apiKeyHelper).
     Creds {
         #[command(subcommand)]
         action: CredsCmd,
     },
+}
+
+#[derive(Subcommand)]
+enum RuntimePolicyCmd {
+    /// Validate effective-policy JSON from stdin and atomically install it.
+    Set { vm: String, principal: String },
+    /// Print the installed effective policy for a principal.
+    Get { vm: String, principal: String },
 }
 
 #[derive(Subcommand)]
@@ -1061,7 +1074,35 @@ fn run() -> Result<()> {
 
         Cmd::Egress { action } => run_egress(action),
 
+        Cmd::RuntimePolicy { action } => run_runtime_policy(action),
+
         Cmd::Creds { action } => run_creds(action),
+    }
+}
+
+fn run_runtime_policy(action: RuntimePolicyCmd) -> Result<()> {
+    match action {
+        RuntimePolicyCmd::Set { vm, principal } => {
+            let mut raw = String::new();
+            std::io::stdin().read_to_string(&mut raw)?;
+            let runtime = egress::parse_runtime_policy(&raw)?;
+            if runtime.vm != vm || runtime.principal != principal {
+                bail!(
+                    "stdin policy identity ({}/{}) does not match command ({vm}/{principal})",
+                    runtime.vm,
+                    runtime.principal
+                );
+            }
+            egress::save_runtime_policy(&runtime)?;
+            println!("{}", serde_json::to_string_pretty(&runtime)?);
+            Ok(())
+        }
+        RuntimePolicyCmd::Get { vm, principal } => {
+            let runtime = egress::runtime_policy_for_principal(&vm, &principal)
+                .ok_or_else(|| anyhow::anyhow!("no runtime policy for {vm}/{principal}"))?;
+            println!("{}", serde_json::to_string_pretty(&runtime)?);
+            Ok(())
+        }
     }
 }
 

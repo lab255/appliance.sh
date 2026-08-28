@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use anyhow::{bail, Result};
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 
 /// How the guest NIC is wired to the host.
@@ -122,7 +124,7 @@ pub struct VmSpec {
 /// One published container port: the in-guest container port and the
 /// host loopback port forwarded to it. Persisted with the spec and
 /// consumed (later) by the boot-time forwarding code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedPort {
     /// Host loopback port (`127.0.0.1:<host>`), allocated from this VM's
@@ -130,6 +132,102 @@ pub struct PublishedPort {
     pub host: u16,
     /// Container port inside the guest the host port forwards to.
     pub container: u16,
+    /// Runtime-only target identity. Absent preserves the historical root
+    /// guest forward; present routes to this principal's namespace `/32`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_target: Option<RuntimeTarget>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeTarget {
+    pub principal: String,
+    pub address: Ipv4Addr,
+}
+
+impl PublishedPort {
+    #[allow(dead_code)]
+    pub fn for_runtime(host: u16, guest: u16, principal: &str, address: Ipv4Addr) -> Result<Self> {
+        validate_principal(principal)?;
+        if address.octets()[3] < 10
+            || address == Ipv4Addr::new(192, 168, 127, 255)
+            || address.octets()[..3] != crate::netstack::GUEST_IP.octets()[..3]
+        {
+            bail!("published runtime target must be in 192.168.127.10-254");
+        }
+        Ok(Self {
+            host,
+            container: guest,
+            runtime_target: Some(RuntimeTarget { principal: principal.to_string(), address }),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[allow(dead_code)]
+pub struct RuntimeMount {
+    pub principal: String,
+    pub slot: String,
+    pub tag: String,
+    pub host: String,
+    pub guest: String,
+    pub writable: bool,
+}
+
+impl RuntimeMount {
+    #[allow(dead_code)]
+    pub fn granted(
+        principal: &str,
+        slot: &str,
+        host: &str,
+        guest: &str,
+        manifest_requests_write: bool,
+        user_grants_write: bool,
+    ) -> Result<Self> {
+        validate_principal(principal)?;
+        if !safe_identity_component(slot) {
+            bail!("mount slot must be a non-empty safe identity component");
+        }
+        if !guest.starts_with('/') || guest.contains("/../") || guest.ends_with("/..") {
+            bail!("mount guest path must be absolute and normalized");
+        }
+        Ok(Self {
+            principal: principal.to_string(),
+            slot: slot.to_string(),
+            tag: runtime_mount_tag(principal, slot)?,
+            host: host.to_string(),
+            guest: guest.to_string(),
+            writable: manifest_requests_write && user_grants_write,
+        })
+    }
+}
+
+#[allow(dead_code)]
+pub fn runtime_mount_tag(principal: &str, slot: &str) -> Result<String> {
+    validate_principal(principal)?;
+    if !safe_identity_component(slot) {
+        bail!("mount slot must be a non-empty safe identity component");
+    }
+    let digest = crate::images::content_sha256_hex(format!("{principal}/{slot}").as_bytes());
+    Ok(format!("ap-{}", &digest[..32]))
+}
+
+#[allow(dead_code)]
+fn safe_identity_component(value: &str) -> bool {
+    !value.is_empty()
+        && value != "."
+        && value != ".."
+        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+#[allow(dead_code)]
+fn validate_principal(principal: &str) -> Result<()> {
+    let mut parts = principal.split('/');
+    if !parts.by_ref().all(safe_identity_component) || principal.matches('/').count() > 1 {
+        bail!("principal must be '<app>' or '<app>/<service>' using safe components");
+    }
+    Ok(())
 }
 
 // NOTE: the allocator below and its constants are exercised by the
@@ -583,8 +681,8 @@ mod tests {
         let mut spec = VmSpec::defaults("x");
         assert!(spec.published.is_empty(), "fresh specs publish nothing");
         spec.published = vec![
-            PublishedPort { host: 20000, container: 8080 },
-            PublishedPort { host: 20001, container: 5432 },
+            PublishedPort { host: 20000, container: 8080, runtime_target: None },
+            PublishedPort { host: 20001, container: 5432, runtime_target: None },
         ];
         let json = serde_json::to_string(&spec).unwrap();
         let back: VmSpec = serde_json::from_str(&json).unwrap();
@@ -681,5 +779,35 @@ mod tests {
         let legacy = r#"{"name":"x","cpus":2,"memoryMib":4096,"diskGib":10,"image":"alpine-3.21.3","cmdline":"console=hvc0","mac":"02:00:00:00:00:01","hostPort":8081,"apiPort":6443}"#;
         let parsed: VmSpec = serde_json::from_str(legacy).unwrap();
         assert!(!parsed.cluster, "pre-field specs adopt the core-first default");
+    }
+
+    #[test]
+    fn runtime_mount_tags_are_stable_bounded_and_write_is_intersection() {
+        let tag = runtime_mount_tag("journal/indexer", "workspace").unwrap();
+        assert!(tag.starts_with("ap-"));
+        assert_eq!(tag.len(), 35);
+        assert_eq!(tag, runtime_mount_tag("journal/indexer", "workspace").unwrap());
+        assert_ne!(tag, runtime_mount_tag("journal/indexer", "cache").unwrap());
+
+        let ro = RuntimeMount::granted(
+            "journal/indexer", "workspace", "/host/journal", "/data", true, false,
+        )
+        .unwrap();
+        assert!(!ro.writable, "manifest write request alone never grants write");
+        let rw = RuntimeMount::granted(
+            "journal/indexer", "workspace", "/host/journal", "/data", true, true,
+        )
+        .unwrap();
+        assert!(rw.writable);
+    }
+
+    #[test]
+    fn runtime_published_port_carries_principal_target() {
+        let address = Ipv4Addr::new(192, 168, 127, 10);
+        let port = PublishedPort::for_runtime(20_000, 3_000, "journal", address).unwrap();
+        let target = port.runtime_target.unwrap();
+        assert_eq!(target.principal, "journal");
+        assert_eq!(target.address, address);
+        assert!(PublishedPort::for_runtime(20_000, 3_000, "journal", crate::netstack::GUEST_IP).is_err());
     }
 }
