@@ -74,7 +74,7 @@ function useBatchedLifecycleAnnouncement(lineCount: number): string {
 // Lifecycle keeps a thin "Run agent →" deep-link (preselecting this VM).
 // Rendered by /machine (pages/machine/index.tsx) for the selected local VM.
 //
-// THE EGRESS DOUBLE-FETCH FIX (docs/desktop-ia.md §5.5): the single
+// The egress policy uses the current desktop IA (docs/desktop-ia.md): the single
 // `['microvm', name, 'egress']` policy poll lives HERE and is passed down —
 // `policy` to the Egress tab, `mitm` to the Credentials tab — instead of
 // each panel registering its own 15 s observer.
@@ -261,7 +261,7 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
             ? 'stopped'
             : 'not created';
 
-  // Q4 (docs/desktop-ia.md §8): surface the prerequisite Doctor prominently
+  // Surface the prerequisite Doctor prominently (docs/desktop-ia.md)
   // when the runtime can't start (failed / engine unavailable), otherwise
   // offer it behind a "Re-run checks" toggle. Either way it's the SAME
   // PreflightPanel as ① /setup/doctor — one implementation, two entry points.

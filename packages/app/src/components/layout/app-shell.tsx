@@ -40,7 +40,7 @@ export function AppShell() {
       previousPath.current = pathname;
     }
   }, [pathname]);
-  // Adaptive Setup (docs/desktop-ia.md §8 Q3): ① is a prominent nav item
+  // Adaptive Setup (docs/desktop-ia.md): Setup is a prominent nav item
   // while unconfigured and is demoted out of the primary nav once a
   // cluster is selected (its recurring children — add-cluster, doctor —
   // surface from ② Clusters). "Unconfigured" = no selected cluster, the

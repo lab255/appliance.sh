@@ -15,8 +15,8 @@ import { useAppMode } from '@/hooks/use-app-mode';
 import type { AppMode } from '@/lib/host';
 import type { EntitlementSuggestion } from '@appliance.sh/sdk';
 
-// ⑤ Settings — slimmed to Updates · About · Preferences (docs/desktop-ia.md
-// §3 / move-map 4b). Cluster CRUD and the cloud-lifecycle panels moved to ②
+// Settings follows the current navigation in docs/desktop-ia.md. Cluster CRUD
+// and the cloud-lifecycle panels moved to ②
 // Clusters (`/clusters` + `/clusters/:id`) in I2; agent sign-in moved to ④
 // Agents in I4. The header keeps the "find them under Clusters / Agents"
 // redirect note so no one dead-ends here looking for the old surfaces.

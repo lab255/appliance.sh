@@ -17,7 +17,7 @@ import type { LocalDeploymentInfo, LocalPodInfo, LocalServiceInfo } from '@/lib/
 // Workloads / pods / services tables + live pod-log tail + pod-shell. Reads
 // through the in-VM api-server (the same signed ApplianceClient that powers
 // projects / deployments). Extracted from `local-runtime/index.tsx` and now
-// homed here in ③ env-detail (docs/desktop-ia.md §3 / move-map 4a) —
+// homed here in environment detail (docs/desktop-ia.md) —
 // deployment runtime state belongs with the environment that was deployed.
 //
 // PARKER CONTINUITY: this panel is inherently RUNTIME-SCOPED — it lists

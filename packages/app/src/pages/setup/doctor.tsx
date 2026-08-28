@@ -9,7 +9,7 @@ import { useHost } from '@/providers/host-provider';
 import { cn } from '@/lib/utils';
 import type { LocalPreflightCheck } from '@/lib/host';
 
-// ① Setup → Doctor (docs/desktop-ia.md §3 / move-map 4a). The prerequisite
+// Setup → Doctor (docs/desktop-ia.md). The prerequisite
 // preflight that used to sit atop the runtimes page now stands alone as the
 // canonical Doctor at `/setup/doctor`. I5 extracted it here out of the old
 // `pages/local-runtime/index.tsx` kitchen-sink page (now deleted); everything
@@ -45,7 +45,7 @@ export function SetupDoctorPage() {
 // The prerequisite preflight, self-contained: the host query + the
 // `PreflightPanel`. Rendered both here (the canonical ① Doctor) and from the
 // ② runtime detail's "Re-run checks" entry — one PreflightPanel, two entry
-// points (docs/desktop-ia.md §8 Q4).
+// points (docs/desktop-ia.md).
 export function DoctorPanel() {
   const host = useHost();
   const local = host.local;

@@ -24,7 +24,7 @@ import { ensureApiServerArtifacts } from './api-server-artifact.js';
 export const DEFAULT_VM_NAME = 'appliance';
 export const RUNTIME_POOL_VM_NAME = 'appliance-runtime';
 
-/** Boot RFC 0002's fixed core-only pool. The engine's --runtime flag
+/** Boot the runtime design doc's fixed core-only pool. The engine's --runtime flag
  * reasserts agent_only=true, dev/docker/cluster=false, Netstack, and
  * the conservative 2 vCPU / 4096 MiB profile before core readiness. */
 export function ensurePooledRuntime(timeout = 900): void {

@@ -23,7 +23,7 @@ import type { EgressEvent, EgressPolicy, MicroVmInstanceHost } from '@/lib/host'
 // writes the whole effective policy back (see the host bridge's addRule).
 //
 // The egress POLICY query is LIFTED to the ② cluster-detail container
-// (docs/desktop-ia.md §5.5): EgressPanel and CredentialsPanel used to each
+// (docs/desktop-ia.md): EgressPanel and CredentialsPanel used to each
 // register their own 15 s `['microvm', name, 'egress']` poll. The container
 // now owns the single poll and passes `policy` down here (and `mitm` to the
 // credentials panel) — one observer, one source of truth. Edits still go

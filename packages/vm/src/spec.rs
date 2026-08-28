@@ -313,7 +313,7 @@ impl VmSpec {
         }
     }
 
-    /// RFC 0002's fixed pooled profile: core supervisor readiness only,
+    /// The runtime design doc's fixed pooled profile: core supervisor readiness only,
     /// no k3s, Docker, or development toolchain.
     pub fn runtime_defaults(name: &str) -> Self {
         let mut spec = Self::defaults(name);

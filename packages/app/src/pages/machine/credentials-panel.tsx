@@ -17,7 +17,7 @@ import type { MicroVmInstanceHost } from '@/lib/host';
 // decrypted headers).
 //
 // `mitmOn` is passed in by the ② cluster-detail container from the SINGLE
-// lifted egress-policy query (docs/desktop-ia.md §5.5) — this panel used to
+// lifted egress-policy query (docs/desktop-ia.md) — this panel used to
 // run its own `['microvm', name, 'egress']` 15 s poll only to read
 // `policy.mitm`, doubling the egress fetch. It no longer fetches the policy;
 // the credentials list (a separate key) stays local.
