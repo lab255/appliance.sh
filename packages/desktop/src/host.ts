@@ -28,6 +28,8 @@ import type {
   CatalogueFetchResult,
   ConsoleHost,
   HostConfig,
+  InstalledRuntimeApp,
+  RuntimeOpenResult,
   LatestGhcrTagInput,
   LocalApplianceManifest,
   LocalDeployToCloudInput,
@@ -144,8 +146,44 @@ export const tauriHost: ConsoleHost = {
         },
       });
     },
-    // AP-173 has not supplied a real `runtime install` implementation on
-    // this branch. Deliberately omit installBundle so the UI cannot fake it.
+  },
+
+  installedApps: {
+    list(target: string) {
+      return invoke<InstalledRuntimeApp[]>('runtime_installed_list', { target });
+    },
+    installBundle(source: string, target: string, options) {
+      return invoke('runtime_install_bundle', {
+        input: { source, target, acceptUnknownPublisher: options?.acceptUnknownPublisher ?? false },
+      });
+    },
+    async uninstall(app: string, target: string, options) {
+      await invoke('runtime_uninstall_bundle', {
+        input: { app, target, keepData: options?.keepData ?? false },
+      });
+    },
+    run(app: string, target: string, options) {
+      return invoke<RuntimeOpenResult>('runtime_run_installed', {
+        input: {
+          app,
+          target,
+          acceptUnknownPublisher: options?.acceptUnknownPublisher ?? false,
+          rememberUnknownPublisher: options?.rememberUnknownPublisher ?? false,
+        },
+      });
+    },
+    async stop(app: string) {
+      await invoke('runtime_stop_installed', { app });
+    },
+    async pickBundle() {
+      const picked = await openDialog({
+        directory: false,
+        multiple: false,
+        title: 'Install an Appliance bundle',
+        filters: [{ name: 'Appliance bundle', extensions: ['appliance.zip', 'zip'] }],
+      });
+      return typeof picked === 'string' ? picked : null;
+    },
   },
 
   bootstrap: {

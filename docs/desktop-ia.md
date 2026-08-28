@@ -29,9 +29,26 @@ pair shows no apps; an expired previously verified pair is labelled **Stale**
 and remains browseable with installs disabled. The desktop retains only a pair
 that passed verification, atomically, and a failed refresh keeps that prior
 pair under `~/.appliance/catalogue/`; the production desktop origin is fixed at
-`https://www.appliance.sh`. Blacklist evaluation is deferred to AP-173 and gates
-installation. The Runtime installer itself remains owned by AP-173, so this page
-reports that handoff explicitly and never simulates a successful install.
+`https://www.appliance.sh`. The Install action now delegates to the desktop's
+Runtime host, which re-verifies the bundle against that current index and the
+signed unsafe-app blacklist before committing it to the selected workspace.
+
+### Installed Apps
+
+`/apps` reads the installed-app store for `useCurrentWorkspace()`. Cards show
+name, version, SPDX license, grant-date placeholder, Running/Stopped state,
+sandbox and egress summaries, and a compound service count. **Open** starts the
+installed app through the pooled Runtime and opens its first published local URL
+in the system browser; the dedicated app window remains AP-176. **Stop** leaves
+the pool running. **Install from file** uses the native file dialog and the same
+host installer as Catalogue.
+
+Unsigned and otherwise unverified local bundles use the Unknown Publisher
+dialog. Publisher risk and requested controls are separate sections; focus
+starts on Cancel. Open once does not persist an acknowledgement, while Open and
+remember writes the digest-bound 30-day warning timestamp. Installed metadata
+is per selected workspace target even though immutable bundle bytes are shared
+content-addressably across targets.
 
 Status: **plan** (no feature code). This is the blueprint phases **I1–I5** build to.
 Scope: the Appliance **desktop app** (`packages/app`, the shared `Console`). The same

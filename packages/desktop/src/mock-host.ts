@@ -12,7 +12,9 @@ import type {
   ConsoleHost,
   HostConfig,
   LocalPreflightCheck,
+  InstalledRuntimeApp,
 } from '@appliance.sh/app';
+import type { InstalledApp } from '@appliance.sh/sdk';
 
 // Browser-runnable stand-in for the Tauri host, so the desktop-only
 // pages (Local Runtime, deploy wizard, bootstrap) can be developed and
@@ -36,6 +38,10 @@ import type {
 //   catalogue-unverified signature failure / fail-closed empty state
 //   catalogue-loading    fetch pending / verification loading state
 //   catalogue-stale expired-but-previously-verified read-only catalogue
+//   installed-apps       populated Installed Apps page
+//   installed-apps-empty empty Installed Apps page
+//   unknown-publisher    unsigned app requiring the warning dialog
+//   install-from-file    file-picker installation path
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
 // lines) so spinners, disabled states, and progress UI are exercised
@@ -55,7 +61,11 @@ type Scenario =
   | 'catalogue-unverified'
   | 'catalogue-stale'
   | 'user-mode-no-vm'
-  | 'catalogue-loading';
+  | 'catalogue-loading'
+  | 'installed-apps'
+  | 'installed-apps-empty'
+  | 'unknown-publisher'
+  | 'install-from-file';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -70,9 +80,16 @@ export function mockHostEnabled(): boolean {
     if (scenario) {
       sessionStorage.setItem(SCENARIO_KEY, scenario);
       if (scenario === 'first-run') sessionStorage.removeItem(APP_MODE_KEY);
-      if (scenario === 'user-mode' || scenario === 'user-mode-no-vm') {
+      if (
+        scenario === 'user-mode' ||
+        scenario === 'user-mode-no-vm' ||
+        scenario === 'installed-apps' ||
+        scenario === 'installed-apps-empty' ||
+        scenario === 'unknown-publisher' ||
+        scenario === 'install-from-file'
+      ) {
         sessionStorage.setItem(APP_MODE_KEY, 'user');
-        configureWorkspaceScenario(scenario);
+        configureWorkspaceScenario(scenario === 'user-mode-no-vm' ? 'user-mode-no-vm' : 'user-mode');
       }
       if (scenario === 'developer-mode') sessionStorage.setItem(APP_MODE_KEY, 'developer');
     }
@@ -93,7 +110,11 @@ function scenario(): Scenario {
     s === 'catalogue-unverified' ||
     s === 'catalogue-stale' ||
     s === 'user-mode-no-vm' ||
-    s === 'catalogue-loading'
+    s === 'catalogue-loading' ||
+    s === 'installed-apps' ||
+    s === 'installed-apps-empty' ||
+    s === 'unknown-publisher' ||
+    s === 'install-from-file'
     ? s
     : 'ready';
 }
@@ -384,11 +405,69 @@ function preflight(): LocalPreflightCheck[] {
   ];
 }
 
+function mockInstalledApp(
+  appId: string,
+  name: string,
+  version: string,
+  license: string,
+  overrides: Partial<InstalledApp> = {}
+): InstalledApp {
+  return {
+    appId,
+    name,
+    version,
+    license,
+    publisher: { name: 'Lab 255', keyId: `ed25519:sha256:${'1'.repeat(64)}`, tier: 'known-publisher' },
+    digest: `sha256:${appId.slice(0, 1).charCodeAt(0).toString(16).padStart(2, '0').repeat(32)}`,
+    bundlePath: `/Users/dev/.appliance/runtime/bundles/${appId}.appliance.zip`,
+    installedAt: '2026-09-02T08:00:00.000Z',
+    source: `https://${appId}.appliance.zip/`,
+    verification: { signature: 'valid', indexBound: { generation: 7 } },
+    controlsSummary: {
+      egressHosts: appId === 'dashboard' ? [] : ['api.example.com'],
+      mounts: [],
+      publishedPorts: [{ name: 'web', guest: 8080, protocol: 'tcp' }],
+      resources: { cpus: 1, memoryMib: 512 },
+      serviceCount: appId === 'notes-sync' ? 2 : 1,
+      serviceNames: appId === 'notes-sync' ? ['web', 'sync'] : [],
+    },
+    ...overrides,
+  };
+}
+
+function initialInstalledApps(): InstalledRuntimeApp[] {
+  if (scenario() === 'installed-apps-empty') return [];
+  if (scenario() === 'unknown-publisher') {
+    return [
+      {
+        app: mockInstalledApp('local-tool', 'Local Tool', '0.1.0', 'MIT', {
+          publisher: { name: 'Local developer', tier: 'unknown' },
+          source: 'file',
+          verification: { signature: 'unsigned' },
+          lastWarnedAt: undefined,
+        }),
+        state: 'stopped',
+        urls: [],
+      },
+    ];
+  }
+  return [
+    { app: mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'), state: 'running', urls: ['http://127.0.0.1:8443'] },
+    { app: mockInstalledApp('dashboard', 'Dashboard', '0.9.1', 'Apache-2.0'), state: 'stopped', urls: [] },
+    {
+      app: mockInstalledApp('notes-sync', 'Notes+Sync', '2.4.0', 'AGPL-3.0'),
+      state: 'running',
+      urls: ['http://127.0.0.1:8445'],
+    },
+  ];
+}
+
 // ---- host ---------------------------------------------------------------
 
 export function createMockHost(): ConsoleHost {
   const catalogueFixture = signedCatalogueFixture();
   let catalogueCache: CatalogueFetchResult | null = null;
+  let installedApps = initialInstalledApps();
   return {
     async getConfig(): Promise<HostConfig> {
       const state = readState();
@@ -462,6 +541,72 @@ export function createMockHost(): ConsoleHost {
               ? verifiedAt
               : catalogueCache.maxSeenWallClock,
         };
+      },
+    },
+
+    installedApps: {
+      async list() {
+        await sleep(40);
+        return installedApps;
+      },
+      async installBundle(source, _target, options) {
+        await sleep(120);
+        const catalogueApp = source.startsWith('https://');
+        const next = catalogueApp
+          ? mockInstalledApp(source.split('://')[1]?.split('.')[0] ?? 'catalogue-app', 'Catalogue App', '1.0.0', 'MIT')
+          : mockInstalledApp('local-tool', 'Local Tool', '0.1.0', 'MIT', {
+              publisher: { name: 'Local developer', tier: 'unknown' },
+              source: 'file',
+              verification: { signature: 'unsigned' },
+            });
+        if (next.publisher.tier === 'unknown' && !options?.acceptUnknownPublisher) {
+          throw new Error(
+            `UNKNOWN_PUBLISHER:${JSON.stringify({
+              appId: next.appId,
+              name: next.name,
+              version: next.version,
+              license: next.license,
+              source: next.source,
+              digest: next.digest,
+              signature: 'unsigned',
+              publisher: next.publisher.name,
+              controlsSummary: next.controlsSummary,
+            })}`
+          );
+        }
+        if (next.publisher.tier === 'unknown') next.lastWarnedAt = new Date().toISOString();
+        installedApps = [
+          ...installedApps.filter((item) => item.app.appId !== next.appId),
+          { app: next, state: 'stopped', urls: [] },
+        ];
+        return next;
+      },
+      async uninstall(app) {
+        installedApps = installedApps.filter((item) => item.app.appId !== app && item.app.name !== app);
+      },
+      async run(app, _target, options) {
+        const item = installedApps.find((candidate) => candidate.app.appId === app || candidate.app.name === app);
+        if (!item) throw new Error(`Mock installed app not found: ${app}`);
+        if (item.app.publisher.tier === 'unknown' && !item.app.lastWarnedAt && !options?.acceptUnknownPublisher) {
+          throw new Error('UNKNOWN_PUBLISHER:{}');
+        }
+        item.app.lastWarnedAt =
+          item.app.publisher.tier === 'unknown' && options?.rememberUnknownPublisher
+            ? new Date().toISOString()
+            : item.app.lastWarnedAt;
+        item.state = 'running';
+        item.urls = ['http://127.0.0.1:8443'];
+        return { appId: item.app.appId, urls: item.urls };
+      },
+      async stop(app) {
+        const item = installedApps.find((candidate) => candidate.app.appId === app);
+        if (item) {
+          item.state = 'stopped';
+          item.urls = [];
+        }
+      },
+      async pickBundle() {
+        return '/private/tmp/unsigned-local.appliance.zip';
       },
     },
 

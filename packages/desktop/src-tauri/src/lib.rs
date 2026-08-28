@@ -368,6 +368,202 @@ fn set_catalogue_cache(input: SetCatalogueCacheInput) -> Result<(), HostError> {
     write_catalogue_cache(&path, &next)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeInstallBundleInput {
+    source: String,
+    target: String,
+    #[serde(default)]
+    accept_unknown_publisher: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeUninstallBundleInput {
+    app: String,
+    target: String,
+    #[serde(default)]
+    keep_data: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeRunInstalledInput {
+    app: String,
+    target: String,
+    #[serde(default)]
+    accept_unknown_publisher: bool,
+    #[serde(default)]
+    remember_unknown_publisher: bool,
+}
+
+async fn run_appliance_capture(app: &AppHandle, args: &[String]) -> Result<String, String> {
+    let sidecar = app
+        .shell()
+        .sidecar("appliance")
+        .map_err(|error| format!("Bundled appliance CLI is unavailable: {error}"))?
+        .args(args);
+    let (mut receiver, _child) = sidecar
+        .spawn()
+        .map_err(|error| format!("failed to spawn appliance CLI: {error}"))?;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut exit_code = None;
+    while let Some(event) = receiver.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) => stdout.extend(bytes),
+            CommandEvent::Stderr(bytes) => stderr.extend(bytes),
+            CommandEvent::Error(message) => return Err(message),
+            CommandEvent::Terminated(payload) => exit_code = payload.code,
+            _ => {}
+        }
+    }
+    if exit_code != Some(0) {
+        let detail = String::from_utf8_lossy(&stderr).trim().to_string();
+        return Err(if detail.is_empty() {
+            format!("appliance CLI exited with code {}", exit_code.unwrap_or(-1))
+        } else {
+            detail
+        });
+    }
+    Ok(String::from_utf8_lossy(&stdout).to_string())
+}
+
+async fn run_appliance_json(app: &AppHandle, args: &[String]) -> Result<serde_json::Value, String> {
+    let stdout = run_appliance_capture(app, args).await?;
+    stdout
+        .lines()
+        .rev()
+        .find_map(|line| serde_json::from_str::<serde_json::Value>(line.trim()).ok())
+        .ok_or_else(|| "appliance CLI returned no JSON result".to_string())
+}
+
+#[tauri::command]
+async fn runtime_installed_list(
+    app: AppHandle,
+    target: String,
+) -> Result<serde_json::Value, String> {
+    if target.trim().is_empty() {
+        return Err("a workspace target is required".to_string());
+    }
+    let installed = run_appliance_json(
+        &app,
+        &[
+            "runtime".into(),
+            "list".into(),
+            "--target".into(),
+            target,
+            "--json".into(),
+        ],
+    )
+    .await?;
+    let runtime = run_appliance_json(&app, &["runtime".into(), "ps".into(), "--json".into()])
+        .await
+        .unwrap_or_else(|_| serde_json::Value::Array(Vec::new()));
+    let records = runtime.as_array().cloned().unwrap_or_default();
+    let views = installed
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|row| {
+            let installed_app = row.get("app")?.clone();
+            let app_id = installed_app.get("appId")?.as_str()?;
+            let record = records.iter().find(|record| {
+                record.get("appId").and_then(|value| value.as_str()) == Some(app_id)
+            });
+            let state = record
+                .and_then(|value| value.get("state"))
+                .and_then(|value| value.as_str())
+                .filter(|state| matches!(*state, "running" | "starting" | "failed"))
+                .unwrap_or("stopped");
+            let urls = record
+                .and_then(|value| value.get("hostPorts"))
+                .and_then(|value| value.as_array())
+                .map(|ports| {
+                    ports
+                        .iter()
+                        .filter_map(|port| port.get("host").and_then(|value| value.as_u64()))
+                        .map(|port| serde_json::Value::String(format!("http://127.0.0.1:{port}")))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            Some(serde_json::json!({ "app": installed_app, "state": state, "urls": urls }))
+        })
+        .collect::<Vec<_>>();
+    Ok(serde_json::Value::Array(views))
+}
+
+#[tauri::command]
+async fn runtime_install_bundle(
+    app: AppHandle,
+    input: RuntimeInstallBundleInput,
+) -> Result<serde_json::Value, String> {
+    if input.source.trim().is_empty() || input.target.trim().is_empty() {
+        return Err("a bundle source and workspace target are required".to_string());
+    }
+    let mut args = vec![
+        "runtime".into(),
+        "install".into(),
+        input.source,
+        "--target".into(),
+        input.target,
+        "--json".into(),
+    ];
+    if input.accept_unknown_publisher {
+        args.push("--accept-unknown-publisher".into());
+    }
+    run_appliance_json(&app, &args).await
+}
+
+#[tauri::command]
+async fn runtime_uninstall_bundle(
+    app: AppHandle,
+    input: RuntimeUninstallBundleInput,
+) -> Result<(), String> {
+    let mut args = vec![
+        "runtime".into(),
+        "uninstall".into(),
+        input.app,
+        "--target".into(),
+        input.target,
+    ];
+    if input.keep_data {
+        args.push("--keep-data".into());
+    }
+    run_appliance_capture(&app, &args).await.map(|_| ())
+}
+
+#[tauri::command]
+async fn runtime_run_installed(
+    app: AppHandle,
+    input: RuntimeRunInstalledInput,
+) -> Result<serde_json::Value, String> {
+    let mut args = vec![
+        "runtime".into(),
+        "run".into(),
+        input.app,
+        "--target".into(),
+        input.target,
+        "--detach".into(),
+        "--json".into(),
+    ];
+    if input.accept_unknown_publisher {
+        args.push("--accept-unknown-publisher".into());
+    }
+    if input.remember_unknown_publisher {
+        args.push("--remember-unknown-publisher".into());
+    }
+    run_appliance_json(&app, &args).await
+}
+
+#[tauri::command]
+async fn runtime_stop_installed(handle: AppHandle, app: String) -> Result<(), String> {
+    run_appliance_capture(&handle, &["runtime".into(), "stop".into(), app])
+        .await
+        .map(|_| ())
+}
+
 fn shared_profiles_path() -> Option<PathBuf> {
     home_dir().map(|h| h.join(SHARED_PROFILES_DIR).join(SHARED_PROFILES_FILE))
 }
@@ -6048,6 +6244,11 @@ pub fn run() {
             set_app_mode,
             get_catalogue_cache,
             set_catalogue_cache,
+            runtime_installed_list,
+            runtime_install_bundle,
+            runtime_uninstall_bundle,
+            runtime_run_installed,
+            runtime_stop_installed,
             add_cluster,
             select_cluster,
             remove_cluster,

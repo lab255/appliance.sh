@@ -4,11 +4,25 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import type { ApplianceV2, ApplianceV2Service } from '@appliance.sh/sdk';
+import { PINNED_CATALOGUE_TRUST, type ApplianceV2, type ApplianceV2Service } from '@appliance.sh/sdk';
 import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
 import { readBundleManifest, unpackBundle, verifyBundle, type VerifyBundleResult } from './utils/bundle-read.js';
+import { controlsSummaryForManifest, currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
+import {
+  assertIndexBinding,
+  assertNotBlacklisted,
+  findLocalEvidence,
+  loadBlacklist,
+  markUnknownPublisherWarned,
+  promptForUnknownPublisher,
+  readCachedIndex,
+  runRuntimeInstallCommand,
+  runRuntimeListCommand,
+  runRuntimeUninstallCommand,
+  unknownPublisherWarningDue,
+} from './appliance-runtime-install.js';
 import {
   readRuntimeRegistry,
   removeRuntimeRecord,
@@ -84,7 +98,7 @@ export type RuntimeServicePlan = RuntimeLeafWorkload & {
 export type RuntimePlan = RuntimePlanBase &
   (RuntimeLeafWorkload | { kind: 'compound'; services: RuntimeServicePlan[] });
 
-type LoadedRuntimeBundle = VerifyBundleResult;
+export type LoadedRuntimeBundle = VerifyBundleResult;
 
 export interface EffectiveRuntimePolicy {
   version: 1;
@@ -294,6 +308,15 @@ function missingRuntimeTarget(
 
 export async function runRuntimeCommand(verb: string, args: string[]): Promise<void> {
   switch (verb) {
+    case 'install':
+      await runRuntimeInstallCommand(args);
+      return;
+    case 'uninstall':
+      await runRuntimeUninstallCommand(args, (appId) => runtimeStop([appId], false));
+      return;
+    case 'list':
+      runRuntimeListCommand(args);
+      return;
     case 'run':
       await runtimeRun(args);
       return;
@@ -322,29 +345,114 @@ async function runtimeRun(args: string[]): Promise<void> {
     console.log(
       'Runs one container, binary, or compound bundle in the pooled appliance-runtime VM; Ctrl-C stops the app.'
     );
+    console.log('The argument may also be an installed app name; use --accept-unknown-publisher for headless opens.');
     return;
   }
-  const input = args.find((arg) => !arg.startsWith('-'));
+  const input = firstPositional(args, ['--target']);
   if (!input) fail('Usage: appliance runtime run <path-to-app.appliance.zip>', 2);
   if (/^https?:\/\//.test(input))
     fail('runtime run URLs are not yet supported; download the bundle and pass a local path', 2);
-  const bundlePath = path.resolve(input);
-  let loaded: LoadedRuntimeBundle;
+  const target = currentWorkspaceTarget(optionValue(args, '--target'));
+  const inputPath = path.resolve(input);
+  const inputIsFile = fs.existsSync(inputPath) && fs.statSync(inputPath).isFile();
+  const installed = inputIsFile ? null : resolveInstalledApp(input, target);
+  const originalBundlePath = installed?.bundlePath ?? inputPath;
+  let opened: VerifiedRuntimeOpenCopy | null = null;
   try {
-    const bounded = readBundleManifest(bundlePath);
-    if (bounded.classification !== 'runnable') throw new Error('runtime run requires a manifest v2 runnable bundle');
-    loaded = verifyBundle(bundlePath);
+    opened = stageAndVerifyRuntimeOpenCopy(originalBundlePath, installed?.digest);
+    const { loaded, bundlePath } = opened;
+    const now = new Date();
+    const blacklist = await loadBlacklist({
+      fetcher: fetch,
+      policy: PINNED_CATALOGUE_TRUST,
+      now,
+      root: runtimeRoot(),
+      networkInstall: false,
+      preOpen: true,
+    });
+    if (blacklist) {
+      assertNotBlacklisted(
+        blacklist,
+        loaded.manifest.name,
+        loaded.manifest.version,
+        loaded.digest,
+        loaded.manifest.publisher.keyId
+      );
+    }
+
+    const index = await readCachedIndex(PINNED_CATALOGUE_TRUST, now, runtimeRoot());
+    const evidence = findLocalEvidence(index, bundlePath);
+    if (installed?.verification.indexBound) {
+      const expectedGeneration = installed.verification.indexBound.generation;
+      if (!index || index.stale || index.payload.generation !== expectedGeneration) {
+        throw new Error(
+          `Installed publisher evidence for '${installed.name}' is not bound to the current verified index generation.`
+        );
+      }
+      if (!evidence || evidence.generation !== expectedGeneration) {
+        throw new Error(`The current verified index no longer binds '${installed.name}' to this exact bundle.`);
+      }
+      assertIndexBinding(evidence.entry, loaded.digest, loaded.manifest);
+    }
+
+    const signature = loaded.signature ? (loaded.signature.valid ? 'valid' : 'invalid') : 'unsigned';
+    const knownPublisher = Boolean(evidence && signature === 'valid');
+    const warningDue =
+      !knownPublisher &&
+      (!installed || unknownPublisherWarningDue(installed, now) || installed.verification.signature !== signature);
+    if (warningDue) {
+      const automatedAcceptance = args.includes('--accept-unknown-publisher');
+      const rememberedAcceptance = args.includes('--remember-unknown-publisher');
+      const interactiveAcceptance =
+        !automatedAcceptance &&
+        !rememberedAcceptance &&
+        (await promptForUnknownPublisher(
+          {
+            appId: loaded.manifest.name,
+            name: evidence?.entry.name ?? installed?.name ?? loaded.manifest.name,
+            version: loaded.manifest.version,
+            license: loaded.manifest.license,
+            source: installed?.source ?? 'file',
+            digest: loaded.digest,
+            signature,
+            publisher: loaded.manifest.publisher.name,
+            controlsSummary: installed?.controlsSummary ?? controlsSummaryForManifest(loaded.manifest),
+          },
+          'open'
+        ));
+      if (!automatedAcceptance && !rememberedAcceptance && !interactiveAcceptance) {
+        throw new Error('Unknown Publisher acknowledgement required; pass --accept-unknown-publisher for this run');
+      }
+      // Headless acceptance is one-shot. Desktop's explicit remember action
+      // and an interactive TTY acknowledgement are time-bounded in the store.
+      if (installed && (rememberedAcceptance || interactiveAcceptance)) {
+        markUnknownPublisherWarned(installed, target);
+      }
+    }
   } catch (error) {
+    if (opened) fs.rmSync(opened.bundlePath, { force: true });
     fail(error instanceof Error ? error.message : String(error), 2);
+  }
+  if (!opened) fail('Runtime pre-open verification did not produce an immutable bundle copy.', 2);
+  const { bundlePath, loaded } = opened;
+  if (installed && loaded.digest !== installed.digest) {
+    fs.rmSync(bundlePath, { force: true });
+    fail(`installed bundle integrity check failed for '${installed.name}'`, 2);
   }
   const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
   if (existing && (existing.state === 'starting' || existing.state === 'running')) {
+    fs.rmSync(bundlePath, { force: true });
     fail(`runtime instance '${existing.appId}' is already running in ${existing.poolVm}`, 2);
   }
 
   const installDir = path.join(runtimeRoot(), 'apps', loaded.manifest.name, loaded.manifest.version);
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
-  const installChanged = installRuntimeBundle(bundlePath, installDir, loaded);
+  let installChanged: boolean;
+  try {
+    installChanged = installRuntimeBundle(bundlePath, installDir, loaded);
+  } finally {
+    fs.rmSync(bundlePath, { force: true });
+  }
   const records = readRuntimeRegistry().filter((entry) => entry.appId !== loaded.manifest.name);
   const persisted = persistedRuntimeAllocation(loaded.manifest);
   const principalIp = persisted?.principalIp ?? allocatePrincipalIp(records);
@@ -368,7 +476,7 @@ async function runtimeRun(args: string[]): Promise<void> {
     updatedAt: now,
     poolVm: RUNTIME_POOL_VM,
     poolRestartPending: false,
-    bundlePath,
+    bundlePath: originalBundlePath,
     installDir,
     shareTag: plan.share.tag,
     uid,
@@ -413,9 +521,14 @@ async function runtimeRun(args: string[]): Promise<void> {
     exitCode: initialExitCode,
     poolRestartPending: false,
   });
-  for (const port of hostPorts) {
-    console.log(`${chalk.green('✓')} ${port.name}: http://127.0.0.1:${port.host} → ${principalIp}:${port.guest}/tcp`);
+  const urls = hostPorts.map((port) => `http://127.0.0.1:${port.host}`);
+  if (args.includes('--json')) console.log(JSON.stringify({ appId: plan.appId, urls }));
+  else {
+    for (const port of hostPorts) {
+      console.log(`${chalk.green('✓')} ${port.name}: http://127.0.0.1:${port.host} → ${principalIp}:${port.guest}/tcp`);
+    }
   }
+  if (args.includes('--detach')) return;
   console.log(chalk.dim(`streaming ${plan.appId} logs; Ctrl-C stops the app but leaves ${RUNTIME_POOL_VM} running`));
 
   let stopping = false;
@@ -517,7 +630,7 @@ function runtimePs(args: string[]): void {
   }
 }
 
-function runtimeStop(args: string[], print = true): void {
+export function runtimeStop(args: string[], print = true): void {
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Usage: appliance runtime stop <app>');
     return;
@@ -530,6 +643,53 @@ function runtimeStop(args: string[], print = true): void {
   if (result.state !== 'stopped' && result.state !== 'missing') fail(`failed to stop '${appId}'`, 1);
   removeRuntimeRecord(appId);
   if (print) console.log(`${chalk.green('✓')} stopped ${appId}; pooled VM ${record.poolVm} remains running`);
+}
+
+export interface VerifiedRuntimeOpenCopy {
+  bundlePath: string;
+  loaded: LoadedRuntimeBundle;
+}
+
+export function stageAndVerifyRuntimeOpenCopy(
+  source: string,
+  expectedDigest?: string,
+  directory = path.join(runtimeRoot(), 'preopen')
+): VerifiedRuntimeOpenCopy {
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  fs.chmodSync(directory, 0o700);
+  const destination = path.join(
+    directory,
+    `open-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.appliance.zip`
+  );
+  fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(destination, 0o400);
+  try {
+    const bounded = readBundleManifest(destination);
+    if (bounded.classification !== 'runnable') {
+      throw new Error('runtime run requires a manifest v2 runnable bundle');
+    }
+    const loaded = verifyBundle(destination, {
+      resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
+    });
+    if (expectedDigest && loaded.digest !== expectedDigest) {
+      throw new Error('installed bundle integrity check failed for the exact immutable pre-open copy');
+    }
+    return { bundlePath: destination, loaded };
+  } catch (cause) {
+    fs.rmSync(destination, { force: true });
+    throw cause;
+  }
+}
+
+function firstPositional(args: string[], valueOptions: string[]): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    if (valueOptions.includes(args[index]!)) {
+      index += 1;
+      continue;
+    }
+    if (!args[index]!.startsWith('-')) return args[index];
+  }
+  return undefined;
 }
 
 async function runtimeLogs(args: string[]): Promise<void> {

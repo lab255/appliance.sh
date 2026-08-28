@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { CatalogueEntry } from '@appliance.sh/sdk';
-import { Grid2X2, Search, ShieldAlert } from 'lucide-react';
+import { Search, ShieldAlert } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,52 +9,20 @@ import { SectionCard } from '@/components/ui/section-card';
 import { StatusPill } from '@/components/ui/status-pill';
 import { useHost } from '@/providers/host-provider';
 import { verifyHostCatalogue, type CatalogueViewData } from '@/lib/trust/catalogue';
+import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
+import { parseUnknownPublisherError, type UnknownPublisherPrompt } from '@/lib/installed-apps';
+import { InstalledAppsPage, UnknownPublisherDialog } from '@/pages/installed-apps';
 
-function RuntimePlaceholder({
-  title,
-  description,
-  emptyTitle,
-  icon: Icon,
-}: {
-  title: string;
-  description: string;
-  emptyTitle: string;
-  icon: typeof Grid2X2;
-}) {
-  return (
-    <PageShell rail="browse">
-      <PageHeader title={title} description={description} />
-      <SectionCard>
-        <div className="flex min-h-52 flex-col items-center justify-center text-center">
-          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-muted-foreground)]">
-            <Icon className="h-5 w-5" aria-hidden />
-          </span>
-          <h2 className="text-sm font-semibold">{emptyTitle}</h2>
-          <p className="mt-1 max-w-md text-xs leading-4 text-[var(--color-muted-foreground)]">
-            This page arrives with the Appliance app runtime. Runtime installation and catalogue content are tracked
-            separately.
-          </p>
-        </div>
-      </SectionCard>
-    </PageShell>
-  );
-}
-
-export function InstalledAppsPage() {
-  return (
-    <RuntimePlaceholder
-      title="Installed Apps"
-      description="Apps installed in this workspace."
-      emptyTitle="Installed apps arrive with the runtime"
-      icon={Grid2X2}
-    />
-  );
-}
+export { InstalledAppsPage };
 
 export function CataloguePage() {
   const host = useHost();
+  const { cluster } = useCurrentWorkspace();
+  const target = cluster?.id ?? 'local';
   const [data, setData] = React.useState<CatalogueViewData | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [pending, setPending] = React.useState<{ entry: CatalogueEntry; prompt: UnknownPublisherPrompt } | null>(null);
+  const [installing, setInstalling] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
@@ -84,7 +52,46 @@ export function CataloguePage() {
     };
   }, [host.catalogue]);
 
-  return <CatalogueContent data={data} error={error} loading={!data && !error} />;
+  const installEntry = async (entry: CatalogueEntry): Promise<string> => {
+    if (!host.installedApps) throw new Error('Installation is available in the Appliance desktop app.');
+    try {
+      const installed = await host.installedApps.installBundle(entry.url, target);
+      return `${installed.name} ${installed.version} was installed.`;
+    } catch (cause) {
+      const prompt = parseUnknownPublisherError(cause);
+      if (!prompt) throw cause;
+      setPending({ entry, prompt });
+      return 'Review the Unknown Publisher warning to continue.';
+    }
+  };
+
+  const acceptUnknown = async () => {
+    if (!pending || !host.installedApps) return;
+    setInstalling(true);
+    try {
+      await host.installedApps.installBundle(pending.entry.url, target, { acceptUnknownPublisher: true });
+      setPending(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The bundle could not be installed.');
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  return (
+    <>
+      <CatalogueContent data={data} error={error} loading={!data && !error} onInstall={installEntry} />
+      {pending ? (
+        <UnknownPublisherDialog
+          prompt={pending.prompt}
+          action="install"
+          busy={installing}
+          onCancel={() => setPending(null)}
+          onAccept={() => void acceptUnknown()}
+        />
+      ) : null}
+    </>
+  );
 }
 
 type Category = 'All' | NonNullable<CatalogueEntry['category']>;
@@ -111,10 +118,12 @@ export function CatalogueContent({
   data,
   error,
   loading = false,
+  onInstall,
 }: {
   data: CatalogueViewData | null;
   error: string | null;
   loading?: boolean;
+  onInstall?: (entry: CatalogueEntry) => Promise<string>;
 }) {
   const [query, setQuery] = React.useState(() =>
     typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('q') ?? '')
@@ -170,12 +179,7 @@ export function CatalogueContent({
         </Banner>
       ) : null}
       {installMessage ? (
-        <Banner
-          tone="info"
-          title="Installation is not available yet"
-          className="mb-4"
-          onDismiss={() => setInstallMessage(null)}
-        >
+        <Banner tone="info" title="Installation" className="mb-4" onDismiss={() => setInstallMessage(null)}>
           {installMessage}
         </Banner>
       ) : null}
@@ -303,9 +307,18 @@ export function CatalogueContent({
                       size="sm"
                       disabled={data.stale}
                       aria-label={`Install ${entry.name}`}
-                      onClick={() =>
-                        setInstallMessage('Installing from the catalogue arrives with AP-173. Nothing was installed.')
-                      }
+                      onClick={() => {
+                        setInstallMessage(null);
+                        void (onInstall
+                          ? onInstall(entry)
+                              .then(setInstallMessage)
+                              .catch((cause: unknown) =>
+                                setInstallMessage(cause instanceof Error ? cause.message : 'Installation failed.')
+                              )
+                          : Promise.resolve(
+                              setInstallMessage('Installation is available in the Appliance desktop app.')
+                            ));
+                      }}
                     >
                       Install
                     </Button>

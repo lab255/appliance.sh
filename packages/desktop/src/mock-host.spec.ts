@@ -85,3 +85,34 @@ describe('mock host catalogue scenarios', () => {
     await expect(verifyScenario('catalogue-stale')).resolves.toMatchObject({ stale: true });
   });
 });
+
+describe('mock host installed-app scenarios', () => {
+  beforeEach(() => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+  });
+
+  async function hostFor(scenario: string) {
+    vi.stubGlobal('window', { location: { search: `?mock-host&scenario=${scenario}` }, open: vi.fn() });
+    expect(mockHostEnabled()).toBe(true);
+    return createMockHost();
+  }
+
+  it('provides populated and empty per-workspace stores', async () => {
+    const populated = await hostFor('installed-apps');
+    expect(await populated.installedApps?.list('microvm')).toHaveLength(3);
+
+    sessionStorage.clear();
+    const empty = await hostFor('installed-apps-empty');
+    expect(await empty.installedApps?.list('microvm')).toEqual([]);
+  });
+
+  it('requires explicit acceptance for the unknown-publisher fixture', async () => {
+    const host = await hostFor('unknown-publisher');
+    await expect(host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm')).rejects.toThrow(
+      'UNKNOWN_PUBLISHER:'
+    );
+    await expect(
+      host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm', { acceptUnknownPublisher: true })
+    ).resolves.toMatchObject({ publisher: { tier: 'unknown' } });
+  });
+});
