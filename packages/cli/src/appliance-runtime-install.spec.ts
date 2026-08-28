@@ -22,7 +22,12 @@ import {
 import { EntitlementGrantRequiredError } from './appliance-runtime-entitlements';
 import { readDevSigningKey } from './utils/bundle-sign';
 import { latestEntitlement, readEntitlementStore } from './utils/entitlements';
-import { immutableBundlePath, readInstalledApps, upsertInstalledApp } from './utils/installed-apps';
+import {
+  immutableBundlePath,
+  listInstalledTargets,
+  readInstalledApps,
+  upsertInstalledApp,
+} from './utils/installed-apps';
 import { tinyOciTar } from './utils/bundle-oci-fixture';
 import { writeBundle } from './utils/bundle-write';
 
@@ -90,6 +95,27 @@ function blacklist(appId: string): VerifiedCatalogue<CatalogueBlacklist> {
 }
 
 describe('runtime install', () => {
+  it('stores a fresh install under the NTFS-safe immutable bundle name', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-install-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const bundle = await unsignedBundle(directory);
+    const installed = await installBundle(bundle.outputPath, {
+      root,
+      target: 'local',
+      acceptUnknownPublisher: true,
+      verifiedBlacklist: null,
+    });
+    const expected = immutableBundlePath(bundle.digest, root);
+    const stored = JSON.parse(fs.readFileSync(path.join(root, 'installed', 'local', 'apps.json'), 'utf8')) as {
+      apps: InstalledApp[];
+    };
+    expect(path.basename(installed.bundlePath)).toBe(`sha256-${bundle.digest.slice('sha256:'.length)}.appliance.zip`);
+    expect(installed.bundlePath).toBe(expected);
+    expect(fs.existsSync(expected)).toBe(true);
+    expect(stored.apps[0]?.bundlePath).toBe(expected);
+  });
+
   it('requires explicit acceptance for an unsigned local bundle', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-install-'));
     roots.push(directory);
@@ -287,6 +313,27 @@ describe('runtime uninstall/list', () => {
     await uninstallInstalledApp('journal', { target: 'cloud', root });
     expect(fs.existsSync(local.bundlePath)).toBe(false);
     expect(fs.existsSync(extracted)).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('lists and uninstalls a pre-existing legacy immutable bundle', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-uninstall-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const digest = `sha256:${'1'.repeat(64)}`;
+    const legacy = path.join(root, 'bundles', `${digest}.appliance.zip`);
+    const installed = { ...app(root, 'local'), bundlePath: legacy };
+    fs.mkdirSync(path.dirname(legacy), { recursive: true });
+    fs.writeFileSync(legacy, 'legacy immutable bundle');
+    upsertInstalledApp('local', installed, root);
+
+    const listed = listInstalledTargets(root).flatMap((group) =>
+      group.apps.map((listedApp) => ({ target: group.target, app: listedApp }))
+    );
+    expect(listed[0]?.app.bundlePath).toBe(legacy);
+    expect(formatInstalledAppsTable(listed)).toContain('local\tJournal\t1.2.0');
+
+    await uninstallInstalledApp('journal', { target: 'local', root });
+    expect(fs.existsSync(legacy)).toBe(false);
   });
 
   it('never deletes a non-canonical bundle path during uninstall', async () => {
