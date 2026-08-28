@@ -1,0 +1,49 @@
+{
+  "manifest": "v2",
+  "kind": "runnable",
+  "type": "binary",
+  "name": "dashboard",
+  "version": "1.0.0",
+  "license": "MIT",
+  "description": "Tiny static HTTP server for the binary Runtime path",
+  "publisher": {
+    "name": "Lab 255 examples"
+  },
+  "payload": {
+    "targets": {
+      "linux/amd64": {
+        "root": "payload/dashboard/linux-amd64",
+        "entrypoint": "bin/dashboard",
+        "args": ["--listen", "0.0.0.0:8080"]
+      },
+      "linux/arm64": {
+        "root": "payload/dashboard/linux-arm64",
+        "entrypoint": "bin/dashboard",
+        "args": ["--listen", "0.0.0.0:8080"]
+      }
+    }
+  },
+  "env": {
+    "DASHBOARD_MESSAGE": "dashboard binary runtime proof"
+  },
+  "ui": {
+    "type": "web",
+    "port": "http",
+    "path": "/"
+  },
+  "ports": [
+    {
+      "name": "http",
+      "guest": 8080,
+      "protocol": "tcp",
+      "expose": "host",
+      "primary": true
+    }
+  ],
+  "resources": {
+    "cpus": 1,
+    "memoryMib": 512,
+    "diskGib": 2
+  }
+}
+

@@ -22,6 +22,29 @@ function manifest(resources: Record<string, number> = {}) {
   });
 }
 
+function binaryManifest(platform: 'linux/amd64' | 'linux/arm64' = 'linux/amd64') {
+  return applianceV2Input.parse({
+    manifest: 'v2',
+    kind: 'runnable',
+    type: 'binary',
+    name: 'dashboard',
+    version: '1.0.0',
+    license: 'MIT',
+    publisher: { name: 'Lab 255' },
+    payload: {
+      targets: {
+        [platform]: {
+          root: `payload/dashboard/${platform.slice('linux/'.length)}`,
+          entrypoint: 'bin/dashboard',
+          args: ['--listen', '0.0.0.0:8080'],
+        },
+      },
+    },
+    env: { DASHBOARD_MODE: 'live' },
+    ports: [{ name: 'http', guest: 8080, protocol: 'tcp', expose: 'host', primary: true }],
+  });
+}
+
 describe('manifest to pooled runtime plan', () => {
   it('targets published ports at the principal /32 and maps resources to cgroup hints', () => {
     const plan = manifestToRuntimePlan(
@@ -72,6 +95,33 @@ describe('manifest to pooled runtime plan', () => {
         value.ports.map((port, index) => ({ ...port, host: 20000 + index }))
       )
     ).toThrow('at most 16 ports');
+  });
+
+  it('routes a binary manifest to an explicit host-architecture target', () => {
+    const plan = manifestToRuntimePlan(
+      binaryManifest(),
+      '/tmp/dashboard',
+      '192.168.127.10',
+      20000,
+      [{ name: 'http', host: 20000, guest: 8080, protocol: 'tcp' }],
+      'x64'
+    );
+    expect(plan).toMatchObject({
+      kind: 'binary',
+      target: {
+        path: 'payload/dashboard/amd64',
+        entrypoint: 'bin/dashboard',
+        args: ['--listen', '0.0.0.0:8080'],
+        env: { DASHBOARD_MODE: 'live' },
+        cwd: '.',
+      },
+    });
+  });
+
+  it('rejects the wrong binary architecture before VM boot and names the manifest fix', () => {
+    expect(() =>
+      manifestToRuntimePlan(binaryManifest('linux/arm64'), '/tmp/dashboard', '192.168.127.10', 20000, [], 'x64')
+    ).toThrow('add payload.targets["linux/amd64"] and repackage');
   });
 });
 

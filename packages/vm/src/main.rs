@@ -275,10 +275,32 @@ struct RuntimePlan {
     principal_ip: String,
     uid: u32,
     share: RuntimePlanShare,
-    image_path: String,
-    env: std::collections::BTreeMap<String, String>,
+    #[serde(flatten)]
+    workload: RuntimePlanWorkload,
     ports: Vec<RuntimePlanPort>,
     resources: RuntimePlanResources,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase", rename_all_fields = "camelCase")]
+enum RuntimePlanWorkload {
+    Container {
+        image_path: String,
+        env: std::collections::BTreeMap<String, String>,
+    },
+    Binary {
+        target: RuntimeBinaryTarget,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeBinaryTarget {
+    path: String,
+    entrypoint: String,
+    args: Vec<String>,
+    env: std::collections::BTreeMap<String, String>,
+    cwd: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1368,7 +1390,6 @@ fn validate_runtime_app_id(app: &str) -> Result<()> {
 
 fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
     use std::collections::HashSet;
-    use std::path::Component;
 
     validate_runtime_app_id(&plan.app_id)?;
     if plan.version.is_empty() || plan.version.len() > 128 {
@@ -1383,15 +1404,20 @@ fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
     if !tag_hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
         bail!("invalid runtime VirtioFS tag");
     }
-    if plan.image_path.contains('\\') {
-        bail!("runtime image path must use safe payload-relative components");
-    }
-    let components: Vec<_> = std::path::Path::new(&plan.image_path).components().collect();
-    if components.first() != Some(&Component::Normal(std::ffi::OsStr::new("payload")))
-        || components.len() < 2
-        || components.iter().any(|component| !matches!(component, Component::Normal(_)))
-    {
-        bail!("runtime image path must use safe payload-relative components");
+    match &plan.workload {
+        RuntimePlanWorkload::Container { image_path, env } => {
+            validate_runtime_payload_path(image_path, "image")?;
+            validate_runtime_env(env)?;
+        }
+        RuntimePlanWorkload::Binary { target } => {
+            validate_runtime_payload_path(&target.path, "binary target")?;
+            validate_runtime_relative_path(&target.entrypoint, "binary entrypoint", false)?;
+            validate_runtime_relative_path(&target.cwd, "binary working directory", true)?;
+            validate_runtime_env(&target.env)?;
+            if target.args.iter().any(|argument| argument.contains('\0')) {
+                bail!("runtime binary arguments must not contain NUL bytes");
+            }
+        }
     }
     let ip: std::net::Ipv4Addr = plan.principal_ip.parse().context("parse runtime principal IP")?;
     let octets = ip.octets();
@@ -1426,6 +1452,52 @@ fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
         || plan.resources.pids == 0
     {
         bail!("runtime resource hints must be positive");
+    }
+    Ok(())
+}
+
+fn validate_runtime_payload_path(value: &str, label: &str) -> Result<()> {
+    use std::path::Component;
+
+    if value.contains('\\') || value.contains('\0') {
+        bail!("runtime {label} path must use safe payload-relative components");
+    }
+    let components: Vec<_> = std::path::Path::new(value).components().collect();
+    if components.first() != Some(&Component::Normal(std::ffi::OsStr::new("payload")))
+        || components.len() < 2
+        || components.iter().any(|component| !matches!(component, Component::Normal(_)))
+    {
+        bail!("runtime {label} path must use safe payload-relative components");
+    }
+    Ok(())
+}
+
+fn validate_runtime_relative_path(value: &str, label: &str, allow_dot: bool) -> Result<()> {
+    use std::path::Component;
+
+    if allow_dot && value == "." {
+        return Ok(());
+    }
+    if value.is_empty() || value.contains('\\') || value.contains('\0') {
+        bail!("runtime {label} must stay inside the binary payload");
+    }
+    let components: Vec<_> = std::path::Path::new(value).components().collect();
+    if components.is_empty() || components.iter().any(|component| !matches!(component, Component::Normal(_))) {
+        bail!("runtime {label} must stay inside the binary payload");
+    }
+    Ok(())
+}
+
+fn validate_runtime_env(env: &std::collections::BTreeMap<String, String>) -> Result<()> {
+    for (name, value) in env {
+        let mut bytes = name.bytes();
+        let valid_first = bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_');
+        if !valid_first || !bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_') {
+            bail!("invalid runtime environment name '{name}'");
+        }
+        if value.contains('\0') {
+            bail!("runtime environment value for '{name}' must not contain NUL bytes");
+        }
     }
     Ok(())
 }
@@ -2020,8 +2092,10 @@ mod tests {
                 host_path: "/tmp/journal".to_string(),
                 read_only: true,
             },
-            image_path: "payload/images/journal.oci.tar".to_string(),
-            env: std::collections::BTreeMap::new(),
+            workload: RuntimePlanWorkload::Container {
+                image_path: "payload/images/journal.oci.tar".to_string(),
+                env: std::collections::BTreeMap::new(),
+            },
             ports: vec![RuntimePlanPort {
                 name: "http".to_string(),
                 host: 20_000,
@@ -2044,7 +2118,10 @@ mod tests {
         assert!(validate_runtime_plan(&wrong_uid).unwrap_err().to_string().contains("UID"));
 
         let mut traversal = plan.clone();
-        traversal.image_path = "payload/../escape.tar".to_string();
+        traversal.workload = RuntimePlanWorkload::Container {
+            image_path: "payload/../escape.tar".to_string(),
+            env: std::collections::BTreeMap::new(),
+        };
         assert!(validate_runtime_plan(&traversal).unwrap_err().to_string().contains("payload-relative"));
 
         let mut too_many = plan;
@@ -2059,6 +2136,81 @@ mod tests {
             })
             .collect();
         assert!(validate_runtime_plan(&too_many).unwrap_err().to_string().contains("at most 16"));
+    }
+
+    #[test]
+    fn runtime_container_plan_round_trips_camelcase_image_path() {
+        let workload: RuntimePlanWorkload = serde_json::from_str(
+            r#"{"kind":"container","imagePath":"payload/images/linux-arm64.tar","env":{}}"#,
+        )
+        .unwrap();
+        let RuntimePlanWorkload::Container { image_path, env } = workload else {
+            panic!("expected container workload");
+        };
+        assert_eq!(image_path, "payload/images/linux-arm64.tar");
+        assert!(env.is_empty());
+
+        let json = serde_json::to_value(valid_runtime_plan()).unwrap();
+        assert_eq!(json["kind"], "container");
+        assert_eq!(json["imagePath"], "payload/images/journal.oci.tar");
+        assert!(json.get("image_path").is_none());
+    }
+
+    #[test]
+    fn runtime_binary_plan_validates_target_entrypoint_env_and_cwd() {
+        let mut plan = valid_runtime_plan();
+        plan.workload = RuntimePlanWorkload::Binary {
+            target: RuntimeBinaryTarget {
+                path: "payload/dashboard/linux-amd64".to_string(),
+                entrypoint: "bin/dashboard".to_string(),
+                args: vec!["--listen".to_string(), "0.0.0.0:8080".to_string()],
+                env: std::collections::BTreeMap::from([("DASHBOARD_MODE".to_string(), "live".to_string())]),
+                cwd: "var/www".to_string(),
+            },
+        };
+        validate_runtime_plan(&plan).unwrap();
+
+        for entrypoint in ["/bin/dashboard", "../dashboard", "bin/../dashboard", "bin\\dashboard"] {
+            let mut invalid = plan.clone();
+            let RuntimePlanWorkload::Binary { target } = &mut invalid.workload else {
+                unreachable!();
+            };
+            target.entrypoint = entrypoint.to_string();
+            assert!(validate_runtime_plan(&invalid).unwrap_err().to_string().contains("entrypoint"));
+        }
+
+        let mut invalid_env = plan.clone();
+        let RuntimePlanWorkload::Binary { target } = &mut invalid_env.workload else {
+            unreachable!();
+        };
+        target.env.insert("NOT-VALID".to_string(), "value".to_string());
+        assert!(validate_runtime_plan(&invalid_env).unwrap_err().to_string().contains("environment name"));
+
+        let mut invalid_cwd = plan;
+        let RuntimePlanWorkload::Binary { target } = &mut invalid_cwd.workload else {
+            unreachable!();
+        };
+        target.cwd = "../outside".to_string();
+        assert!(validate_runtime_plan(&invalid_cwd).unwrap_err().to_string().contains("working directory"));
+    }
+
+    #[test]
+    fn runtime_binary_plan_round_trips_the_tagged_wire_variant() {
+        let mut plan = valid_runtime_plan();
+        plan.workload = RuntimePlanWorkload::Binary {
+            target: RuntimeBinaryTarget {
+                path: "payload/dashboard/linux-arm64".to_string(),
+                entrypoint: "bin/dashboard".to_string(),
+                args: vec!["--exit-code".to_string(), "7".to_string()],
+                env: std::collections::BTreeMap::new(),
+                cwd: ".".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&plan).unwrap();
+        assert!(json.contains("\"kind\":\"binary\""));
+        assert!(json.contains("\"target\":{"));
+        let decoded: RuntimePlan = serde_json::from_str(&json).unwrap();
+        validate_runtime_plan(&decoded).unwrap();
     }
 
     #[test]

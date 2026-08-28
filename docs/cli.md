@@ -37,10 +37,10 @@ Before uploading `-a/--build <zip>`, `deploy` and Builder `install` enforce boun
 
 `appliance runtime <verb>` reserves the packaged-app surface: `run`, `install`, `uninstall`, `list`, `ps`, `stop`, `logs`, `open`, `search`, and `entitlements`.
 
-`run`, `ps`, `stop`, and `logs` operate container bundles in the pooled Runtime
-VM. `search` fetches and verifies the same signed free-app index as the desktop;
-stale results are labelled and paid entries are discarded before matching or
-output. Set `APPLIANCE_CATALOGUE_URL` to override the default
+`run`, `ps`, `stop`, and `logs` operate container or binary bundles in the
+pooled Runtime VM. `search` fetches and verifies the same signed free-app index
+as the desktop; stale results are labelled and paid entries are discarded
+before matching or output. Set `APPLIANCE_CATALOGUE_URL` to override the default
 `https://www.appliance.sh` origin; non-local overrides must use HTTPS. The other
 Runtime verbs remain placeholders: they print `coming in a later release` and
 exit with status 2. Blacklist evaluation is deferred to AP-173 and gates

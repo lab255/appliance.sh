@@ -535,7 +535,7 @@ any sign of the brokered credential reaching the guest, **blocks the flip**.
 
 ---
 
-## Runtime pooled-VM proof (AP-163 / AP-167)
+## Runtime pooled-VM proof (AP-163 / AP-164 / AP-167)
 
 This proof uses the repository engine and CLI, creates a tiny OCI bundle, and
 records each phase. The Runtime pool is separate from `$SBX`: its fixed name is
@@ -593,3 +593,83 @@ Observed on the final macOS VZ proof (2026-08-28): serialized cold pool boot
 `<=1.01s`; `runtime ps` `0.29s`; host curl `status=200 total=0.035827s`
 (repeat `0.040435s`); explicit app teardown `12.7s`. The explicit-stop and
 Ctrl-C cycles both left the same pool PID running and core-ready.
+
+### Binary payload, entrypoint, and exit-code proof (AP-164)
+
+The dashboard fixture commits no executable. Its build script uses
+`docker run --rm ... golang:1.22-alpine go build` to generate static amd64 and
+arm64 ELF files in a temporary directory, then packages that directory with
+`appliance builder package`. This optional proof is CI-skippable when Docker is
+unavailable.
+
+Rebuild the engine and stop/up the Runtime pool before testing: the running VZ
+engine and its guest boot media do not pick up `guest.rs` changes in place.
+
+```sh
+cd ~/Workspaces/appliance.sh
+pnpm --filter @appliance.sh/cli run build
+
+cd packages/vm
+cargo build --release
+./scripts/sign-dev.sh --release
+cd ../..
+export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
+
+examples/runtime/dashboard/build-bundle.sh serve \
+  examples/runtime/dashboard/dashboard.appliance.zip
+examples/runtime/dashboard/build-bundle.sh exit7 \
+  examples/runtime/dashboard/dashboard-exit7.appliance.zip
+
+packages/cli/dist/appliance vm stop --name appliance-runtime
+packages/vm/target/release/appliance-vm status appliance-runtime
+time packages/cli/dist/appliance vm up --name appliance-runtime
+```
+
+In Terminal A, run the HTTP server and follow its shared Runtime log pipeline:
+
+```sh
+time packages/cli/dist/appliance runtime run \
+  examples/runtime/dashboard/dashboard.appliance.zip
+```
+
+In Terminal B, discover the allocated host port, curl it, inspect state/logs,
+and stop only the app:
+
+```sh
+PORT=$(packages/cli/dist/appliance runtime ps --json | \
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(x=>x.appId==="dashboard").hostPorts[0].host))')
+curl -fsS -D /tmp/dashboard.headers -o /tmp/dashboard.body \
+  -w 'status=%{http_code} total=%{time_total}s\n' "http://127.0.0.1:$PORT/"
+grep -q '200 OK' /tmp/dashboard.headers
+grep -q 'dashboard binary runtime proof' /tmp/dashboard.body
+time packages/cli/dist/appliance runtime ps
+time packages/cli/dist/appliance runtime logs dashboard
+time packages/cli/dist/appliance runtime stop dashboard
+```
+
+Finally prove that the declared arguments reach the binary and status 7 flows
+through the supervisor, CLI process, registry, and `runtime ps` rendering:
+
+```sh
+set +e
+time packages/cli/dist/appliance runtime run \
+  examples/runtime/dashboard/dashboard-exit7.appliance.zip
+RUN_STATUS=$?
+set -e
+test "$RUN_STATUS" -eq 7
+packages/cli/dist/appliance runtime ps | grep 'dashboard-exit7.*exited (7)'
+packages/vm/target/release/appliance-vm status appliance-runtime
+```
+
+**PASS:** curl returns 200 with the dashboard proof body; `runtime ps` shows the
+binary app's principal, relay, and then `exited (7)` for the exit fixture;
+stdout/stderr appear through `runtime logs`; stopping an app leaves the pooled
+VM running. Record Docker/package, cold/warm boot, supervisor start, curl, ps,
+stop, and exit-propagation timings. The binary runner uses containerd's custom
+rootfs mode so UID/GID, cgroup, seccomp, empty capability sets, network
+namespace, relays, and policy stay identical to the container runner.
+
+Observed on macOS VZ (2026-08-28): serialized rebuilt-media pool boot `10.36s`;
+host curl `status=200 total=0.035151s`; `runtime ps` `0.49s`; app stop `1.07s`;
+exit fixture cold reconcile/run `11.14s`, with CLI status `7`, `runtime ps`
+rendering `exited (7)`, and the pool remaining core-ready.
