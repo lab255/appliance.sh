@@ -499,6 +499,9 @@ importers:
       http-message-signatures:
         specifier: ^1.0.4
         version: 1.0.4
+      spdx-license-ids:
+        specifier: 3.0.23
+        version: 3.0.23
       uuidv7:
         specifier: ^1.1.0
         version: 1.2.1
