@@ -53,8 +53,14 @@ describe('runtime registry', () => {
     expect(removeRuntimeRecord('api', file)).toBe(true);
     expect(removeRuntimeRecord('missing', file)).toBe(false);
     expect(readRuntimeRegistry(file)).toHaveLength(1);
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     expect(fs.readdirSync(path.dirname(file))).toEqual(['registry.json']);
+  });
+
+  // NTFS does not expose POSIX owner-only mode semantics.
+  it.skipIf(process.platform === 'win32')('writes the registry with mode 0600', () => {
+    const file = tempRegistry();
+    upsertRuntimeRecord(record('journal'), file);
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
   });
 
   it('fails closed to an empty registry for corrupt input', () => {
