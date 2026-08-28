@@ -61,6 +61,16 @@ describe('app window document', () => {
     expect(button.hasAttribute('aria-busy')).toBe(false);
   });
 
+  it('shows a Tauri invoke string rejection after a rejected Reopen attempt', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const root = document.createElement('div');
+    document.body.append(root);
+    renderAppWindow(root, { ...running, state: 'exited', exitCode: 7 }, { reopen: vi.fn().mockRejectedValue('boom') });
+
+    root.querySelector('button')!.click();
+    await vi.waitFor(() => expect(root.querySelector('[role="alert"]')?.textContent).toBe('boom'));
+  });
+
   it('distinguishes normal stops, nonzero exits, and failures', () => {
     const copies = [
       [{ ...running, state: 'exited' as const, exitCode: 0 }, 'Journal has stopped.'],

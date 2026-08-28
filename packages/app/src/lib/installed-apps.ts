@@ -16,6 +16,11 @@ export interface UnknownPublisherPrompt {
 const UNKNOWN_PREFIX = 'UNKNOWN_PUBLISHER:';
 const GRANT_PREFIX = 'ENTITLEMENT_GRANT_REQUIRED:';
 
+export function errorMessage(cause: unknown, fallback: string): string {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return message.trim() ? message : fallback;
+}
+
 export function parseUnknownPublisherError(cause: unknown): UnknownPublisherPrompt | null {
   const message = cause instanceof Error ? cause.message : String(cause);
   const offset = message.indexOf(UNKNOWN_PREFIX);

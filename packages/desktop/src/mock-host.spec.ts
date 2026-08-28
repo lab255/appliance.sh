@@ -108,8 +108,8 @@ describe('mock host installed-app scenarios', () => {
 
   it('requires explicit acceptance for the unknown-publisher fixture', async () => {
     const host = await hostFor('unknown-publisher');
-    await expect(host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm')).rejects.toThrow(
-      'UNKNOWN_PUBLISHER:'
+    await expect(host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm')).rejects.toEqual(
+      expect.stringContaining('UNKNOWN_PUBLISHER:')
     );
     await expect(
       host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm', { acceptUnknownPublisher: true })
@@ -118,14 +118,21 @@ describe('mock host installed-app scenarios', () => {
 
   it('serves the grant-prompt scenario and accepts an explicit checkbox selection', async () => {
     const host = await hostFor('grant-prompt');
-    await expect(host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm')).rejects.toThrow(
-      'ENTITLEMENT_GRANT_REQUIRED:'
+    await expect(host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm')).rejects.toEqual(
+      expect.stringContaining('ENTITLEMENT_GRANT_REQUIRED:')
     );
     await expect(
       host.installedApps?.installBundle('/tmp/local.appliance.zip', 'microvm', {
         grantIds: ['egress:sync.example.com', 'port:web', 'resources:runtime'],
       })
     ).resolves.toMatchObject({ appId: 'journal-import' });
+  });
+
+  it('rejects install failures with the same plain string shape as Tauri invoke', async () => {
+    const host = await hostFor('install-error');
+    await expect(host.installedApps?.installBundle('C:\\x.zip', 'microvm')).rejects.toBe(
+      'Bundle is not a regular file: C:\\x.zip'
+    );
   });
 
   it('serves and revokes the suggested-revocation scenario', async () => {

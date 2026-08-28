@@ -10,7 +10,12 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { useHost } from '@/providers/host-provider';
 import { verifyHostCatalogue, type CatalogueViewData } from '@/lib/trust/catalogue';
 import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
-import { parseUnknownPublisherError, type UnknownPublisherPrompt } from '@/lib/installed-apps';
+import {
+  errorMessage,
+  parseEntitlementGrantError,
+  parseUnknownPublisherError,
+  type UnknownPublisherPrompt,
+} from '@/lib/installed-apps';
 import { InstalledAppsPage, UnknownPublisherDialog } from '@/pages/installed-apps';
 
 export { InstalledAppsPage };
@@ -45,7 +50,8 @@ export function CataloguePage() {
       .catch((cause: unknown) => {
         if (!active) return;
         setData(null);
-        setError(cause instanceof Error ? cause.message : 'Catalogue verification failed.');
+        console.error('[catalogue] verification failed', cause);
+        setError(errorMessage(cause, 'Catalogue verification failed.'));
       });
     return () => {
       active = false;
@@ -59,9 +65,15 @@ export function CataloguePage() {
       return `${installed.name} ${installed.version} was installed.`;
     } catch (cause) {
       const prompt = parseUnknownPublisherError(cause);
-      if (!prompt) throw cause;
-      setPending({ entry, prompt });
-      return 'Review the Unknown Publisher warning to continue.';
+      if (prompt) {
+        setPending({ entry, prompt });
+        return 'Review the Unknown Publisher warning to continue.';
+      }
+      if (parseEntitlementGrantError(cause))
+        throw new Error(
+          'This app requests permissions the catalogue installer cannot grant. Install it from Installed Apps to review them.'
+        );
+      throw cause;
     }
   };
 
@@ -72,7 +84,14 @@ export function CataloguePage() {
       await host.installedApps.installBundle(pending.entry.url, target, { acceptUnknownPublisher: true });
       setPending(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The bundle could not be installed.');
+      console.error('[catalogue] unknown-publisher install failed', cause);
+      if (parseEntitlementGrantError(cause)) {
+        setError(
+          'This app requests permissions the catalogue installer cannot grant. Install it from Installed Apps to review them.'
+        );
+      } else {
+        setError(errorMessage(cause, 'The bundle could not be installed.'));
+      }
     } finally {
       setInstalling(false);
     }
@@ -312,9 +331,10 @@ export function CatalogueContent({
                         void (onInstall
                           ? onInstall(entry)
                               .then(setInstallMessage)
-                              .catch((cause: unknown) =>
-                                setInstallMessage(cause instanceof Error ? cause.message : 'Installation failed.')
-                              )
+                              .catch((cause: unknown) => {
+                                console.error('[catalogue] install failed', cause);
+                                setInstallMessage(errorMessage(cause, 'Installation failed.'));
+                              })
                           : Promise.resolve(
                               setInstallMessage('Installation is available in the Appliance desktop app.')
                             ));
