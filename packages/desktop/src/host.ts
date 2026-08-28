@@ -50,6 +50,7 @@ import type {
   TerminalSession,
   TerminalSessionInfo,
 } from '@appliance.sh/app';
+import type { EntitlementRecord, EntitlementSuggestion } from '@appliance.sh/sdk';
 
 interface NativeCatalogueCache {
   indexJson: string;
@@ -154,7 +155,12 @@ export const tauriHost: ConsoleHost = {
     },
     installBundle(source: string, target: string, options) {
       return invoke('runtime_install_bundle', {
-        input: { source, target, acceptUnknownPublisher: options?.acceptUnknownPublisher ?? false },
+        input: {
+          source,
+          target,
+          acceptUnknownPublisher: options?.acceptUnknownPublisher ?? false,
+          grantIds: options?.grantIds,
+        },
       });
     },
     async uninstall(app: string, target: string, options) {
@@ -183,6 +189,18 @@ export const tauriHost: ConsoleHost = {
         filters: [{ name: 'Appliance bundle', extensions: ['appliance.zip', 'zip'] }],
       });
       return typeof picked === 'string' ? picked : null;
+    },
+  },
+
+  entitlements: {
+    list() {
+      return invoke<EntitlementRecord[]>('runtime_entitlements_list');
+    },
+    suggestions(days = 30) {
+      return invoke<EntitlementSuggestion[]>('runtime_entitlements_suggestions', { days });
+    },
+    async revoke(appId, grantId) {
+      await invoke('runtime_entitlements_revoke', { appId, grantId });
     },
   },
 

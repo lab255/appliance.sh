@@ -19,8 +19,10 @@ import {
   unknownPublisherWarningDue,
   uninstallInstalledApp,
 } from './appliance-runtime-install';
+import { EntitlementGrantRequiredError } from './appliance-runtime-entitlements';
 import { readDevSigningKey } from './utils/bundle-sign';
-import { immutableBundlePath, upsertInstalledApp } from './utils/installed-apps';
+import { latestEntitlement, readEntitlementStore } from './utils/entitlements';
+import { immutableBundlePath, readInstalledApps, upsertInstalledApp } from './utils/installed-apps';
 import { tinyOciTar } from './utils/bundle-oci-fixture';
 import { writeBundle } from './utils/bundle-write';
 
@@ -45,6 +47,28 @@ async function unsignedBundle(directory: string) {
       publisher: { name: 'Local developer' },
       payload: { images: { [platform]: { path: 'payload/image.tar' } } },
       env: {},
+    },
+    files: [{ path: 'payload/image.tar', data: tinyOciTar(platform) }],
+  });
+}
+
+async function controlledBundle(directory: string, version: string, hosts: string[]) {
+  const platform = process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
+  return writeBundle({
+    outputPath: path.join(directory, `journal-${version}.appliance.zip`),
+    manifest: {
+      manifest: 'v2',
+      kind: 'runnable',
+      type: 'container',
+      name: 'journal',
+      version,
+      license: 'MIT',
+      description: 'Private daily notes.',
+      publisher: { name: 'Local developer' },
+      payload: { images: { [platform]: { path: 'payload/image.tar' } } },
+      env: {},
+      network: { egress: hosts.map((host) => ({ host, ports: [443] })) },
+      mounts: [{ name: 'data', source: 'volume', guest: '/data', readOnly: false }],
     },
     files: [{ path: 'payload/image.tar', data: tinyOciTar(platform) }],
   });
@@ -173,6 +197,51 @@ describe('runtime install', () => {
         fetcher: async () => new Response(bytes, { status: 200 }),
       })
     ).rejects.toThrow('Catalogue digest mismatch');
+  });
+
+  it('requires a grant prompt before installing controlled bytes', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-install-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const bundle = await controlledBundle(directory, '1.0.0', ['api.example.test']);
+    await expect(
+      installBundle(bundle.outputPath, { root, acceptUnknownPublisher: true, verifiedBlacklist: null })
+    ).rejects.toBeInstanceOf(EntitlementGrantRequiredError);
+    expect(readInstalledApps('local', root)).toEqual([]);
+    expect(fs.existsSync(immutableBundlePath(bundle.digest, root))).toBe(false);
+  });
+
+  it('prompts only for an upgrade delta and preserves unchanged approval times', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-install-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const initial = await controlledBundle(directory, '1.0.0', ['api.example.test']);
+    await installBundle(initial.outputPath, {
+      root,
+      acceptUnknownPublisher: true,
+      verifiedBlacklist: null,
+      grantAll: true,
+      now: new Date('2026-06-01T00:00:00.000Z'),
+    });
+    const before = latestEntitlement(readEntitlementStore({ home: root }).records, 'journal')!;
+    const upgraded = await controlledBundle(directory, '1.1.0', ['api.example.test', 'sync.example.test']);
+    let prompted: string[] = [];
+    await installBundle(upgraded.outputPath, {
+      root,
+      acceptUnknownPublisher: true,
+      verifiedBlacklist: null,
+      now: new Date('2026-07-01T00:00:00.000Z'),
+      confirmEntitlementGrants: async (details) => {
+        prompted = details.grants.map((grant) => grant.id);
+        return prompted;
+      },
+    });
+    expect(prompted).toEqual(['egress:sync.example.test']);
+    const after = latestEntitlement(readEntitlementStore({ home: root }).records, 'journal')!;
+    expect(after.version).toBe('1.1.0');
+    expect(after.grants.find((grant) => grant.id === 'egress:api.example.test')?.approvedAt).toBe(
+      before.grants.find((grant) => grant.id === 'egress:api.example.test')?.approvedAt
+    );
   });
 });
 

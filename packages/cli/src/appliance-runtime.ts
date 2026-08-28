@@ -4,7 +4,12 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import { PINNED_CATALOGUE_TRUST, type ApplianceV2, type ApplianceV2Service } from '@appliance.sh/sdk';
+import {
+  PINNED_CATALOGUE_TRUST,
+  type ApplianceV2,
+  type ApplianceV2Service,
+  type EntitlementGrant,
+} from '@appliance.sh/sdk';
 import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
@@ -33,6 +38,13 @@ import {
   type RuntimeHostPort,
   type RuntimeRecord,
 } from './utils/runtime-registry.js';
+import {
+  applianceHome,
+  assertManifestEntitled,
+  latestEntitlement,
+  readEntitlementStore,
+  stampEntitlementUsage,
+} from './utils/entitlements.js';
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
@@ -110,9 +122,15 @@ export interface EffectiveRuntimePolicy {
   allowPorts: Record<string, number[]>;
 }
 
-export function manifestToRuntimePolicy(manifest: ApplianceV2, principalIp: string): EffectiveRuntimePolicy {
+export function manifestToRuntimePolicy(
+  manifest: ApplianceV2,
+  principalIp: string,
+  effectiveGrants?: EntitlementGrant[]
+): EffectiveRuntimePolicy {
   const allowed = new Map<string, Set<number>>();
-  const rules = manifest.network?.egress ?? [];
+  const rules = effectiveGrants
+    ? effectiveGrants.flatMap((grant) => (grant.control === 'egress-host' ? [grant.value] : []))
+    : (manifest.network?.egress ?? []);
   for (const rule of rules) {
     const host = rule.host.startsWith('*.') ? rule.host.slice(2) : rule.host;
     const ports = allowed.get(host) ?? new Set<number>();
@@ -317,6 +335,11 @@ export async function runRuntimeCommand(verb: string, args: string[]): Promise<v
     case 'list':
       runRuntimeListCommand(args);
       return;
+    case 'entitlements': {
+      const { runRuntimeEntitlementsCommand } = await import('./appliance-runtime-entitlements.js');
+      await runRuntimeEntitlementsCommand(args, rewriteEffectivePolicyAfterRevocation);
+      return;
+    }
     case 'run':
       await runtimeRun(args);
       return;
@@ -439,6 +462,13 @@ async function runtimeRun(args: string[]): Promise<void> {
     fs.rmSync(bundlePath, { force: true });
     fail(`installed bundle integrity check failed for '${installed.name}'`, 2);
   }
+  let effectiveGrants: EntitlementGrant[];
+  try {
+    effectiveGrants = assertRuntimeRunEntitled(loaded.manifest);
+  } catch (error) {
+    fs.rmSync(bundlePath, { force: true });
+    fail(error instanceof Error ? error.message : String(error), 2);
+  }
   const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
   if (existing && (existing.state === 'starting' || existing.state === 'running')) {
     fs.rmSync(bundlePath, { force: true });
@@ -487,7 +517,19 @@ async function runtimeRun(args: string[]): Promise<void> {
 
   console.log(chalk.cyan('» reconciling the pooled appliance-runtime VM (2 vCPU / 4096 MiB)'));
   const prepared = vmJson(['runtime', 'prepare', RUNTIME_POOL_VM, JSON.stringify(plan)]);
-  installEffectiveRuntimePolicy(manifestToRuntimePolicy(loaded.manifest, principalIp));
+  // Re-read at the last possible moment so a concurrent revoke between the
+  // pre-open check and policy installation can never widen the live policy.
+  try {
+    effectiveGrants = assertRuntimeRunEntitled(loaded.manifest);
+  } catch (error) {
+    updateRuntimeRecord(plan.appId, { state: 'failed' });
+    fail(error instanceof Error ? error.message : String(error), 2);
+  }
+  installEffectiveRuntimePolicy(manifestToRuntimePolicy(loaded.manifest, principalIp, effectiveGrants));
+  stampUsageBestEffort(
+    loaded.manifest.name,
+    effectiveGrants.filter((grant) => grant.control === 'egress-host').map((grant) => grant.id)
+  );
   const restartRequired = runtimePoolRestartRequired(plan.kind, installChanged, Boolean(prepared.restartRequired));
   if (restartRequired) {
     updateRuntimeRecord(plan.appId, { poolRestartPending: true });
@@ -521,6 +563,10 @@ async function runtimeRun(args: string[]): Promise<void> {
     exitCode: initialExitCode,
     poolRestartPending: false,
   });
+  stampUsageBestEffort(
+    loaded.manifest.name,
+    effectiveGrants.filter((grant) => grant.control === 'published-port').map((grant) => grant.id)
+  );
   const urls = hostPorts.map((port) => `http://127.0.0.1:${port.host}`);
   if (args.includes('--json')) console.log(JSON.stringify({ appId: plan.appId, urls }));
   else {
@@ -918,7 +964,7 @@ function persistedRuntimeAllocation(
   }
 }
 
-function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): void {
+export function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): void {
   const result = spawnSync(vmBinary(), ['runtime-policy', 'set', policy.vm, policy.principal], {
     encoding: 'utf8',
     input: `${JSON.stringify(policy)}\n`,
@@ -927,6 +973,55 @@ function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): void {
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || '').trim();
     fail(`could not install effective Runtime policy for '${policy.app}'${detail ? `: ${detail}` : ''}`, 1);
+  }
+}
+
+export function assertRuntimeRunEntitled(manifest: ApplianceV2, home = applianceHome()): EntitlementGrant[] {
+  const store = readEntitlementStore({ home });
+  return assertManifestEntitled(manifest, latestEntitlement(store.records, manifest.name));
+}
+
+export interface RevocationRewriteDependencies {
+  readRuntimeRecords?: () => RuntimeRecord[];
+  readManifest?: (bundlePath: string) => ApplianceV2;
+  readCurrentGrants?: (appId: string) => EntitlementGrant[];
+  installPolicy?: (policy: EffectiveRuntimePolicy) => void;
+  stopRuntime?: (args: string[], print: boolean) => void;
+}
+
+export function rewriteEffectivePolicyAfterRevocation(
+  appId: string,
+  grantId: string,
+  dependencies: RevocationRewriteDependencies = {}
+): void {
+  const runtime = (dependencies.readRuntimeRecords ?? readRuntimeRegistry)().find(
+    (record) => record.appId === appId && (record.state === 'running' || record.state === 'starting')
+  );
+  if (!runtime) return;
+  const manifest = dependencies.readManifest
+    ? dependencies.readManifest(runtime.bundlePath)
+    : verifyBundle(runtime.bundlePath, {
+        resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
+      }).manifest;
+  const grants = dependencies.readCurrentGrants
+    ? dependencies.readCurrentGrants(appId)
+    : (latestEntitlement(readEntitlementStore().records, appId)?.grants ?? []);
+  (dependencies.installPolicy ?? installEffectiveRuntimePolicy)(
+    manifestToRuntimePolicy(manifest, runtime.principalIp, grants)
+  );
+  if (grantId.startsWith('port:') || grantId.startsWith('resources:')) {
+    (dependencies.stopRuntime ?? runtimeStop)([appId], false);
+  }
+}
+
+function stampUsageBestEffort(appId: string, grantIds: string[]): void {
+  try {
+    stampEntitlementUsage(appId, grantIds, { home: applianceHome() });
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    console.error(
+      chalk.yellow(`Warning: entitlement usage could not be persisted; latest use remains in memory only. ${detail}`)
+    );
   }
 }
 
