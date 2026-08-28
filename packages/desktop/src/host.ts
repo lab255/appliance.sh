@@ -4,6 +4,7 @@ import { sendNotification } from '@tauri-apps/plugin-notification';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { check as checkForUpdate, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch as relaunchApp } from '@tauri-apps/plugin-process';
+import { waitForPublishedPort, type RuntimeAppWindowDescriptor } from '@appliance.sh/app';
 import type {
   AvailableUpdate,
   UpdateProgress,
@@ -177,6 +178,31 @@ export const tauriHost: ConsoleHost = {
           rememberUnknownPublisher: options?.rememberUnknownPublisher ?? false,
         },
       });
+    },
+    async openWindow(app: string, target: string, openMetric) {
+      const resolved = await invoke<RuntimeAppWindowDescriptor>('runtime_open_descriptor', {
+        selector: app,
+        target,
+      });
+      const descriptor = openMetric ? { ...resolved, openMetric } : resolved;
+      if (descriptor.ui.type !== 'web' || !descriptor.url) return descriptor;
+      await waitForPublishedPort(async () => {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 500);
+        try {
+          await fetch(descriptor.url!, { mode: 'no-cors', signal: controller.signal });
+          return true;
+        } catch {
+          return false;
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      });
+      await invoke('runtime_open_window', { descriptor, stopOnClose: false });
+      return descriptor;
+    },
+    windowStatus(app: string, target: string) {
+      return invoke<RuntimeAppWindowDescriptor>('runtime_open_descriptor', { selector: app, target });
     },
     async stop(app: string) {
       await invoke('runtime_stop_installed', { app });

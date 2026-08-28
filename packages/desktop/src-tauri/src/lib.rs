@@ -1,14 +1,17 @@
 mod terminal;
 
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{BufRead as _, Write as _};
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -453,15 +456,11 @@ async fn runtime_installed_list(
             "runtime".into(),
             "list".into(),
             "--target".into(),
-            target,
+            target.clone(),
             "--json".into(),
         ],
     )
     .await?;
-    let runtime = run_appliance_json(&app, &["runtime".into(), "ps".into(), "--json".into()])
-        .await
-        .unwrap_or_else(|_| serde_json::Value::Array(Vec::new()));
-    let records = runtime.as_array().cloned().unwrap_or_default();
     let entitlements = run_appliance_json(
         &app,
         &[
@@ -482,25 +481,25 @@ async fn runtime_installed_list(
         .filter_map(|row| {
             let installed_app = row.get("app")?.clone();
             let app_id = installed_app.get("appId")?.as_str()?;
-            let record = records.iter().find(|record| {
-                record.get("appId").and_then(|value| value.as_str()) == Some(app_id)
-            });
-            let state = record
-                .and_then(|value| value.get("state"))
-                .and_then(|value| value.as_str())
-                .filter(|state| matches!(*state, "running" | "starting" | "failed"))
+            let descriptor = row
+                .get("descriptor")
+                .cloned()
+                .and_then(|value| serde_json::from_value::<RuntimeAppWindowDescriptor>(value).ok());
+            let state = descriptor
+                .as_ref()
+                .map(|value| value.state.as_str())
                 .unwrap_or("stopped");
-            let urls = record
-                .and_then(|value| value.get("hostPorts"))
-                .and_then(|value| value.as_array())
-                .map(|ports| {
-                    ports
-                        .iter()
-                        .filter_map(|port| port.get("host").and_then(|value| value.as_u64()))
-                        .map(|port| serde_json::Value::String(format!("http://127.0.0.1:{port}")))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+            let exit_code = descriptor.as_ref().and_then(|value| value.exit_code);
+            let urls = descriptor
+                .as_ref()
+                .and_then(|value| value.url.as_ref())
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>();
+            let ui = descriptor
+                .as_ref()
+                .map(|value| serde_json::to_value(&value.ui).unwrap_or_default())
+                .unwrap_or_else(|| serde_json::json!({ "type": "none" }));
             let entitlement = grants
                 .iter()
                 .find(|grant| grant.get("appId").and_then(|value| value.as_str()) == Some(app_id))
@@ -513,8 +512,10 @@ async fn runtime_installed_list(
             Some(serde_json::json!({
                 "app": installed_app,
                 "state": state,
+                "exitCode": exit_code,
                 "urls": urls,
                 "entitlement": entitlement,
+                "ui": ui
             }))
         })
         .collect::<Vec<_>>();
@@ -634,6 +635,14 @@ async fn runtime_run_installed(
     app: AppHandle,
     input: RuntimeRunInstalledInput,
 ) -> Result<serde_json::Value, String> {
+    if let Ok(descriptor) = runtime_open_descriptor_inner(&app, &input.app, &input.target).await {
+        if matches!(descriptor.state.as_str(), "running" | "starting") {
+            return Ok(serde_json::json!({
+                "appId": descriptor.app_id,
+                "urls": descriptor.url.into_iter().collect::<Vec<_>>(),
+            }));
+        }
+    }
     let mut args = vec![
         "runtime".into(),
         "run".into(),
@@ -657,6 +666,437 @@ async fn runtime_stop_installed(handle: AppHandle, app: String) -> Result<(), St
     run_appliance_capture(&handle, &["runtime".into(), "stop".into(), app])
         .await
         .map(|_| ())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeAppWindowUi {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    port: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeAppWindowDescriptor {
+    app_id: String,
+    target: String,
+    name: String,
+    version: String,
+    license: String,
+    ui: RuntimeAppWindowUi,
+    state: String,
+    #[serde(default)]
+    exit_code: Option<i64>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    host_port: Option<u16>,
+    egress_host_count: usize,
+    #[serde(default)]
+    open_metric: Option<RuntimeAppOpenMetricContext>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeAppOpenMetricContext {
+    kind: String,
+    started_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeAppMetric {
+    name: String,
+    app_id: String,
+    duration_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeAppWindowSize {
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopIpcRequest {
+    token: String,
+    action: String,
+    descriptor: RuntimeAppWindowDescriptor,
+}
+
+fn runtime_app_window_label(app_id: &str) -> Result<String, String> {
+    let trimmed = app_id.trim();
+    let safe = trimmed
+        .to_ascii_lowercase()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '-' {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    if safe.is_empty() {
+        return Err("an app id is required".to_string());
+    }
+    let hash = trimmed
+        .as_bytes()
+        .iter()
+        .fold(0x811c9dc5_u32, |hash, byte| {
+            (hash ^ u32::from(*byte)).wrapping_mul(0x01000193)
+        });
+    Ok(format!("app-{safe}-{hash:08x}"))
+}
+
+fn runtime_app_window_title(name: &str) -> String {
+    format!(
+        "{} — Appliance",
+        if name.trim().is_empty() {
+            "App"
+        } else {
+            name.trim()
+        }
+    )
+}
+
+fn app_window_sizes_path(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|directory| directory.join("app-window-sizes.json"))
+        .map_err(|error| error.to_string())
+}
+
+fn read_app_window_size(app: &AppHandle, size_key: &str) -> Option<RuntimeAppWindowSize> {
+    let path = app_window_sizes_path(app).ok()?;
+    let values =
+        serde_json::from_slice::<BTreeMap<String, RuntimeAppWindowSize>>(&fs::read(path).ok()?)
+            .ok()?;
+    values.get(size_key).cloned()
+}
+
+fn persist_app_window_size(app: &AppHandle, size_key: &str, width: u32, height: u32) {
+    let Ok(path) = app_window_sizes_path(app) else {
+        return;
+    };
+    let mut values = fs::read(&path)
+        .ok()
+        .and_then(|bytes| {
+            serde_json::from_slice::<BTreeMap<String, RuntimeAppWindowSize>>(&bytes).ok()
+        })
+        .unwrap_or_default();
+    values.insert(
+        size_key.to_string(),
+        RuntimeAppWindowSize {
+            width: width.max(640),
+            height: height.max(480),
+        },
+    );
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let temporary = path.with_extension("json.tmp");
+    if fs::write(
+        &temporary,
+        serde_json::to_vec_pretty(&values).unwrap_or_default(),
+    )
+    .is_ok()
+    {
+        let _ = fs::rename(temporary, path);
+    }
+}
+
+async fn runtime_open_descriptor_inner(
+    app: &AppHandle,
+    selector: &str,
+    target: &str,
+) -> Result<RuntimeAppWindowDescriptor, String> {
+    let value = run_appliance_json(
+        app,
+        &[
+            "runtime".into(),
+            "open".into(),
+            selector.into(),
+            "--target".into(),
+            target.into(),
+            "--describe".into(),
+            "--json".into(),
+        ],
+    )
+    .await?;
+    serde_json::from_value(value)
+        .map_err(|error| format!("invalid Runtime app-window descriptor: {error}"))
+}
+
+#[tauri::command]
+async fn runtime_open_descriptor(
+    app: AppHandle,
+    selector: String,
+    target: String,
+) -> Result<RuntimeAppWindowDescriptor, String> {
+    runtime_open_descriptor_inner(&app, &selector, &target).await
+}
+
+fn validate_runtime_app_window(descriptor: &RuntimeAppWindowDescriptor) -> Result<(), String> {
+    if descriptor.ui.kind != "web" {
+        return Err(format!("'{}' has no web UI", descriptor.name));
+    }
+    let host_port = descriptor
+        .host_port
+        .ok_or_else(|| format!("'{}' has no published UI port", descriptor.name))?;
+    let url = descriptor
+        .url
+        .as_ref()
+        .ok_or_else(|| format!("'{}' has no web UI URL", descriptor.name))?
+        .parse::<tauri::Url>()
+        .map_err(|error| format!("invalid app UI URL: {error}"))?;
+    if url.scheme() != "http"
+        || url.host_str() != Some("127.0.0.1")
+        || url.port() != Some(host_port)
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err(
+            "app UI URL must be an uncredentialed loopback HTTP URL on its published port"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn runtime_app_navigation_allowed(url: &tauri::Url, host_port: u16) -> bool {
+    (url.host_str() == Some("127.0.0.1") && url.port() == Some(host_port))
+        || (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
+        || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
+        || (cfg!(debug_assertions)
+            && url.scheme() == "http"
+            && url.host_str() == Some("localhost")
+            && url.port() == Some(1420))
+}
+
+fn open_runtime_app_window(
+    app: &AppHandle,
+    descriptor: RuntimeAppWindowDescriptor,
+    stop_on_close: bool,
+) -> Result<(), String> {
+    use base64::Engine as _;
+
+    validate_runtime_app_window(&descriptor)?;
+    let label = runtime_app_window_label(&descriptor.app_id)?;
+    if let Some(window) = app.get_webview_window(&label) {
+        window
+            .emit("runtime-app-open", &descriptor)
+            .map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(serde_json::to_vec(&descriptor).map_err(|error| error.to_string())?);
+    let size = read_app_window_size(app, &label).unwrap_or(RuntimeAppWindowSize {
+        width: 1100,
+        height: 720,
+    });
+    let host_port = descriptor.host_port.expect("validated app window port");
+    let window = tauri::WebviewWindowBuilder::new(
+        app,
+        &label,
+        tauri::WebviewUrl::App(PathBuf::from(format!("index.html?app-window={encoded}"))),
+    )
+    .title(runtime_app_window_title(&descriptor.name))
+    .inner_size(size.width as f64, size.height as f64)
+    .min_inner_size(640.0, 480.0)
+    .on_navigation(move |url| runtime_app_navigation_allowed(url, host_port))
+    .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
+    .build()
+    .map_err(|error| error.to_string())?;
+    let handle = app.clone();
+    let app_id = descriptor.app_id.clone();
+    let size_key = label.clone();
+    let (size_sender, size_receiver) = mpsc::channel::<RuntimeAppWindowSize>();
+    let size_handle = app.clone();
+    std::thread::Builder::new()
+        .name(format!("{label}-size"))
+        .spawn(move || {
+            while let Ok(mut size) = size_receiver.recv() {
+                loop {
+                    match size_receiver.recv_timeout(Duration::from_millis(300)) {
+                        Ok(next) => size = next,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            persist_app_window_size(
+                                &size_handle,
+                                &size_key,
+                                size.width,
+                                size.height,
+                            );
+                            break;
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            persist_app_window_size(
+                                &size_handle,
+                                &size_key,
+                                size.width,
+                                size.height,
+                            );
+                            return;
+                        }
+                    }
+                }
+            }
+        })
+        .map_err(|error| error.to_string())?;
+    window.on_window_event(move |event| match event {
+        tauri::WindowEvent::Resized(size) => {
+            let _ = size_sender.send(RuntimeAppWindowSize {
+                width: size.width,
+                height: size.height,
+            });
+        }
+        tauri::WindowEvent::CloseRequested { .. } if stop_on_close => {
+            let handle = handle.clone();
+            let app_id = app_id.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = runtime_stop_installed(handle, app_id).await;
+            });
+        }
+        _ => {}
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn runtime_open_window(
+    app: AppHandle,
+    descriptor: RuntimeAppWindowDescriptor,
+    #[allow(unused_variables)] stop_on_close: Option<bool>,
+) -> Result<(), String> {
+    open_runtime_app_window(&app, descriptor, stop_on_close.unwrap_or(false))
+}
+
+#[tauri::command]
+fn runtime_record_app_metric(app: AppHandle, metric: RuntimeAppMetric) -> Result<(), String> {
+    if !matches!(metric.name.as_str(), "app_open_ttv" | "app_stop_ttx")
+        || metric.app_id.trim().is_empty()
+        || metric.duration_ms > 60_000
+        || metric
+            .kind
+            .as_deref()
+            .is_some_and(|kind| !matches!(kind, "cold" | "warm" | "reopen"))
+    {
+        return Err("invalid desktop app metric".to_string());
+    }
+    let line = serde_json::to_string(&serde_json::json!({
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "metric": metric,
+    }))
+    .map_err(|error| error.to_string())?;
+    eprintln!("desktop_metric {line}");
+    let directory = app
+        .path()
+        .app_log_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(directory.join("desktop-metrics.jsonl"))
+        .map_err(|error| error.to_string())?;
+    writeln!(file, "{line}").map_err(|error| error.to_string())
+}
+
+fn desktop_ipc_path() -> Result<PathBuf, String> {
+    home_dir()
+        .map(|home| {
+            home.join(".appliance")
+                .join("runtime")
+                .join("desktop-ipc.json")
+        })
+        .ok_or_else(|| "cannot resolve the home directory".to_string())
+}
+
+fn start_desktop_ipc(app: AppHandle) -> Result<(), String> {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|error| error.to_string())?;
+    let port = listener
+        .local_addr()
+        .map_err(|error| error.to_string())?
+        .port();
+    let token = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let path = desktop_ipc_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let temporary = path.with_extension("json.tmp");
+    fs::write(
+        &temporary,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "version": 1,
+            "pid": std::process::id(),
+            "port": port,
+            "token": token,
+        }))
+        .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600))
+            .map_err(|error| error.to_string())?;
+    }
+    fs::rename(temporary, path).map_err(|error| error.to_string())?;
+
+    std::thread::Builder::new()
+        .name("appliance-desktop-ipc".into())
+        .spawn(move || {
+            for incoming in listener.incoming() {
+                let Ok(mut stream) = incoming else {
+                    continue;
+                };
+                if stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .is_err()
+                {
+                    continue;
+                }
+                let mut line = String::new();
+                let read = std::io::BufReader::new(&stream).read_line(&mut line);
+                let request = read
+                    .ok()
+                    .filter(|count| *count > 0 && line.len() <= 64 * 1024)
+                    .and_then(|_| serde_json::from_str::<DesktopIpcRequest>(&line).ok());
+                let accepted = request
+                    .filter(|request| request.token == token && request.action == "open")
+                    .map(|request| {
+                        let handle = app.clone();
+                        match open_runtime_app_window(&handle, request.descriptor, false) {
+                            Ok(()) => true,
+                            Err(error) => {
+                                eprintln!("warn: desktop IPC open failed: {error}");
+                                false
+                            }
+                        }
+                    })
+                    .unwrap_or(false);
+                let _ = stream.write_all(if accepted { b"ok\n" } else { b"error\n" });
+            }
+        })
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn shared_profiles_path() -> Option<PathBuf> {
@@ -6305,6 +6745,13 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // A private loopback rendezvous lets `appliance runtime open`
+            // hand an already-resolved descriptor to this running process.
+            // A stale registration is harmless: the CLI's bounded connect
+            // fails and it opens the loopback URL in the browser instead.
+            if let Err(error) = start_desktop_ipc(app.handle().clone()) {
+                eprintln!("warn: desktop Runtime-open IPC unavailable: {error}");
+            }
             // Adopt CLI-registered microVM clusters at launch —
             // `appliance vm up` may have run (for any VM) while the
             // desktop was closed, and the cluster switcher should
@@ -6330,6 +6777,12 @@ pub fn run() {
                         eprintln!("warn: microvm cluster sync at launch failed for '{name}': {e}");
                     }
                 }
+                // Registry is lifecycle truth after a desktop restart. `ps`
+                // reconciles exited/missing supervisors, but deliberately
+                // does not recreate app windows; only a user Open does that.
+                let _ =
+                    run_appliance_json(&handle, &["runtime".into(), "ps".into(), "--json".into()])
+                        .await;
             });
             Ok(())
         })
@@ -6347,6 +6800,9 @@ pub fn run() {
             runtime_uninstall_bundle,
             runtime_run_installed,
             runtime_stop_installed,
+            runtime_open_descriptor,
+            runtime_open_window,
+            runtime_record_app_metric,
             add_cluster,
             select_cluster,
             remove_cluster,
@@ -6411,6 +6867,91 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_window_identity_matches_the_desktop_contract() {
+        assert_eq!(
+            runtime_app_window_label("journal").unwrap(),
+            "app-journal-c1875f78"
+        );
+        assert_eq!(
+            runtime_app_window_label("Notes.Sync").unwrap(),
+            "app-notes-sync-cdcfbd0f"
+        );
+        assert_ne!(
+            runtime_app_window_label("a.b").unwrap(),
+            runtime_app_window_label("a-b").unwrap()
+        );
+        assert_eq!(runtime_app_window_title("Journal"), "Journal — Appliance");
+    }
+
+    fn app_window_descriptor(url: &str, host_port: u16) -> RuntimeAppWindowDescriptor {
+        RuntimeAppWindowDescriptor {
+            app_id: "journal".into(),
+            target: "local".into(),
+            name: "Journal".into(),
+            version: "1.2.0".into(),
+            license: "MIT".into(),
+            ui: RuntimeAppWindowUi {
+                kind: "web".into(),
+                port: Some("web".into()),
+                path: Some("/".into()),
+            },
+            state: "running".into(),
+            exit_code: None,
+            url: Some(url.into()),
+            host_port: Some(host_port),
+            egress_host_count: 2,
+            open_metric: None,
+        }
+    }
+
+    #[test]
+    fn app_window_validation_rejects_non_loopback_urls() {
+        assert!(validate_runtime_app_window(&app_window_descriptor(
+            "http://localhost:20421/",
+            20421
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn app_window_validation_rejects_port_mismatch() {
+        assert!(validate_runtime_app_window(&app_window_descriptor(
+            "http://127.0.0.1:20422/",
+            20421
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn app_window_validation_rejects_credentials() {
+        assert!(validate_runtime_app_window(&app_window_descriptor(
+            "http://user:secret@127.0.0.1:20421/",
+            20421
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn app_window_navigation_is_limited_to_wrapper_and_published_origin() {
+        assert!(runtime_app_navigation_allowed(
+            &"tauri://localhost/index.html".parse().unwrap(),
+            20421
+        ));
+        assert!(runtime_app_navigation_allowed(
+            &"http://127.0.0.1:20421/next".parse().unwrap(),
+            20421
+        ));
+        assert!(!runtime_app_navigation_allowed(
+            &"http://127.0.0.1:20422/".parse().unwrap(),
+            20421
+        ));
+        assert!(!runtime_app_navigation_allowed(
+            &"https://example.com/".parse().unwrap(),
+            20421
+        ));
+    }
 
     fn catalogue_cache_input(generation: u64, verified_at: &str) -> SetCatalogueCacheInput {
         SetCatalogueCacheInput {

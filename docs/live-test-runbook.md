@@ -762,3 +762,38 @@ to shorten it independently of these samples.
 The notes-suite recovery check (`ctr ... tasks kill -s SIGKILL ...` followed by
 the `runtime ps` loop) returned healthy with `restarts=1` within 9s, and the
 pool remained running.
+
+---
+
+## Desktop app-window proof (AP-176)
+
+Build the signed Runtime engine and Journal fixture as above, then run Desktop
+with `pnpm --filter @appliance.sh/desktop exec tauri dev --no-watch`. Open the
+installed Journal app with `appliance runtime open journal --json`; use the
+Installed Apps card for the Stop and Reopen click paths. Measurements are
+written to the platform `desktop-metrics.jsonl` described in
+[Opening installed apps](runtime.md#opening-installed-apps).
+
+Parker gates: warm `app_open_ttv` p95 ≤2 s, cold `app_open_ttv` p95 ≤15 s,
+and `app_stop_ttx` p95 ≤2 s. A complete native run is 5 warm, 3 cold, 3 stop,
+and 3 reopen samples, with one native capture each of the running and exited
+dedicated window.
+
+Observed on macOS VZ (2026-08-28):
+
+| Path                 | Samples (ms)        | Observed p95 | Gate         |
+| -------------------- | ------------------- | ------------ | ------------ |
+| warm open            | 206, 32, 33, 28, 30 | 206 ms       | PASS (≤2 s)  |
+| cold app open        | 456, 434, 441       | 456 ms       | PASS (≤15 s) |
+| stop → exited paint  | not recorded        | —            | BLOCKED      |
+| Reopen → iframe load | not recorded        | —            | BLOCKED      |
+
+The native Tauri build and dedicated windows ran successfully. A stale,
+protected macOS SecurityAgent Keychain password prompt from the first launch
+remained system-modal and intercepted all synthetic and physical app-window
+clicks. Window-id captures and CLI-driven open/stop remained possible, but a
+Stop or Reopen sample would not prove the reviewed click-to-paint path, so no
+numbers were manufactured. The DOM suite covers pending/error/focus behavior
+and metric emission; rerun the six click samples after dismissing the prompt.
+Native evidence is in `/private/tmp/ap-captures/launch/native-app-window.png`
+and `/private/tmp/ap-captures/launch/native-app-exited.png`.

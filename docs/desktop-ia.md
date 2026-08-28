@@ -36,12 +36,16 @@ signed unsafe-app blacklist before committing it to the selected workspace.
 ### Installed Apps
 
 `/apps` reads the installed-app store for `useCurrentWorkspace()`. Cards show
-name, version, SPDX license, grant-date placeholder, Running/Stopped state,
-sandbox and egress summaries, and a compound service count. **Open** starts the
-installed app through the pooled Runtime and opens its first published local URL
-in the system browser; the dedicated app window remains AP-176. **Stop** leaves
-the pool running. **Install from file** uses the native file dialog and the same
-host installer as Catalogue.
+name, version, SPDX license, grant-date placeholder, Running/Stopped/Exited
+state, sandbox and egress summaries, and a compound service count. **Open**
+starts the installed app through the pooled Runtime, waits for the manifest's
+named web UI port, and opens `app-<appId>` as a separate native window. That
+window follows frame 4 of the user-mode mock: the app owns a cross-origin iframe
+while Appliance owns the title and slim mono status strip. **Stop** leaves the
+pool running and changes an open app window to **App exited · Reopen**. Closing
+the window keeps the app running by default. Apps without `ui.type: web` show
+**No UI** plus Logs rather than a misleading Open action. **Install from file**
+uses the native file dialog and the same host installer as Catalogue.
 
 Unsigned and otherwise unverified local bundles use the Unknown Publisher
 dialog. Publisher risk and requested controls are separate sections; focus

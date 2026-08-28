@@ -1,6 +1,28 @@
 import './lib/polyfills';
 
 export { Console } from './App';
+export {
+  appWindowLabel,
+  appWindowStatusText,
+  appWindowTitle,
+  closePolicyAction,
+  decodeAppWindowDescriptor,
+  encodeAppWindowDescriptor,
+  reconcileRuntimeApps,
+  clearAppStopStart,
+  recordAppStopStart,
+  renderAppWindow,
+  waitForPublishedPort,
+  wrapperCsp,
+} from './lib/app-window';
+export type {
+  AppOpenKind,
+  AppOpenMetricContext,
+  AppWindowClosePolicy,
+  AppWindowMetric,
+  RuntimeAppUi,
+  RuntimeAppWindowDescriptor,
+} from './lib/app-window';
 export type {
   ConsoleHost,
   AppMode,

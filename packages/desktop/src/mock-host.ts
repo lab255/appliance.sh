@@ -13,6 +13,7 @@ import type {
   HostConfig,
   LocalPreflightCheck,
   InstalledRuntimeApp,
+  RuntimeAppWindowDescriptor,
 } from '@appliance.sh/app';
 import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@appliance.sh/sdk';
 
@@ -39,6 +40,8 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 //   catalogue-loading    fetch pending / verification loading state
 //   catalogue-stale expired-but-previously-verified read-only catalogue
 //   installed-apps       populated Installed Apps page
+//   app-window           dedicated running-app window
+//   app-exited           dedicated app-exited window
 //   installed-apps-empty empty Installed Apps page
 //   unknown-publisher    unsigned app requiring the warning dialog
 //   install-from-file    file-picker installation path
@@ -67,6 +70,8 @@ type Scenario =
   | 'installed-apps'
   | 'installed-apps-before-grant'
   | 'installed-apps-empty'
+  | 'app-window'
+  | 'app-exited'
   | 'unknown-publisher'
   | 'install-from-file'
   | 'grant-prompt'
@@ -91,6 +96,8 @@ export function mockHostEnabled(): boolean {
         scenario === 'installed-apps' ||
         scenario === 'installed-apps-before-grant' ||
         scenario === 'installed-apps-empty' ||
+        scenario === 'app-window' ||
+        scenario === 'app-exited' ||
         scenario === 'unknown-publisher' ||
         scenario === 'install-from-file' ||
         scenario === 'grant-prompt' ||
@@ -122,6 +129,8 @@ function scenario(): Scenario {
     s === 'installed-apps' ||
     s === 'installed-apps-before-grant' ||
     s === 'installed-apps-empty' ||
+    s === 'app-window' ||
+    s === 'app-exited' ||
     s === 'unknown-publisher' ||
     s === 'install-from-file' ||
     s === 'grant-prompt' ||
@@ -435,7 +444,12 @@ function mockInstalledApp(
     source: `https://${appId}.appliance.zip/`,
     verification: { signature: 'valid', indexBound: { generation: 7 } },
     controlsSummary: {
-      egressHosts: appId === 'dashboard' ? [] : ['api.example.com'],
+      egressHosts:
+        appId === 'dashboard'
+          ? []
+          : appId === 'journal'
+            ? ['sync.example.com', 'updates.example.com']
+            : ['api.example.com'],
       mounts: [],
       publishedPorts: [{ name: 'web', guest: 8080, protocol: 'tcp' }],
       resources: { cpus: 1, memoryMib: 512 },
@@ -489,12 +503,14 @@ function mockEntitlement(app: InstalledApp): EntitlementRecord {
 function mockInstalledView(
   app: InstalledApp,
   state: InstalledRuntimeApp['state'],
-  urls: string[]
+  urls: string[],
+  ui: InstalledRuntimeApp['ui'] = { type: 'none' }
 ): InstalledRuntimeApp {
   return {
     app,
     state,
     urls,
+    ui,
     ...(scenario() === 'installed-apps-before-grant'
       ? {}
       : { entitlement: { license: app.license, grantedAt: mockEntitlement(app).grantedAt } }),
@@ -515,15 +531,27 @@ function initialInstalledApps(): InstalledRuntimeApp[] {
         state: 'stopped',
         urls: [],
         entitlement: { license: 'MIT', grantedAt: '2026-07-01T09:30:00.000Z' },
+        ui: { type: 'none' },
       },
     ];
   }
   return [
-    mockInstalledView(mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'), 'running', ['http://127.0.0.1:8443']),
+    {
+      ...mockInstalledView(
+        mockInstalledApp('journal', 'Journal', '1.2.0', 'MIT'),
+        scenario() === 'app-exited' ? 'exited' : 'running',
+        scenario() === 'app-exited' ? [] : ['http://127.0.0.1:8443'],
+        { type: 'web', port: 'web', path: '/' }
+      ),
+      ...(scenario() === 'app-exited' ? { exitCode: 17 } : {}),
+    },
     mockInstalledView(mockInstalledApp('dashboard', 'Dashboard', '0.9.1', 'Apache-2.0'), 'stopped', []),
-    mockInstalledView(mockInstalledApp('notes-sync', 'Notes+Sync', '2.4.0', 'AGPL-3.0'), 'running', [
-      'http://127.0.0.1:8445',
-    ]),
+    mockInstalledView(
+      mockInstalledApp('notes-sync', 'Notes+Sync', '2.4.0', 'AGPL-3.0'),
+      'running',
+      ['http://127.0.0.1:8445'],
+      { type: 'web', port: 'web', path: '/' }
+    ),
   ];
 }
 
@@ -740,6 +768,22 @@ export function createMockHost(): ConsoleHost {
         item.state = 'running';
         item.urls = ['http://127.0.0.1:8443'];
         return { appId: item.app.appId, urls: item.urls };
+      },
+      async openWindow(app, target) {
+        const item = installedApps.find((candidate) => candidate.app.appId === app);
+        if (!item) throw new Error(`Mock installed app not found: ${app}`);
+        const descriptor = mockAppWindowDescriptor(item, target);
+        window.open(
+          `/?mock-host&scenario=${item.state === 'exited' ? 'app-exited' : 'app-window'}&app-window=${encodeMockAppWindowDescriptor(descriptor)}`,
+          '_blank',
+          'popup,width=1100,height=720'
+        );
+        return descriptor;
+      },
+      async windowStatus(app, target) {
+        const item = installedApps.find((candidate) => candidate.app.appId === app);
+        if (!item) throw new Error(`Mock installed app not found: ${app}`);
+        return mockAppWindowDescriptor(item, target);
       },
       async stop(app) {
         const item = installedApps.find((candidate) => candidate.app.appId === app);
@@ -1235,6 +1279,28 @@ export function createMockHost(): ConsoleHost {
       },
     },
   };
+}
+
+function mockAppWindowDescriptor(item: InstalledRuntimeApp, target: string): RuntimeAppWindowDescriptor {
+  return {
+    appId: item.app.appId,
+    target,
+    name: item.app.name,
+    version: item.app.version,
+    license: item.app.license,
+    ui: item.ui,
+    state: item.state,
+    ...(item.exitCode == null ? {} : { exitCode: item.exitCode }),
+    ...(item.urls[0] ? { url: item.urls[0], hostPort: Number(new URL(item.urls[0]).port) } : {}),
+    egressHostCount: item.app.controlsSummary.egressHosts.length,
+  };
+}
+
+function encodeMockAppWindowDescriptor(descriptor: RuntimeAppWindowDescriptor): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(descriptor));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // MicroVM mock state (module-level: survives SPA navigation, resets on
