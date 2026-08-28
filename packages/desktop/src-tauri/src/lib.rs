@@ -182,6 +182,8 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, HostError> {
 
 const SHARED_PROFILES_DIR: &str = ".appliance";
 const SHARED_PROFILES_FILE: &str = "profiles.json";
+const CATALOGUE_DIR: &str = "catalogue";
+const CATALOGUE_CACHE_FILE: &str = "verified-pair.json";
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -242,6 +244,128 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct CatalogueCache {
+    index_json: String,
+    signature_json: String,
+    fetched_at: String,
+    highest_generation: u64,
+    max_seen_wall_clock: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetCatalogueCacheInput {
+    index_json: String,
+    signature_json: String,
+    fetched_at: String,
+    generation: u64,
+    verified_at: String,
+}
+
+fn catalogue_cache_path() -> Result<PathBuf, HostError> {
+    home_dir()
+        .map(|home| {
+            home.join(SHARED_PROFILES_DIR)
+                .join(CATALOGUE_DIR)
+                .join(CATALOGUE_CACHE_FILE)
+        })
+        .ok_or_else(|| std::io::Error::other("cannot resolve the home directory").into())
+}
+
+fn catalogue_cache_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn read_catalogue_cache(path: &std::path::Path) -> Result<Option<CatalogueCache>, HostError> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::from_slice(&fs::read(path)?)?))
+}
+
+fn write_catalogue_cache(path: &std::path::Path, cache: &CatalogueCache) -> Result<(), HostError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("catalogue cache path has no parent"))?;
+    fs::create_dir_all(parent)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
+    }
+
+    let temporary = path.with_extension("json.tmp");
+    let mut options = fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary)?;
+    std::io::Write::write_all(&mut file, &serde_json::to_vec(cache)?)?;
+    file.sync_all()?;
+    drop(file);
+    fs::rename(&temporary, path)?;
+    #[cfg(unix)]
+    fs::set_permissions(path, {
+        use std::os::unix::fs::PermissionsExt;
+        fs::Permissions::from_mode(0o600)
+    })?;
+    Ok(())
+}
+
+fn next_catalogue_cache(
+    current: Option<&CatalogueCache>,
+    input: SetCatalogueCacheInput,
+) -> Result<CatalogueCache, HostError> {
+    let current_generation = current.map_or(0, |cache| cache.highest_generation);
+    if input.generation < current_generation {
+        return Err(std::io::Error::other(format!(
+            "catalogue generation {} is below persisted floor {}",
+            input.generation, current_generation
+        ))
+        .into());
+    }
+    let max_seen_wall_clock = match current {
+        Some(cache)
+            if chrono::DateTime::parse_from_rfc3339(&cache.max_seen_wall_clock).map_err(
+                |error| std::io::Error::new(std::io::ErrorKind::InvalidData, error.to_string()),
+            )? > chrono::DateTime::parse_from_rfc3339(&input.verified_at).map_err(
+                |error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string()),
+            )? =>
+        {
+            cache.max_seen_wall_clock.clone()
+        }
+        _ => input.verified_at,
+    };
+    Ok(CatalogueCache {
+        index_json: input.index_json,
+        signature_json: input.signature_json,
+        fetched_at: input.fetched_at,
+        highest_generation: current_generation.max(input.generation),
+        max_seen_wall_clock,
+    })
+}
+
+#[tauri::command]
+fn get_catalogue_cache() -> Result<Option<CatalogueCache>, HostError> {
+    let _guard = catalogue_cache_lock();
+    read_catalogue_cache(&catalogue_cache_path()?)
+}
+
+#[tauri::command]
+fn set_catalogue_cache(input: SetCatalogueCacheInput) -> Result<(), HostError> {
+    let _guard = catalogue_cache_lock();
+    let path = catalogue_cache_path()?;
+    let current = read_catalogue_cache(&path)?;
+    let next = next_catalogue_cache(current.as_ref(), input)?;
+    write_catalogue_cache(&path, &next)
 }
 
 fn shared_profiles_path() -> Option<PathBuf> {
@@ -5922,6 +6046,8 @@ pub fn run() {
             get_config,
             get_app_mode,
             set_app_mode,
+            get_catalogue_cache,
+            set_catalogue_cache,
             add_cluster,
             select_cluster,
             remove_cluster,
@@ -5986,6 +6112,37 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn catalogue_cache_input(generation: u64, verified_at: &str) -> SetCatalogueCacheInput {
+        SetCatalogueCacheInput {
+            index_json: format!("index-{generation}"),
+            signature_json: format!("signature-{generation}"),
+            fetched_at: verified_at.to_string(),
+            generation,
+            verified_at: verified_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn catalogue_cache_floors_are_write_monotonic() {
+        let first = next_catalogue_cache(None, catalogue_cache_input(7, "2026-08-27T00:02:00Z"))
+            .expect("first cache write");
+        let later_generation_with_earlier_clock = next_catalogue_cache(
+            Some(&first),
+            catalogue_cache_input(8, "2026-08-27T00:01:00Z"),
+        )
+        .expect("later cache write");
+        assert_eq!(later_generation_with_earlier_clock.highest_generation, 8);
+        assert_eq!(
+            later_generation_with_earlier_clock.max_seen_wall_clock,
+            "2026-08-27T00:02:00Z"
+        );
+        assert!(next_catalogue_cache(
+            Some(&later_generation_with_earlier_clock),
+            catalogue_cache_input(7, "2026-08-27T00:03:00Z")
+        )
+        .is_err());
+    }
 
     #[test]
     fn app_mode_round_trips_through_persisted_config() {
