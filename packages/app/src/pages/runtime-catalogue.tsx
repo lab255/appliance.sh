@@ -10,7 +10,12 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { useHost } from '@/providers/host-provider';
 import { verifyHostCatalogue, type CatalogueViewData } from '@/lib/trust/catalogue';
 import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
-import { errorMessage, parseUnknownPublisherError, type UnknownPublisherPrompt } from '@/lib/installed-apps';
+import {
+  errorMessage,
+  parseEntitlementGrantError,
+  parseUnknownPublisherError,
+  type UnknownPublisherPrompt,
+} from '@/lib/installed-apps';
 import { InstalledAppsPage, UnknownPublisherDialog } from '@/pages/installed-apps';
 
 export { InstalledAppsPage };
@@ -60,9 +65,15 @@ export function CataloguePage() {
       return `${installed.name} ${installed.version} was installed.`;
     } catch (cause) {
       const prompt = parseUnknownPublisherError(cause);
-      if (!prompt) throw cause;
-      setPending({ entry, prompt });
-      return 'Review the Unknown Publisher warning to continue.';
+      if (prompt) {
+        setPending({ entry, prompt });
+        return 'Review the Unknown Publisher warning to continue.';
+      }
+      if (parseEntitlementGrantError(cause))
+        throw new Error(
+          'This app requests permissions the catalogue installer cannot grant. Install it from Installed Apps to review them.'
+        );
+      throw cause;
     }
   };
 
@@ -74,7 +85,13 @@ export function CataloguePage() {
       setPending(null);
     } catch (cause) {
       console.error('[catalogue] unknown-publisher install failed', cause);
-      setError(errorMessage(cause, 'The bundle could not be installed.'));
+      if (parseEntitlementGrantError(cause)) {
+        setError(
+          'This app requests permissions the catalogue installer cannot grant. Install it from Installed Apps to review them.'
+        );
+      } else {
+        setError(errorMessage(cause, 'The bundle could not be installed.'));
+      }
     } finally {
       setInstalling(false);
     }
