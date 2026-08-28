@@ -9,9 +9,9 @@
 > historical record of Levers 1 and 2; read `appliance-sbx` as the
 > now-retired dedicated VM.
 
-**Status:** S1 (Lever 1, agent-only VM mode) **shipped** — see [§1.6 Invariants](#16-invariants-enforced-as-built). S2 (Lever 2, the prebuilt agent image) **machinery shipped** — the build workflow, fetch + `download_and_verify`, RO squashfs attach (`vdc`), PATH-first, the npm prefix move + wipe-on-project-switch, and the claude-code pin all land in `packages/vm` + `packages/cli` + a CI workflow. **Owed-live (owner/CI):** the squashfs artifact must be built by `release-agent-image.yml` and its per-arch sha256 committed into `images.rs` (the all-zero sentinel until then — the attach is skipped and the guest self-heals via npm), then a live boot+launch on a VM. **Scope:** this doc decides _what_ S1/S2 build. **Owner-locked going in:** two levers only; **VM snapshots are ruled out** — see [§0](#0-why-not-snapshots).
+**Status:** S1 (Lever 1, agent-only VM mode) **shipped** — see [§1.6 Invariants](#16-invariants-enforced-as-built). S2 (Lever 2, the prebuilt agent image) **machinery shipped** — the build workflow, fetch + `download_and_verify`, RO squashfs attach (`vdc`), PATH-first, the npm prefix move + wipe-on-project-switch, and the claude-code pin all land in `packages/vm` + `packages/cli` + a CI workflow. **Live verification remaining:** the squashfs artifact must be built by `release-agent-image.yml` and its per-arch sha256 committed into `images.rs` (the all-zero sentinel until then — the attach is skipped and the guest self-heals via npm), then booted and launched on a VM. **Scope:** this document covers two levers; **VM snapshots are ruled out** — see [§0](#0-why-not-snapshots).
 
-> **S2 as built — verify-before-use for ALL downloads (Sasha condition #3, elevated).** `download_and_verify(url, dest, sha256)` verifies the on-disk artifact's sha256 **before use, every boot — on a cache hit as well as a fresh download** (closing the `download_to` early-return-on-`exists()` hole — Quinn gap #3). It is applied not only to the new agent image but **retrofitted to the pre-existing unauthenticated root-code downloads** — k3s, `modloop-virt`, and the Alpine kernel/initramfs (`images.rs`/`guest.rs`) — whose digests are now committed in-source. The agent squashfs is additionally **re-verified at attach time** immediately before the device is attached. See §2.3.
+> **S2 as built — verify-before-use for all downloads.** `download_and_verify(url, dest, sha256)` verifies the on-disk artifact's sha256 **before use, every boot — on a cache hit as well as a fresh download** (closing the `download_to` early-return-on-`exists()` hole). It is applied not only to the new agent image but **retrofitted to the pre-existing unauthenticated root-code downloads** — k3s, `modloop-virt`, and the Alpine kernel/initramfs (`images.rs`/`guest.rs`) — whose digests are now committed in-source. The agent squashfs is additionally **re-verified at attach time** immediately before the device is attached. See §2.3.
 
 ## Context
 
@@ -30,7 +30,7 @@ The sandbox VM `appliance-sbx` (`sandbox.ts:19`) **persists** and is **reused** 
 
 ## 0. Why not snapshots
 
-Ruled out (owner-confirmed, not relitigated here). VZ save/restore is infeasible post egress-firewall: `validateSaveRestoreSupportWithError` rejects a config carrying VirtioFS (the workspace share, `guest.rs:404`) and the file-handle NIC; and the smoltcp netstack / DHCP / MITM state that the egress boundary depends on is **host-side** (`backend/vz/mod.rs:108-114`, `netstack/`), outside anything a guest snapshot could capture. A ~10-line `validateSaveRestoreSupportWithError` spike could confirm the rejection, but **do not build snapshots.** Both levers below are snapshot-free.
+Ruled out. VZ save/restore is infeasible post egress-firewall: `validateSaveRestoreSupportWithError` rejects a config carrying VirtioFS (the workspace share, `guest.rs:404`) and the file-handle NIC; and the smoltcp netstack / DHCP / MITM state that the egress boundary depends on is **host-side** (`backend/vz/mod.rs:108-114`, `netstack/`), outside anything a guest snapshot could capture. A ~10-line `validateSaveRestoreSupportWithError` spike could confirm the rejection, but **do not build snapshots.** Both levers below are snapshot-free.
 
 ---
 
@@ -62,7 +62,7 @@ Serializes as `agentOnly` in `vm.json`. Legacy specs lack it and parse to `false
 Wrap the k3s region of `APPLIANCE_START` (`guest.rs:156-249` — the `k3s` binary copy, `registries.yaml`, the registry manifest, `k3s server`, and the kubeconfig handoff) behind a new substitution marker `__K3S_PROVISION__`, exactly like `__DEV_PROVISION__`/`__DOCKER_PROVISION__` already work (`guest.rs:689-691`):
 
 - `agent_only = false` → marker is the existing k3s block (byte-for-byte unchanged).
-- `agent_only = true` → marker is replaced with an **agent-handoff** block: wait for the Node toolchain (`/persist/.dev-ready`, written by `DEV_PROVISION`, `guest.rs:392`) — the **grippable** marker, **not** the shell agent's "listening" console echo (Quinn #2: it goes to console/serial, not a file the host can grip) — then serve a one-line `agent-ready` sentinel over `httpd` on `KUBECONFIG_PORT` (free in agent-only mode — no k3s competes for it) at `/srv/handoff/agent-ready`. This **reuses the existing handoff httpd machinery** (`guest.rs:244-249`) and the host's `wait_http` + fetch path verbatim — minimal new code. The host-side belt-and-suspenders probe is the vsock `command -v node` (`waitForAgentRuntime`, `sandbox.ts`).
+- `agent_only = true` → marker is replaced with an **agent-handoff** block: wait for the Node toolchain (`/persist/.dev-ready`, written by `DEV_PROVISION`, `guest.rs:392`) — the **grippable** marker, **not** the shell agent's "listening" console echo (it goes to console/serial, not a file the host can grip) — then serve a one-line `agent-ready` sentinel over `httpd` on `KUBECONFIG_PORT` (free in agent-only mode — no k3s competes for it) at `/srv/handoff/agent-ready`. This **reuses the existing handoff httpd machinery** (`guest.rs:244-249`) and the host's `wait_http` + fetch path verbatim — minimal new code. The host-side belt-and-suspenders probe is the vsock `command -v node` (`waitForAgentRuntime`, `sandbox.ts`).
 
 `build_apkovl`/`build_boot_media` take an `agent_only: bool` and thread it through the substitution (mirrors the existing `dev`/`docker` plumbing at `guest.rs:613-694, 743-767` and `backend/vz/mod.rs:81-88`).
 
@@ -112,7 +112,7 @@ just documented:
    so it is an invariant, not a convenience.
 
 2. **The `KUBECONFIG_PORT` handoff forward is RETAINED in agent-only
-   mode** (Quinn #4b). Agent-only drops the k3s api/ingress/registry/
+   mode.** Agent-only drops the k3s api/ingress/registry/
    NodePort forwards but keeps the handoff: the guest serves the
    `agent-ready` sentinel over the **same** busybox `httpd` on
    `KUBECONFIG_PORT` (free with no k3s competing), and under the netstack
@@ -120,7 +120,7 @@ just documented:
    it (`guest.rs::host_services`). Without this the host could never fetch
    the readiness sentinel.
 
-3. **Network discovery is PRESERVED** (Sasha #1, acceptance criterion).
+3. **Network discovery is preserved.**
    Agent-only **still** runs `discover_guest_ip` / the netstack lease and
    **still writes `guest-ip`** — only the k3s _forwards_ are skipped, never
    the discovery/lease. The broker's exact-lease peer-pin
@@ -130,20 +130,20 @@ just documented:
    true; only `wire_k3s_forwards` follows `!agent_only`), so a regression
    that gated `guest-ip` on agent-only fails the test.
 
-4. **Marker ordering** (Quinn #1). The `__K3S_PROVISION__` branch (k3s
+4. **Marker ordering.** The `__K3S_PROVISION__` branch (k3s
    block _or_ the agent handoff) is substituted **before** the nested
    `__KUBECONFIG_PORT__`/`__REGISTRY_*__`/`__AGENT_DOCKER_STUB__` port/stub
    markers, so an injected `__KUBECONFIG_PORT__` is expanded rather than
    surviving as a literal (`build_apkovl`). A unit test asserts no literal
    marker leaks into the agent-only bootstrap.
 
-5. **Readiness is a grippable proof, never the console echo** (Quinn #2).
+5. **Readiness is a grippable proof, never the console echo.**
    The gate is the host-side vsock probe (`command -v node` over
    `vmShellCapture`) plus the `.dev-ready`-gated `agent-ready` sentinel —
    **not** the shell-agent "listening" echo, which goes to console/serial
    and lands in no file the host can grip.
 
-6. **Stale-marker removal** (Quinn #4c). A prior boot's `agent-ready`
+6. **Stale-marker removal.** A prior boot's `agent-ready`
    marker is removed before spawn (`main.rs` `Up`, mirroring the stale
    `kubeconfig` removal; also in the foreground host process,
    `backend/vz/mod.rs`) so `up` can never return on a stale readiness file.
@@ -186,7 +186,7 @@ npm installs are not bit-reproducible (timestamps, optional deps), so **the arti
 
 - **Hosted** as a GitHub release asset on the appliance repo — mirrors how k3s is fetched from `k3s-io` releases (`guest.rs:82-89`). The toolchain is built + hosted by the project, **not pulled live from npm at boot.**
 - **Fetched** by a new `ensure_agent_image()` mirroring `ensure_assets` (`guest.rs:67-92`), arch-split via `arch_tuple()` (`guest.rs:54`), into `images/agent-assets/agents-<ver>-<arch>.squashfs`. A new `AGENT_IMAGE` table mirrors the `IMAGES` table (`images.rs:24-34`): per-arch URL **and sha256**, keyed on a single `AGENT_IMAGE_VERSION` const.
-- **Verified** by sha256 **before the device is attached** — and **on every cache hit, not only after a fresh download** (Quinn gap #3). `download_to` early-returned on `dest.exists()` with no check; `download_and_verify(url, dest, sha256)` replaces it and verifies the on-disk bytes every boot, so a cached/tampered file can never bypass the hash. The agent image is additionally re-verified (`verify_agent_image`) right before the `VZDiskImageStorageDeviceAttachment` is built. **As built (Sasha condition #3, elevated):** `download_and_verify` is also applied to the **pre-existing** unauthenticated root-code downloads — k3s, `modloop-virt`, and the Alpine kernel/initramfs — whose committed sha256s now live in `images.rs`/`guest.rs`. The kernel is verified against its **raw** network bytes (a `kernel.raw` kept beside the normalized boot image) since normalization mutates the file. This closes a pre-existing hole: those run as root / become the guest kernel — higher privilege than the agent image.
+- **Verified** by sha256 **before the device is attached** — and **on every cache hit, not only after a fresh download**. `download_to` early-returned on `dest.exists()` with no check; `download_and_verify(url, dest, sha256)` replaces it and verifies the on-disk bytes every boot, so a cached/tampered file can never bypass the hash. The agent image is additionally re-verified (`verify_agent_image`) right before the `VZDiskImageStorageDeviceAttachment` is built. **As built:** `download_and_verify` is also applied to the **pre-existing** unauthenticated root-code downloads — k3s, `modloop-virt`, and the Alpine kernel/initramfs — whose committed sha256s now live in `images.rs`/`guest.rs`. The kernel is verified against its **raw** network bytes (a `kernel.raw` kept beside the normalized boot image) since normalization mutates the file. This closes a pre-existing hole: those run as root / become the guest kernel — higher privilege than the agent image.
 
 ### 2.4 Mounted on PATH at boot
 
@@ -210,7 +210,7 @@ export PATH="/opt/appliance/agents/bin:/persist/npm-global/bin:$PATH"
 
 Change both profile exports (`APP_USER_PROVISION`, `guest.rs:321-322`; `DEV_PROVISION`, `guest.rs:378`). This **ends the repo pollution** (no more `<repo>/.local`) and **ends the per-project reinstall** (the prefix is VM-global now, not per-mount). `/persist/npm-global` survives `vm stop`/`up` like the rest of `/persist`, so even the self-heal fallback installs once per VM, not once per project.
 
-> **As built — Sasha condition #2: wipe `/persist/npm-global` on a project switch.** Because the prefix is now VM-global and persistent, a CLI a self-heal installed for one project would otherwise linger on PATH into the next project's sandbox (the cross-project PATH-persistence vector). The host stamps the mounted project's identity (a 16-hex sha256 of its absolute path) into the boot media; the guest bootstrap compares it against `/persist/.npm-global-project` and `rm -rf`s the prefix when they differ — and the sandbox already reboots on a mount change, so the wipe rides that reboot. The read-only squashfs PATH-first already shields the three **baked** CLIs; this closes the **self-heal residue**. (No mount ⇒ empty identity ⇒ no wipe.)
+> **As built — wipe `/persist/npm-global` on a project switch.** Because the prefix is now VM-global and persistent, a CLI a self-heal installed for one project would otherwise linger on PATH into the next project's sandbox (the cross-project PATH-persistence vector). The host stamps the mounted project's identity (a 16-hex sha256 of its absolute path) into the boot media; the guest bootstrap compares it against `/persist/.npm-global-project` and `rm -rf`s the prefix when they differ — and the sandbox already reboots on a mount change, so the wipe rides that reboot. The read-only squashfs PATH-first already shields the three **baked** CLIs; this closes the **self-heal residue**. (No mount ⇒ empty identity ⇒ no wipe.)
 
 ### 2.6 Runtime `npm install` → presence-check no-op
 
@@ -238,7 +238,7 @@ A CLI pin change is **one coordinated commit**: (1) bump the adapter `install.ve
 
 ---
 
-## 4. Security (Sasha gates)
+## 4. Security
 
 ### 4.1 Agent-only shrinks the attack surface — confirm nothing essential is skipped
 
@@ -267,10 +267,10 @@ The squashfs bakes three third-party CLIs + Node + their full transitive npm tre
 
 ---
 
-## Open questions (owner / Sasha)
+## Open questions
 
 1. **Node source** — bake a pinned Node ≥ 22 into the squashfs (this doc's recommendation; apk `nodejs` on Alpine v3.21 may be < 22 and break copilot/codex). Confirm bake.
 2. **dockerd** — explicit `--docker` flag (recommended), or auto-imply from project detection (`Dockerfile`/compose present)? Lean explicit + honest error.
-3. **Hosting/attestation** — GitHub release on the appliance repo acceptable for v1, or does Sasha want cosign-signed + provenance-attested from day one?
-4. **Checksum gap** — ~~extend `download_and_verify` to the existing k3s/modloop/alpine assets too~~ **DONE (Sasha #3, S2):** the retrofit shipped — k3s/modloop/alpine kernel+initramfs now carry committed in-source sha256s and are verified before use every boot (cache-hit included). See §2.3.
+3. **Hosting/attestation** — use a GitHub release on the appliance repo for v1, or require cosign-signed + provenance-attested assets from day one?
+4. **Checksum gap** — ~~extend `download_and_verify` to the existing k3s/modloop/alpine assets too~~ **Done:** the retrofit shipped — k3s/modloop/alpine kernel+initramfs now carry committed in-source sha256s and are verified before use every boot (cache-hit included). See §2.3.
 5. **claude-code pin** — pinning the adapter (§2.6) means choosing a claude-code version to bake; which release tracks the pin (and how often is it bumped vs the faster-moving copilot/codex)?

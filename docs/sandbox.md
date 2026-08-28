@@ -36,7 +36,8 @@ Alpine ships a maintained `docker` aplet (dockerd + containerd + runc + CNI plug
 
 ## 6. Security posture
 
-> Revised per security review (Sasha). The original draft claimed env-var injection was sufficient egress confinement and that "the VM is the sandbox" — both overstated. Corrected below.
+> Environment-variable injection is not sufficient egress confinement, and the
+> VM boundary does not contain access to a read-write host-folder share.
 
 **Recommendation:** **root dockerd** in the guest. The VM is the primary isolation boundary; rootless dockerd on diskless Alpine needs subuid/subgid + fuse-overlayfs plumbing that buys little when the blast radius is already a throwaway microVM. Keep the socket off the network (vsock, §3).
 

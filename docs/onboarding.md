@@ -1,4 +1,4 @@
-# Zero → first-deploy onboarding (E5)
+# Zero → first-deploy onboarding
 
 **Status:** Implemented. This doc describes the shipped onboarding flow — one
 guided CLI command, one desktop click, and a hand-off into the first deploy.
@@ -13,7 +13,7 @@ over HTTP (`packages/api-server/src/main.ts`, `routes/workloads/index.ts`).
 > downloads a few components and can take a few minutes; subsequent boots are
 > fast.
 
-> **Naming (owner decision, 2026-06-28).** The onboarding command is
+> **Naming.** The onboarding command is
 > **`appliance init`** (not the spike's proposed `appliance start`). Bare
 > `appliance init` runs local microVM onboarding; the historical remote/cloud
 > credential setup is preserved via `appliance init --remote <url>` and

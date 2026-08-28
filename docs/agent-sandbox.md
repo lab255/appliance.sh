@@ -1,7 +1,7 @@
 # Agent sandboxes — running coding agents inside the microVM (Phase 5)
 
-**Status:** Design (A0 spike). **Scope:** the architecture + security design
-that A1–A6 build to. **Branch:** `feat/phase5-agent-sandboxes`.
+**Status:** Design. **Scope:** the architecture and security design for agent
+sandboxes.
 
 **Goal.** Run a coding agent — **Claude Code first**, with a pluggable
 adapter seam for other CLI agents later — inside the Phase-4 microVM
@@ -10,7 +10,7 @@ the desktop tab dock. The **Anthropic API key is brokered host-side**: it
 is injected into the agent's TLS traffic at the egress proxy and **never
 enters the VM**.
 
-**Locked decisions (owner).** Claude Code first (adapter seam later);
+**Design decisions.** Claude Code first (adapter seam later);
 host-side credential broker (key never in VM); **interactive + autonomous**
 modes both; **MVP** = one agent per project/VM, observed via a tab
 (fleet / history / approvals deferred).
@@ -318,7 +318,7 @@ command -v claude >/dev/null 2>&1 || npm install -g @anthropic-ai/claude-code
   (`registry.npmjs.org`); with default-allow it just works, with
   default-deny the adapter's allowlist must include it.
 
-**Modes the agent CLI must support** (both required by the owner decision):
+**Modes the agent CLI must support:**
 
 - **Interactive TTY:** bare `claude` in the tmux session → the desktop
   attaches it as a tab (§7).
@@ -369,7 +369,7 @@ extraction is `parseResult` (§8b).
 
 Per-project, alongside `link.json` (same `.appliance/` dir,
 `utils/link.ts`), additive and project-local so it commits/ignores with the
-repo as the owner chooses. MVP shape (one agent per project/VM, but modeled
+repo according to the project's version-control policy. MVP shape (one agent per project/VM, but modeled
 as a list for forward-compat):
 
 ```jsonc
@@ -395,7 +395,7 @@ The registry is the desktop's source of truth for the agent-tab badge and
 the CLI's `appliance agent ls/attach/stop`. Liveness reconciles against
 `appliance-vm shell <vm> --session` listing
 (`shell.rs:121`) — a registry entry whose tmux session is gone is `exited`.
-_(Owner fork: commit `agents.json` or gitignore it — §11.)_
+_(Open question: commit `agents.json` or gitignore it — §11.)_
 
 ## 8. Desktop surface + the pluggable-adapter seam
 
@@ -440,7 +440,7 @@ proxy/CA/placeholder env (§2/§4) → `launchArgv` in the `agent-<id>`
 session; A2 applies `credHosts` + MITM. Adding "codex"/"aider"/etc. later
 is a new adapter object — no transport, no broker change.
 
-## 9. Security analysis — for Sasha
+## 9. Security analysis
 
 **What holds.**
 
@@ -473,7 +473,7 @@ is a new adapter object — no transport, no broker change.
   value (the key) is brokered out of reach_ — but do not market the agent
   sandbox as containment for hostile code.
 
-**Genuine forks for Sasha / owner.**
+**Open questions.**
 
 1. **Where the host Anthropic key is stored.** Recommended: macOS Keychain
    (`sh.appliance.agent`), `0600` file fallback off-macOS — consistent with
@@ -486,7 +486,7 @@ print-key` indirection (the indirection keeps the Keychain access policy
    exfiltrate workspace contents to any host (default-allow). For an agent
    that runs untrusted code, the natural hardening is **default-deny +
    allowlist** (`api.anthropic.com`, the npm registry, the project's git
-   remote) — but that is the "egress as a real boundary" follow-up epic,
+   remote) — but that requires follow-up firewall work,
    and even default-deny is bypassable while routing stays cooperative.
    Decision: ship MVP default-allow with the broker, and track the firewall
    as the security follow-up? (Recommended.)
@@ -501,11 +501,10 @@ print-key` indirection (the indirection keeps the Keychain access policy
 
 ## 10. A1–A6 file-set mapping
 
-Dependency order (from the board): A0 → **A1 + A2** → **A3** → **A4 / A6**;
-**A3 + A4** → **A5**. Gates: A2 security (Sasha); A3 code (Quinn); A5
-design (Devon) + product (Parker).
+Implementation order: A0 → **A1 + A2** → **A3** → **A4 / A6**;
+**A3 + A4** → **A5**.
 
-- **A1 — Agent runner (Blake).** The runner that opens `agent-<id>`,
+- **A1 — Agent runner.** The runner that opens `agent-<id>`,
   composes install + proxy/CA/placeholder env + launch argv.
 
   - `packages/cli/src/utils/sandbox.ts` (reuse `ensureSandboxVm`, add an
@@ -516,8 +515,8 @@ design (Devon) + product (Parker).
     target).
   - _Touches no transport — `shell.rs`/`guest.rs` are reused as-is._
 
-- **A2 — Cred broker wiring + the proxy-into-shell gap (Blake; Sasha
-  gate).** The env prefix (§4) + the Anthropic cred rule/MITM (§3) + the
+- **A2 — Cred broker wiring + the proxy-into-shell gap.** The env prefix (§4) +
+  the Anthropic cred rule/MITM (§3) + the
   host key store/helper (§9 fork 1).
 
   - launch-env composition in `packages/cli/src/utils/agent.ts` (proxy URL
@@ -534,19 +533,19 @@ design (Devon) + product (Parker).
     refusal that never forwards the placeholder (`mitm.rs`); helper TTL
     cache + `has_cred_rule`/`has_inject_rule` (`creds.rs`).
 
-- **A3 — CLI surface (Avery; Quinn gate).** `appliance agent` command group.
+- **A3 — CLI surface.** `appliance agent` command group.
 
   - new `packages/cli/src/appliance-agent.ts`: `run [--task] [--autonomous]`,
     `ls`, `attach <id>`, `stop <id>`, `login` (wraps A1/A2);
   - register in the CLI entry (mirror `appliance-vm.ts`/`appliance-up.ts`
     command wiring).
 
-- **A4 — Agent registry (Avery).** `.appliance/agents.json` (§7).
+- **A4 — Agent registry.** `.appliance/agents.json` (§7).
 
   - new `packages/cli/src/utils/agents-registry.ts` (read/write/reconcile,
     sibling to `utils/link.ts`); liveness via `shell.rs:121` session list.
 
-- **A5 — Desktop surface (Avery; Devon + Parker gates).** Agent-typed tab.
+- **A5 — Desktop surface.** Agent-typed tab.
 
   - `packages/app/src/providers/terminal-sessions-provider.tsx` (agent meta;
     `agent-` prefix in `mintSessionId`/`modeFromSessionId`/rehydrate,
@@ -561,7 +560,7 @@ design (Devon) + product (Parker).
   - `packages/app/src/lib/host.ts` + `packages/desktop/src/host.ts` (host
     bridge methods for run/list/attach/stop, mirroring `terminal.*`/`creds.*`).
 
-- **A6 — Autonomous mode (Blake).** Headless run + result capture (§6).
+- **A6 — Autonomous mode.** Headless run + result capture (§6).
   - autonomous `launchArgv` + `parseResult` in the claude-code adapter
     (`utils/agent.ts`);
   - result/exit-code capture reuses the one-shot sentinel
@@ -593,14 +592,9 @@ precedence chain** (so the §3 placeholder is mandatory); CA via
 - **Auth-header-only (no local key)?** Whether `claude` would run with
   _all_ local auth unset and only the proxy injecting auth is undocumented
   → we don't rely on it; the placeholder sidesteps it.
-- **Security forks (§9):** host key store; egress-firewall gating; CA-trust
-  scope. A2 is blocked on Sasha here.
-- **Registry placement:** commit `.appliance/agents.json` or gitignore it
-  (owner).
+- **Security questions (§9):** host key store; egress-firewall gating; CA-trust
+  scope.
+- **Registry placement:** commit `.appliance/agents.json` or gitignore it.
 - **`uid` on `--mount` VMs** already resolved in E2 (`docs/rootless-guest.md`
   §6) — agents writing the shared workspace inherit that behavior; no new
   decision.
-
----
-
-_Suggested commit subject:_ `docs(agent-sandbox): architecture + host cred-broker design for Phase 5 agents`

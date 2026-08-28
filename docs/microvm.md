@@ -93,7 +93,7 @@ devices and keep it running".
   and OrbStack build on, driven directly rather than through an
   external VM manager. Requires the `com.apple.security.virtualization`
   entitlement (ad-hoc signing is sufficient for local dev; the desktop
-  app's signing pipeline adds it for distribution).
+  app's signing pipeline adds it for release builds).
 - **Linux — KVM.** Target shape: an embedded rust-vmm based VMM
   (mmio virtio devices, no device emulation beyond what the guest
   contract needs). Until that lands, the backend reports itself
