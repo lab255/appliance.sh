@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-export type RuntimeState = 'starting' | 'running' | 'stopped' | 'exited' | 'failed';
+export type RuntimeState = 'starting' | 'running' | 'degraded' | 'stopped' | 'exited' | 'failed';
 
 export interface RuntimeHostPort {
   name: string;

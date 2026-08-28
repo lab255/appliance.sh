@@ -673,3 +673,96 @@ Observed on macOS VZ (2026-08-28): serialized rebuilt-media pool boot `10.36s`;
 host curl `status=200 total=0.035151s`; `runtime ps` `0.49s`; app stop `1.07s`;
 exit fixture cold reconcile/run `11.14s`, with CLI status `7`, `runtime ps`
 rendering `exited (7)`, and the pool remaining core-ready.
+
+### Compound shared-VM lifecycle proof (AP-166)
+
+`notes-suite` is source-only and Docker-builds two OCI leaves at package time.
+`api` has no host listener; `web` depends on its HTTP health check and owns the
+single primary host port. The runtime injects
+`APPLIANCE_SVC_API_URL=http://127.0.0.1:9000` into both leaves.
+
+Rebuild the engine and guest media, then serialize the pool restart before the
+live claim. A running pool never picks up an edited supervisor in place.
+
+```sh
+cd ~/Workspaces/appliance.sh
+pnpm --filter @appliance.sh/cli run build
+
+cd packages/vm
+cargo build --release
+./scripts/sign-dev.sh --release
+cd ../..
+export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
+
+examples/runtime/notes-suite/build-bundle.sh
+packages/cli/dist/appliance vm stop --name appliance-runtime
+while packages/vm/target/release/appliance-vm status appliance-runtime | grep -q '"running":true'; do sleep 0.25; done
+time packages/cli/dist/appliance vm up --name appliance-runtime
+```
+
+In Terminal A, start the app and follow all leaf logs. Every emitted line has a
+`[service]` prefix; Ctrl-C is also a stop-as-a-unit proof.
+
+```sh
+time packages/cli/dist/appliance runtime run \
+  examples/runtime/notes-suite/notes-suite.appliance.zip
+```
+
+In Terminal B, prove the primary host path, service rows, service log filter,
+restart policy, reverse unit stop, and pool survival:
+
+```sh
+PORT=$(packages/cli/dist/appliance runtime ps --json | \
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(x=>x.appId==="notes-suite").hostPorts[0].host))')
+curl -fsS -D /tmp/notes-suite.headers -o /tmp/notes-suite.body \
+  -w 'status=%{http_code} total=%{time_total}s\n' "http://127.0.0.1:$PORT/"
+grep -q '200 OK' /tmp/notes-suite.headers
+grep -q 'notes-suite compound runtime proof' /tmp/notes-suite.body
+time packages/cli/dist/appliance runtime ps | tee /tmp/notes-suite.ps
+grep -q '↳ api.*healthy' /tmp/notes-suite.ps
+grep -q '↳ web.*healthy' /tmp/notes-suite.ps
+packages/cli/dist/appliance runtime logs notes-suite --service api
+
+# Kill only the API task. policy=always must recreate it in the same app.
+packages/vm/target/release/appliance-vm shell appliance-runtime --root -- \
+  ctr -n appliance-notes-suite tasks kill -s SIGKILL appliance-notes-suite-api
+for _ in $(seq 1 80); do
+  packages/cli/dist/appliance runtime ps > /tmp/notes-suite.restart
+  grep -q '↳ api.*healthy.*restarts=1' /tmp/notes-suite.restart && break
+  sleep 0.25
+done
+grep -q '↳ api.*healthy.*restarts=1' /tmp/notes-suite.restart
+
+time packages/cli/dist/appliance runtime stop notes-suite
+! packages/cli/dist/appliance runtime ps | grep -q notes-suite
+packages/vm/target/release/appliance-vm status appliance-runtime | grep -q '"running":true'
+```
+
+**PASS:** curl is HTTP 200; `ps` has one app row and exactly two indented
+healthy leaf rows; the API-only log filter excludes web output; killing the API
+increments its restart count and returns it to healthy; stop removes the whole
+app while the pool remains running. Record bundle build, pool boot, supervisor
+start, curl, ps, restart recovery, and stop timings.
+
+Observed on the final macOS VZ proof (2026-08-28): cached source bundle build
+`2.85s`; rebuilt-media cold pool boot `10.34s`; the API began listening in the
+same one-second timestamp bucket as the app registry start; host curl `0.04s`
+with HTTP 200; `runtime ps` `0.33s`; forced API recovery was healthy with
+`restarts=1` within `9s`; reverse unit stop `10.61s`. Pool PID `92499` remained
+running after the app and both service rows disappeared.
+
+The shared-VM controls default for this increment is explicit: payload,
+environment, task, cgroup, health, restart, state, and logs are leaf-scoped.
+All leaves retain one app principal `/32` and netns, so host-enforced egress is
+declared once at the compound root. A leaf-level `network.egress` is rejected
+with guidance to move it to the top level; there is no per-leaf grant union.
+Host publication is narrower: only compound leaf ports marked both
+`expose: "host"` and `primary: true` receive a host listener. `isolation: "vm"`
+is rejected as `not yet supported`; dedicated placement and upgrades remain
+follow-ups.
+
+**NOTE:** v1 starts the deterministic topological sequence serially, with
+lexical service-name tie-breaking for simultaneously ready leaves and a 300 s
+readiness cap per leaf. Optional-leaf restart exhaustion degrades the app but
+does not stop its dependents. Parallel launch of independent leaves and
+dependent teardown after optional exhaustion are intentionally deferred.

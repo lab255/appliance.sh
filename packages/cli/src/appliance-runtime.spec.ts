@@ -1,6 +1,13 @@
 import { applianceV2Input } from '@appliance.sh/sdk';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { manifestToRuntimePlan, manifestToRuntimePolicy, sanitizeRuntimeLog } from './appliance-runtime.js';
+import {
+  manifestToRuntimePlan,
+  manifestToRuntimePolicy,
+  prefixServiceLog,
+  runtimePoolRestartRequired,
+  sanitizeRuntimeLog,
+} from './appliance-runtime.js';
 
 function manifest(resources: Record<string, number> = {}) {
   return applianceV2Input.parse({
@@ -42,6 +49,46 @@ function binaryManifest(platform: 'linux/amd64' | 'linux/arm64' = 'linux/amd64')
     },
     env: { DASHBOARD_MODE: 'live' },
     ports: [{ name: 'http', guest: 8080, protocol: 'tcp', expose: 'host', primary: true }],
+  });
+}
+
+function compoundManifest(isolation: 'shared' | 'vm' = 'shared') {
+  return applianceV2Input.parse({
+    manifest: 'v2',
+    kind: 'runnable',
+    type: 'compound',
+    name: 'notes-suite',
+    version: '2.0.0',
+    license: 'MIT',
+    publisher: { name: 'Lab 255' },
+    ui: { type: 'web', service: 'web', port: 'http', path: '/' },
+    services: {
+      web: {
+        type: 'container',
+        isolation,
+        payload: {
+          images: {
+            'linux/amd64': { path: 'payload/web/web-amd64.oci.tar' },
+            'linux/arm64': { path: 'payload/web/web-arm64.oci.tar' },
+          },
+        },
+        dependsOn: ['api'],
+        ports: [{ name: 'http', guest: 3000, protocol: 'tcp', expose: 'host' }],
+        health: { type: 'http', port: 'http', path: '/healthz' },
+      },
+      api: {
+        type: 'binary',
+        payload: {
+          targets: {
+            'linux/amd64': { root: 'payload/api/amd64', entrypoint: 'bin/api' },
+            'linux/arm64': { root: 'payload/api/arm64', entrypoint: 'bin/api' },
+          },
+        },
+        ports: [{ name: 'api', guest: 9000, protocol: 'tcp', expose: 'internal', primary: true }],
+        health: { type: 'tcp', port: 'api', intervalSeconds: 1, timeoutSeconds: 1, failureThreshold: 2 },
+        restart: { policy: 'always', maxAttempts: 7, backoffSeconds: 3 },
+      },
+    },
   });
 }
 
@@ -123,6 +170,59 @@ describe('manifest to pooled runtime plan', () => {
       manifestToRuntimePlan(binaryManifest('linux/arm64'), '/tmp/dashboard', '192.168.127.10', 20000, [], 'x64')
     ).toThrow('add payload.targets["linux/amd64"] and repackage');
   });
+
+  it('flattens a compound graph, resolves health ports, and publishes only the primary host port', () => {
+    const plan = manifestToRuntimePlan(
+      compoundManifest(),
+      '/tmp/notes-suite',
+      '192.168.127.10',
+      20000,
+      [{ name: 'web.http', host: 20000, guest: 3000, protocol: 'tcp' }],
+      'x64'
+    );
+    expect(plan.kind).toBe('compound');
+    if (plan.kind !== 'compound') throw new Error('expected compound plan');
+    expect(plan.services.map((service) => service.name)).toEqual(['api', 'web']);
+    expect(plan.services.find((service) => service.name === 'web')).toMatchObject({
+      dependsOn: ['api'],
+      health: { type: 'http', port: 3000, path: '/healthz' },
+      env: {},
+    });
+    expect(plan.ports).toMatchObject([{ name: 'web.http', guest: 3000, host: 20000 }]);
+  });
+
+  it('rejects dedicated-VM placement before Runtime preparation', () => {
+    expect(() =>
+      manifestToRuntimePlan(compoundManifest('vm'), '/tmp/notes-suite', '192.168.127.10', 20000, [], 'x64')
+    ).toThrow('isolation: vm, which is not yet supported');
+  });
+
+  it('rejects leaf-level egress because compound leaves share one principal', () => {
+    const value = compoundManifest();
+    value.services.api.network = { egress: [{ host: 'api.example.com', ports: [443] }] };
+    expect(() => manifestToRuntimePlan(value, '/tmp/notes-suite', '192.168.127.10', 20000, [], 'x64')).toThrow(
+      'compound apps declare network.egress at the root (shared principal); move api.network.egress to the top level'
+    );
+  });
+
+  it('translates the source-only notes-suite example without Docker', () => {
+    const value = applianceV2Input.parse(
+      JSON.parse(readFileSync(new URL('../../../examples/runtime/notes-suite/appliance.json', import.meta.url), 'utf8'))
+    );
+    const plan = manifestToRuntimePlan(
+      value,
+      '/tmp/notes-suite',
+      '192.168.127.10',
+      20000,
+      [{ name: 'web.http', host: 20000, guest: 3000, protocol: 'tcp' }],
+      'x64'
+    );
+    expect(plan).toMatchObject({
+      kind: 'compound',
+      services: [{ name: 'api' }, { name: 'web' }],
+      ports: [{ name: 'web.http', host: 20000, guest: 3000 }],
+    });
+  });
 });
 
 describe('manifest to effective Runtime policy', () => {
@@ -149,5 +249,18 @@ describe('manifest to effective Runtime policy', () => {
 describe('runtime log rendering', () => {
   it('strips ANSI and terminal control bytes while preserving lines and tabs', () => {
     expect(sanitizeRuntimeLog('\u001b[31mred\u001b[0m\u0000\u0007\tline\nnext\u007f')).toBe('red\tline\nnext');
+  });
+
+  it('prefixes every compound service log line', () => {
+    expect(prefixServiceLog('api', 'ready\nrequest\n')).toBe('[api] ready\n[api] request\n');
+  });
+});
+
+describe('runtime pool share reconciliation', () => {
+  it('restarts for a replaced compound install without changing legacy single-workload behavior', () => {
+    expect(runtimePoolRestartRequired('compound', true, false)).toBe(true);
+    expect(runtimePoolRestartRequired('container', true, false)).toBe(false);
+    expect(runtimePoolRestartRequired('binary', true, false)).toBe(false);
+    expect(runtimePoolRestartRequired('container', false, true)).toBe(true);
   });
 });
