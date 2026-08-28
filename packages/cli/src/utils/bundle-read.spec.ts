@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import archiver from 'archiver';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canonicalJsonBytes, computeBundleDigest } from './bundle-digest.js';
-import { readBundleManifest, unpackBundle, verifyBundle } from './bundle-read.js';
+import { isPathContained, readBundleManifest, unpackBundle, verifyBundle } from './bundle-read.js';
 import { readDevSigningKey, signEnvelope } from './bundle-sign.js';
 import { writeBundle } from './bundle-write.js';
 import { tinyOciTar } from './bundle-oci-fixture.js';
@@ -141,6 +141,33 @@ describe('bundle reading and verification', () => {
     expect(() => readBundleManifest(bundle)).toThrow('Unsafe ZIP entry path');
   });
 
+  it.each(['CON', 'con', 'nul.txt', 'dir/COM1.log', 'LPT9', 'trailing.', 'trailing ', 'a/b./c'])(
+    'rejects the non-portable Windows path %j',
+    async (entryPath) => {
+      const dir = tempDir();
+      const bundle = await rawZip(dir, 'unsafe-windows-path.zip', [
+        { name: 'appliance.json', data: canonicalJsonBytes(containerManifest()) },
+        { name: entryPath, data: 'unsafe' },
+      ]);
+      expect(() => readBundleManifest(bundle)).toThrow('Unsafe ZIP entry path');
+    }
+  );
+
+  it.each(['console.txt', 'null', 'com10', 'lpt0'])('accepts the portable path %j', async (entryPath) => {
+    const dir = tempDir();
+    const bundle = await rawZip(dir, 'portable-windows-path.zip', [
+      { name: 'appliance.json', data: canonicalJsonBytes(containerManifest()) },
+      { name: entryPath, data: 'portable' },
+    ]);
+    expect(readBundleManifest(bundle).classification).toBe('runnable');
+  });
+
+  it('compares Windows containment without drive-letter casing', () => {
+    expect(isPathContained('C:\\x', 'c:\\x', 'win32')).toBe(true);
+    expect(isPathContained('C:\\x', 'c:\\x\\child', 'win32')).toBe(true);
+    expect(isPathContained('C:\\x', 'c:\\x-other', 'win32')).toBe(false);
+  });
+
   it('rejects symlink entries from Unix ZIP metadata', async () => {
     const dir = tempDir();
     const bundle = await validBundle(dir);
@@ -213,6 +240,32 @@ describe('bundle reading and verification', () => {
     expect(() => unpackBundle(bundle, unpacked)).toThrow('destination contains');
     expect(fs.readdirSync(outside)).toEqual([]);
   });
+
+  it('rejects an unpack destination that resolves through a filesystem alias', async () => {
+    const dir = tempDir();
+    const bundle = await validBundle(dir);
+    const outside = path.join(dir, 'outside');
+    const unpacked = path.join(dir, 'unpacked');
+    fs.mkdirSync(outside);
+    fs.symlinkSync(outside, unpacked, process.platform === 'win32' ? 'junction' : 'dir');
+    expect(() => unpackBundle(bundle, unpacked)).toThrow('destination contains');
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it.runIf(process.platform === 'win32')(
+    'does not traverse a junction already present in the unpack destination',
+    async () => {
+      const dir = tempDir();
+      const bundle = await validBundle(dir);
+      const unpacked = path.join(dir, 'unpacked');
+      const outside = path.join(dir, 'outside');
+      fs.mkdirSync(unpacked);
+      fs.mkdirSync(outside);
+      fs.symlinkSync(outside, path.join(unpacked, 'payload'), 'junction');
+      expect(() => unpackBundle(bundle, unpacked)).toThrow('destination contains');
+      expect(fs.readdirSync(outside)).toEqual([]);
+    }
+  );
 });
 
 function replaceAllSameLength(filePath: string, before: string, after: string): void {
