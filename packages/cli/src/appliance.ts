@@ -68,6 +68,10 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     description: 'builds the appliance in the current working directory',
     load: () => import('./appliance-build.js'),
   },
+  builder: {
+    description: 'build and ship your own apps (`appliance builder <verb>`)',
+    load: async () => {},
+  },
   cluster: {
     description: 'list, switch, and forget clusters (shared with the desktop app)',
     load: () => import('./appliance-cluster.js'),
@@ -77,8 +81,12 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     load: () => import('./appliance-configure.js'),
   },
   deploy: {
-    description: 'deploy the linked (or named) project/environment',
-    aliases: ['install'],
+    description: 'deploy the linked (or named) project to the active cluster (see `appliance cluster`; usually cloud)',
+    load: () => import('./appliance-deploy.js'),
+  },
+  install: {
+    description:
+      'install the linked (or named) project to the local VM cluster (--cluster <name> to override) — or the whole stack in a stack folder',
     load: () => import('./appliance-deploy.js'),
   },
   deployment: {
@@ -137,6 +145,38 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
   open: {
     description: 'open the latest deployment URL in a browser',
     load: () => import('./appliance-open.js'),
+  },
+  package: {
+    description: 'package a manifest v2 project as a runnable bundle (alias: `appliance builder package`)',
+    load: () => import('./appliance-build.js'),
+  },
+  run: {
+    description: 'run a packaged app (coming in a later release)',
+    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('run'),
+  },
+  uninstall: {
+    description: 'uninstall a packaged app (coming in a later release)',
+    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('uninstall'),
+  },
+  ps: {
+    description: 'list running packaged apps (coming in a later release)',
+    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('ps'),
+  },
+  stop: {
+    description: 'stop a packaged app (coming in a later release)',
+    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('stop'),
+  },
+  search: {
+    description: 'search for packaged apps (coming in a later release)',
+    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('search'),
+  },
+  entitlements: {
+    description: 'manage packaged-app entitlements (coming in a later release)',
+    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('entitlements'),
+  },
+  runtime: {
+    description: 'run packaged apps in microVMs (`appliance runtime <verb>`)',
+    load: async () => {},
   },
   profile: {
     description: '(use `appliance cluster`) the lower-level credential-profile store',
@@ -205,6 +245,45 @@ const CLOUD_VERBS: Record<string, string> = {
   teardown: 'teardown',
 };
 
+// Namespaces only route to existing in-process command modules. This keeps the
+// Bun single-binary contract intact and guarantees the top-level spelling and
+// `builder <verb>` share exactly the same implementation.
+const BUILDER_VERBS: Record<string, string> = {
+  build: 'build',
+  configure: 'configure',
+  deploy: 'deploy',
+  deployment: 'deployment',
+  destroy: 'destroy',
+  dev: 'dev',
+  down: 'down',
+  env: 'env',
+  init: 'init',
+  install: 'install',
+  link: 'link',
+  logs: 'logs',
+  manifest: 'manifest',
+  open: 'open',
+  package: 'package',
+  shell: 'shell',
+  stack: 'stack',
+  test: 'test',
+  unlink: 'unlink',
+  up: 'up',
+};
+
+const RUNTIME_VERBS: Record<string, string> = {
+  run: 'run a .appliance.zip (path or URL) without installing',
+  install: 'verify, register, and start a packaged app',
+  uninstall: "stop, deregister, and delete an app's VM and volumes",
+  list: 'list installed packaged apps',
+  ps: 'list running packaged apps',
+  stop: 'stop a running packaged app',
+  logs: "stream a packaged app's logs",
+  open: "open a packaged app's UI",
+  search: 'search the signed app index',
+  entitlements: 'show, grant, or revoke app entitlements',
+};
+
 // Resolve aliases (e.g. `application` -> `app`) to their canonical
 // subcommand name. Filled once at module load.
 const ALIAS_MAP: Record<string, string> = (() => {
@@ -216,46 +295,72 @@ const ALIAS_MAP: Record<string, string> = (() => {
   return m;
 })();
 
-// Help groups the commands by audience instead of alphabetically: the
-// everyday loop first, then configuration, then the advanced cloud &
-// machine surface — so the common path is obvious before the long
-// tail. Names must exist in SUBCOMMANDS (or SHORTCUTS, rendered as an
-// alias line); anything unlisted lands in "Other" so a newly-registered
-// command is never silently hidden.
+const HELP_ONLY: Record<string, string> = {
+  cloud: 'umbrella: `appliance cloud install|update|bootstrap|teardown`',
+};
+
+// Help groups commands by product surface. Names must exist in
+// SUBCOMMANDS, SHORTCUTS, or HELP_ONLY; anything unlisted lands in
+// "Other" so a newly registered command is never silently hidden.
 const COMMAND_GROUPS: Array<{ title: string; names: string[] }> = [
   {
-    title: 'Getting started & everyday',
-    names: ['init', 'dev', 'deploy', 'logs', 'open', 'status', 'agent', 'up', 'shell', 'down'],
-  },
-  {
-    title: 'Configuration (profiles, environments, project links)',
-    names: ['configure', 'env', 'link', 'unlink', 'stack', 'app', 'cluster', 'login', 'whoami'],
-  },
-  {
-    title: 'Advanced (cloud installs, machine & diagnostics)',
+    title: 'Builder',
     names: [
+      'builder',
+      'init',
+      'dev',
+      'build',
+      'package',
+      'install',
+      'deploy',
+      'destroy',
+      'configure',
+      'env',
+      'link',
+      'unlink',
+      'stack',
+      'deployment',
+      'manifest',
+      'test',
+      'logs',
+      'open',
+    ],
+  },
+  {
+    title: 'Cluster & machine',
+    names: [
+      'up',
+      'down',
+      'shell',
+      'vm',
+      'cluster',
+      'status',
       'bootstrap',
       'teardown',
-      'vm',
-      'deployment',
+      'cloud',
       'keys',
       'doctor',
-      'test',
-      'mcp',
-      'manifest',
-      'build',
-      'destroy',
       'upgrade',
     ],
+  },
+  { title: 'Agents', names: ['agent', 'mcp'] },
+  { title: 'Account', names: ['login', 'whoami', 'app', 'setup', 'list'] },
+  {
+    title: 'Runtime',
+    names: ['runtime', 'run', 'uninstall', 'ps', 'stop', 'search', 'entitlements'],
   },
 ];
 
 function showHelp(): void {
   console.log('Usage: appliance <command> [options]');
-  const allNames = Object.keys(SUBCOMMANDS).filter((n) => !SUBCOMMANDS[n].hidden);
+  const allNames = [
+    ...Object.keys(SUBCOMMANDS).filter((n) => !SUBCOMMANDS[n].hidden),
+    ...Object.keys(SHORTCUTS),
+    ...Object.keys(HELP_ONLY),
+  ];
   const width = Math.max(...allNames.map((n) => n.length));
   const grouped = new Set(COMMAND_GROUPS.flatMap((g) => g.names));
-  const leftovers = allNames.filter((n) => !grouped.has(n)).sort();
+  const leftovers = [...new Set(allNames.filter((n) => !grouped.has(n)))].sort();
   const groups = [...COMMAND_GROUPS, ...(leftovers.length > 0 ? [{ title: 'Other', names: leftovers }] : [])];
   for (const group of groups) {
     console.log();
@@ -263,23 +368,15 @@ function showHelp(): void {
     for (const name of group.names) {
       const def = SUBCOMMANDS[name];
       if (!def) {
-        // A shortcut listed in a group (e.g. `status`) renders as its
-        // alias line here instead of in the Shortcuts section below.
         const sc = SHORTCUTS[name];
-        if (sc) console.log(`  ${name.padEnd(width)}  alias for \`appliance ${sc.target} ${sc.prefix.join(' ')}\``);
+        const description = sc ? `alias for \`appliance ${sc.target} ${sc.prefix.join(' ')}\`` : HELP_ONLY[name];
+        if (description) console.log(`  ${name.padEnd(width)}  ${description}`);
         continue;
       }
       const aliasTail = def.aliases && def.aliases.length > 0 ? ` (alias: ${def.aliases.join(', ')})` : '';
       console.log(`  ${name.padEnd(width)}  ${def.description}${aliasTail}`);
     }
   }
-  console.log();
-  console.log('Shortcuts:');
-  for (const [name, sc] of Object.entries(SHORTCUTS)) {
-    if (grouped.has(name)) continue;
-    console.log(`  ${name.padEnd(width)}  alias for \`appliance ${sc.target} ${sc.prefix.join(' ')}\``);
-  }
-  console.log(`  ${'cloud'.padEnd(width)}  umbrella: \`appliance cloud install|update|bootstrap|teardown\``);
   console.log();
   console.log('The three journeys:');
   console.log('  1. Build & run your app(s):   appliance dev            (deploy + logs + rebuild on save;');
@@ -293,6 +390,24 @@ function showHelp(): void {
   console.log('  APPLIANCE_TRUST_MANIFEST=1      skip the programmatic-manifest trust prompt (CI)');
   console.log();
   console.log('Run `appliance <command> --help` for command-specific options.');
+}
+
+function showNamespaceHelp(namespace: 'builder' | 'runtime'): void {
+  console.log(`Usage: appliance ${namespace} <verb> [options]`);
+  console.log();
+  console.log(namespace === 'builder' ? 'Build and ship your own apps:' : 'Run packaged apps in microVMs:');
+  const verbs = namespace === 'builder' ? BUILDER_VERBS : RUNTIME_VERBS;
+  const width = Math.max(...Object.keys(verbs).map((verb) => verb.length));
+  for (const [verb, targetOrDescription] of Object.entries(verbs)) {
+    const description = namespace === 'builder' ? SUBCOMMANDS[targetOrDescription].description : targetOrDescription;
+    console.log(`  ${verb.padEnd(width)}  ${description}`);
+  }
+  if (namespace === 'runtime') {
+    console.log();
+    console.log('Runtime commands are coming in a later release.');
+  }
+  console.log();
+  console.log(`Run \`appliance ${namespace} <verb> --help\` for command-specific options.`);
 }
 
 async function main(): Promise<void> {
@@ -311,6 +426,37 @@ async function main(): Promise<void> {
   }
 
   const sub = args[0];
+
+  if (sub === 'builder' || sub === 'runtime') {
+    const verb = args[1];
+    if (!verb || verb === '--help' || verb === '-h' || verb === 'help') {
+      showNamespaceHelp(sub);
+      return;
+    }
+    if (sub === 'runtime') {
+      if (!RUNTIME_VERBS[verb]) {
+        console.error(`Unknown runtime command: ${verb}`);
+        console.error();
+        showNamespaceHelp('runtime');
+        process.exit(1);
+      }
+      const { runRuntimeStub } = await import('./appliance-runtime-stub.js');
+      runRuntimeStub(
+        verb,
+        args.slice(2).some((arg) => arg === '--help' || arg === '-h')
+      );
+    }
+    const target = BUILDER_VERBS[verb];
+    if (!target) {
+      console.error(`Unknown builder command: ${verb}`);
+      console.error();
+      showNamespaceHelp('builder');
+      process.exit(1);
+    }
+    process.argv = [process.argv[0], `appliance-${target}`, ...args.slice(2)];
+    await SUBCOMMANDS[target].load();
+    return;
+  }
 
   // `appliance status` routes by link.json: a `sandbox` link (an
   // `appliance up` folder) shows the sandbox container + URL; otherwise
