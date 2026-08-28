@@ -51,6 +51,8 @@ appliance runtime uninstall my-app
 Installation records the app in the current workspace target. Use `--profile` for another target. The CLI shows publisher and requested
 control prompts before accepting grants when confirmation is required.
 
+On Windows, runtime install and unpack still require paths under MAX_PATH (260 characters) unless LongPathsEnabled is enabled.
+
 ## Inspect and control running apps
 
 ```sh

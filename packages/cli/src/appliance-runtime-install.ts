@@ -24,6 +24,7 @@ import {
   listInstalledTargets,
   readInstalledApps,
   removeInstalledApp,
+  removeImmutableFile,
   resolveImmutableBundlePath,
   resolveInstalledApp,
   upsertInstalledApp,
@@ -223,7 +224,7 @@ export async function installBundle(source: string, options: InstallBundleOption
     upsertInstalledApp(target, installed, root);
     return installed;
   } finally {
-    if (!keepStaging) fs.rmSync(staging, { force: true });
+    if (!keepStaging) removeImmutableFile(staging);
   }
 }
 
@@ -261,6 +262,7 @@ async function stageSource(
   if (!response.ok) throw new Error(`Bundle download failed (${response.status}).`);
   const descriptor = fs.openSync(staging, 'wx', 0o600);
   let received = 0;
+  let failed = false;
   try {
     if (!response.body) throw new Error('Bundle download returned no body.');
     const reader = response.body.getReader();
@@ -273,10 +275,11 @@ async function stageSource(
     }
     fs.fsyncSync(descriptor);
   } catch (cause) {
-    fs.rmSync(staging, { force: true });
+    failed = true;
     throw cause;
   } finally {
     fs.closeSync(descriptor);
+    if (failed) removeImmutableFile(staging);
   }
   return staging;
 }
@@ -560,7 +563,7 @@ export async function uninstallInstalledApp(input: string, options: UninstallOpt
     path.resolve(app.bundlePath) === path.resolve(expectedImmutablePath) &&
     !isBundleReferenced(app.bundlePath, root)
   ) {
-    fs.rmSync(app.bundlePath, { force: true });
+    removeImmutableFile(app.bundlePath);
   }
   return app;
 }

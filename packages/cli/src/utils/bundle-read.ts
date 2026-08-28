@@ -97,11 +97,19 @@ export function readBundleManifestForDeploy(
 
 export function unpackBundle(filePath: string, destination: string, limits: Partial<BundleLimits> = {}): void {
   const zip = inspectZip(filePath, limits, 'strict');
-  fs.mkdirSync(path.resolve(destination), { recursive: true });
-  const root = fs.realpathSync(path.resolve(destination));
+  const resolvedDestination = path.resolve(destination);
+  fs.mkdirSync(resolvedDestination, { recursive: true });
+  const root = fs.realpathSync.native(resolvedDestination);
+  const directDestination = path.join(
+    fs.realpathSync.native(path.dirname(resolvedDestination)),
+    path.basename(resolvedDestination)
+  );
+  if (process.platform === 'win32' && !sameFileSystemPath(directDestination, root)) {
+    throw new Error(`Bundle unpack destination contains a symlink or junction: ${resolvedDestination}`);
+  }
   for (const entry of zip.entries) {
     const outputPath = path.resolve(root, ...entry.name.replace(/\/$/, '').split('/'));
-    if (outputPath !== root && !outputPath.startsWith(`${root}${path.sep}`)) {
+    if (!isPathContained(root, outputPath)) {
       throw new Error(`Bundle entry escapes destination: ${entry.name}`);
     }
     if (entry.isDirectory) {
@@ -410,7 +418,15 @@ function validateEntryPath(entryPath: string, maxBytes: number): void {
     entryPath.includes('\\') ||
     entryPath.includes('\0') ||
     /^[A-Za-z]:/.test(entryPath) ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+    segments.some(
+      (segment) =>
+        segment === '' ||
+        segment === '.' ||
+        segment === '..' ||
+        /[<>:"|?*]/.test(segment) ||
+        /[. ]$/.test(segment) ||
+        /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(?:\..*)?$/i.test(segment)
+    )
   ) {
     throw new Error(`Unsafe ZIP entry path: ${JSON.stringify(entryPath)}`);
   }
@@ -453,13 +469,36 @@ function ensureSafeDirectory(root: string, directory: string): void {
     current = path.join(current, segment);
     if (!fs.existsSync(current)) {
       fs.mkdirSync(current);
-      continue;
     }
     const stat = fs.lstatSync(current);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) {
-      throw new Error(`Bundle unpack destination contains a non-directory or symlink: ${current}`);
+    if (
+      !stat.isDirectory() ||
+      stat.isSymbolicLink() ||
+      (process.platform === 'win32' && !sameFileSystemPath(path.resolve(current), fs.realpathSync.native(current)))
+    ) {
+      throw new Error(`Bundle unpack destination contains a non-directory, symlink, or junction: ${current}`);
     }
   }
+}
+
+export function isPathContained(
+  root: string,
+  candidate: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  const separator = platform === 'win32' ? path.win32.sep : path.posix.sep;
+  const normalizedRoot = normalizeFileSystemPath(root, platform);
+  const normalizedCandidate = normalizeFileSystemPath(candidate, platform);
+  const prefix = normalizedRoot.endsWith(separator) ? normalizedRoot : `${normalizedRoot}${separator}`;
+  return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(prefix);
+}
+
+function sameFileSystemPath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  return normalizeFileSystemPath(a, platform) === normalizeFileSystemPath(b, platform);
+}
+
+function normalizeFileSystemPath(value: string, platform: NodeJS.Platform): string {
+  return platform === 'win32' ? value.toLowerCase() : value;
 }
 
 function makeCrcTable(): Uint32Array {
