@@ -27,7 +27,7 @@ appliance package --image linux/amd64=./tmp/test-image.oci.tar
 
 When a compound contains more than one image for the same platform, select each full payload path, for example `--image payload/web/web.oci.tar=./web.oci.tar`. Binary manifests do not compile: every declared `payload.targets.*.root` directory and entrypoint must already exist. Compound manifests collect their container and binary leaves into the shared root `payload/` tree; because v2 has no per-service build-context field, compound container leaves require `--image`.
 
-The default output is `<name>.appliance.zip`. The root manifest is RFC 8785 canonical JSON; the CLI uses its small dependency-free canonicalizer. The bundle carries the RFC 0001 length-framed SHA-256 digest. `--sign` accepts a local PKCS#8 Ed25519 PEM or JSON `{"privateKey":"ed25519:<base64url-32-byte-seed>"}`, adds the derived publisher key ID, and prints that key ID. This option is for a developer-owned local key, never a CI signing identity.
+The default output is `<name>.appliance.zip`. The root manifest is RFC 8785 canonical JSON; the CLI uses its small dependency-free canonicalizer. The bundle carries a length-framed SHA-256 digest. `--sign` accepts a local PKCS#8 Ed25519 PEM or JSON `{"privateKey":"ed25519:<base64url-32-byte-seed>"}`, adds the derived publisher key ID, and prints that key ID. This option is for a developer-owned local key, never a CI signing identity.
 
 Manifest v1 remains the source-bundle contract. `package` directs v1 projects to `appliance build` rather than silently changing their artifact kind.
 
@@ -37,14 +37,14 @@ Before uploading `-a/--build <zip>`, `deploy` and Builder `install` enforce boun
 
 `appliance runtime <verb>` reserves the packaged-app surface: `run`, `install`, `uninstall`, `list`, `ps`, `stop`, `logs`, `open`, `search`, and `entitlements`.
 
-`run`, `ps`, `stop`, and `logs` operate container, binary, or compound bundles
-in the pooled Runtime VM. `search` fetches and verifies the same signed free-app
-index as the desktop; stale results are labelled and paid entries are discarded
-before matching or output. Set `APPLIANCE_CATALOGUE_URL` to override the default
-`https://www.appliance.sh` origin; non-local overrides must use HTTPS. The other
-Runtime verbs remain placeholders: they print `coming in a later release` and
-exit with status 2. Blacklist evaluation is deferred to AP-173 and gates
-installation. Existing colliding top-level commands remain unchanged.
+`run`, `install`, `ps`, `stop`, `logs`, and `open` operate container, binary, or
+compound bundles in the pooled Runtime VM. `list` and `uninstall` manage the
+installed-app registry, `search` fetches and verifies the same signed index as
+the desktop, and `entitlements` shows or changes app grants. Stale search results
+are labelled. Set `APPLIANCE_CATALOGUE_URL` to override the default
+`https://www.appliance.sh` origin; non-local overrides must use HTTPS. The
+runtime checks the current blacklist before installation. Existing colliding
+top-level commands remain unchanged.
 
 ## `install` versus `deploy`
 
