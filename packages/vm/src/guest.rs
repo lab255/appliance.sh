@@ -1716,6 +1716,11 @@ echo '{"state":"running"}'
 
 const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
 # k3s, registry, BuildKit, Node, or development toolchain is installed.
+if ! SOCAT_SELF_CHECK=$(socat -V 2>&1); then
+  echo "appliance-runtime: socat self-check failed; offline Runtime APK set is ABI-inconsistent"
+  printf '%s\n' "$SOCAT_SELF_CHECK"
+  exit 1
+fi
 rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
 mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
 find /persist/runtime/apps -type f \( -name pid -o -name relay.pids -o -name logcap.pid \) -delete
@@ -2090,13 +2095,18 @@ pub fn build_boot_media(
     let volume_bytes = ((content as u64 + 64 * 1024 * 1024) / (16 * 1024 * 1024) + 1) * (16 * 1024 * 1024);
 
     let image_path = vm_dir.join("boot-media.img");
+    // Build away from the canonical path and durably flush the FAT image
+    // before VZ/KVM can attach it. Without this boundary a cold VZ boot can
+    // observe the directory entry before the apkovl payload has reached the
+    // backing file, producing an intermittent "invalid magic / short read".
+    let partial = vm_dir.join("boot-media.img.partial");
     let file = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&image_path)
-        .with_context(|| format!("create {}", image_path.display()))?;
+        .open(&partial)
+        .with_context(|| format!("create {}", partial.display()))?;
     file.set_len(volume_bytes)?;
 
     let buf = fscommon::BufStream::new(&file);
@@ -2147,6 +2157,10 @@ pub fn build_boot_media(
         }
     }
     fs.unmount().context("unmount FAT volume")?;
+    file.sync_all().context("sync FAT boot media")?;
+    drop(file);
+    fs::rename(&partial, &image_path)
+        .with_context(|| format!("publish {}", image_path.display()))?;
 
     Ok(BootMedia {
         image: image_path,
@@ -3304,11 +3318,19 @@ mod tests {
         assert_eq!(repositories, "/media/vdb/apks/main\n/media/vdb/apks/community\n");
         assert!(!repositories.contains("https://"));
         let world = apkovl_file(&overlay, "etc/apk/world").unwrap();
-        assert!(world.lines().any(|package| package == "containerd"));
-        assert!(world.lines().any(|package| package == "containerd-ctr"));
-        assert!(world.lines().any(|package| package == "nftables"));
+        assert!(world.lines().any(|package| package == "containerd=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "containerd-ctr=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "nftables=1.1.1-r0"));
+        assert!(world.lines().any(|package| package == "socat=1.8.1.3-r0"));
+        assert!(world.lines().any(|package| package == "openssl=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libssl3=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libcrypto3=3.3.7-r0"));
         let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
         assert!(start.contains("cgroup.subtree_control"));
+        let self_check = start.find("socat -V").unwrap();
+        let ready = start.find("appliance-runtime: supervisor ready").unwrap();
+        assert!(self_check < ready, "socat ABI self-check must gate Runtime readiness");
+        assert!(start.contains("offline Runtime APK set is ABI-inconsistent"));
     }
 
     #[test]
