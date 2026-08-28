@@ -59,6 +59,11 @@ export function resolveImmutableBundlePath(digest: string, root = runtimeRoot())
   return fs.existsSync(legacy) ? legacy : canonical;
 }
 
+export function removeImmutableFile(filePath: string): void {
+  if (process.platform === 'win32' && fs.existsSync(filePath)) fs.chmodSync(filePath, 0o600);
+  fs.rmSync(filePath, { force: true });
+}
+
 export function installedAppDataDirectory(target: string, appId: string, root = runtimeRoot()): string {
   if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(appId))
     throw new Error('Cannot address app data with an invalid app id.');

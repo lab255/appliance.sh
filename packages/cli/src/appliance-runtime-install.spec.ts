@@ -316,6 +316,21 @@ describe('runtime uninstall/list', () => {
     expect(fs.existsSync(extracted)).toBe(false);
   });
 
+  it.skipIf(process.platform === 'win32')('uninstalls an owner-read-only immutable bundle', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-uninstall-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const installed = app(root, 'local');
+    fs.mkdirSync(path.dirname(installed.bundlePath), { recursive: true });
+    fs.writeFileSync(installed.bundlePath, 'immutable', { mode: 0o400 });
+    fs.chmodSync(installed.bundlePath, 0o400);
+    upsertInstalledApp('local', installed, root);
+
+    await uninstallInstalledApp('journal', { target: 'local', root });
+
+    expect(fs.existsSync(installed.bundlePath)).toBe(false);
+  });
+
   it.skipIf(process.platform === 'win32')('lists and uninstalls a pre-existing legacy immutable bundle', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-uninstall-'));
     roots.push(directory);

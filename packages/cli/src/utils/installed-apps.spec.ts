@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InstalledApp } from '@appliance.sh/sdk';
 import {
   assertNtfsSafeBundleBasename,
@@ -9,9 +9,27 @@ import {
   isBundleReferenced,
   readInstalledApps,
   removeInstalledApp,
+  removeImmutableFile,
   resolveImmutableBundlePath,
   upsertInstalledApp,
 } from './installed-apps';
+
+const fsOperations = vi.hoisted(() => [] as Array<{ name: string; args: unknown[] }>);
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    chmodSync: (...args: Parameters<typeof actual.chmodSync>) => {
+      fsOperations.push({ name: 'chmod', args });
+      return actual.chmodSync(...args);
+    },
+    rmSync: (...args: Parameters<typeof actual.rmSync>) => {
+      fsOperations.push({ name: 'rm', args });
+      return actual.rmSync(...args);
+    },
+  };
+});
 
 const roots: string[] = [];
 
@@ -78,6 +96,25 @@ describe('installed app store', () => {
     expect(readInstalledApps('local', root)).toEqual([app]);
     if (process.platform !== 'win32') {
       expect(fs.statSync(path.join(root, 'installed', 'local', 'apps.json')).mode & 0o777).toBe(0o600);
+    }
+  });
+
+  it('clears the Windows read-only attribute before removing an immutable file', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-installed-'));
+    roots.push(root);
+    const file = path.join(root, 'immutable.appliance.zip');
+    fs.writeFileSync(file, 'immutable');
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    try {
+      fsOperations.length = 0;
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      removeImmutableFile(file);
+      expect(fsOperations).toEqual([
+        { name: 'chmod', args: [file, 0o600] },
+        { name: 'rm', args: [file, { force: true }] },
+      ]);
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
     }
   });
 
