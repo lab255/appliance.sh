@@ -79,24 +79,24 @@ export function InstalledAppCard({
               ? 'success'
               : item.state === 'degraded'
                 ? 'warning'
-              : item.state === 'failed'
-                ? 'error'
-                : item.state === 'starting'
-                  ? 'info'
-                  : 'neutral'
+                : item.state === 'failed'
+                  ? 'error'
+                  : item.state === 'starting'
+                    ? 'info'
+                    : 'neutral'
           }
           label={
             item.state === 'running'
               ? 'Running'
               : item.state === 'degraded'
                 ? 'Degraded'
-              : item.state === 'starting'
-                ? 'Starting'
-                : item.state === 'exited'
-                  ? `Exited (${item.exitCode ?? '?'})`
-                  : item.state === 'failed'
-                    ? 'Failed'
-                    : 'Stopped'
+                : item.state === 'starting'
+                  ? 'Starting'
+                  : item.state === 'exited'
+                    ? `Exited (${item.exitCode ?? '?'})`
+                    : item.state === 'failed'
+                      ? 'Failed'
+                      : 'Stopped'
           }
           activity={item.state === 'starting' ? 'spin' : 'static'}
         />
