@@ -1,6 +1,6 @@
 {
   "name": "@appliance.sh/console",
-  "version": "1.56.0",
+  "version": "1.57.0",
   "private": true,
   "description": "Web shell for the Appliance control panel",
   "license": "MIT",

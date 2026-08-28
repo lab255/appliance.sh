@@ -1,3 +1,37 @@
+## 1.57.0 (2026-08-28)
+
+### Features
+
+- **cli:** builder and runtime namespaces; install targets the local cluster ([#72](https://github.com/lab255/appliance.sh/pull/72))
+- **cli:** builder package emits runnable manifest v2 bundles ([#76](https://github.com/lab255/appliance.sh/pull/76))
+- **desktop:** first-run user/developer mode choice and nav gating ([#74](https://github.com/lab255/appliance.sh/pull/74))
+- **desktop:** catalogue page with verified signed index ([#78](https://github.com/lab255/appliance.sh/pull/78))
+- **desktop:** workspace switcher in user mode ([#80](https://github.com/lab255/appliance.sh/pull/80))
+- **desktop:** sandboxed app windows, lifecycle and runtime open ([#87](https://github.com/lab255/appliance.sh/pull/87))
+- **runtime:** appliance runtime run/ps/stop/logs in a pooled microvm ([#81](https://github.com/lab255/appliance.sh/pull/81))
+- **runtime:** run binary payloads through the hardened launcher ([#82](https://github.com/lab255/appliance.sh/pull/82))
+- **runtime:** compound apps in the shared microvm ([#84](https://github.com/lab255/appliance.sh/pull/84))
+- **runtime:** install/uninstall/list, verified immutable bundles, installed apps page ([#83](https://github.com/lab255/appliance.sh/pull/83))
+- **runtime:** signed entitlement grants, usage tracking and revocation ([#85](https://github.com/lab255/appliance.sh/pull/85))
+- **sdk:** manifest v2 zod schema ([#75](https://github.com/lab255/appliance.sh/pull/75))
+- **vm:** per-app runtime policies, principal egress and inspection-only tls ([#79](https://github.com/lab255/appliance.sh/pull/79))
+
+### Bug Fixes
+
+- **vm:** stop the one-shot vsock shell from killing commands after 0.5s ([#68](https://github.com/lab255/appliance.sh/pull/68))
+
+### Chores
+
+- post-merge formatting fix and public docs scope ([#88](https://github.com/lab255/appliance.sh/pull/88))
+
+### CI
+
+- **runtime:** build sample bundles; consolidate live runbook and metrics ([#86](https://github.com/lab255/appliance.sh/pull/86))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.56.0 (2026-08-26)
 
 ### Features
