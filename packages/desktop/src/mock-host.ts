@@ -56,11 +56,11 @@ type Scenario =
   | 'missing'
   | 'first-run'
   | 'user-mode'
-  | 'user-mode-no-vm'
   | 'developer-mode'
   | 'catalogue'
   | 'catalogue-unverified'
   | 'catalogue-stale'
+  | 'user-mode-no-vm'
   | 'catalogue-loading'
   | 'installed-apps'
   | 'installed-apps-empty'
@@ -105,11 +105,11 @@ function scenario(): Scenario {
     s === 'missing' ||
     s === 'first-run' ||
     s === 'user-mode' ||
-    s === 'user-mode-no-vm' ||
     s === 'developer-mode' ||
     s === 'catalogue' ||
     s === 'catalogue-unverified' ||
     s === 'catalogue-stale' ||
+    s === 'user-mode-no-vm' ||
     s === 'catalogue-loading' ||
     s === 'installed-apps' ||
     s === 'installed-apps-empty' ||

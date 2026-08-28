@@ -1,5 +1,6 @@
 FROM busybox:1.37
 
+COPY entrypoint.sh /entrypoint.sh
 RUN mkdir /www && printf '%s\n' \
   '<!doctype html>' \
   '<html><head><title>Journal</title></head>' \
@@ -9,4 +10,4 @@ RUN mkdir /www && printf '%s\n' \
 # The Runtime supervisor supplies the app's stable unprivileged UID and
 # drops all Linux capabilities; use an unprivileged listener accordingly.
 EXPOSE 3000
-CMD ["httpd", "-f", "-p", "3000", "-h", "/www"]
+ENTRYPOINT ["/entrypoint.sh"]
