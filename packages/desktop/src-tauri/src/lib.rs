@@ -101,6 +101,13 @@ struct HostConfig {
     api_key: Option<ApiKey>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum AppMode {
+    User,
+    Developer,
+}
+
 // Persisted config supports both the new multi-cluster shape and the
 // legacy `apiServerUrl`-only shape. Legacy reads are migrated on first
 // `get_config` call (see `migrate_legacy`).
@@ -111,6 +118,8 @@ struct PersistedConfig {
     clusters: Vec<Cluster>,
     #[serde(default)]
     selected_cluster_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    app_mode: Option<AppMode>,
     // Legacy single-cluster field. Kept (skipped when serialising
     // the new shape) only as a migration source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -173,6 +182,8 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, HostError> {
 
 const SHARED_PROFILES_DIR: &str = ".appliance";
 const SHARED_PROFILES_FILE: &str = "profiles.json";
+const CATALOGUE_DIR: &str = "catalogue";
+const CATALOGUE_CACHE_FILE: &str = "verified-pair.json";
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -233,6 +244,128 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct CatalogueCache {
+    index_json: String,
+    signature_json: String,
+    fetched_at: String,
+    highest_generation: u64,
+    max_seen_wall_clock: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetCatalogueCacheInput {
+    index_json: String,
+    signature_json: String,
+    fetched_at: String,
+    generation: u64,
+    verified_at: String,
+}
+
+fn catalogue_cache_path() -> Result<PathBuf, HostError> {
+    home_dir()
+        .map(|home| {
+            home.join(SHARED_PROFILES_DIR)
+                .join(CATALOGUE_DIR)
+                .join(CATALOGUE_CACHE_FILE)
+        })
+        .ok_or_else(|| std::io::Error::other("cannot resolve the home directory").into())
+}
+
+fn catalogue_cache_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn read_catalogue_cache(path: &std::path::Path) -> Result<Option<CatalogueCache>, HostError> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::from_slice(&fs::read(path)?)?))
+}
+
+fn write_catalogue_cache(path: &std::path::Path, cache: &CatalogueCache) -> Result<(), HostError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("catalogue cache path has no parent"))?;
+    fs::create_dir_all(parent)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
+    }
+
+    let temporary = path.with_extension("json.tmp");
+    let mut options = fs::OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary)?;
+    std::io::Write::write_all(&mut file, &serde_json::to_vec(cache)?)?;
+    file.sync_all()?;
+    drop(file);
+    fs::rename(&temporary, path)?;
+    #[cfg(unix)]
+    fs::set_permissions(path, {
+        use std::os::unix::fs::PermissionsExt;
+        fs::Permissions::from_mode(0o600)
+    })?;
+    Ok(())
+}
+
+fn next_catalogue_cache(
+    current: Option<&CatalogueCache>,
+    input: SetCatalogueCacheInput,
+) -> Result<CatalogueCache, HostError> {
+    let current_generation = current.map_or(0, |cache| cache.highest_generation);
+    if input.generation < current_generation {
+        return Err(std::io::Error::other(format!(
+            "catalogue generation {} is below persisted floor {}",
+            input.generation, current_generation
+        ))
+        .into());
+    }
+    let max_seen_wall_clock = match current {
+        Some(cache)
+            if chrono::DateTime::parse_from_rfc3339(&cache.max_seen_wall_clock).map_err(
+                |error| std::io::Error::new(std::io::ErrorKind::InvalidData, error.to_string()),
+            )? > chrono::DateTime::parse_from_rfc3339(&input.verified_at).map_err(
+                |error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string()),
+            )? =>
+        {
+            cache.max_seen_wall_clock.clone()
+        }
+        _ => input.verified_at,
+    };
+    Ok(CatalogueCache {
+        index_json: input.index_json,
+        signature_json: input.signature_json,
+        fetched_at: input.fetched_at,
+        highest_generation: current_generation.max(input.generation),
+        max_seen_wall_clock,
+    })
+}
+
+#[tauri::command]
+fn get_catalogue_cache() -> Result<Option<CatalogueCache>, HostError> {
+    let _guard = catalogue_cache_lock();
+    read_catalogue_cache(&catalogue_cache_path()?)
+}
+
+#[tauri::command]
+fn set_catalogue_cache(input: SetCatalogueCacheInput) -> Result<(), HostError> {
+    let _guard = catalogue_cache_lock();
+    let path = catalogue_cache_path()?;
+    let current = read_catalogue_cache(&path)?;
+    let next = next_catalogue_cache(current.as_ref(), input)?;
+    write_catalogue_cache(&path, &next)
 }
 
 fn shared_profiles_path() -> Option<PathBuf> {
@@ -528,26 +661,10 @@ fn seed_desktop_profiles(app: &AppHandle) -> Result<usize, HostError> {
 fn ingest_shared_into_legacy(
     app: &AppHandle,
     shared: SharedProfilesFile,
+    app_mode: Option<AppMode>,
 ) -> Result<PersistedConfig, HostError> {
-    let mut cfg = PersistedConfig::default();
+    let cfg = build_ingested_config(&shared, app_mode);
     for (id, entry) in &shared.profiles {
-        let cluster = Cluster {
-            id: id.clone(),
-            name: entry.name.clone().unwrap_or_else(|| id.clone()),
-            api_server_url: entry.api_url.clone(),
-            created_at: entry
-                .created_at
-                .clone()
-                .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
-            state_backend_url: entry.state_backend_url.clone(),
-            last_bootstrap_input: entry.last_bootstrap_input.clone(),
-            install_generation: entry.install_generation.clone(),
-            cloud_formation_stack_name: entry.cloud_formation_stack_name.clone(),
-            aws_account_id: entry.aws_account_id.clone(),
-            aws_region: entry.aws_region.clone(),
-            // The keychain copy below comes from this very entry.
-            synced_key_id: Some(entry.key_id.clone()),
-        };
         // Only seed the Keychain when the shared entry actually carries a
         // secret. A macOS desktop-managed entry has an EMPTY secret (the
         // Keychain is canonical), so writing it here would clobber the
@@ -561,9 +678,7 @@ fn ingest_shared_into_legacy(
                 },
             );
         }
-        cfg.clusters.push(cluster);
     }
-    cfg.selected_cluster_id = shared.active_profile.clone();
 
     // Persist to the legacy file so this code path doesn't re-ingest
     // on every read.
@@ -571,6 +686,40 @@ fn ingest_shared_into_legacy(
     let raw = serde_json::to_string_pretty(&cfg)?;
     fs::write(legacy_path, raw)?;
     Ok(cfg)
+}
+
+/// Pure half of shared-profile adoption. Keeping mode propagation here
+/// makes it testable without a Tauri app handle or OS keychain.
+fn build_ingested_config(
+    shared: &SharedProfilesFile,
+    app_mode: Option<AppMode>,
+) -> PersistedConfig {
+    PersistedConfig {
+        clusters: shared
+            .profiles
+            .iter()
+            .map(|(id, entry)| Cluster {
+                id: id.clone(),
+                name: entry.name.clone().unwrap_or_else(|| id.clone()),
+                api_server_url: entry.api_url.clone(),
+                created_at: entry
+                    .created_at
+                    .clone()
+                    .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
+                state_backend_url: entry.state_backend_url.clone(),
+                last_bootstrap_input: entry.last_bootstrap_input.clone(),
+                install_generation: entry.install_generation.clone(),
+                cloud_formation_stack_name: entry.cloud_formation_stack_name.clone(),
+                aws_account_id: entry.aws_account_id.clone(),
+                aws_region: entry.aws_region.clone(),
+                // The keychain copy comes from this very entry.
+                synced_key_id: Some(entry.key_id.clone()),
+            })
+            .collect(),
+        selected_cluster_id: shared.active_profile.clone(),
+        app_mode,
+        ..Default::default()
+    }
 }
 
 /// Serializes every read-modify-write of the persisted config.
@@ -614,7 +763,7 @@ fn read_persisted_config(app: &AppHandle) -> Result<PersistedConfig, HostError> 
     // CLI (or a previous version of this desktop) populated it.
     if let Some(shared) = read_shared_profiles() {
         if !shared.profiles.is_empty() {
-            return ingest_shared_into_legacy(app, shared);
+            return ingest_shared_into_legacy(app, shared, legacy.app_mode);
         }
     }
     Ok(legacy)
@@ -774,6 +923,31 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
         selected_cluster_id: persisted.selected_cluster_id,
         api_key,
     })
+}
+
+#[tauri::command]
+fn get_app_mode(app: AppHandle) -> Result<Option<AppMode>, HostError> {
+    let _guard = config_lock();
+    let mut persisted = read_persisted_config(&app)?;
+    migrate_legacy(&app, &mut persisted)?;
+    Ok(effective_app_mode(&persisted))
+}
+
+/// Upgrades must preserve the historical developer shell. Only a machine
+/// with neither an explicit choice nor an existing cluster is truly fresh.
+fn effective_app_mode(persisted: &PersistedConfig) -> Option<AppMode> {
+    persisted
+        .app_mode
+        .or_else(|| (!persisted.clusters.is_empty()).then_some(AppMode::Developer))
+}
+
+#[tauri::command]
+fn set_app_mode(app: AppHandle, mode: AppMode) -> Result<(), HostError> {
+    let _guard = config_lock();
+    let mut persisted = read_persisted_config(&app)?;
+    migrate_legacy(&app, &mut persisted)?;
+    persisted.app_mode = Some(mode);
+    write_persisted_config(&app, &persisted)
 }
 
 #[tauri::command]
@@ -5870,6 +6044,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
+            get_app_mode,
+            set_app_mode,
+            get_catalogue_cache,
+            set_catalogue_cache,
             add_cluster,
             select_cluster,
             remove_cluster,
@@ -5934,6 +6112,81 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn catalogue_cache_input(generation: u64, verified_at: &str) -> SetCatalogueCacheInput {
+        SetCatalogueCacheInput {
+            index_json: format!("index-{generation}"),
+            signature_json: format!("signature-{generation}"),
+            fetched_at: verified_at.to_string(),
+            generation,
+            verified_at: verified_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn catalogue_cache_floors_are_write_monotonic() {
+        let first = next_catalogue_cache(None, catalogue_cache_input(7, "2026-08-27T00:02:00Z"))
+            .expect("first cache write");
+        let later_generation_with_earlier_clock = next_catalogue_cache(
+            Some(&first),
+            catalogue_cache_input(8, "2026-08-27T00:01:00Z"),
+        )
+        .expect("later cache write");
+        assert_eq!(later_generation_with_earlier_clock.highest_generation, 8);
+        assert_eq!(
+            later_generation_with_earlier_clock.max_seen_wall_clock,
+            "2026-08-27T00:02:00Z"
+        );
+        assert!(next_catalogue_cache(
+            Some(&later_generation_with_earlier_clock),
+            catalogue_cache_input(7, "2026-08-27T00:03:00Z")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn app_mode_round_trips_through_persisted_config() {
+        let config = PersistedConfig {
+            app_mode: Some(AppMode::User),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).expect("serialize persisted config");
+        assert!(json.contains("\"appMode\":\"user\""));
+        let decoded: PersistedConfig =
+            serde_json::from_str(&json).expect("deserialize persisted config");
+        assert_eq!(decoded.app_mode, Some(AppMode::User));
+    }
+
+    #[test]
+    fn existing_config_defaults_to_developer_but_fresh_install_prompts() {
+        let configured = PersistedConfig {
+            clusters: vec![test_cluster("existing")],
+            ..Default::default()
+        };
+        assert_eq!(effective_app_mode(&configured), Some(AppMode::Developer));
+        assert_eq!(effective_app_mode(&PersistedConfig::default()), None);
+    }
+
+    #[test]
+    fn ingesting_shared_profiles_preserves_app_mode() {
+        let mut shared = SharedProfilesFile {
+            active_profile: Some("existing".to_string()),
+            ..Default::default()
+        };
+        shared.profiles.insert(
+            "existing".to_string(),
+            SharedProfileEntry {
+                api_url: "https://api.example.com".to_string(),
+                key_id: "key-1".to_string(),
+                ..Default::default()
+            },
+        );
+
+        let ingested = build_ingested_config(&shared, Some(AppMode::User));
+        assert_eq!(ingested.app_mode, Some(AppMode::User));
+        assert_eq!(ingested.selected_cluster_id.as_deref(), Some("existing"));
+        assert_eq!(ingested.clusters.len(), 1);
+    }
 
     // ---- stage-1 credential seed (decide_seed) -------------------
 

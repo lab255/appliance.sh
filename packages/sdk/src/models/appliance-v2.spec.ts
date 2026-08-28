@@ -161,7 +161,13 @@ describe('appliance manifest v2', () => {
         group: { type: 'compound', services: { nested: { type: 'compound', services: { worker: worker() } } } },
       },
     };
-    expect(applianceV2Input.safeParse(depthThree).success).toBe(false);
+    const result = applianceV2Input.safeParse(depthThree);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({ path: ['services', 'group', 'services', 'nested'] })
+      );
+    }
   });
 
   it('counts runnable leaves only and caps them at 16', () => {
@@ -189,6 +195,14 @@ describe('appliance manifest v2', () => {
   it('defaults the web UI port to primary and requires one primary for other port arrays', () => {
     const parsed = applianceV2Input.parse(journal);
     expect(parsed.ports?.[0].primary).toBe(true);
+    const explicitAdmin = applianceV2Input.parse({
+      ...journal,
+      ports: [journal.ports[0], { name: 'admin', guest: 3001, protocol: 'tcp', expose: 'host', primary: true }],
+    });
+    expect(explicitAdmin.ports?.map((port) => [port.name, port.primary])).toEqual([
+      ['http', false],
+      ['admin', true],
+    ]);
     expect(
       applianceV2Input.safeParse({ ...base('container'), payload: imagePayload(), ports: journal.ports }).success
     ).toBe(false);
@@ -331,5 +345,93 @@ describe('appliance manifest v2', () => {
         .success
     ).toBe(false);
     expect(applianceV2Input.safeParse({ ...journal, resources: { cpus: 33 } }).success).toBe(false);
+  });
+
+  it.each<[string, unknown]>([
+    [
+      'duplicate mount names',
+      {
+        ...journal,
+        mounts: [
+          { name: 'data', source: 'volume', guest: '/data', readOnly: false },
+          { name: 'data', source: 'volume', guest: '/cache', readOnly: false },
+        ],
+      },
+    ],
+    [
+      'duplicate port names',
+      {
+        ...journal,
+        ports: [journal.ports[0], { name: 'http', guest: 3001, protocol: 'tcp', expose: 'internal', primary: false }],
+      },
+    ],
+    [
+      'duplicate guest/protocol pairs',
+      {
+        ...journal,
+        ports: [journal.ports[0], { name: 'admin', guest: 3000, protocol: 'tcp', expose: 'internal', primary: false }],
+      },
+    ],
+    ['self dependency', { ...base('compound'), services: { worker: { ...worker(), dependsOn: ['worker'] } } }],
+    [
+      'duplicate dependencies',
+      {
+        ...base('compound'),
+        services: { api: worker('api'), web: { ...worker('web'), dependsOn: ['api', 'api'] } },
+      },
+    ],
+    [
+      'isolation below the first service level',
+      {
+        ...base('compound'),
+        services: {
+          group: { type: 'compound', services: { worker: { ...worker(), isolation: 'vm' } } },
+        },
+      },
+    ],
+    ['ui.service on a non-compound manifest', { ...journal, ui: { ...journal.ui, service: 'web' } }],
+    ['compound web UI without ui.service', { ...notesSuite, ui: { type: 'web', port: 'http', path: '/' } }],
+    ['web UI on a UDP port', { ...journal, ports: [{ ...journal.ports[0], protocol: 'udp' }] }],
+    ['web UI on an internal port', { ...journal, ports: [{ ...journal.ports[0], expose: 'internal' }] }],
+    ['reserved service environment prefix', { ...journal, env: { APPLIANCE_SVC_API_URL: 'http://api' } }],
+    ['invalid environment name', { ...journal, env: { 'BAD-NAME': 'value' } }],
+    ['memory below the minimum', { ...journal, resources: { memoryMib: 511 } }],
+    ['disk below the minimum', { ...journal, resources: { diskGib: 0 } }],
+    [
+      'restart attempts above the maximum',
+      {
+        ...base('compound'),
+        services: { worker: { ...worker(), restart: { policy: 'on-failure', maxAttempts: 101 } } },
+      },
+    ],
+    [
+      'health failure threshold above the maximum',
+      {
+        ...base('compound'),
+        services: { worker: { ...worker(), health: { type: 'exec', command: ['check'], failureThreshold: 21 } } },
+      },
+    ],
+    ['egress port outside the valid range', { ...journal, network: { egress: [{ host: 'example.com', ports: [0] }] } }],
+    ['empty wildcard host', { ...journal, network: { egress: [{ host: '*.', ports: [443] }] } }],
+    ['public-suffix wildcard host', { ...journal, network: { egress: [{ host: '*.com', ports: [443] }] } }],
+    ['unknown key inside a service', { ...base('compound'), services: { worker: { ...worker(), unexpected: true } } }],
+    ['description over 500 characters', { ...journal, description: 'x'.repeat(501) }],
+    [
+      'lifecycle controls on a structural service',
+      {
+        ...base('compound'),
+        services: {
+          group: {
+            type: 'compound',
+            health: { type: 'exec', command: ['check'] },
+            restart: { policy: 'never' },
+            required: false,
+            services: { worker: worker() },
+          },
+        },
+      },
+    ],
+  ])('rejects %s', (_rule, manifest) => {
+    expect(applianceV2Input.safeParse(manifest).success).toBe(false);
   });
 });

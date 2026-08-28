@@ -11,6 +11,8 @@ import { dismissOnboarding, resetOnboarding } from '@/lib/local-runtime';
 import { TeamSection } from '@/pages/settings-team';
 import type { AvailableUpdate, UpdateProgress } from '@/lib/host';
 import { cn } from '@/lib/utils';
+import { useAppMode } from '@/hooks/use-app-mode';
+import type { AppMode } from '@/lib/host';
 
 // ⑤ Settings — slimmed to Updates · About · Preferences (docs/desktop-ia.md
 // §3 / move-map 4b). Cluster CRUD and the cloud-lifecycle panels moved to ②
@@ -27,7 +29,9 @@ export function SettingsPage() {
 
   return (
     <PageShell rail="detail" className="space-y-6">
-      <PageHeader title="Settings" description="Updates, team access, and preferences for this desktop app." />
+      <PageHeader title="Settings" description="Mode, updates, team access, and preferences for this desktop app." />
+
+      {host.appMode ? <ModeSection /> : null}
 
       <TeamSection />
 
@@ -48,6 +52,70 @@ export function SettingsPage() {
         />
       </section>
     </PageShell>
+  );
+}
+
+function ModeSection() {
+  const { mode, isLoading, isSaving, error, setMode } = useAppMode();
+  const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const options: Array<{ mode: AppMode; label: string }> = [
+    { mode: 'user', label: 'Use apps' },
+    { mode: 'developer', label: 'Build apps' },
+  ];
+  const moveSelection = (index: number, direction: -1 | 1) => {
+    const nextIndex = (index + direction + options.length) % options.length;
+    const next = options[nextIndex];
+    optionRefs.current[nextIndex]?.focus();
+    void setMode(next.mode).catch(() => undefined);
+  };
+  return (
+    <Section title="Mode" description="Choose how much of the desktop workspace to show.">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="text-sm">App mode</div>
+          <p className="mt-0.5 max-w-xl text-xs leading-4 text-[var(--color-muted-foreground)]">
+            Developer mode adds Setup, Projects, Agents, Machine and Cloud to the sidebar, plus the terminal dock.
+            Installed apps keep running either way.
+          </p>
+        </div>
+        <div
+          role="radiogroup"
+          aria-label="App mode"
+          className="inline-flex shrink-0 overflow-hidden rounded-md border border-[var(--color-border)]"
+        >
+          {options.map((option, index) => (
+            <button
+              key={option.mode}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={mode === option.mode}
+              tabIndex={mode === option.mode || (!mode && index === 0) ? 0 : -1}
+              disabled={isLoading || isSaving}
+              onClick={() => void setMode(option.mode).catch(() => undefined)}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                moveSelection(index, event.key === 'ArrowLeft' ? -1 : 1);
+              }}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-60',
+                mode === option.mode && 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-[var(--color-destructive-foreground)]">
+          Couldn't save the mode change.
+        </p>
+      ) : null}
+    </Section>
   );
 }
 

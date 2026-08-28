@@ -69,6 +69,29 @@ export function findCluster(name: string): ClusterEntry | null {
   return classifyCluster(name, profile, file.activeProfile === name);
 }
 
+export interface SelectDeployClusterOptions {
+  command: 'deploy' | 'install';
+  /** `install --cluster` uses the cluster vocabulary shown by
+   *  `appliance cluster list`. */
+  cluster?: string;
+  /** Existing `--profile` spelling retained for compatibility. */
+  profile?: string;
+  envProfile?: string;
+  activeProfile?: string | null;
+}
+
+/**
+ * Choose the credential profile used by a deploy-like command.
+ *
+ * `deploy` preserves the existing override → environment → active-profile
+ * cascade. `install` deliberately flips only the default to the local
+ * cluster; an explicit --cluster (or legacy --profile) still wins.
+ */
+export function selectDeployCluster(opts: SelectDeployClusterOptions): string | undefined {
+  if (opts.command === 'install') return opts.cluster ?? opts.profile ?? 'local';
+  return opts.profile ?? opts.envProfile ?? opts.activeProfile ?? undefined;
+}
+
 /** Best-effort running-state of each defined microVM, keyed by VM name.
  *  Empty when the engine binary isn't installed (nothing to report) —
  *  so `cluster list` degrades to omitting the state column rather than

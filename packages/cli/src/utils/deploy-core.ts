@@ -10,6 +10,7 @@ import { buildApplianceZip } from './build-package.js';
 import { readLink, writeLink } from './link.js';
 import { pollDeploymentUntilDone, extractDeploymentUrl } from './deploy-poll.js';
 import { startProgressLine, BRAND } from './progress.js';
+import { readBundleManifestForDeploy } from './bundle-read.js';
 import chalk from 'chalk';
 
 // The deploy engine, shared by `appliance deploy` (single app in cwd)
@@ -28,6 +29,17 @@ export class PrintedError extends Error {
 
 export function isPrintedError(err: unknown): err is PrintedError {
   return err instanceof Error && (err as PrintedError).printed === true;
+}
+
+/** Bounded pre-upload discriminator. Existing v1 bytes remain untouched. */
+export function assertSourceBundleForDeploy(buildPath: string): void {
+  const bundle = readBundleManifestForDeploy(buildPath);
+  if (bundle.classification === 'runnable') {
+    throw new Error(
+      'deploy currently accepts manifest v1 source bundles only; ' +
+        'runnable bundles will be handled by appliance runtime in a later release.'
+    );
+  }
 }
 
 export interface DeployOptions {
@@ -279,6 +291,7 @@ async function resolveBuildId(
     console.log(chalk.green(`Built: ${built.outputPath} (${sizeMb} MB)`));
   }
 
+  assertSourceBundleForDeploy(buildPath);
   const buildData = fs.readFileSync(buildPath);
   const sizeMb = (buildData.length / 1024 / 1024).toFixed(1);
   console.log(chalk.dim(`Uploading build (${sizeMb} MB)...`));
@@ -396,6 +409,14 @@ export interface RunDeployParams {
 // caller decides the exit code); throws on any pre-terminal failure.
 export async function runDeploy(params: RunDeployParams): Promise<DeployOutcome> {
   const { client, apiUrl, program, opts } = params;
+
+  // Inspect an existing archive before target resolution or API mutation so a
+  // runnable/invalid bundle cannot be obscured by an unrelated link/prompt
+  // error. The resolveBuildId guard below also covers a just-auto-built zip.
+  if (!opts.imageUri) {
+    const existingBuild = path.resolve(opts.build);
+    if (fs.existsSync(existingBuild)) assertSourceBundleForDeploy(existingBuild);
+  }
 
   const { projectName, environmentName, source } = await resolveTarget(
     params.cliProject,
