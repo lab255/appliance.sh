@@ -5,9 +5,9 @@ import { ChevronDown, Check, Monitor, Plus } from 'lucide-react';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { cn } from '@/lib/utils';
-import { devMachineLabel, isMicroVmClusterId, microVmNameFromClusterId } from '@/lib/host';
+import { devMachineLabel, isMicroVmClusterId, localMachineLabel, microVmNameFromClusterId } from '@/lib/host';
 import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
-import type { Cluster } from '@/lib/host';
+import type { Cluster, HostPlatform } from '@/lib/host';
 import { Tag } from '@/components/ui/tag';
 import { Banner } from '@/components/ui/banner';
 import { StatusDot } from '@/components/ui/status-dot';
@@ -30,12 +30,15 @@ export function workspaceKind(cluster: Pick<Cluster, 'id'>): WorkspaceKind {
 export function switcherName(
   presentation: 'developer' | 'workspace',
   cluster: Cluster | null,
+  platform: HostPlatform,
   isLoading = false
 ): string {
   if (cluster) {
-    return presentation === 'workspace' && workspaceKind(cluster) === 'local' ? 'This Mac' : targetName(cluster);
+    return presentation === 'workspace' && workspaceKind(cluster) === 'local'
+      ? localMachineLabel(platform)
+      : targetName(cluster);
   }
-  if (presentation === 'workspace') return 'This Mac';
+  if (presentation === 'workspace') return localMachineLabel(platform);
   return isLoading ? '…' : 'Select target';
 }
 
@@ -61,6 +64,7 @@ export interface ClusterSwitcherProps {
 export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }: ClusterSwitcherProps) {
   const workspacePresentation = presentation === 'workspace';
   const host = useHost();
+  const localLabel = localMachineLabel(host.platform);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { config, cluster, isLoading } = useSelectedCluster();
@@ -184,7 +188,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
     return <div className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">Not connected</div>;
   }
 
-  const currentName = switcherName(presentation, cluster, isLoading);
+  const currentName = switcherName(presentation, cluster, host.platform, isLoading);
 
   return (
     <div className="relative" ref={ref}>
@@ -282,7 +286,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                         <div className="w-4">{isSelected ? <Check className="h-4 w-4" aria-hidden /> : null}</div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 font-medium">
-                            {pending ? 'Switching…' : 'This Mac'} <Tag emphasis="sandbox">sandboxed</Tag>
+                            {pending ? 'Switching…' : localLabel} <Tag emphasis="sandbox">sandboxed</Tag>
                           </div>
                           <div className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
                             {c.apiServerUrl}
@@ -307,10 +311,10 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                     <div className="w-4" />
                     <div>
                       <div className="flex items-center gap-1.5 font-medium">
-                        This Mac <Tag>not set up</Tag>
+                        {localLabel} <Tag>not set up</Tag>
                       </div>
                       <div className="text-xs leading-4 text-[var(--color-muted-foreground)]">
-                        Set up your Mac sandbox
+                        Set up the sandbox on {localLabel.replace(/^This/, 'this')}
                       </div>
                     </div>
                   </button>
@@ -375,7 +379,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                     <div className="w-4" />
                     <div>
                       <div className="flex items-center gap-1.5 font-medium">
-                        This Mac <Tag>not set up</Tag>
+                        {localLabel} <Tag>not set up</Tag>
                       </div>
                       <div className="text-xs leading-4 text-[var(--color-muted-foreground)]">Open Setup</div>
                     </div>

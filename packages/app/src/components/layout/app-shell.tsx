@@ -184,6 +184,7 @@ export function AppShell() {
       >
         {isModeLoading ? null : mode === null ? (
           <ModeChoicePage
+            platform={host.platform}
             savingMode={savingMode}
             error={modeError}
             onSelect={(nextMode) => {

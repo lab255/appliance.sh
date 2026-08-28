@@ -21,11 +21,15 @@ const cloud: Cluster = {
 };
 
 describe('workspace switcher presentation', () => {
-  it('uses user copy without changing developer target copy', () => {
-    expect(switcherName('workspace', local)).toBe('This Mac');
-    expect(switcherName('workspace', null)).toBe('This Mac');
-    expect(switcherName('developer', null)).toBe('Select target');
-    expect(switcherName('developer', local)).toBe('Dev Machine');
+  it.each([
+    ['macos', 'This Mac'],
+    ['windows', 'This PC'],
+    ['linux', 'This computer'],
+  ] as const)('uses %s user copy without changing developer target copy', (platform, expected) => {
+    expect(switcherName('workspace', local, platform)).toBe(expected);
+    expect(switcherName('workspace', null, platform)).toBe(expected);
+    expect(switcherName('developer', null, platform)).toBe('Select target');
+    expect(switcherName('developer', local, platform)).toBe('Dev Machine');
   });
 
   it('derives workspace kind from the existing cluster identity', () => {

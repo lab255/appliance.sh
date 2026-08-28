@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { FolderOpen, Grid2X2, Loader2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import type { EntitlementGrantPrompt, InstalledRuntimeApp } from '@/lib/host';
+import { localMachineLabel, type EntitlementGrantPrompt, type InstalledRuntimeApp } from '@/lib/host';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -219,7 +219,7 @@ export function InstalledAppsPage() {
   const navigate = useNavigate();
   const { cluster, kind, isLoading: workspaceLoading } = useCurrentWorkspace();
   const target = cluster?.id ?? 'local';
-  const workspaceName = kind === 'cloud' ? (cluster?.name ?? target) : 'This Mac';
+  const workspaceName = kind === 'cloud' ? (cluster?.name ?? target) : localMachineLabel(host.platform);
   const [apps, setApps] = React.useState<InstalledRuntimeApp[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
