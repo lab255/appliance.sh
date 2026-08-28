@@ -616,8 +616,8 @@ export interface EgressPolicy {
 }
 
 /** The baked, always-on allowlist for `net_link=Netstack` VMs — a mirror
- *  of NETSTACK_ALLOWLIST in packages/vm/src/egress.rs (§5 of
- *  docs/egress-firewall.md). The engine merges these into the effective
+ *  of NETSTACK_ALLOWLIST in packages/vm/src/egress.rs; see
+ *  docs/egress-firewall.md. The engine merges these into the effective
  *  policy's `allow`; the desktop partitions them back out to distinguish
  *  the always-on baked set from the operator's own allow rules. Keep in
  *  sync with the engine constant. */

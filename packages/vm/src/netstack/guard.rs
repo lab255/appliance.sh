@@ -1,7 +1,7 @@
 //! The egress boundary — default-deny + allowlist over the F1 netstack.
 //!
-//! This is the security payload of the egress-firewall epic
-//! (docs/egress-firewall.md §4, §8.1). For every guest TCP flow the
+//! This is the security boundary described in docs/egress-firewall.md.
+//! For every guest TCP flow the
 //! netstack terminated (`FlowKind::Terminated`) the engine hands us its
 //! byte stream; we **classify** it (SNI on 443, Host on 80, raw IP
 //! otherwise), consult the VM's effective policy (hard default-DENY +

@@ -3,8 +3,8 @@
 //! When a VM runs with `net_link = Netstack`, its NIC is no longer a
 //! framework NAT attachment but a `socketpair(AF_UNIX, SOCK_DGRAM)`
 //! whose host end *this* netstack owns. Every guest frame arrives here
-//! and nothing leaves except through here — the property the
-//! egress-firewall design turns on (docs/egress-firewall.md §2, §8).
+//! and nothing leaves except through here — the boundary described in
+//! docs/egress-firewall.md.
 //!
 //! Layering:
 //!   * [`frame`] — the hostile-frame classifier + UDP/IPv4 frame

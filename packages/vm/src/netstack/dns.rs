@@ -4,8 +4,8 @@
 //! does: it listens at the gateway (`.1:53`) and forwards the guest's
 //! query to the host's real resolver, returning the answer verbatim.
 //!
-//! **F2 — the boundary.** The resolver is now a defense-in-depth + UX
-//! layer in front of the hard TCP boundary (docs/egress-firewall.md §3):
+//! The resolver is a defense-in-depth and UX layer in front of the hard
+//! TCP boundary described in docs/egress-firewall.md:
 //!
 //!   * [`name_allowed`] applies the VM's effective default-deny policy to
 //!     the queried name — a non-allowlisted name gets no answer (it fails

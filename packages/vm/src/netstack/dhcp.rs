@@ -4,7 +4,7 @@
 //! the netstack does. Because we *assign* the lease, the guest IP is
 //! known deterministically the instant it is handed out (indeed
 //! a-priori, per VM). This replaces the `/var/db/dhcpd_leases` scrape
-//! entirely (docs/egress-firewall.md §3): no plist parsing, no 120 s
+//! entirely (docs/egress-firewall.md): no plist parsing, no 120 s
 //! poll, no MAC-lookup race.
 //!
 //! Only the bytes are here (parse a DISCOVER/REQUEST, build an

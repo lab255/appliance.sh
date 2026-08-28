@@ -162,7 +162,7 @@ pub fn spawn_proxy(listen_port: u16, target: SocketAddr) -> Result<()> {
 /// netstack (`Netstack::connect`, which originates a SYN to the guest),
 /// and the two streams are spliced by the same bidirectional pump. The
 /// listener side (`127.0.0.1:<port>`) is identical to the NAT forward —
-/// only the "connect to guest" leg swaps (docs/egress-firewall.md §6).
+/// only the "connect to guest" leg swaps (docs/egress-firewall.md).
 pub fn spawn_proxy_netstack(
     listen_port: u16,
     guest_port: u16,
