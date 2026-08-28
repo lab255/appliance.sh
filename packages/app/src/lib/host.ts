@@ -66,6 +66,30 @@ export interface AppModeHost {
   set(mode: AppMode): Promise<void>;
 }
 
+export interface CatalogueFetchResult {
+  /** Exact UTF-8 documents fetched/cached as one pair; the host never parses them. */
+  indexJson: string;
+  signatureJson: string;
+  fetchedAt: string;
+  source: 'network' | 'cache' | 'mock';
+  refreshError?: string;
+  highestGeneration?: number;
+  maxSeenWallClock?: string;
+  /** DEV mock only. Production callers must use the binary's pinned policy. */
+  developmentTrustPolicy?: {
+    keys: Readonly<Record<string, string>>;
+    generationFloor: number;
+  };
+}
+
+export interface CatalogueHost {
+  fetchCatalogue(): Promise<CatalogueFetchResult>;
+  /** Atomically retain only a pair the shared trust verifier accepted. */
+  cacheVerified?(pair: CatalogueFetchResult, generation: number, verifiedAt: string): Promise<void>;
+  /** AP-173 owns the real installer; absent means the UI must not fake success. */
+  installBundle?(path: string): Promise<void>;
+}
+
 export interface AddClusterInput {
   name: string;
   apiServerUrl: string;
@@ -268,6 +292,8 @@ export interface ConsoleHost {
   notify?(opts: { title: string; body?: string }): Promise<void>;
   /** Desktop-only persisted User / Developer shell preference. */
   appMode?: AppModeHost;
+  /** Desktop-owned paired catalogue transport/cache. */
+  catalogue?: CatalogueHost;
   bootstrap?: BootstrapHost;
   /**
    * Local-runtime support surface: preflight, prerequisite installs,

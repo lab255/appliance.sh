@@ -48,8 +48,8 @@
   "dependencies": {
     "@appliance.sh/app": "workspace:*",
     "@appliance.sh/bootstrap": "workspace:*",
-    "@appliance.sh/install-aws": "workspace:*",
     "@appliance.sh/helper": "workspace:*",
+    "@appliance.sh/install-aws": "workspace:*",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-notification": "^2.2.0",
@@ -61,6 +61,7 @@
   },
   "devDependencies": {
     "@appliance.sh/cli": "workspace:*",
+    "@appliance.sh/sdk": "workspace:*",
     "@tauri-apps/cli": "^2.1.0",
     "@types/node": "24.12.2",
     "@types/react": "^19.0.1",
