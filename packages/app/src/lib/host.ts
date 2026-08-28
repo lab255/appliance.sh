@@ -15,7 +15,7 @@ import type {
   StatePromotionInput,
   StatePromotionOptions,
 } from '@appliance.sh/bootstrap';
-import type { InstalledApp } from '@appliance.sh/sdk';
+import type { EntitlementGrant, EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@appliance.sh/sdk';
 
 // A cluster is one (api-server URL, API key) pair the user has either
 // connected to manually or bootstrapped from this shell. Identity is a
@@ -91,9 +91,10 @@ export interface CatalogueHost {
 
 export interface InstalledRuntimeApp {
   app: InstalledApp;
-  state: 'running' | 'stopped' | 'starting' | 'exited' | 'failed';
+  state: 'running' | 'degraded' | 'stopped' | 'starting' | 'exited' | 'failed';
   exitCode?: number;
   urls: string[];
+  entitlement?: { license: string; grantedAt: string };
   ui: import('./app-window').RuntimeAppUi;
 }
 
@@ -105,7 +106,11 @@ export interface RuntimeOpenResult {
 /** Per-workspace installed-app surface owned by the desktop host. */
 export interface InstalledAppsHost {
   list(target: string): Promise<InstalledRuntimeApp[]>;
-  installBundle(source: string, target: string, options?: { acceptUnknownPublisher?: boolean }): Promise<InstalledApp>;
+  installBundle(
+    source: string,
+    target: string,
+    options?: { acceptUnknownPublisher?: boolean; grantIds?: string[] }
+  ): Promise<InstalledApp>;
   uninstall(app: string, target: string, options?: { keepData?: boolean }): Promise<void>;
   run(
     app: string,
@@ -120,6 +125,21 @@ export interface InstalledAppsHost {
   windowStatus(app: string, target: string): Promise<import('./app-window').RuntimeAppWindowDescriptor>;
   stop(app: string): Promise<void>;
   pickBundle(): Promise<string | null>;
+}
+
+export interface EntitlementGrantPrompt {
+  appId: string;
+  version: string;
+  license: string;
+  upgrade: boolean;
+  grants: EntitlementGrant[];
+  requiredGrantIds: string[];
+}
+
+export interface EntitlementsHost {
+  list(): Promise<EntitlementRecord[]>;
+  suggestions(days?: number): Promise<EntitlementSuggestion[]>;
+  revoke(appId: string, grantId: string): Promise<void>;
 }
 
 export interface AddClusterInput {
@@ -328,6 +348,7 @@ export interface ConsoleHost {
   catalogue?: CatalogueHost;
   /** Desktop-owned per-workspace app installation and Runtime controls. */
   installedApps?: InstalledAppsHost;
+  entitlements?: EntitlementsHost;
   bootstrap?: BootstrapHost;
   /**
    * Local-runtime support surface: preflight, prerequisite installs,

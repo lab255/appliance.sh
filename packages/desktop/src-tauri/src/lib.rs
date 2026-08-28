@@ -378,6 +378,7 @@ struct RuntimeInstallBundleInput {
     target: String,
     #[serde(default)]
     accept_unknown_publisher: bool,
+    grant_ids: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -460,6 +461,18 @@ async fn runtime_installed_list(
         ],
     )
     .await?;
+    let entitlements = run_appliance_json(
+        &app,
+        &[
+            "runtime".into(),
+            "entitlements".into(),
+            "list".into(),
+            "--json".into(),
+        ],
+    )
+    .await
+    .unwrap_or_else(|_| serde_json::Value::Array(Vec::new()));
+    let grants = entitlements.as_array().cloned().unwrap_or_default();
     let views = installed
         .as_array()
         .cloned()
@@ -467,6 +480,7 @@ async fn runtime_installed_list(
         .into_iter()
         .filter_map(|row| {
             let installed_app = row.get("app")?.clone();
+            let app_id = installed_app.get("appId")?.as_str()?;
             let descriptor = row
                 .get("descriptor")
                 .cloned()
@@ -486,11 +500,21 @@ async fn runtime_installed_list(
                 .as_ref()
                 .map(|value| serde_json::to_value(&value.ui).unwrap_or_default())
                 .unwrap_or_else(|| serde_json::json!({ "type": "none" }));
+            let entitlement = grants
+                .iter()
+                .find(|grant| grant.get("appId").and_then(|value| value.as_str()) == Some(app_id))
+                .map(|grant| {
+                    serde_json::json!({
+                        "license": grant.get("license"),
+                        "grantedAt": grant.get("grantedAt"),
+                    })
+                });
             Some(serde_json::json!({
                 "app": installed_app,
                 "state": state,
                 "exitCode": exit_code,
                 "urls": urls,
+                "entitlement": entitlement,
                 "ui": ui
             }))
         })
@@ -517,7 +541,75 @@ async fn runtime_install_bundle(
     if input.accept_unknown_publisher {
         args.push("--accept-unknown-publisher".into());
     }
+    args.push("--desktop".into());
+    if let Some(grant_ids) = input.grant_ids {
+        args.push("--grant-selection".into());
+        for grant_id in grant_ids {
+            args.push("--grant-id".into());
+            args.push(grant_id);
+        }
+    }
     run_appliance_json(&app, &args).await
+}
+
+#[tauri::command]
+async fn runtime_entitlements_list(app: AppHandle) -> Result<serde_json::Value, String> {
+    run_appliance_json(
+        &app,
+        &[
+            "runtime".into(),
+            "entitlements".into(),
+            "list".into(),
+            "--json".into(),
+        ],
+    )
+    .await
+}
+
+#[tauri::command]
+async fn runtime_entitlements_suggestions(
+    app: AppHandle,
+    days: u32,
+) -> Result<serde_json::Value, String> {
+    if days == 0 {
+        return Err("entitlement suggestion days must be at least 1".to_string());
+    }
+    run_appliance_json(
+        &app,
+        &[
+            "runtime".into(),
+            "entitlements".into(),
+            "--suggest-revoke".into(),
+            "--days".into(),
+            days.to_string(),
+            "--json".into(),
+        ],
+    )
+    .await
+}
+
+#[tauri::command]
+async fn runtime_entitlements_revoke(
+    app: AppHandle,
+    app_id: String,
+    grant_id: String,
+) -> Result<(), String> {
+    if app_id.trim().is_empty() || grant_id.trim().is_empty() {
+        return Err("an app id and grant id are required".to_string());
+    }
+    run_appliance_capture(
+        &app,
+        &[
+            "runtime".into(),
+            "entitlements".into(),
+            "revoke".into(),
+            app_id,
+            grant_id,
+            "--yes".into(),
+        ],
+    )
+    .await
+    .map(|_| ())
 }
 
 #[tauri::command]
@@ -6702,6 +6794,9 @@ pub fn run() {
             set_catalogue_cache,
             runtime_installed_list,
             runtime_install_bundle,
+            runtime_entitlements_list,
+            runtime_entitlements_suggestions,
+            runtime_entitlements_revoke,
             runtime_uninstall_bundle,
             runtime_run_installed,
             runtime_stop_installed,

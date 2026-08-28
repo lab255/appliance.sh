@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { RefreshCw, Download, ArrowUpCircle } from 'lucide-react';
+import { RefreshCw, Download, ArrowUpCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
 import { KeyValueList } from '@/components/ui/key-value-list';
@@ -13,6 +13,7 @@ import type { AvailableUpdate, UpdateProgress } from '@/lib/host';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/use-app-mode';
 import type { AppMode } from '@/lib/host';
+import type { EntitlementSuggestion } from '@appliance.sh/sdk';
 
 // ⑤ Settings — slimmed to Updates · About · Preferences (docs/desktop-ia.md
 // §3 / move-map 4b). Cluster CRUD and the cloud-lifecycle panels moved to ②
@@ -39,6 +40,8 @@ export function SettingsPage() {
 
       {canReplaySetup ? <PreferencesSection /> : null}
 
+      {host.entitlements ? <EntitlementsSection /> : null}
+
       <section aria-labelledby="about-heading" className="px-1">
         <h2 id="about-heading" className="mb-2 text-sm font-semibold">
           About
@@ -53,6 +56,164 @@ export function SettingsPage() {
       </section>
     </PageShell>
   );
+}
+
+function EntitlementsSection() {
+  const host = useHost();
+  const [suggestions, setSuggestions] = React.useState<EntitlementSuggestion[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [confirming, setConfirming] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const refresh = React.useCallback(async () => {
+    if (!host.entitlements) return;
+    setLoading(true);
+    try {
+      setSuggestions(await host.entitlements.suggestions(30));
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Entitlement suggestions could not be loaded.');
+    } finally {
+      setLoading(false);
+    }
+  }, [host.entitlements]);
+
+  React.useEffect(() => void refresh(), [refresh]);
+
+  const revoke = async (suggestion: EntitlementSuggestion) => {
+    if (!host.entitlements) return;
+    setBusy(`${suggestion.appId}:${suggestion.grant.id}`);
+    try {
+      await host.entitlements.revoke(suggestion.appId, suggestion.grant.id);
+      setConfirming(null);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The grant could not be revoked.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Entitlements"
+      description="Review controls that have not been used for at least 30 days. Suggestions never revoke automatically."
+    >
+      {error ? (
+        <p className="mb-3 text-xs text-[var(--color-destructive-foreground)]" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {loading ? (
+        <p className="text-xs text-[var(--color-muted-foreground)]" role="status">
+          Checking grant usage…
+        </p>
+      ) : suggestions.length === 0 ? (
+        <EntitlementsEmptyState />
+      ) : (
+        <ul className="divide-y divide-[var(--color-border)]" aria-label="Suggested entitlement revocations">
+          {suggestions.map((suggestion) => {
+            const key = `${suggestion.appId}:${suggestion.grant.id}`;
+            return (
+              <EntitlementSuggestionRow
+                key={key}
+                suggestion={suggestion}
+                confirming={confirming === key}
+                busy={busy === key}
+                anotherBusy={busy !== null && busy !== key}
+                onReview={() => setConfirming(key)}
+                onRevoke={() => void revoke(suggestion)}
+                onKeep={() => setConfirming(null)}
+              />
+            );
+          })}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+export function EntitlementsEmptyState() {
+  return (
+    <div className="flex items-start gap-2 text-xs text-[var(--color-muted-foreground)]">
+      <ShieldCheck className="h-4 w-4 text-[var(--color-success-foreground)]" aria-hidden />
+      <div>
+        <div className="font-medium text-[var(--color-foreground)]">All entitlement grants are active</div>
+        <div className="mt-0.5">No non-mount grants have been unused for 30 days.</div>
+      </div>
+    </div>
+  );
+}
+
+export function EntitlementSuggestionRow({
+  suggestion,
+  confirming,
+  busy,
+  anotherBusy,
+  onReview,
+  onRevoke,
+  onKeep,
+}: {
+  suggestion: EntitlementSuggestion;
+  confirming: boolean;
+  busy: boolean;
+  anotherBusy: boolean;
+  onReview: () => void;
+  onRevoke: () => void;
+  onKeep: () => void;
+}) {
+  return (
+    <li className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">{suggestion.appId}</div>
+        <div className="mt-0.5 truncate text-xs text-[var(--color-muted-foreground)]">
+          {controlKind(suggestion)} · <span className="font-mono">{suggestion.grant.id}</span> · last used{' '}
+          {suggestion.lastUsedAt?.slice(0, 10) ?? 'never'}
+        </div>
+      </div>
+      {confirming ? (
+        <div
+          className="flex shrink-0 items-center gap-2"
+          role="group"
+          aria-label={`Confirm revoke from ${suggestion.appId}`}
+        >
+          <span className="text-xs">
+            Revoke <span className="font-mono">{suggestion.grant.id}</span> from {suggestion.appId}?
+          </span>
+          <Button size="sm" disabled={busy} onClick={onRevoke}>
+            {busy ? 'Revoking…' : 'Revoke'}
+          </Button>
+          <Button variant="outline" size="sm" disabled={busy} onClick={onKeep}>
+            Keep
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || anotherBusy}
+          onClick={onReview}
+          aria-label={`Review revoking ${suggestion.grant.id} from ${suggestion.appId}`}
+        >
+          Revoke
+        </Button>
+      )}
+    </li>
+  );
+}
+
+function controlKind(suggestion: EntitlementSuggestion): string {
+  switch (suggestion.grant.control) {
+    case 'egress-host':
+      return 'Network';
+    case 'mount':
+      return 'Mount';
+    case 'published-port':
+      return 'Port';
+    case 'resources':
+      return 'Resources';
+  }
 }
 
 function ModeSection() {

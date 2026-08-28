@@ -535,16 +535,40 @@ any sign of the brokered credential reaching the guest, **blocks the flip**.
 
 ---
 
-## Runtime pooled-VM proof (AP-163 / AP-167)
+## Runtime live test
 
-This proof uses the repository engine and CLI, creates a tiny OCI bundle, and
-records each phase. The Runtime pool is separate from `$SBX`: its fixed name is
-`appliance-runtime`, it is 2 vCPU / 4096 MiB, and it reaches core supervisor
-readiness without k3s, Docker, BuildKit, Node, or the dev toolchain.
+This proof covers the source-only [journal](../examples/runtime/journal/)
+container, [dashboard](../examples/runtime/dashboard/) binary, and
+[notes-suite](../examples/runtime/notes-suite/) compound samples. The Runtime
+pool is separate from `$SBX`: its fixed name is `appliance-runtime`, it is 2
+vCPU / 4096 MiB, and it reaches core supervisor readiness without k3s, Docker,
+BuildKit, Node, or the dev toolchain.
+
+**Board metric (2026-08-28): Command-to-first-byte (`time appliance runtime
+run` → first curl 200), cold (pool down) and warm (pool up), per sample.**
+Journal: `9.036s` cold / `0.815s` warm; dashboard: `9.022s` cold / `0.947s`
+warm; notes-suite: `9.406s` cold / `1.155s` warm.
+
+“Warm start” has one definition throughout this section: command-to-first-byte
+wall-clock from invoking `time appliance runtime run <bundle>` with the pool
+already running and core-ready until the first curl returns HTTP 200. “Cold
+start” uses the identical boundary with `appliance-runtime` fully down. Stop
+time is measured separately with `time appliance runtime stop <app>` after the
+successful probe.
+
+Prerequisites are macOS with Virtualization.framework, Docker with Buildx,
+Node/pnpm/Bun, and the repository's Rust and JavaScript toolchains. The sample
+script commits no generated OCI archives, executables, or zip files. It invokes
+`appliance builder package` for every bundle; that command calls `verifyBundle`
+before returning success and the wrapper also asserts every exit status and
+embedded digest. CI requires Docker (`--require-docker`); local builds skip with
+a message. Building a standalone CLI binary is not a prerequisite: the sample
+script builds only the SDK/helper workspace entrypoints used by the source CLI.
 
 ```sh
 cd ~/Workspaces/appliance.sh
-pnpm --filter @appliance.sh/cli run build
+export OUT="${TMPDIR:-/tmp}/appliance-runtime-samples"
+scripts/build-runtime-samples.sh --require-docker
 
 cd packages/vm
 cargo build --release
@@ -552,19 +576,20 @@ cargo build --release
 cd ../..
 export APPLIANCE_VM="$PWD/packages/vm/target/release/appliance-vm"
 
-# The script commits only source; the OCI tar and zip stay generated/ignored.
-examples/runtime/journal/build-bundle.sh
-
 # Serialize the engine restart: `vm stop` requests shutdown asynchronously,
 # so wait for `running: false` before booting the rebuilt binary.
 packages/cli/dist/appliance vm stop --name appliance-runtime
-packages/vm/target/release/appliance-vm status appliance-runtime
+while packages/vm/target/release/appliance-vm status appliance-runtime | grep -q '"running":true'; do sleep 0.25; done
 time packages/cli/dist/appliance vm up --name appliance-runtime
+```
 
+### Journal container
+
+```sh
 # Terminal A: validates, unpacks, reconciles the already-booted pool, starts
 # journal, and follows logs.
 time packages/cli/dist/appliance runtime run \
-  examples/runtime/journal/journal.appliance.zip
+  "$OUT/journal.appliance.zip"
 
 # Terminal B, while Terminal A follows logs:
 curl -fsS -D /tmp/journal.headers -o /tmp/journal.body \
@@ -575,8 +600,8 @@ time packages/cli/dist/appliance runtime ps
 time packages/cli/dist/appliance runtime logs journal
 time packages/cli/dist/appliance runtime stop journal
 packages/cli/dist/appliance runtime ps
-packages/vm/target/debug/appliance-vm status appliance-runtime
-packages/vm/target/debug/appliance-vm timings appliance-runtime
+packages/vm/target/release/appliance-vm status appliance-runtime
+packages/vm/target/release/appliance-vm timings appliance-runtime
 ```
 
 **PASS:** curl returns HTTP 200; `runtime ps` shows `journal`, its
@@ -588,11 +613,155 @@ stop timings from `time` plus `appliance-vm timings`.
 Ctrl-C in Terminal A is an equivalent stop proof: it stops `journal`, exits
 130, and deliberately leaves the pooled VM running.
 
-Observed on the final macOS VZ proof (2026-08-28): serialized cold pool boot
-`10.33s`; warm Runtime reconciliation/start reached the published-port line in
-`<=1.01s`; `runtime ps` `0.29s`; host curl `status=200 total=0.035827s`
-(repeat `0.040435s`); explicit app teardown `12.7s`. The explicit-stop and
-Ctrl-C cycles both left the same pool PID running and core-ready.
+### Dashboard binary
+
+The dashboard fixture commits no executable. Its build script uses
+`docker run --rm ... golang:1.22-alpine go build` to generate static amd64 and
+arm64 ELF files in a temporary directory, then packages that directory with
+`appliance builder package`. This optional proof is CI-skippable when Docker is
+unavailable.
+
+In Terminal A, run the HTTP server and follow its shared Runtime log pipeline:
+
+```sh
+time packages/cli/dist/appliance runtime run \
+  "$OUT/dashboard.appliance.zip"
+```
+
+In Terminal B, discover the allocated host port, curl it, inspect state/logs,
+and stop only the app:
+
+```sh
+PORT=$(packages/cli/dist/appliance runtime ps --json | \
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(x=>x.appId==="dashboard").hostPorts[0].host))')
+curl -fsS -D /tmp/dashboard.headers -o /tmp/dashboard.body \
+  -w 'status=%{http_code} total=%{time_total}s\n' "http://127.0.0.1:$PORT/"
+grep -q '200 OK' /tmp/dashboard.headers
+grep -q 'dashboard binary runtime proof' /tmp/dashboard.body
+time packages/cli/dist/appliance runtime ps
+time packages/cli/dist/appliance runtime logs dashboard
+time packages/cli/dist/appliance runtime stop dashboard
+```
+
+The sample's own `build-bundle.sh exit7` mode can additionally prove declared
+arguments and status propagation through the supervisor, CLI, registry, and
+`runtime ps` rendering:
+
+```sh
+set +e
+examples/runtime/dashboard/build-bundle.sh exit7 "$OUT/dashboard-exit7.appliance.zip"
+time packages/cli/dist/appliance runtime run "$OUT/dashboard-exit7.appliance.zip"
+RUN_STATUS=$?
+set -e
+test "$RUN_STATUS" -eq 7
+packages/cli/dist/appliance runtime ps | grep 'dashboard-exit7.*exited (7)'
+packages/vm/target/release/appliance-vm status appliance-runtime
+```
+
+**PASS:** curl returns 200 with the dashboard proof body; `runtime ps` shows the
+binary app's principal, relay, and then `exited (7)` for the exit fixture;
+stdout/stderr appear through `runtime logs`; stopping an app leaves the pooled
+VM running. Record Docker/package, cold/warm boot, supervisor start, curl, ps,
+stop, and exit-propagation timings. The binary runner uses containerd's custom
+rootfs mode so UID/GID, cgroup, seccomp, empty capability sets, network
+namespace, relays, and policy stay identical to the container runner.
+
+### Notes Suite compound app
+
+`notes-suite` is source-only and Docker-builds two OCI leaves at package time.
+`api` has no host listener; `web` depends on its HTTP health check and owns the
+single primary host port. The runtime injects
+`APPLIANCE_SVC_API_URL=http://127.0.0.1:9000` into both leaves.
+
+In Terminal A, start the app and follow all leaf logs. Every emitted line has a
+`[service]` prefix; Ctrl-C is also a stop-as-a-unit proof.
+
+```sh
+time packages/cli/dist/appliance runtime run \
+  "$OUT/notes-suite.appliance.zip"
+```
+
+In Terminal B, prove the primary host path, service rows, service log filter,
+restart policy, reverse unit stop, and pool survival:
+
+```sh
+PORT=$(packages/cli/dist/appliance runtime ps --json | \
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(x=>x.appId==="notes-suite").hostPorts[0].host))')
+curl -fsS -D /tmp/notes-suite.headers -o /tmp/notes-suite.body \
+  -w 'status=%{http_code} total=%{time_total}s\n' "http://127.0.0.1:$PORT/"
+grep -q '200 OK' /tmp/notes-suite.headers
+grep -q 'notes-suite compound runtime proof' /tmp/notes-suite.body
+time packages/cli/dist/appliance runtime ps | tee /tmp/notes-suite.ps
+grep -q '↳ api.*healthy' /tmp/notes-suite.ps
+grep -q '↳ web.*healthy' /tmp/notes-suite.ps
+packages/cli/dist/appliance runtime logs notes-suite --service api
+
+# Kill only the API task. policy=always must recreate it in the same app.
+packages/vm/target/release/appliance-vm shell appliance-runtime --root -- \
+  ctr -n appliance-notes-suite tasks kill -s SIGKILL appliance-notes-suite-api
+for _ in $(seq 1 80); do
+  packages/cli/dist/appliance runtime ps > /tmp/notes-suite.restart
+  grep -q '↳ api.*healthy.*restarts=1' /tmp/notes-suite.restart && break
+  sleep 0.25
+done
+grep -q '↳ api.*healthy.*restarts=1' /tmp/notes-suite.restart
+
+time packages/cli/dist/appliance runtime stop notes-suite
+! packages/cli/dist/appliance runtime ps | grep -q notes-suite
+packages/vm/target/release/appliance-vm status appliance-runtime | grep -q '"running":true'
+```
+
+**PASS:** curl is HTTP 200; `ps` has one app row and exactly two indented
+healthy leaf rows; the API-only log filter excludes web output; killing the API
+increments its restart count and returns it to healthy; stop removes the whole
+app while the pool remains running. Record bundle build, pool boot, supervisor
+start, curl, ps, restart recovery, and stop timings.
+
+The shared-VM controls default for this increment is explicit: payload,
+environment, task, cgroup, health, restart, state, and logs are leaf-scoped.
+All leaves retain one app principal `/32` and netns, so host-enforced egress is
+declared once at the compound root. A leaf-level `network.egress` is rejected
+with guidance to move it to the top level; there is no per-leaf grant union.
+Host publication is narrower: only compound leaf ports marked both
+`expose: "host"` and `primary: true` receive a host listener. `isolation: "vm"`
+is rejected as `not yet supported`; dedicated placement and upgrades remain
+follow-ups.
+
+**NOTE:** v1 starts the deterministic topological sequence serially, with
+lexical service-name tie-breaking for simultaneously ready leaves and a 300 s
+readiness cap per leaf. Optional-leaf restart exhaustion degrades the app but
+does not stop its dependents. Parallel launch of independent leaves and
+dependent teardown after optional exhaustion are intentionally deferred.
+
+### Pool survival and expected timings
+
+For any sample, pressing Ctrl-C in the `runtime run` terminal must stop the app
+as a unit, return status 130, and leave the pool alive. Explicit `runtime stop`
+must do the same without stopping the VM. After either path, assert
+`appliance-vm status appliance-runtime` contains `"running":true`; a subsequent
+`runtime run` is the warm-start check. For notes-suite, the SIGKILL sequence
+above is the restart-recovery check: only the API leaf is killed, it returns
+healthy with `restarts=1`, and the web leaf and pool survive.
+
+These macOS VZ values were recorded on 2026-08-28 with the definition above.
+Every row used the same `appliance runtime run <bundle>` → curl-200 boundary;
+each stop range contains the cold-run and warm-run stop observations.
+
+| Kind                 | Command used                                                                                                        | Cold start | Warm start |         Stop |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------: | ---------: | -----------: |
+| Journal container    | `time appliance runtime run "$OUT/journal.appliance.zip"` → curl 200; `time appliance runtime stop journal`         |     9.036s |     0.815s | 0.347–0.835s |
+| Dashboard binary     | `time appliance runtime run "$OUT/dashboard.appliance.zip"` → curl 200; `time appliance runtime stop dashboard`     |     9.022s |     0.947s |       0.851s |
+| Notes Suite compound | `time appliance runtime run "$OUT/notes-suite.appliance.zip"` → curl 200; `time appliance runtime stop notes-suite` |     9.406s |     1.155s | 0.885–1.378s |
+
+Journal and notes-suite now use PID 1 wrappers that trap SIGTERM and forward it
+to BusyBox `httpd`. The engine's effective stop-grace constant remains about
+10 seconds, encoded by the `seq 1 20` × `sleep 0.5` loops in
+[`guest.rs`](../packages/vm/src/guest.rs); the engine owner can decide whether
+to shorten it independently of these samples.
+
+The notes-suite recovery check (`ctr ... tasks kill -s SIGKILL ...` followed by
+the `runtime ps` loop) returned healthy with `restarts=1` within 9s, and the
+pool remained running.
 
 ---
 

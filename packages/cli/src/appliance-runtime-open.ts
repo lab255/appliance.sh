@@ -17,7 +17,7 @@ export interface RuntimeOpenDescriptor {
   version: string;
   license: string;
   ui: { type: 'web' | 'native' | 'none'; port?: string; path?: string };
-  state: 'starting' | 'running' | 'stopped' | 'exited' | 'failed';
+  state: 'starting' | 'running' | 'degraded' | 'stopped' | 'exited' | 'failed';
   exitCode?: number;
   url?: string;
   hostPort?: number;

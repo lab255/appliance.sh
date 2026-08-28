@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { InstalledRuntimeApp } from '@/lib/host';
-import { InstalledAppCard, InstalledAppsEmptyState } from './index';
+import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
 
 function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntimeApp {
@@ -28,6 +28,7 @@ function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntime
     },
     state: 'running',
     urls: ['http://127.0.0.1:8443'],
+    entitlement: { license: 'AGPL-3.0', grantedAt: '2026-09-03T09:30:00.000Z' },
     ui: { type: 'web', port: 'web', path: '/' },
     ...overrides,
   };
@@ -39,7 +40,8 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('Notes+Sync');
     expect(html).toContain('v2.4.0');
     expect(html).toContain('AGPL-3.0');
-    expect(html).toContain('installed 2026-09-02');
+    expect(html).toContain('granted 2026-09-03');
+    expect(html).toContain('rounded bg-[var(--color-muted)]');
     expect(html).toContain('Running');
     expect(html).toContain('2 services');
     expect(html).toContain('web, sync');
@@ -107,5 +109,55 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('Open and remember for 30 days');
     expect(html.match(/<button/g)?.length).toBe(3);
     expect(html.match(/bg-\[var\(--color-primary\)\]/g)?.length).toBe(1);
+  });
+
+  it('renders an accessible grant dialog with grouped required controls and selectable mounts', () => {
+    const html = renderToStaticMarkup(
+      <GrantDialog
+        prompt={{
+          appId: 'notes-sync',
+          version: '2.4.0',
+          license: 'AGPL-3.0',
+          upgrade: false,
+          requiredGrantIds: ['egress:sync.example.com', 'resources:runtime'],
+          grants: [
+            {
+              id: 'egress:sync.example.com',
+              control: 'egress-host',
+              value: { host: 'sync.example.com', ports: [443] },
+              approvedAt: '2026-09-03T09:30:00.000Z',
+            },
+            {
+              id: 'mount:data',
+              control: 'mount',
+              value: { name: 'data', source: 'volume', guest: '/data', access: 'read-write' },
+              approvedAt: '2026-09-03T09:30:00.000Z',
+            },
+            {
+              id: 'resources:runtime',
+              control: 'resources',
+              value: { cpus: 1, memoryMib: 512, diskGib: 2 },
+              approvedAt: '2026-09-03T09:30:00.000Z',
+            },
+          ],
+        }}
+        onCancel={() => {}}
+        onGrant={() => {}}
+      />
+    );
+    expect(html).toContain('role="alertdialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-labelledby="grant-dialog-title"');
+    expect(html).toContain('aria-describedby="grant-dialog-description"');
+    expect(html).toContain('notes-sync 2.4.0 (AGPL-3.0) asks for the controls below');
+    expect(html).toContain('Required');
+    expect(html).toContain('Mounts');
+    expect(html).toContain('egress:sync.example.com');
+    expect(html).toContain('mount:data');
+    expect(html).toContain('1 CPU · 512 MiB memory · 2 GiB disk');
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toContain('id="grant-mount:data"');
+    expect(html).not.toContain('disabled=""');
+    expect(html).toContain('Grant and install');
   });
 });

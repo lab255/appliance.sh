@@ -171,8 +171,8 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     load: async () => (await import('./appliance-runtime-search.js')).runRuntimeSearch(process.argv.slice(2)),
   },
   entitlements: {
-    description: 'manage packaged-app entitlements (coming in a later release)',
-    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('entitlements'),
+    description: 'list, inspect, and revoke packaged-app entitlements',
+    load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('entitlements', process.argv.slice(2)),
   },
   runtime: {
     description: 'run packaged apps in microVMs (`appliance runtime <verb>`)',
@@ -404,7 +404,9 @@ function showNamespaceHelp(namespace: 'builder' | 'runtime'): void {
   }
   if (namespace === 'runtime') {
     console.log();
-    console.log('Container run/ps/stop/logs are available; install/list/uninstall are available per workspace target.');
+    console.log(
+      'Container run/ps/stop/logs are available; catalogue search and workspace-targeted install/list/uninstall are also available; the remaining verbs are staged for later releases.'
+    );
   }
   console.log();
   console.log(`Run \`appliance ${namespace} <verb> --help\` for command-specific options.`);

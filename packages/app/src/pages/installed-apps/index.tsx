@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { FolderOpen, Grid2X2, Loader2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import type { InstalledRuntimeApp } from '@/lib/host';
+import type { EntitlementGrantPrompt, InstalledRuntimeApp } from '@/lib/host';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -13,16 +13,19 @@ import { Tag } from '@/components/ui/tag';
 import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
 import {
   parseUnknownPublisherError,
+  parseEntitlementGrantError,
   unknownPublisherWarningDue,
   type UnknownPublisherPrompt,
 } from '@/lib/installed-apps';
 import { useHost } from '@/providers/host-provider';
 import { clearAppStopStart, recordAppStopStart } from '@/lib/app-window';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
+import { GrantDialog } from './grant-dialog';
 
 type PendingWarning =
-  | { action: 'install'; source: string; prompt: UnknownPublisherPrompt }
-  | { action: 'open'; app: InstalledRuntimeApp; prompt: UnknownPublisherPrompt };
+  | { kind: 'publisher'; action: 'install'; source: string; prompt: UnknownPublisherPrompt }
+  | { kind: 'publisher'; action: 'open'; app: InstalledRuntimeApp; prompt: UnknownPublisherPrompt }
+  | { kind: 'grant'; source: string; prompt: EntitlementGrantPrompt; acceptedUnknownPublisher: boolean };
 
 function promptForInstalledApp(item: InstalledRuntimeApp): UnknownPublisherPrompt {
   const app = item.app;
@@ -74,6 +77,8 @@ export function InstalledAppCard({
           tone={
             item.state === 'running'
               ? 'success'
+              : item.state === 'degraded'
+                ? 'warning'
               : item.state === 'failed'
                 ? 'error'
                 : item.state === 'starting'
@@ -83,6 +88,8 @@ export function InstalledAppCard({
           label={
             item.state === 'running'
               ? 'Running'
+              : item.state === 'degraded'
+                ? 'Degraded'
               : item.state === 'starting'
                 ? 'Starting'
                 : item.state === 'exited'
@@ -95,8 +102,14 @@ export function InstalledAppCard({
         />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-        <span className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 text-micro font-medium">{app.license}</span>
-        <span>installed {app.installedAt.slice(0, 10)}</span>
+        <span className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 text-micro font-medium">
+          {item.entitlement?.license ?? app.license}
+        </span>
+        <span>
+          {item.entitlement
+            ? `granted ${item.entitlement.grantedAt.slice(0, 10)}`
+            : `installed ${app.installedAt.slice(0, 10)}`}
+        </span>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {app.controlsSummary.serviceCount > 1 ? (
@@ -139,7 +152,7 @@ export function InstalledAppCard({
         ) : (
           <span className="font-mono text-micro text-[var(--color-muted-foreground)]">No UI</span>
         )}
-        {item.state === 'running' ? (
+        {item.state === 'running' || item.state === 'degraded' ? (
           <Button
             variant="outline"
             size="sm"
@@ -242,16 +255,20 @@ export function InstalledAppsPage() {
   }, [refresh, workspaceLoading]);
 
   React.useEffect(() => {
-    if (!apps.some((item) => item.state === 'running' || item.state === 'starting')) return;
+    if (!apps.some((item) => item.state === 'running' || item.state === 'degraded' || item.state === 'starting'))
+      return;
     const timer = window.setInterval(() => void refresh(true), 1_500);
     return () => window.clearInterval(timer);
   }, [apps, refresh]);
 
-  const installSource = async (source: string, accepted = false) => {
+  const installSource = async (source: string, accepted = false, grantIds?: string[]) => {
     if (!host.installedApps) return;
     setBusy('install');
     try {
-      const installed = await host.installedApps.installBundle(source, target, { acceptUnknownPublisher: accepted });
+      const installed = await host.installedApps.installBundle(source, target, {
+        acceptUnknownPublisher: accepted,
+        ...(grantIds ? { grantIds } : {}),
+      });
       setPending(null);
       setNotice({
         title: 'Installed',
@@ -260,8 +277,11 @@ export function InstalledAppsPage() {
       await refresh();
     } catch (cause) {
       const prompt = parseUnknownPublisherError(cause);
-      if (prompt && !accepted) setPending({ action: 'install', source, prompt });
-      else setError(cause instanceof Error ? cause.message : 'The bundle could not be installed.');
+      const grantPrompt = parseEntitlementGrantError(cause);
+      if (prompt && !accepted) setPending({ kind: 'publisher', action: 'install', source, prompt });
+      else if (grantPrompt) {
+        setPending({ kind: 'grant', source, prompt: grantPrompt, acceptedUnknownPublisher: accepted });
+      } else setError(cause instanceof Error ? cause.message : 'The bundle could not be installed.');
     } finally {
       setBusy(null);
     }
@@ -282,13 +302,16 @@ export function InstalledAppsPage() {
       return;
     }
     if (!accepted && unknownPublisherWarningDue(item.app)) {
-      setPending({ action: 'open', app: item, prompt: promptForInstalledApp(item) });
+      setPending({ kind: 'publisher', action: 'open', app: item, prompt: promptForInstalledApp(item) });
       return;
     }
     setBusy(item.app.appId);
     setBusyAction('opening');
     const openMetric = {
-      kind: item.state === 'running' || item.state === 'starting' ? ('warm' as const) : ('cold' as const),
+      kind:
+        item.state === 'running' || item.state === 'degraded' || item.state === 'starting'
+          ? ('warm' as const)
+          : ('cold' as const),
       startedAtMs: Date.now(),
     };
     try {
@@ -417,7 +440,7 @@ export function InstalledAppsPage() {
         </div>
       )}
 
-      {pending ? (
+      {pending?.kind === 'publisher' ? (
         <UnknownPublisherDialog
           prompt={pending.prompt}
           action={pending.action}
@@ -429,8 +452,17 @@ export function InstalledAppsPage() {
           onRemember={pending.action === 'open' ? () => void openApp(pending.app, true, true) : undefined}
         />
       ) : null}
+      {pending?.kind === 'grant' ? (
+        <GrantDialog
+          prompt={pending.prompt}
+          busy={busy !== null}
+          onCancel={() => setPending(null)}
+          onGrant={(grantIds) => void installSource(pending.source, pending.acceptedUnknownPublisher, grantIds)}
+        />
+      ) : null}
     </PageShell>
   );
 }
 
 export { UnknownPublisherDialog } from './unknown-publisher-dialog';
+export { GrantDialog } from './grant-dialog';

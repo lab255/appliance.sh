@@ -13,7 +13,7 @@ export interface RuntimeAppWindowDescriptor {
   version: string;
   license: string;
   ui: RuntimeAppUi;
-  state: 'starting' | 'running' | 'stopped' | 'exited' | 'failed';
+  state: 'starting' | 'running' | 'degraded' | 'stopped' | 'exited' | 'failed';
   exitCode?: number;
   url?: string;
   hostPort?: number;

@@ -29,6 +29,17 @@ import {
   writeInstalledApps,
 } from './utils/installed-apps.js';
 import { readRuntimeRegistry, runtimeRoot } from './utils/runtime-registry.js';
+import {
+  entitlementHomeForRuntimeRoot,
+  grantManifestEntitlements,
+  markEntitlementUninstalled,
+} from './utils/entitlements.js';
+import {
+  EntitlementGrantRequiredError,
+  entitlementGrantPrompt,
+  promptForEntitlementGrants,
+  type EntitlementGrantPromptDetails,
+} from './appliance-runtime-entitlements.js';
 import { describeRuntimeApp } from './appliance-runtime-open.js';
 
 const DEFAULT_CATALOGUE_ORIGIN = 'https://www.appliance.sh';
@@ -84,6 +95,10 @@ export interface InstallBundleOptions {
   now?: Date;
   verifiedIndex?: VerifiedCatalogue<CatalogueIndex>;
   verifiedBlacklist?: VerifiedCatalogue<CatalogueBlacklist> | null;
+  grantAll?: boolean;
+  approvedGrantIds?: string[];
+  confirmEntitlementGrants?: (details: EntitlementGrantPromptDetails) => Promise<string[] | null>;
+  installer?: 'cli' | 'desktop';
 }
 
 export async function installBundle(source: string, options: InstallBundleOptions = {}): Promise<InstalledApp> {
@@ -154,6 +169,19 @@ export async function installBundle(source: string, options: InstallBundleOption
       if (!accepted) throw new UnknownPublisherError(unknownDetails);
     }
 
+    const entitlementHome = entitlementHomeForRuntimeRoot(root);
+    const grantPrompt = entitlementGrantPrompt(verified.manifest, { home: entitlementHome, now });
+    let approvedGrantIds: string[] = [];
+    if (grantPrompt) {
+      const approved = options.grantAll
+        ? grantPrompt.grants.map((grant) => grant.id)
+        : options.approvedGrantIds !== undefined
+          ? options.approvedGrantIds
+          : await options.confirmEntitlementGrants?.(grantPrompt);
+      if (!approved) throw new EntitlementGrantRequiredError(grantPrompt);
+      approvedGrantIds = approved;
+    }
+
     const destination = immutableBundlePath(verified.digest, root);
     fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
     if (fs.existsSync(destination)) {
@@ -187,6 +215,10 @@ export async function installBundle(source: string, options: InstallBundleOption
       },
       controlsSummary,
     };
+    grantManifestEntitlements(verified.manifest, options.installer ?? 'cli', approvedGrantIds, {
+      home: entitlementHome,
+      now,
+    });
     upsertInstalledApp(target, installed, root);
     return installed;
   } finally {
@@ -505,6 +537,13 @@ export async function uninstallInstalledApp(input: string, options: UninstallOpt
   if (!extractedAppPath.startsWith(`${runtimeAppsRoot}${path.sep}`)) {
     throw new Error('Installed app identity cannot address a runtime extraction outside the apps directory.');
   }
+  const remainsInstalledElsewhere = listInstalledTargets(root).some(
+    ({ target: candidateTarget, apps }) =>
+      candidateTarget !== target && apps.some((candidate) => candidate.appId === app.appId)
+  );
+  if (!remainsInstalledElsewhere) {
+    markEntitlementUninstalled(app.appId, { home: entitlementHomeForRuntimeRoot(root) });
+  }
   const removed = removeInstalledApp(target, app.appId, root);
   if (!removed) throw new Error(`Installed app '${input}' disappeared during uninstall.`);
   if (!options.keepData)
@@ -577,10 +616,12 @@ export async function promptForUnknownPublisher(
 
 export async function runRuntimeInstallCommand(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: appliance runtime install <path|https-url> [--accept-unknown-publisher] [--json]');
+    console.log(
+      'Usage: appliance runtime install <path|https-url> [--accept-unknown-publisher] [--grant-all] [--json]'
+    );
     return;
   }
-  const source = firstPositional(args, ['--target']);
+  const source = firstPositional(args, ['--target', '--grant-id']);
   if (!source) throw new Error('Usage: appliance runtime install <path|https-url>');
   const target = optionValue(args, '--target');
   let installed: InstalledApp;
@@ -589,9 +630,17 @@ export async function runRuntimeInstallCommand(args: string[]): Promise<void> {
       target,
       acceptUnknownPublisher: args.includes('--accept-unknown-publisher'),
       confirmUnknownPublisher: promptForUnknownPublisher,
+      grantAll: args.includes('--grant-all'),
+      approvedGrantIds:
+        args.includes('--grant-selection') || args.includes('--grant-id')
+          ? optionValues(args, '--grant-id')
+          : undefined,
+      confirmEntitlementGrants: promptForEntitlementGrants,
+      installer: args.includes('--desktop') ? 'desktop' : 'cli',
     });
   } catch (cause) {
     if (cause instanceof UnknownPublisherError) throw new Error(cause.serialise());
+    if (cause instanceof EntitlementGrantRequiredError) throw new Error(cause.serialise());
     throw cause;
   }
   if (args.includes('--json')) {
@@ -657,6 +706,10 @@ export function runRuntimeListCommand(args: string[]): void {
 function optionValue(args: string[], option: string): string | undefined {
   const index = args.indexOf(option);
   return index >= 0 ? args[index + 1] : undefined;
+}
+
+function optionValues(args: string[], option: string): string[] {
+  return args.flatMap((value, index) => (value === option && args[index + 1] ? [args[index + 1]!] : []));
 }
 
 function firstPositional(args: string[], valueOptions: string[]): string | undefined {

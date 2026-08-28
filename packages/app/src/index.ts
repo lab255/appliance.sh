@@ -31,6 +31,8 @@ export type {
   CatalogueFetchResult,
   InstalledAppsHost,
   InstalledRuntimeApp,
+  EntitlementGrantPrompt,
+  EntitlementsHost,
   RuntimeOpenResult,
   HostConfig,
   Cluster,
