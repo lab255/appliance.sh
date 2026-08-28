@@ -1,8 +1,18 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
-import { localMachineLabel, type InstalledRuntimeApp } from '@/lib/host';
-import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState } from './index';
+import { MemoryRouter } from 'react-router';
+import { describe, expect, it, vi } from 'vitest';
+import { localMachineLabel, type ConsoleHost, type InstalledRuntimeApp } from '@/lib/host';
+import { HostProvider } from '@/providers/host-provider';
+import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState, InstalledAppsPage } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
+
+vi.mock('@/components/layout/workspace-switcher', () => ({
+  useCurrentWorkspace: () => ({ cluster: null, kind: 'local', isLoading: false }),
+}));
 
 function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntimeApp {
   return {
@@ -34,9 +44,60 @@ function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntime
   };
 }
 
+async function installedAppsInstallMessage(rejection: unknown): Promise<string> {
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const installedApps = {
+    list: vi.fn().mockResolvedValue([]),
+    pickBundle: vi.fn().mockResolvedValue('C:\\x.zip'),
+    installBundle: vi.fn().mockRejectedValue(rejection),
+  };
+  const host = { installedApps, platform: 'macos' } as unknown as ConsoleHost;
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <HostProvider host={host}>
+            <InstalledAppsPage />
+          </HostProvider>
+        </MemoryRouter>
+      );
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('Install from file'))
+        ?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(installedApps.installBundle).toHaveBeenCalledWith('C:\\x.zip', 'local', {
+      acceptUnknownPublisher: false,
+    });
+    expect(consoleError).toHaveBeenCalledWith('[installed-apps] install failed', rejection);
+    return container.textContent ?? '';
+  } finally {
+    await act(async () => root.unmount());
+    consoleError.mockRestore();
+  }
+}
+
 describe('Installed Apps mock scenarios', () => {
   it('uses the Windows workspace label', () => {
     expect(localMachineLabel('windows')).toBe('This PC');
+  });
+
+  it('shows a Tauri invoke string rejection in the installation banner', async () => {
+    await expect(installedAppsInstallMessage('Bundle is not a regular file: C:\\x.zip')).resolves.toContain(
+      'Bundle is not a regular file: C:\\x.zip'
+    );
+  });
+
+  it('shows an Error rejection message in the installation banner', async () => {
+    await expect(installedAppsInstallMessage(new Error('install exploded'))).resolves.toContain('install exploded');
+  });
+
+  it('shows the installation fallback for an empty string rejection', async () => {
+    await expect(installedAppsInstallMessage('')).resolves.toContain('The bundle could not be installed.');
   });
 
   it('renders the installed-apps card contract from mock frame 2', () => {

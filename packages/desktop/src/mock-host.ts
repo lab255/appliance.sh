@@ -41,6 +41,7 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 //   catalogue-loading    fetch pending / verification loading state
 //   catalogue-stale expired-but-previously-verified read-only catalogue
 //   installed-apps       populated Installed Apps page
+//   install-error        install fails with a production-shaped string rejection
 //   app-window           dedicated running-app window
 //   app-exited           dedicated app-exited window
 //   installed-apps-empty empty Installed Apps page
@@ -69,6 +70,7 @@ type Scenario =
   | 'user-mode-no-vm'
   | 'catalogue-loading'
   | 'installed-apps'
+  | 'install-error'
   | 'installed-apps-before-grant'
   | 'installed-apps-empty'
   | 'app-window'
@@ -101,6 +103,7 @@ export function mockHostEnabled(): boolean {
         scenario === 'user-mode' ||
         scenario === 'user-mode-no-vm' ||
         scenario === 'installed-apps' ||
+        scenario === 'install-error' ||
         scenario === 'installed-apps-before-grant' ||
         scenario === 'installed-apps-empty' ||
         scenario === 'app-window' ||
@@ -139,6 +142,7 @@ function scenario(): Scenario {
     s === 'user-mode-no-vm' ||
     s === 'catalogue-loading' ||
     s === 'installed-apps' ||
+    s === 'install-error' ||
     s === 'installed-apps-before-grant' ||
     s === 'installed-apps-empty' ||
     s === 'app-window' ||
@@ -677,6 +681,9 @@ export function createMockHost(): ConsoleHost {
       },
       async installBundle(source, _target, options) {
         await sleep(120);
+        if (scenario() === 'install-error') {
+          return Promise.reject(`Bundle is not a regular file: ${source}`);
+        }
         const catalogueApp = source.startsWith('https://');
         const next =
           scenario() === 'grant-prompt'
@@ -703,7 +710,7 @@ export function createMockHost(): ConsoleHost {
                   verification: { signature: 'unsigned' },
                 });
         if (scenario() === 'grant-prompt' && options?.grantIds === undefined) {
-          throw new Error(
+          return Promise.reject(
             `ENTITLEMENT_GRANT_REQUIRED:${JSON.stringify({
               appId: next.appId,
               version: next.version,
@@ -740,7 +747,7 @@ export function createMockHost(): ConsoleHost {
           );
         }
         if (next.publisher.tier === 'unknown' && !options?.acceptUnknownPublisher) {
-          throw new Error(
+          return Promise.reject(
             `UNKNOWN_PUBLISHER:${JSON.stringify({
               appId: next.appId,
               name: next.name,

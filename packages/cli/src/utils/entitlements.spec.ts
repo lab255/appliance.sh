@@ -60,7 +60,7 @@ function allGrantIds(value: ApplianceV2): string[] {
 }
 
 describe('signed entitlement store', () => {
-  it('round-trips signed records at mode 0600 and detects tampering', () => {
+  it('round-trips signed records and detects tampering', () => {
     const directory = home();
     const value = manifest();
     const record = grantManifestEntitlements(value, 'cli', allGrantIds(value), {
@@ -68,13 +68,20 @@ describe('signed entitlement store', () => {
       now: new Date('2026-08-01T00:00:00.000Z'),
     });
     expect(readEntitlementStore({ home: directory }).records).toEqual([record]);
-    expect(fs.statSync(entitlementsFile(directory)).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(entitlementAnchorFile(directory)).mode & 0o777).toBe(0o600);
     const file = entitlementsFile(directory);
     const edited = fs.readFileSync(file, 'utf8').replace('"license": "MIT"', '"license": "GPL-3.0"');
     fs.writeFileSync(file, edited);
     expect(() => readEntitlementStore({ home: directory })).toThrow(EntitlementIntegrityError);
     expect(fs.readFileSync(file, 'utf8')).toBe(edited);
+  });
+
+  // NTFS does not expose POSIX owner-only mode semantics.
+  it.skipIf(process.platform === 'win32')('writes the store and anchor with mode 0600', () => {
+    const directory = home();
+    const value = manifest();
+    grantManifestEntitlements(value, 'cli', allGrantIds(value), { home: directory });
+    expect(fs.statSync(entitlementsFile(directory)).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(entitlementAnchorFile(directory)).mode & 0o777).toBe(0o600);
   });
 
   it('detects deletion or reordering of otherwise valid signed history', () => {

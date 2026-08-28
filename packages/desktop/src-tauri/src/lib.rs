@@ -435,11 +435,13 @@ async fn run_appliance_capture(app: &AppHandle, args: &[String]) -> Result<Strin
     }
     if exit_code != Some(0) {
         let detail = String::from_utf8_lossy(&stderr).trim().to_string();
-        return Err(if detail.is_empty() {
+        let detail = if detail.is_empty() {
             format!("appliance CLI exited with code {}", exit_code.unwrap_or(-1))
         } else {
             detail
-        });
+        };
+        eprintln!("warn: appliance {:?} failed: {}", args, detail);
+        return Err(detail);
     }
     Ok(String::from_utf8_lossy(&stdout).to_string())
 }

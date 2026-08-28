@@ -12,6 +12,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { Tag } from '@/components/ui/tag';
 import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
 import {
+  errorMessage,
   parseUnknownPublisherError,
   parseEntitlementGrantError,
   unknownPublisherWarningDue,
@@ -242,7 +243,8 @@ export function InstalledAppsPage() {
         setApps(await host.installedApps.list(target));
         setError(null);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Installed apps could not be loaded.');
+        console.error('[installed-apps] list failed', cause);
+        setError(errorMessage(cause, 'Installed apps could not be loaded.'));
       } finally {
         if (!quiet) setLoading(false);
       }
@@ -281,7 +283,10 @@ export function InstalledAppsPage() {
       if (prompt && !accepted) setPending({ kind: 'publisher', action: 'install', source, prompt });
       else if (grantPrompt) {
         setPending({ kind: 'grant', source, prompt: grantPrompt, acceptedUnknownPublisher: accepted });
-      } else setError(cause instanceof Error ? cause.message : 'The bundle could not be installed.');
+      } else {
+        console.error('[installed-apps] install failed', cause);
+        setError(errorMessage(cause, 'The bundle could not be installed.'));
+      }
     } finally {
       setBusy(null);
     }
@@ -331,7 +336,8 @@ export function InstalledAppsPage() {
       }
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : `Could not open ${item.app.name}.`);
+      console.error('[installed-apps] open failed', cause);
+      setError(errorMessage(cause, `Could not open ${item.app.name}.`));
     } finally {
       setBusy(null);
       setBusyAction(null);
@@ -349,7 +355,8 @@ export function InstalledAppsPage() {
       await refresh();
     } catch (cause) {
       clearAppStopStart(item.app.appId);
-      setError(cause instanceof Error ? cause.message : `Could not stop ${item.app.name}.`);
+      console.error('[installed-apps] stop failed', cause);
+      setError(errorMessage(cause, `Could not stop ${item.app.name}.`));
     } finally {
       setBusy(null);
       setBusyAction(null);

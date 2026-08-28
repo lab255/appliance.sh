@@ -1,3 +1,5 @@
+import { errorMessage } from './installed-apps';
+
 export type AppWindowClosePolicy = 'keep-running' | 'stop-on-close';
 
 export interface RuntimeAppUi {
@@ -185,7 +187,8 @@ export function renderAppWindow(
             });
           })
           .catch((cause: unknown) => {
-            reopenError.textContent = cause instanceof Error ? cause.message : `Could not reopen ${descriptor.name}.`;
+            console.error('[app-window] reopen failed', cause);
+            reopenError.textContent = errorMessage(cause, `Could not reopen ${descriptor.name}.`);
             reopen.disabled = false;
             reopen.removeAttribute('aria-busy');
             reopen.textContent = 'Reopen';

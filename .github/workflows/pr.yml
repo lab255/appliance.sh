@@ -116,3 +116,65 @@ jobs:
           cargo build
           cargo test
           cargo clippy -- -D warnings
+
+  windows:
+    name: Windows desktop + CLI
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/desktop/src-tauri
+            packages/vm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build desktop prerequisites
+        run: >-
+          pnpm exec nx run-many -t build -p
+          '@appliance.sh/sdk'
+          '@appliance.sh/infra'
+          '@appliance.sh/helper'
+          '@appliance.sh/cli'
+          '@appliance.sh/app'
+      - name: Test desktop and CLI packages
+        run: >-
+          pnpm exec nx run-many -t test -p
+          '@appliance.sh/cli'
+          '@appliance.sh/app'
+          '@appliance.sh/desktop'
+          '@appliance.sh/helper'
+      # cargo check runs Tauri's build script, which only needs its declared
+      # sidecar/resource paths to exist; real bundles are covered by release CI.
+      - name: Prepare Tauri check resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force packages/desktop/src-tauri/binaries | Out-Null
+          New-Item -ItemType Directory -Force packages/desktop/src-tauri/vm-bin | Out-Null
+          New-Item -ItemType Directory -Force packages/desktop/src-tauri/apiserver-bin | Out-Null
+          New-Item -ItemType File -Force packages/desktop/src-tauri/binaries/appliance-x86_64-pc-windows-msvc.exe | Out-Null
+          New-Item -ItemType File -Force packages/desktop/src-tauri/vm-bin/appliance-vm.exe | Out-Null
+      - name: Check desktop Rust
+        run: cargo check --manifest-path packages/desktop/src-tauri/Cargo.toml
+      - name: Check microVM Rust
+        run: cargo check --manifest-path packages/vm/Cargo.toml
