@@ -52,6 +52,48 @@ jobs:
       - name: Test
         run: pnpm exec nx run-many --target=test --all
 
+  runtime-samples:
+    name: Runtime samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # `appliance builder package` runs `docker buildx build --output type=oci`,
+      # which the default docker driver cannot export. Use a container driver.
+      - name: Set up Docker Buildx (docker-container driver)
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver: docker-container
+          install: true
+      - name: Build and verify Runtime samples (Docker required)
+        env:
+          OUT: ${{ runner.temp }}/runtime-samples
+        # CI requires Docker (`--require-docker`); local builds skip with a message.
+        run: scripts/build-runtime-samples.sh --require-docker
+      - name: Upload Runtime sample bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-samples
+          path: ${{ runner.temp }}/runtime-samples/*.appliance.zip
+          if-no-files-found: error
+          retention-days: 7
+
   verify-rust:
     name: Verify (Rust microVM crate)
     runs-on: macos-latest

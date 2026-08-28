@@ -1,7 +1,8 @@
 FROM busybox:1.37
 
 COPY index.html /www/index.html
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod -R a+rX /www
 
 EXPOSE 3000
-CMD ["httpd", "-f", "-p", "3000", "-h", "/www"]
+ENTRYPOINT ["/entrypoint.sh"]
