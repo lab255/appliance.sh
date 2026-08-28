@@ -146,6 +146,10 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     description: 'open the latest deployment URL in a browser',
     load: () => import('./appliance-open.js'),
   },
+  package: {
+    description: 'package a manifest v2 project as a runnable bundle (alias: `appliance builder package`)',
+    load: () => import('./appliance-build.js'),
+  },
   run: {
     description: 'run a packaged app (coming in a later release)',
     load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('run'),
@@ -259,6 +263,7 @@ const BUILDER_VERBS: Record<string, string> = {
   logs: 'logs',
   manifest: 'manifest',
   open: 'open',
+  package: 'package',
   shell: 'shell',
   stack: 'stack',
   test: 'test',
@@ -305,6 +310,7 @@ const COMMAND_GROUPS: Array<{ title: string; names: string[] }> = [
       'init',
       'dev',
       'build',
+      'package',
       'install',
       'deploy',
       'destroy',

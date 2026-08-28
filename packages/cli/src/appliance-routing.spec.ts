@@ -61,6 +61,7 @@ describe('appliance umbrella routing', () => {
         "logs",
         "manifest",
         "open",
+        "package",
         "shell",
         "stack",
         "test",
@@ -92,6 +93,7 @@ describe('appliance umbrella routing', () => {
 
   it('resolves Builder and existing shortcut aliases without changing command help', () => {
     expect(appliance('builder', 'build', '--help').stdout).toBe(appliance('build', '--help').stdout);
+    expect(appliance('builder', 'package', '--help').stdout).toBe(appliance('package', '--help').stdout);
     expect(appliance('builder', 'install', '--help').stdout).toBe(appliance('install', '--help').stdout);
     expect(appliance('builder', 'open', '--help').stdout).toBe(appliance('open', '--help').stdout);
     expect(appliance('list', '--help').stdout).toBe(appliance('app', 'list', '--help').stdout);
