@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 /** Tiny valid OCI image-layout tar generated entirely in memory for tests. */
-export function tinyOciTar(platform = 'linux/amd64'): Buffer {
+export function tinyOciTar(platform = 'linux/amd64', includeDirectories = false): Buffer {
   const [os, architecture, variant] = platform.split('/');
   const config = Buffer.from(JSON.stringify({ architecture, os, ...(variant ? { variant } : {}), config: {} }));
   const configDigest = sha256(config);
@@ -32,6 +32,12 @@ export function tinyOciTar(platform = 'linux/amd64'): Buffer {
     })
   );
   return makeTar([
+    ...(includeDirectories
+      ? ([
+          ['blobs/', Buffer.alloc(0), true],
+          ['blobs/sha256/', Buffer.alloc(0), true],
+        ] as Array<[string, Buffer, boolean]>)
+      : []),
     ['oci-layout', Buffer.from('{"imageLayoutVersion":"1.0.0"}')],
     ['index.json', index],
     [`blobs/sha256/${manifestDigest}`, manifest],
@@ -39,9 +45,9 @@ export function tinyOciTar(platform = 'linux/amd64'): Buffer {
   ]);
 }
 
-function makeTar(entries: Array<[string, Buffer]>): Buffer {
+function makeTar(entries: Array<[string, Buffer, boolean?]>): Buffer {
   const chunks: Buffer[] = [];
-  for (const [entryPath, data] of entries) {
+  for (const [entryPath, data, directory = false] of entries) {
     const header = Buffer.alloc(512);
     header.write(entryPath, 0, 100, 'utf8');
     writeOctal(header, 100, 8, 0o644);
@@ -50,7 +56,7 @@ function makeTar(entries: Array<[string, Buffer]>): Buffer {
     writeOctal(header, 124, 12, data.length);
     writeOctal(header, 136, 12, 0);
     header.fill(0x20, 148, 156);
-    header[156] = 0x30;
+    header[156] = directory ? 0x35 : 0x30;
     header.write('ustar\0', 257, 6, 'ascii');
     header.write('00', 263, 2, 'ascii');
     let checksum = 0;

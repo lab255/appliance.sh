@@ -97,6 +97,11 @@ pub struct VmSpec {
     /// it false; one-way, like `dev`/`docker`.
     #[serde(default)]
     pub agent_only: bool,
+    /// Fixed core-only Appliance Runtime profile. Runtime VMs are
+    /// agent-only in the sense that they carry the host vsock control
+    /// channel, but deliberately omit the development toolchain.
+    #[serde(default)]
+    pub runtime: bool,
     /// Whether this VM's boot media provisions the lazy Kubernetes
     /// platform layer (k3s, BuildKit, registry, and api-server). Fresh
     /// VMs start core-only; `appliance-vm up --cluster` promotes this
@@ -112,6 +117,10 @@ pub struct VmSpec {
     /// default and absent from legacy specs (which parse to `vec![]`).
     #[serde(default)]
     pub published: Vec<PublishedPort>,
+    /// Boot-configured per-app VirtioFS exports. VZ devices cannot be
+    /// hot-added, so changes require a pool restart.
+    #[serde(default)]
+    pub runtime_mounts: Vec<RuntimeMount>,
     /// How the guest NIC attaches to the host. Defaults to `Nat`
     /// (behaviour unchanged); `Netstack` swaps in the host-side smoltcp
     /// terminator. Legacy specs lack the field and parse to `Nat`. A
@@ -296,10 +305,27 @@ impl VmSpec {
             dev_mount: None,
             docker: false,
             agent_only: false,
+            runtime: false,
             cluster: false,
             published: Vec::new(),
+            runtime_mounts: Vec::new(),
             net_link: NetLink::Nat,
         }
+    }
+
+    /// RFC 0002's fixed pooled profile: core supervisor readiness only,
+    /// no k3s, Docker, or development toolchain.
+    pub fn runtime_defaults(name: &str) -> Self {
+        let mut spec = Self::defaults(name);
+        spec.agent_only = true;
+        spec.runtime = true;
+        spec.dev = false;
+        spec.docker = false;
+        spec.cluster = false;
+        spec.net_link = NetLink::Netstack;
+        spec.image = crate::images::RUNTIME_IMAGE.to_string();
+        spec.cmdline = crate::guest::runtime_guest_cmdline();
+        spec
     }
 
     /// The link this VM should actually use, honouring the global
@@ -501,6 +527,13 @@ impl VmPaths {
     #[cfg_attr(windows, allow(dead_code))]
     pub fn shell_sock(&self) -> PathBuf {
         self.dir.join("shell.sock")
+    }
+    /// Owner-only control socket served by the resident Runtime host.
+    /// Reconciliation processes request published forwards here so new
+    /// apps do not require a pooled-VM restart merely to bind host ports.
+    #[cfg_attr(windows, allow(dead_code))]
+    pub fn runtime_forward_sock(&self) -> PathBuf {
+        self.dir.join("runtime-forward.sock")
     }
 }
 
@@ -756,6 +789,23 @@ mod tests {
         assert!(json.contains("\"agentOnly\":true"), "wire form is camelCase agentOnly");
         let back: VmSpec = serde_json::from_str(&json).unwrap();
         assert!(back.agent_only, "agent_only must survive a JSON round-trip");
+    }
+
+    #[test]
+    fn runtime_profile_is_core_only_and_netstack_enforced() {
+        let spec = VmSpec::runtime_defaults("appliance-runtime");
+        assert_eq!(spec.name, "appliance-runtime");
+        assert_eq!(spec.cpus, 2);
+        assert_eq!(spec.memory_mib, 4096);
+        assert_eq!(spec.disk_gib, 10);
+        assert!(spec.agent_only);
+        assert!(spec.runtime);
+        assert!(!spec.dev);
+        assert!(!spec.docker);
+        assert!(!spec.cluster);
+        assert_eq!(spec.net_link, NetLink::Netstack);
+        assert_eq!(spec.image, crate::images::RUNTIME_IMAGE);
+        assert!(spec.cmdline.contains("alpine_repo=auto"));
     }
 
     #[test]

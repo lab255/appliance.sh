@@ -24,7 +24,7 @@
   "ports": [
     {
       "name": "http",
-      "guest": 80,
+      "guest": 3000,
       "protocol": "tcp",
       "expose": "host"
     }

@@ -15,6 +15,7 @@
 //! `scripts/sign-dev.sh` applies it ad-hoc for local builds.
 
 mod shell;
+mod runtime;
 
 use super::VmBackend;
 use crate::netstack::Netstack;
@@ -97,7 +98,7 @@ impl VmBackend for VzBackend {
         // the CLIs via npm — but `ensure_agent_image` only returns a path it
         // has hash-verified, so a tampered artifact is never attached
         // (Quinn #3, defence in depth with the attach-time re-verify below).
-        let agent_image: Option<std::path::PathBuf> = if spec.agent_only {
+        let agent_image: Option<std::path::PathBuf> = if spec.agent_only && !spec.runtime {
             match crate::images::ensure_agent_image() {
                 Ok(p) => Some(p),
                 Err(e) => {
@@ -199,6 +200,12 @@ impl VmBackend for VzBackend {
                 crate::netstack::LinkConfig::for_guest_mac(&spec.name, &spec.mac),
             )
         });
+        if spec.runtime {
+            let runtime_netstack = netstack
+                .clone()
+                .ok_or_else(|| anyhow!("Runtime profile requires the host netstack"))?;
+            runtime::spawn_forward_control(runtime_netstack, paths.runtime_forward_sock())?;
+        }
 
         let queue = DispatchQueue::new(&format!("sh.appliance.vm.{}", spec.name), None);
         let vm = unsafe {
@@ -448,10 +455,8 @@ fn build_configuration(
         config.setSocketDevices(&NSArray::from_retained_slice(&[Retained::into_super(vsock)
             as Retained<VZSocketDeviceConfiguration>]));
 
-        // Optional VirtioFS share: a host folder presented to the guest
-        // under a fixed tag, which the bootstrap mounts at
-        // /persist/workspace (dev bind-mount). Read-write — the whole
-        // point is editing on the host and running in the VM.
+        let mut directory_devices: Vec<Retained<VZDirectorySharingDeviceConfiguration>> = Vec::new();
+        // Optional development workspace share.
         if let Some(mount) = spec.dev_mount.as_deref() {
             let shared = VZSharedDirectory::initWithURL_readOnly(
                 VZSharedDirectory::alloc(),
@@ -470,9 +475,35 @@ fn build_configuration(
                 &tag,
             );
             fs_device.setShare(Some(&share));
-            config.setDirectorySharingDevices(&NSArray::from_retained_slice(&[
-                Retained::into_super(fs_device) as Retained<VZDirectorySharingDeviceConfiguration>,
-            ]));
+            directory_devices.push(
+                Retained::into_super(fs_device) as Retained<VZDirectorySharingDeviceConfiguration>
+            );
+        }
+        // Runtime payload shares are separate boot-configured devices,
+        // each hash-tagged below VZ's 36-byte maximum. They are exported
+        // read-only and mounted only by the guest supervisor.
+        for runtime_mount in &spec.runtime_mounts {
+            let shared = VZSharedDirectory::initWithURL_readOnly(
+                VZSharedDirectory::alloc(),
+                &file_url(Path::new(&runtime_mount.host)),
+                !runtime_mount.writable,
+            );
+            let share =
+                VZSingleDirectoryShare::initWithDirectory(VZSingleDirectoryShare::alloc(), &shared);
+            let tag = NSString::from_str(&runtime_mount.tag);
+            VZVirtioFileSystemDeviceConfiguration::validateTag_error(&tag)
+                .map_err(|e| anyhow!("invalid runtime virtiofs tag '{}': {}", runtime_mount.tag, error_text(&e)))?;
+            let fs_device = VZVirtioFileSystemDeviceConfiguration::initWithTag(
+                VZVirtioFileSystemDeviceConfiguration::alloc(),
+                &tag,
+            );
+            fs_device.setShare(Some(&share));
+            directory_devices.push(
+                Retained::into_super(fs_device) as Retained<VZDirectorySharingDeviceConfiguration>
+            );
+        }
+        if !directory_devices.is_empty() {
+            config.setDirectorySharingDevices(&NSArray::from_retained_slice(&directory_devices));
         }
 
         Ok(BuiltConfig { config, host_fd })

@@ -151,20 +151,20 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     load: () => import('./appliance-build.js'),
   },
   run: {
-    description: 'run a packaged app (coming in a later release)',
-    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('run'),
+    description: 'run a container-type packaged app in the pooled Runtime VM',
+    load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('run', process.argv.slice(2)),
   },
   uninstall: {
     description: 'uninstall a packaged app (coming in a later release)',
     load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('uninstall'),
   },
   ps: {
-    description: 'list running packaged apps (coming in a later release)',
-    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('ps'),
+    description: 'list running packaged apps',
+    load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('ps', process.argv.slice(2)),
   },
   stop: {
-    description: 'stop a packaged app (coming in a later release)',
-    load: async () => (await import('./appliance-runtime-stub.js')).runRuntimeStub('stop'),
+    description: 'stop a packaged app',
+    load: async () => (await import('./appliance-runtime.js')).runRuntimeCommand('stop', process.argv.slice(2)),
   },
   search: {
     description: 'search the signed free-app catalogue',
@@ -404,7 +404,9 @@ function showNamespaceHelp(namespace: 'builder' | 'runtime'): void {
   }
   if (namespace === 'runtime') {
     console.log();
-    console.log('Runtime commands are coming in a later release.');
+    console.log(
+      'Container run/ps/stop/logs are available, as is catalogue search; the remaining verbs are staged for later releases.'
+    );
   }
   console.log();
   console.log(`Run \`appliance ${namespace} <verb> --help\` for command-specific options.`);
@@ -445,11 +447,9 @@ async function main(): Promise<void> {
         await runRuntimeSearch(args.slice(2));
         return;
       }
-      const { runRuntimeStub } = await import('./appliance-runtime-stub.js');
-      runRuntimeStub(
-        verb,
-        args.slice(2).some((arg) => arg === '--help' || arg === '-h')
-      );
+      const { runRuntimeCommand } = await import('./appliance-runtime.js');
+      await runRuntimeCommand(verb, args.slice(2));
+      return;
     }
     const target = BUILDER_VERBS[verb];
     if (!target) {

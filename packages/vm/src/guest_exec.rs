@@ -59,6 +59,23 @@ pub fn run_wrapped(name: &str, cmd: &str) -> Result<String, String> {
     payload.ok_or_else(|| "guest output markers missing".to_string())
 }
 
+/// Send one structured Runtime lifecycle request over the existing
+/// root vsock one-shot. JSON is shell-quoted as data; the guest
+/// supervisor parses it with jq and returns either structured status
+/// or captured log text. Long-lived lifecycle is guest-owned — this
+/// transport never keeps the PTY connection open after reconciliation.
+pub fn runtime_request(name: &str, request_json: &str) -> Result<String, String> {
+    let quoted = shell_single_quote(request_json);
+    run_wrapped(
+        name,
+        &format!("/usr/local/bin/appliance-runtime-supervisor {quoted}"),
+    )
+}
+
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,5 +113,10 @@ mod tests {
         assert!(!wrapped.contains(&begin_mark()));
         assert!(wrapped.contains("RC=$?"));
         assert!(wrapped.ends_with("[ \"$RC\" -eq 0 ]"));
+    }
+
+    #[test]
+    fn runtime_json_is_shell_quoted_as_data() {
+        assert_eq!(shell_single_quote(r#"{"env":"it's data"}"#), r#"'{"env":"it'\''s data"}'"#);
     }
 }

@@ -27,7 +27,7 @@ mod traffic;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use spec::{VmPaths, VmSpec, VmStatus};
+use spec::{runtime_mount_tag, NetLink, PublishedPort, RuntimeMount, VmPaths, VmSpec, VmStatus};
 use std::io::Read;
 use std::net::SocketAddr;
 use std::process::Command;
@@ -92,6 +92,9 @@ enum Cmd {
         /// agent runtime). Implies --dev.
         #[arg(long, default_value_t = false)]
         agent_only: bool,
+        /// Create the fixed core-only pooled Appliance Runtime profile.
+        #[arg(long, default_value_t = false, conflicts_with_all = ["dev", "mount", "docker"])]
+        runtime: bool,
     },
     /// Start a VM in the background (creates it with defaults first if needed).
     Start {
@@ -149,6 +152,10 @@ enum Cmd {
         /// one-way, applies on the next boot; never silently turned off.
         #[arg(long, default_value_t = false)]
         agent_only: bool,
+        /// Reconcile the fixed pooled Runtime profile: agent-only core
+        /// readiness with no dev, Docker, or cluster layer.
+        #[arg(long, default_value_t = false, conflicts_with_all = ["dev", "mount", "docker", "cluster"])]
+        runtime: bool,
         /// Fail (exit non-zero) if the whole bring-up takes longer than
         /// this many seconds, even when it eventually succeeds. A
         /// regression tripwire for CI / perf work — readiness itself is
@@ -237,6 +244,69 @@ enum Cmd {
         #[command(subcommand)]
         action: CredsCmd,
     },
+    /// Host↔guest lifecycle RPC for pooled packaged applications.
+    Runtime {
+        #[command(subcommand)]
+        action: RuntimeCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum RuntimeCmd {
+    /// Reconcile a validated app's boot-time share and published ports.
+    Prepare { name: String, plan: String },
+    /// Start one app through the guest Runtime supervisor.
+    Start { name: String, plan: String },
+    Stop { name: String, app: String },
+    Status { name: String, app: String },
+    Logs {
+        name: String,
+        app: String,
+        #[arg(default_value_t = 0)]
+        offset: u64,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePlan {
+    app_id: String,
+    version: String,
+    principal_ip: String,
+    uid: u32,
+    share: RuntimePlanShare,
+    image_path: String,
+    env: std::collections::BTreeMap<String, String>,
+    ports: Vec<RuntimePlanPort>,
+    resources: RuntimePlanResources,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePlanShare {
+    tag: String,
+    host_path: String,
+    read_only: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePlanPort {
+    name: String,
+    host: u16,
+    guest: u16,
+    relay: u16,
+    target: String,
+    protocol: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimePlanResources {
+    cpus: usize,
+    memory_mib: u64,
+    disk_gib: u64,
+    pids: u32,
 }
 
 #[derive(Subcommand)]
@@ -501,6 +571,7 @@ fn run() -> Result<()> {
             mount,
             docker,
             agent_only,
+            runtime,
         } => {
             // A shared host folder only makes sense in a dev environment,
             // so --mount implies --dev. Agent-only implies --dev too: its
@@ -509,13 +580,18 @@ fn run() -> Result<()> {
                 Some(path) => Some(resolve_mount(path)?),
                 None => None,
             };
-            let dev = dev || dev_mount.is_some() || agent_only;
+            let dev = if runtime { false } else { dev || dev_mount.is_some() || agent_only };
             // Allocate a non-colliding port block so this VM can run
             // alongside others (the default VM keeps the canonical
             // 8081/6443/5052/5053; an existing VM keeps its ports).
             let (host_port, api_port, registry_port, egress_port, buildkit_port) =
                 VmSpec::allocate_ports(&name);
-            let spec = VmSpec {
+            let mut spec = if runtime {
+                VmSpec::runtime_defaults(&name)
+            } else {
+                VmSpec::defaults(&name)
+            };
+            spec = VmSpec {
                 cpus,
                 memory_mib: memory,
                 disk_gib: disk,
@@ -527,8 +603,10 @@ fn run() -> Result<()> {
                 dev,
                 dev_mount,
                 docker,
-                agent_only,
-                ..VmSpec::defaults(&name)
+                agent_only: agent_only || runtime,
+                runtime,
+                net_link: if runtime { NetLink::Netstack } else { spec.net_link },
+                ..spec
             };
             store::save_spec(&spec)?;
             store::ensure_disk(&spec)?;
@@ -573,11 +651,12 @@ fn run() -> Result<()> {
             docker,
             cluster,
             agent_only,
+            runtime,
             time_budget,
         } => {
             let up_started = std::time::Instant::now();
             backend.availability()?;
-            let mut spec = ensure_spec(&name)?;
+            let mut spec = ensure_spec_for_up(&name, runtime)?;
             // Persist resource overrides into the spec *before* spawning
             // the host process — `run` reads sizing from disk, and a
             // persisted spec is what makes the new sizing survive a
@@ -612,7 +691,16 @@ fn run() -> Result<()> {
             // invariant `agent_only ⟹ dev`: the agent-handoff readiness gate
             // waits on the dev toolchain's .dev-ready, so force dev on too.
             let was_agent_only = spec.agent_only;
-            if agent_only {
+            if runtime {
+                if spec.cluster || spec.dev || spec.docker || spec.dev_mount.is_some() {
+                    bail!("the Runtime profile cannot reuse a dev, Docker, mounted-workspace, or cluster VM");
+                }
+                spec.runtime = true;
+                spec.agent_only = true;
+                spec.net_link = NetLink::Netstack;
+                spec.image = images::RUNTIME_IMAGE.to_string();
+                spec.cmdline = guest::runtime_guest_cmdline();
+            } else if agent_only {
                 spec.agent_only = true;
                 spec.dev = true;
             }
@@ -633,7 +721,8 @@ fn run() -> Result<()> {
             let docker_enabled = spec.docker && !was_docker;
             let cluster_enabled = spec.cluster && !was_cluster;
             let agent_only_enabled = spec.agent_only && !was_agent_only;
-            if resized || dev_enabled || mount_changed || docker_enabled || cluster_enabled || agent_only_enabled {
+            let runtime_enabled = runtime && spec.runtime;
+            if resized || dev_enabled || mount_changed || docker_enabled || cluster_enabled || agent_only_enabled || runtime_enabled {
                 store::save_spec(&spec)?;
                 if store::read_live_pid(&name).is_some() {
                     if resized {
@@ -683,7 +772,7 @@ fn run() -> Result<()> {
             // The readiness marker `up` polls on is spec-keyed: an
             // agent-only VM has no k3s kubeconfig — it answers with the
             // agent-ready sentinel marker instead.
-            let ready_marker = if spec.agent_only {
+            let ready_marker = if spec.agent_only && spec.dev {
                 paths.agent_ready()
             } else if spec.cluster {
                 paths.kubeconfig()
@@ -794,6 +883,13 @@ fn run() -> Result<()> {
                 println!("  bring-up:    {elapsed:.1}s (within the {budget}s budget)");
                 Ok(())
             };
+            if spec.runtime {
+                println!("VM '{name}' is up (pooled runtime core-ready)");
+                println!("  runtime supervisor: containerd + vsock control ready");
+                println!("  shell: appliance-vm shell {name} --root");
+                check_time_budget(time_budget)?;
+                return Ok(());
+            }
             if spec.agent_only {
                 // No k3s API to confirm — readiness is the agent runtime,
                 // already proven by the agent-ready marker above. Reach the
@@ -824,6 +920,8 @@ fn run() -> Result<()> {
             println!("try: KUBECONFIG={} kubectl get nodes", paths.kubeconfig().display());
             Ok(())
         }
+
+        Cmd::Runtime { action } => run_runtime_command(action),
 
         Cmd::Timings { name } => {
             let paths = VmPaths::for_name(&name);
@@ -888,7 +986,7 @@ fn run() -> Result<()> {
             // is spec-keyed — an agent-only VM answers with agent-ready, not
             // kubeconfig.
             let ready_marker = match spec.as_ref() {
-                Some(s) if s.agent_only => paths.agent_ready(),
+                Some(s) if s.agent_only && s.dev => paths.agent_ready(),
                 Some(s) if s.cluster => paths.kubeconfig(),
                 _ => paths.core_ready(),
             };
@@ -948,7 +1046,7 @@ fn run() -> Result<()> {
                     let paths = VmPaths::for_name(&spec.name);
                     // Spec-keyed readiness marker: agent-only answers with
                     // agent-ready, k3s VMs with kubeconfig.
-                    let ready_marker = if spec.agent_only {
+                    let ready_marker = if spec.agent_only && spec.dev {
                         paths.agent_ready()
                     } else if spec.cluster {
                         paths.kubeconfig()
@@ -1078,6 +1176,419 @@ fn run() -> Result<()> {
 
         Cmd::Creds { action } => run_creds(action),
     }
+}
+
+fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
+    match action {
+        RuntimeCmd::Prepare { name, plan } => {
+            let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime plan")?;
+            validate_runtime_plan(&plan)?;
+            if !plan.share.read_only {
+                bail!("runtime payload shares must be read-only");
+            }
+            let host_path = std::fs::canonicalize(&plan.share.host_path)
+                .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
+
+            let prior = store::load_spec(&name)?;
+            let mut spec = match prior.clone() {
+                Some(existing) => {
+                    if !existing.runtime {
+                        bail!("VM '{name}' already exists and is not an Appliance Runtime pool");
+                    }
+                    existing
+                }
+                None => {
+                    let mut fresh = VmSpec::runtime_defaults(&name);
+                    let ports = VmSpec::allocate_ports(&name);
+                    fresh.host_port = ports.0;
+                    fresh.api_port = ports.1;
+                    fresh.registry_port = ports.2;
+                    fresh.egress_port = ports.3;
+                    fresh.buildkit_port = ports.4;
+                    fresh
+                }
+            };
+            // Reassert the fixed profile on every reconciliation.
+            spec.cpus = spec::DEFAULT_CPUS;
+            spec.memory_mib = spec::DEFAULT_MEMORY_MIB;
+            spec.disk_gib = spec::DEFAULT_DISK_GIB;
+            spec.agent_only = true;
+            spec.runtime = true;
+            spec.dev = false;
+            spec.dev_mount = None;
+            spec.docker = false;
+            spec.cluster = false;
+            spec.net_link = NetLink::Netstack;
+            spec.image = images::RUNTIME_IMAGE.to_string();
+            spec.cmdline = guest::runtime_guest_cmdline();
+
+            let expected_tag = runtime_mount_tag(&plan.app_id, "payload")?;
+            if plan.share.tag != expected_tag {
+                bail!("runtime share tag does not match the principal/slot mount identity");
+            }
+            let guest_path = format!("/run/appliance/shares/{expected_tag}");
+            spec.runtime_mounts.retain(|mount| mount.principal != plan.app_id);
+            spec.runtime_mounts.push(RuntimeMount::granted(
+                &plan.app_id,
+                "payload",
+                &host_path.to_string_lossy(),
+                &guest_path,
+                false,
+                false,
+            )?);
+            spec.runtime_mounts.sort_by(|a, b| a.principal.cmp(&b.principal));
+            let planned_hosts = plan
+                .ports
+                .iter()
+                .map(|port| port.host)
+                .collect::<std::collections::HashSet<_>>();
+            spec.published.retain(|published| {
+                // Migrate the pre-RuntimeTarget relay record for this
+                // allocation while preserving unrelated legacy forwards.
+                if published.runtime_target.is_none() && planned_hosts.contains(&published.host) {
+                    return false;
+                }
+                published
+                    .runtime_target
+                    .as_ref()
+                    .map(|target| target.principal.as_str())
+                    != Some(plan.app_id.as_str())
+            });
+            for port in plan.ports {
+                if !(20000..=29999).contains(&port.host) {
+                    bail!("runtime host port {} is outside 20000-29999", port.host);
+                }
+                let target: std::net::Ipv4Addr = port.target.parse().context("parse runtime principal target")?;
+                let octets = target.octets();
+                if octets[..3] != [192, 168, 127] || !(10..=239).contains(&octets[3]) {
+                    bail!("runtime principal target must be an allocated 192.168.127.10-239 /32");
+                }
+                spec.published.push(PublishedPort::for_runtime(
+                    port.host,
+                    port.relay,
+                    &plan.app_id,
+                    target,
+                )?);
+            }
+            spec.published.sort_by_key(|published| published.host);
+            let restart_required = store::read_live_pid(&name).is_some()
+                && prior.as_ref().is_some_and(|old| old.runtime_mounts != spec.runtime_mounts);
+            store::save_spec(&spec)?;
+            store::ensure_disk(&spec)?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "poolVm": name,
+                    "restartRequired": restart_required,
+                    "profile": {
+                        "agentOnly": true,
+                        "dev": false,
+                        "docker": false,
+                        "cluster": false,
+                        "cpus": spec.cpus,
+                        "memoryMib": spec.memory_mib,
+                        "netLink": "netstack"
+                    }
+                })
+            );
+            Ok(())
+        }
+        RuntimeCmd::Start { name, plan } => {
+            let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime start plan")?;
+            validate_runtime_plan(&plan)?;
+            ensure_runtime_running(&name)?;
+            validate_runtime_plan_against_spec(&name, &plan)?;
+            let mut bound = Vec::new();
+            for port in &plan.ports {
+                if let Err(error) = runtime_forward_request(
+                    &name,
+                    "bind",
+                    port.host,
+                    netstack::GUEST_IP,
+                    port.relay,
+                ) {
+                    for (host, target, guest) in bound {
+                        let _ = runtime_forward_request(&name, "unbind", host, target, guest);
+                    }
+                    return Err(error);
+                }
+                bound.push((port.host, netstack::GUEST_IP, port.relay));
+            }
+            let request = serde_json::json!({ "action": "start", "appId": plan.app_id, "plan": plan });
+            let response = match guest_exec::runtime_request(&name, &request.to_string()) {
+                Ok(response) => response,
+                Err(error) => {
+                    for port in &plan.ports {
+                        let _ = runtime_forward_request(
+                            &name,
+                            "unbind",
+                            port.host,
+                            netstack::GUEST_IP,
+                            port.relay,
+                        );
+                    }
+                    return Err(anyhow::anyhow!("runtime start RPC: {error}"));
+                }
+            };
+            let started = serde_json::from_str::<serde_json::Value>(&response)
+                .ok()
+                .and_then(|value| value.get("state").and_then(serde_json::Value::as_str).map(str::to_owned))
+                .is_some_and(|state| state == "running");
+            if !started {
+                for port in &plan.ports {
+                    let _ = runtime_forward_request(
+                        &name,
+                        "unbind",
+                        port.host,
+                        netstack::GUEST_IP,
+                        port.relay,
+                    );
+                }
+            }
+            println!("{response}");
+            Ok(())
+        }
+        RuntimeCmd::Stop { name, app } => runtime_stop_request(&name, &app),
+        RuntimeCmd::Status { name, app } => runtime_status_request(&name, &app),
+        RuntimeCmd::Logs { name, app, offset } => runtime_logs_request(&name, &app, offset),
+    }
+}
+
+fn validate_runtime_app_id(app: &str) -> Result<()> {
+    if app.is_empty()
+        || app.len() > 63
+        || app.starts_with('-')
+        || app.ends_with('-')
+        || !app.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        bail!("invalid runtime app id '{app}'");
+    }
+    Ok(())
+}
+
+fn validate_runtime_plan(plan: &RuntimePlan) -> Result<()> {
+    use std::collections::HashSet;
+    use std::path::Component;
+
+    validate_runtime_app_id(&plan.app_id)?;
+    if plan.version.is_empty() || plan.version.len() > 128 {
+        bail!("invalid runtime app version");
+    }
+    let tag_hex = plan
+        .share
+        .tag
+        .strip_prefix("ap-")
+        .filter(|hex| !hex.is_empty() && hex.len() <= 32)
+        .ok_or_else(|| anyhow::anyhow!("invalid runtime VirtioFS tag"))?;
+    if !tag_hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+        bail!("invalid runtime VirtioFS tag");
+    }
+    if plan.image_path.contains('\\') {
+        bail!("runtime image path must use safe payload-relative components");
+    }
+    let components: Vec<_> = std::path::Path::new(&plan.image_path).components().collect();
+    if components.first() != Some(&Component::Normal(std::ffi::OsStr::new("payload")))
+        || components.len() < 2
+        || components.iter().any(|component| !matches!(component, Component::Normal(_)))
+    {
+        bail!("runtime image path must use safe payload-relative components");
+    }
+    let ip: std::net::Ipv4Addr = plan.principal_ip.parse().context("parse runtime principal IP")?;
+    let octets = ip.octets();
+    if octets[..3] != [192, 168, 127] || !(10..=239).contains(&octets[3]) {
+        bail!("runtime principal IP must be in 192.168.127.10-239");
+    }
+    let expected_uid = 20_000 + u32::from(octets[3] - 10);
+    if plan.uid != expected_uid || !(20_000..=20_239).contains(&plan.uid) {
+        bail!("runtime UID does not match its principal IP");
+    }
+    if plan.ports.len() > 16 {
+        bail!("runtime apps may publish at most 16 ports");
+    }
+    let mut hosts = HashSet::new();
+    let mut relays = HashSet::new();
+    let relay_base = 22_000 + (plan.uid - 20_000) as u16 * 16;
+    for (index, port) in plan.ports.iter().enumerate() {
+        if port.protocol != "tcp"
+            || port.target != plan.principal_ip
+            || !(20_000..=29_999).contains(&port.host)
+            || port.guest == 0
+            || port.relay != relay_base + index as u16
+            || !hosts.insert(port.host)
+            || !relays.insert(port.relay)
+        {
+            bail!("invalid runtime published port '{}': mapping is inconsistent", port.name);
+        }
+    }
+    if plan.resources.cpus == 0
+        || plan.resources.memory_mib == 0
+        || plan.resources.disk_gib == 0
+        || plan.resources.pids == 0
+    {
+        bail!("runtime resource hints must be positive");
+    }
+    Ok(())
+}
+
+fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<()> {
+    let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
+    if !spec.runtime {
+        bail!("VM '{name}' is not an Appliance Runtime pool");
+    }
+    let share = spec
+        .runtime_mounts
+        .iter()
+        .find(|share| share.principal == plan.app_id && share.slot == "payload")
+        .with_context(|| format!("runtime share for '{}' is not persisted", plan.app_id))?;
+    let host_path = std::fs::canonicalize(&plan.share.host_path)
+        .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
+    if share.tag != plan.share.tag
+        || share.host != host_path.to_string_lossy()
+        || share.guest != format!("/run/appliance/shares/{}", plan.share.tag)
+        || share.writable
+        || !plan.share.read_only
+    {
+        bail!("runtime start share does not match the persisted pool spec");
+    }
+    let published: Vec<_> = spec
+        .published
+        .iter()
+        .filter(|published| {
+            published.runtime_target.as_ref().map(|target| target.principal.as_str())
+                == Some(plan.app_id.as_str())
+        })
+        .collect();
+    if published.len() != plan.ports.len() {
+        bail!("runtime start ports do not match the persisted pool spec");
+    }
+    for port in &plan.ports {
+        let matches = published.iter().any(|persisted| {
+            persisted.host == port.host
+                && persisted.container == port.relay
+                && persisted.runtime_target.as_ref().is_some_and(|target| {
+                    target.principal == plan.app_id && target.address.to_string() == port.target
+                })
+        });
+        if !matches {
+            bail!("runtime start port '{}' does not match the persisted pool spec", port.name);
+        }
+    }
+    Ok(())
+}
+
+fn ensure_runtime_running(name: &str) -> Result<()> {
+    let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
+    if !spec.runtime {
+        bail!("VM '{name}' is not an Appliance Runtime pool");
+    }
+    if store::read_live_pid(name).is_none() {
+        bail!("runtime pool '{name}' is not running");
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn runtime_forward_request(
+    name: &str,
+    action: &str,
+    host: u16,
+    target: std::net::Ipv4Addr,
+    guest: u16,
+) -> Result<()> {
+    use std::io::{Read, Write};
+    use std::net::Shutdown;
+    use std::os::unix::net::UnixStream;
+
+    let paths = VmPaths::for_name(name);
+    let mut stream = UnixStream::connect(paths.runtime_forward_sock())
+        .with_context(|| format!("connect Runtime forward control for '{name}'"))?;
+    let request = serde_json::json!({ "action": action, "host": host, "target": target, "guest": guest });
+    stream.write_all(request.to_string().as_bytes())?;
+    stream.shutdown(Shutdown::Write)?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response)?;
+    let response: serde_json::Value = serde_json::from_str(&response).context("parse Runtime forward response")?;
+    if response.get("ok").and_then(serde_json::Value::as_bool) != Some(true) {
+        bail!(
+            "Runtime forward {host}->{guest} failed: {}",
+            response
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("unknown error")
+        );
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn runtime_forward_request(
+    _name: &str,
+    _action: &str,
+    _host: u16,
+    _target: std::net::Ipv4Addr,
+    _guest: u16,
+) -> Result<()> {
+    bail!("dynamic Runtime forwards are not implemented on this host backend")
+}
+
+fn runtime_lifecycle_request(name: &str, app: &str, action: &str) -> Result<String> {
+    validate_runtime_app_id(app)?;
+    ensure_runtime_running(name)?;
+    let request = serde_json::json!({ "action": action, "appId": app });
+    let response = guest_exec::runtime_request(name, &request.to_string())
+        .map_err(|error| anyhow::anyhow!("runtime {action} RPC: {error}"))?;
+    Ok(response)
+}
+
+fn runtime_app_forwards(name: &str, app: &str) -> Result<Vec<(u16, std::net::Ipv4Addr, u16)>> {
+    let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
+    Ok(spec
+        .published
+        .iter()
+        .filter_map(|port| {
+            port.runtime_target
+                .as_ref()
+                .filter(|target| target.principal == app)
+                .map(|_| (port.host, netstack::GUEST_IP, port.container))
+        })
+        .collect())
+}
+
+fn runtime_unbind_app_forwards(name: &str, app: &str) -> Result<()> {
+    for (host, target, guest) in runtime_app_forwards(name, app)? {
+        runtime_forward_request(name, "unbind", host, target, guest)?;
+    }
+    Ok(())
+}
+
+fn runtime_stop_request(name: &str, app: &str) -> Result<()> {
+    let response = runtime_lifecycle_request(name, app, "stop")?;
+    runtime_unbind_app_forwards(name, app)?;
+    println!("{response}");
+    Ok(())
+}
+
+fn runtime_status_request(name: &str, app: &str) -> Result<()> {
+    let response = runtime_lifecycle_request(name, app, "status")?;
+    let running = serde_json::from_str::<serde_json::Value>(&response)
+        .ok()
+        .and_then(|value| value.get("state").and_then(serde_json::Value::as_str).map(str::to_owned))
+        .is_some_and(|state| state == "running");
+    if !running {
+        runtime_unbind_app_forwards(name, app)?;
+    }
+    println!("{response}");
+    Ok(())
+}
+
+fn runtime_logs_request(name: &str, app: &str, offset: u64) -> Result<()> {
+    validate_runtime_app_id(app)?;
+    ensure_runtime_running(name)?;
+    let request = serde_json::json!({ "action": "logs", "appId": app, "offset": offset });
+    let response = guest_exec::runtime_request(name, &request.to_string())
+        .map_err(|error| anyhow::anyhow!("runtime logs RPC: {error}"))?;
+    println!("{response}");
+    Ok(())
 }
 
 fn run_runtime_policy(action: RuntimePolicyCmd) -> Result<()> {
@@ -1344,19 +1855,28 @@ fn resolve_mount(path: &str) -> Result<String> {
 }
 
 fn ensure_spec(name: &str) -> Result<VmSpec> {
+    ensure_spec_for_up(name, false)
+}
+
+fn ensure_spec_for_up(name: &str, runtime: bool) -> Result<VmSpec> {
     if let Some(spec) = store::load_spec(name)? {
         return Ok(spec);
     }
     // A VM started without an explicit `create` still needs a
     // non-colliding port block so it can run beside existing VMs.
     let (host_port, api_port, registry_port, egress_port, buildkit_port) = VmSpec::allocate_ports(name);
+    let defaults = if runtime {
+        VmSpec::runtime_defaults(name)
+    } else {
+        VmSpec::defaults(name)
+    };
     let spec = VmSpec {
         host_port,
         api_port,
         registry_port,
         egress_port,
         buildkit_port,
-        ..VmSpec::defaults(name)
+        ..defaults
     };
     store::save_spec(&spec)?;
     Ok(spec)
@@ -1416,6 +1936,19 @@ fn spawn_host_process(name: &str, budget_secs: u64) -> Result<std::process::Chil
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::from(log))
         .stderr(std::process::Stdio::from(log_err));
+    configure_host_process_detachment(&mut cmd);
+    cmd.spawn().context("spawn VM host process")
+}
+
+/// Keep terminal signals sent to the launching CLI away from the resident
+/// hypervisor. Redirecting stdio is not sufficient on Unix: without a new
+/// process group, Ctrl-C targets both `runtime run` and its pooled VM child.
+fn configure_host_process_detachment(cmd: &mut Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -1427,7 +1960,6 @@ fn spawn_host_process(name: &str, budget_secs: u64) -> Result<std::process::Chil
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     }
-    cmd.spawn().context("spawn VM host process")
 }
 
 /// One `up` poll's readiness verdict, pure so the ordering contract is
@@ -1458,6 +1990,76 @@ fn tail_of(path: &std::path::Path, n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn detached_host_process_uses_its_own_process_group() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 5"]);
+        configure_host_process_detachment(&mut command);
+        let mut child = command.spawn().expect("spawn detached test child");
+        let child_pid = child.id() as i32;
+        let child_group = unsafe { libc::getpgid(child_pid) };
+        let caller_group = unsafe { libc::getpgrp() };
+
+        let _ = child.kill();
+        let _ = child.wait();
+
+        assert_eq!(child_group, child_pid);
+        assert_ne!(child_group, caller_group);
+    }
+
+    fn valid_runtime_plan() -> RuntimePlan {
+        RuntimePlan {
+            app_id: "journal".to_string(),
+            version: "1.0.0".to_string(),
+            principal_ip: "192.168.127.10".to_string(),
+            uid: 20_000,
+            share: RuntimePlanShare {
+                tag: "ap-0123456789abcdef0123456789abcdef".to_string(),
+                host_path: "/tmp/journal".to_string(),
+                read_only: true,
+            },
+            image_path: "payload/images/journal.oci.tar".to_string(),
+            env: std::collections::BTreeMap::new(),
+            ports: vec![RuntimePlanPort {
+                name: "http".to_string(),
+                host: 20_000,
+                guest: 3_000,
+                relay: 22_000,
+                target: "192.168.127.10".to_string(),
+                protocol: "tcp".to_string(),
+            }],
+            resources: RuntimePlanResources { cpus: 1, memory_mib: 512, disk_gib: 2, pids: 256 },
+        }
+    }
+
+    #[test]
+    fn runtime_plan_validation_binds_uid_target_tag_and_relay_slice() {
+        let plan = valid_runtime_plan();
+        validate_runtime_plan(&plan).unwrap();
+
+        let mut wrong_uid = plan.clone();
+        wrong_uid.uid += 1;
+        assert!(validate_runtime_plan(&wrong_uid).unwrap_err().to_string().contains("UID"));
+
+        let mut traversal = plan.clone();
+        traversal.image_path = "payload/../escape.tar".to_string();
+        assert!(validate_runtime_plan(&traversal).unwrap_err().to_string().contains("payload-relative"));
+
+        let mut too_many = plan;
+        too_many.ports = (0..17)
+            .map(|index| RuntimePlanPort {
+                name: format!("p{index}"),
+                host: 20_000 + index,
+                guest: 3_000 + index,
+                relay: 22_000 + index,
+                target: "192.168.127.10".to_string(),
+                protocol: "tcp".to_string(),
+            })
+            .collect();
+        assert!(validate_runtime_plan(&too_many).unwrap_err().to_string().contains("at most 16"));
+    }
 
     #[test]
     fn up_readiness_needs_marker_and_terminal_ready_phase() {

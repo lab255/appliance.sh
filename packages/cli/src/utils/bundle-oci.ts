@@ -42,6 +42,7 @@ export function validateOciImageTar(data: Uint8Array, declaredPlatform: string):
 
 function parseTar(data: Buffer): Map<string, TarEntry> {
   const entries = new Map<string, TarEntry>();
+  const seenPaths = new Set<string>();
   let offset = 0;
   while (offset + 512 <= data.length) {
     const header = data.subarray(offset, offset + 512);
@@ -52,14 +53,17 @@ function parseTar(data: Buffer): Map<string, TarEntry> {
     validateTarChecksum(header);
     const name = tarString(header.subarray(0, 100));
     const prefix = tarString(header.subarray(345, 500));
-    const entryPath = prefix ? `${prefix}/${name}` : name;
+    const archivePath = prefix ? `${prefix}/${name}` : name;
+    const type = header[156];
+    const isDirectory = type === 0x35;
+    const entryPath = isDirectory && archivePath.endsWith('/') ? archivePath.slice(0, -1) : archivePath;
     validateTarPath(entryPath);
     const size = parseTarOctal(header.subarray(124, 136), `size for ${entryPath}`);
-    const type = header[156];
     const dataOffset = offset + 512;
     const nextOffset = dataOffset + Math.ceil(size / 512) * 512;
     if (nextOffset > data.length) throw new Error(`OCI tar entry is truncated: ${entryPath}`);
-    if (entries.has(entryPath)) throw new Error(`OCI tar has a duplicate entry: ${entryPath}`);
+    if (seenPaths.has(entryPath)) throw new Error(`OCI tar has a duplicate entry: ${entryPath}`);
+    seenPaths.add(entryPath);
     if (type === 0 || type === 0x30) entries.set(entryPath, { data: data.subarray(dataOffset, dataOffset + size) });
     else if (type !== 0x35) throw new Error(`OCI tar entry is not a regular file or directory: ${entryPath}`);
     offset = nextOffset;

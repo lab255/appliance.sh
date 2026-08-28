@@ -6,11 +6,13 @@
 //!   /appliance.apkovl.tar.gz    our config overlay (openrc wiring +
 //!                               the appliance.start bootstrap script)
 //!   /k3s                        pinned k3s binary (arm64/amd64)
+//!   /apks/{main,community}      Runtime's signed local Alpine repos
 //!
 //! Boot flow: the netboot initramfs (ip=dhcp) finds the FAT volume on
 //! the second virtio-blk disk, mounts the modloop from it, applies the
 //! apkovl, installs the apkovl's /etc/apk/world packages from the
-//! network repo, then pivots to the real root where openrc runs
+//! selected repo (Runtime uses local signed media; other profiles use
+//! the network), then pivots to the real root where openrc runs
 //! /etc/local.d/appliance.start — which formats/mounts the persistent
 //! data disk (vda) on first boot and starts k3s with its state there.
 //!
@@ -332,6 +334,10 @@ fi
 # otherwise. Runs after /persist is mounted so the workspace, home, and
 # apk cache all land on the persistent disk.
 __DEV_PROVISION__
+# --- pooled Appliance Runtime supervisor ----------------------------
+# Core-only runtime VMs get containerd plus the small host-driven
+# supervisor below. Empty for ordinary core, dev, and cluster VMs.
+__RUNTIME_PROVISION__
 # --- docker engine (appliance vm ... --docker) -----------------------
 # Substituted with the provisioning block below for docker VMs, empty
 # otherwise. Backgrounded and fully decoupled from the bring-up phases:
@@ -1298,6 +1304,352 @@ set -g history-limit 50000
 set -g destroy-unattached off
 "#;
 
+/// Guest half of the v1 Runtime lifecycle protocol. The host sends a
+/// validated JSON request over the existing root vsock one-shot. Long-
+/// lived processes stay here: containerd owns the task and this script
+/// persists desired/observed state and captured output under
+/// /persist/runtime/apps/<app>.
+const RUNTIME_SUPERVISOR: &str = r#"#!/bin/sh
+set -eu
+REQ=${1:-'{}'}
+ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
+APP=$(printf '%s' "$REQ" | jq -r '.appId // .plan.appId // empty')
+case "$APP" in ''|*[!a-z0-9-]*) echo '{"state":"failed","message":"invalid app id"}'; exit 2;; esac
+STATE=/persist/runtime/apps/$APP
+NS=ap-$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+ROOT_IF=r$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+CTR_NS=appliance-$APP
+CID=appliance-$APP
+MAX_LOG_BYTES=8388608
+
+task_pid() {
+  ctr -n "$CTR_NS" tasks list 2>/dev/null | awk -v id="$CID" '$1 == id { print $2; exit }'
+}
+
+cap_log() {
+  [ -f "$STATE/current.log" ] || return 0
+  SIZE=$(wc -c < "$STATE/current.log")
+  if [ "$SIZE" -gt "$MAX_LOG_BYTES" ]; then
+    DROP=$((SIZE - MAX_LOG_BYTES))
+    BASE=$(cat "$STATE/log-base" 2>/dev/null || echo 0)
+    tail -c "$MAX_LOG_BYTES" "$STATE/current.log" > "$STATE/current.log.trim"
+    cat "$STATE/current.log.trim" > "$STATE/current.log"
+    rm -f "$STATE/current.log.trim"
+    echo "$((BASE + DROP))" > "$STATE/log-base"
+  fi
+}
+
+cleanup_resources() {
+  if [ -f "$STATE/relay.pids" ]; then
+    while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+  fi
+  if [ -f "$STATE/logcap.pid" ]; then
+    kill "$(cat "$STATE/logcap.pid")" 2>/dev/null || true
+  fi
+  ip netns del "$NS" 2>/dev/null || true
+  ip link del "$ROOT_IF" 2>/dev/null || true
+  if [ -f "$STATE/request.json" ]; then
+    OLD_TAG=$(jq -r '.plan.share.tag // empty' "$STATE/request.json")
+    OLD_SHARE=/run/appliance/shares/$OLD_TAG
+    grep -qs " $OLD_SHARE " /proc/mounts && umount "$OLD_SHARE" || true
+  fi
+  rm -f "$STATE/relay.pids" "$STATE/logcap.pid"
+}
+
+status() {
+  if [ -f "$STATE/exit-code" ]; then
+    CODE=$(cat "$STATE/exit-code" 2>/dev/null || echo 1)
+    printf '{"state":"exited","exitCode":%s}\n' "$CODE"
+  elif [ -n "$(task_pid)" ]; then
+    echo '{"state":"running"}'
+  elif [ -d "$STATE" ]; then
+    echo '{"state":"exited","exitCode":1}'
+  else
+    echo '{"state":"missing"}'
+  fi
+}
+
+case "$ACTION" in
+  status) status; exit 0;;
+  logs)
+    OFFSET=$(printf '%s' "$REQ" | jq -r '.offset // 0')
+    case "$OFFSET" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid log offset"}'; exit 2;; esac
+    cap_log
+    SIZE=0
+    [ -f "$STATE/current.log" ] && SIZE=$(wc -c < "$STATE/current.log")
+    BASE=$(cat "$STATE/log-base" 2>/dev/null || echo 0)
+    RESET=false
+    if [ "$OFFSET" -lt "$BASE" ] || [ "$OFFSET" -gt "$((BASE + SIZE))" ]; then
+      OFFSET=$BASE
+      RESET=true
+    fi
+    LOCAL_OFFSET=$((OFFSET - BASE))
+    AVAILABLE=$((SIZE - LOCAL_OFFSET))
+    READ_BYTES=$AVAILABLE
+    [ "$READ_BYTES" -le 65536 ] || READ_BYTES=65536
+    if [ -f "$STATE/current.log" ]; then
+      DATA=$(tail -c "+$((LOCAL_OFFSET + 1))" "$STATE/current.log" | head -c "$READ_BYTES" | base64 | tr -d '\n')
+    else
+      DATA=
+    fi
+    printf '{"offset":%s,"reset":%s,"data":"%s"}\n' "$((OFFSET + READ_BYTES))" "$RESET" "$DATA"
+    exit 0
+    ;;
+  stop)
+    if [ ! -d "$STATE" ]; then echo '{"state":"missing"}'; exit 0; fi
+    ctr -n "$CTR_NS" tasks kill -s SIGTERM "$CID" >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+      ctr -n "$CTR_NS" tasks list 2>/dev/null | grep -q "$CID" || break
+      sleep 0.5
+    done
+    ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
+    cleanup_resources
+    [ -f "$STATE/pid" ] && kill "$(cat "$STATE/pid")" 2>/dev/null || true
+    rm -f "$STATE/pid"
+    echo stopped > "$STATE/desired"
+    echo '{"state":"stopped"}'
+    exit 0
+    ;;
+  start) ;;
+  *) echo '{"state":"failed","message":"unknown runtime action"}'; exit 2;;
+esac
+
+if [ -n "$(task_pid)" ]; then
+  echo '{"state":"failed","message":"instance already running"}'
+  exit 2
+fi
+mkdir -p "$STATE" /run/appliance/shares /sys/fs/cgroup/appliance
+cleanup_resources
+rm -f "$STATE/exit-code" "$STATE/current.log" "$STATE/pid"
+echo 0 > "$STATE/log-base"
+printf '%s\n' "$REQ" > "$STATE/request.json"
+TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
+IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
+UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
+IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath')
+TAG_HEX=${TAG#ap-}
+case "$TAG" in ap-*) ;; *) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
+case "$TAG_HEX" in ''|*[!0-9a-f]*) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
+[ "${#TAG_HEX}" -le 32 ] || { echo '{"state":"failed","message":"invalid share tag"}'; exit 2; }
+case "$UID_NUM" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid uid"}'; exit 2;; esac
+[ "$UID_NUM" -ge 20000 ] && [ "$UID_NUM" -le 20239 ] || { echo '{"state":"failed","message":"invalid uid"}'; exit 2; }
+IP_PREFIX=${IP%.*}
+IP_LEAF=${IP##*.}
+case "$IP_LEAF" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;; esac
+[ "$IP_PREFIX" = 192.168.127 ] && [ "$IP_LEAF" -ge 10 ] && [ "$IP_LEAF" -le 239 ] || {
+  echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;
+}
+case "/$IMAGE_PATH/" in
+  /payload/*) ;;
+  *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;;
+esac
+case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+[ "$(printf '%s' "$REQ" | jq '.plan.ports | length')" -le 16 ] || {
+  echo '{"state":"failed","message":"too many published ports"}'; exit 2;
+}
+printf '%s' "$REQ" | jq -e --arg ip "$IP" '
+  .plan.ports | all(.target == $ip and (.relay | type == "number") and (.guest | type == "number"))
+' >/dev/null || { echo '{"state":"failed","message":"invalid published port target"}'; exit 2; }
+SHARE=/run/appliance/shares/$TAG
+mkdir -p "$SHARE"
+grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+
+# A stable unprivileged identity exists even when the image config names
+# its own uid; ownership and audit records use this principal uid.
+USER_NAME=u$UID_NUM
+getent group "$USER_NAME" >/dev/null 2>&1 || addgroup -g "$UID_NUM" "$USER_NAME"
+id "$USER_NAME" >/dev/null 2>&1 || adduser -D -H -u "$UID_NUM" -G "$USER_NAME" "$USER_NAME"
+
+# Per-principal cgroup v2 controls. Hints never resize the pooled VM.
+CG=/sys/fs/cgroup/appliance/$APP
+for CONTROL in cpu memory pids; do
+  grep -qw "$CONTROL" /sys/fs/cgroup/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/cgroup.subtree_control
+  grep -qw "$CONTROL" /sys/fs/cgroup/appliance/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/appliance/cgroup.subtree_control
+done
+mkdir -p "$CG"
+CPUS=$(printf '%s' "$REQ" | jq -r '.plan.resources.cpus')
+MEM=$(printf '%s' "$REQ" | jq -r '.plan.resources.memoryMib')
+PIDS=$(printf '%s' "$REQ" | jq -r '.plan.resources.pids')
+echo "$((CPUS * 100000)) 100000" > "$CG/cpu.max"
+echo "$((MEM * 1024 * 1024))" > "$CG/memory.max"
+echo "$((MEM * 1024 * 1024 * 9 / 10))" > "$CG/memory.high"
+echo 1 > "$CG/memory.oom.group"
+echo "$PIDS" > "$CG/pids.max"
+printf '%s\n' "$(printf '%s' "$REQ" | jq -r '.plan.resources.diskGib')" > "$STATE/disk-quota-gib"
+
+# Stable /32 network namespace. The guest root routes the leaf through
+# its only NIC and proxy-ARPs it; nftables drops source spoofing at the
+# veth ingress. Inter-app forwarding remains absent by default.
+ip netns del "$NS" 2>/dev/null || true
+ip netns add "$NS"
+APP_IF=a$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+ip link del "$ROOT_IF" 2>/dev/null || true
+ip link add "$ROOT_IF" type veth peer name "$APP_IF"
+ip link set "$APP_IF" netns "$NS"
+ip link set "$ROOT_IF" up
+ip route replace "$IP/32" dev "$ROOT_IF"
+ip netns exec "$NS" ip link set lo up
+ip netns exec "$NS" ip addr add "$IP/32" dev "$APP_IF"
+ip netns exec "$NS" ip link set "$APP_IF" up
+ip netns exec "$NS" ip route add default dev "$APP_IF"
+sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.eth0.proxy_arp=1 "net.ipv4.conf.$ROOT_IF.proxy_arp=1"
+if ! nft list table inet appliance_runtime >/dev/null 2>&1; then
+  nft add table inet appliance_runtime
+fi
+if ! nft list chain inet appliance_runtime principal_input >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_input { type filter hook input priority -10; policy accept; }'
+  nft add rule inet appliance_runtime principal_input ct state established,related accept
+  nft add rule inet appliance_runtime principal_input iifname "r*" drop
+fi
+if ! nft list chain inet appliance_runtime principal_forward >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_forward { type filter hook forward priority -10; policy accept; }'
+  nft add rule inet appliance_runtime principal_forward iifname "r*" oifname != "eth0" drop
+fi
+if ! nft list chain inet appliance_runtime principal_spoof >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_spoof { type filter hook forward priority -11; policy accept; }'
+fi
+nft add rule inet appliance_runtime principal_spoof iifname "$ROOT_IF" ip saddr != "$IP" drop
+
+ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print address[1]; exit }')
+[ -n "$ETH0_IP" ] || { echo '{"state":"failed","message":"guest eth0 has no IPv4 address"}'; exit 2; }
+
+rc-service containerd start >/dev/null 2>&1 || true
+for _ in $(seq 1 50); do [ -S /run/containerd/containerd.sock ] && break; sleep 0.1; done
+set +e
+IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" 2>&1)
+IMPORT_CODE=$?
+set -e
+printf '%s\n' "$IMPORT_OUTPUT" >> "$STATE/current.log"
+[ "$IMPORT_CODE" -eq 0 ] || { echo '{"state":"failed","message":"container image import failed"}'; cleanup_resources; exit 2; }
+IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
+if [ -z "$IMAGE" ]; then
+  IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+fi
+[ -n "$IMAGE" ] || {
+  echo '{"state":"failed","message":"container image import produced no image"}'
+  cleanup_resources
+  exit 2
+}
+
+# Root-namespace relays are unique per app. Host listeners terminate at
+# these relay ports; each relay's final target is the app's /32.
+printf '%s' "$REQ" | jq -r '.plan.ports[] | [.relay,.guest] | @tsv' > "$STATE/ports.tsv"
+while IFS="$(printf '\t')" read -r RELAY GUEST; do
+  export RELAY GUEST ETH0_IP IP STATE
+  nohup setsid sh -c 'exec socat "TCP-LISTEN:$RELAY,bind=$ETH0_IP,reuseaddr,fork" "TCP:$IP:$GUEST"' \
+    </dev/null >> "$STATE/current.log" 2>&1 &
+  echo $! >> "$STATE/relay.pids"
+done < "$STATE/ports.tsv"
+sleep 0.1
+if [ -f "$STATE/relay.pids" ]; then
+  while read -r P; do
+    kill -0 "$P" 2>/dev/null || {
+      echo '{"state":"failed","message":"published port relay failed closed"}'
+      cleanup_resources
+      exit 2
+    }
+  done < "$STATE/relay.pids"
+fi
+
+printf '%s' "$REQ" | jq -r '.plan.env | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+# The lifecycle RPC is a one-shot vsock shell. Ignore its closing SIGHUP so
+# the pooled workload outlives that control connection, and let containerd
+# place the actual task (rather than this short-lived launcher) in the app's
+# cgroup. Runtime status is task-based, and the child records its own PID
+# after setsid so teardown never races a short-lived wrapper.
+export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM
+nohup setsid sh -c '
+  echo $$ > "$STATE/logcap.pid"
+  while true; do
+    if [ -f "$STATE/current.log" ] && [ "$(wc -c < "$STATE/current.log")" -gt 8388608 ]; then
+      SIZE=$(wc -c < "$STATE/current.log")
+      DROP=$((SIZE - 8388608))
+      BASE=$(cat "$STATE/log-base" 2>/dev/null || echo 0)
+      tail -c 8388608 "$STATE/current.log" > "$STATE/current.log.trim"
+      cat "$STATE/current.log.trim" > "$STATE/current.log"
+      rm -f "$STATE/current.log.trim"
+      echo "$((BASE + DROP))" > "$STATE/log-base"
+    fi
+    sleep 1
+  done
+' </dev/null >/dev/null 2>&1 &
+nohup setsid sh -c '
+  echo $$ > "$STATE/pid"
+  # ctr 2.0 rejects the Docker-style `--cap-drop ALL`; enumerate every
+  # capability in its default OCI set so the resulting sets are empty.
+  set -- \
+    --cap-drop CAP_CHOWN \
+    --cap-drop CAP_DAC_OVERRIDE \
+    --cap-drop CAP_FSETID \
+    --cap-drop CAP_FOWNER \
+    --cap-drop CAP_MKNOD \
+    --cap-drop CAP_NET_RAW \
+    --cap-drop CAP_SETGID \
+    --cap-drop CAP_SETUID \
+    --cap-drop CAP_SETFCAP \
+    --cap-drop CAP_SETPCAP \
+    --cap-drop CAP_NET_BIND_SERVICE \
+    --cap-drop CAP_SYS_CHROOT \
+    --cap-drop CAP_KILL \
+    --cap-drop CAP_AUDIT_WRITE
+  while IFS="$(printf '\t')" read -r KEY VALUE; do
+    DECODED=$(printf '%s' "$VALUE" | base64 -d)
+    set -- "$@" --env "$KEY=$DECODED"
+  done < "$STATE/env.tsv"
+  set +e
+  ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  CODE=$?
+  echo "$CODE" > "$STATE/exit-code"
+  if [ -f "$STATE/relay.pids" ]; then
+    while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+  fi
+  [ -f "$STATE/logcap.pid" ] && kill "$(cat "$STATE/logcap.pid")" 2>/dev/null || true
+  ip netns del "$NS" 2>/dev/null || true
+  ip link del "$ROOT_IF" 2>/dev/null || true
+  grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+  rm -f "$STATE/pid" "$STATE/relay.pids" "$STATE/logcap.pid"
+  exit "$CODE"
+' </dev/null >/dev/null 2>&1 &
+
+TASK_PID=
+for _ in $(seq 1 100); do
+  TASK_PID=$(task_pid)
+  [ -n "$TASK_PID" ] && break
+  [ -f "$STATE/exit-code" ] && break
+  sleep 0.1
+done
+if [ -z "$TASK_PID" ]; then
+  cleanup_resources
+  echo '{"state":"failed","message":"container task did not start"}'
+  exit 2
+fi
+if ! grep -qx "$TASK_PID" "$CG/cgroup.procs"; then
+  ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
+  cleanup_resources
+  echo '{"state":"failed","message":"container task escaped its cgroup"}'
+  exit 2
+fi
+echo running > "$STATE/desired"
+echo '{"state":"running"}'
+"#;
+
+const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
+# k3s, registry, BuildKit, Node, or development toolchain is installed.
+if ! SOCAT_SELF_CHECK=$(socat -V 2>&1); then
+  echo "appliance-runtime: socat self-check failed; offline Runtime APK set is ABI-inconsistent"
+  printf '%s\n' "$SOCAT_SELF_CHECK"
+  exit 1
+fi
+rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
+mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
+find /persist/runtime/apps -type f \( -name pid -o -name relay.pids -o -name logcap.pid \) -delete
+for CONTROL in cpu memory pids; do
+  grep -qw "$CONTROL" /sys/fs/cgroup/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/cgroup.subtree_control
+  grep -qw "$CONTROL" /sys/fs/cgroup/appliance/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/appliance/cgroup.subtree_control
+done
+echo "appliance-runtime: supervisor ready"
+"#;
+
 /// Build the apkovl (Alpine "local backup" overlay tarball): openrc
 /// runlevel wiring, networking config, the world file driving package
 /// installs at boot, and the appliance.start bootstrap.
@@ -1333,7 +1685,7 @@ fn build_apkovl(
         mount,
         docker,
         egress_port,
-        if agent_only { HostReadiness::Agent } else { HostReadiness::K3s },
+        readiness_for(agent_only, !agent_only, dev),
         project_id,
         host_port,
         bootstrap_token,
@@ -1356,6 +1708,7 @@ fn build_apkovl_for_readiness(
     apiserver: bool,
 ) -> Result<Vec<u8>> {
     let agent_only = readiness == HostReadiness::Agent;
+    let runtime = readiness == HostReadiness::Runtime;
     let cluster = readiness == HostReadiness::K3s;
     let gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     let mut tar = tar::Builder::new(gz);
@@ -1392,19 +1745,20 @@ fn build_apkovl_for_readiness(
     // libstdc++/libgcc back the bun-compiled api-server binary; unzip
     // (zipinfo included) backs its server-side build pipeline. All three
     // are small and ride every VM so the world file stays static.
-    file(
-        "etc/apk/world",
-        0o644,
-        b"alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\n",
-    )?;
-    file(
-        "etc/apk/repositories",
-        0o644,
+    let world = if runtime {
+        format!("{}\n", crate::images::RUNTIME_WORLD.join("\n"))
+    } else {
+        "alpine-base\ne2fsprogs\nca-certificates\nbusybox-extras\nsocat\nsudo\ntmux\nlibstdc++\nlibgcc\nunzip\n".to_string()
+    };
+    file("etc/apk/world", 0o644, world.as_bytes())?;
+    let apk_repositories = if runtime {
+        "/media/vdb/apks/main\n/media/vdb/apks/community\n".to_string()
+    } else {
         format!(
             "https://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/main\nhttps://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/community\n"
         )
-        .as_bytes(),
-    )?;
+    };
+    file("etc/apk/repositories", 0o644, apk_repositories.as_bytes())?;
     // cgroups v2 unified hierarchy — kubelet requires it.
     file(
         "etc/rc.conf",
@@ -1435,6 +1789,7 @@ fn build_apkovl_for_readiness(
                 "__K3S_PROVISION__",
                 &match readiness {
                     HostReadiness::Core => String::new(),
+                    HostReadiness::Runtime => String::new(),
                     HostReadiness::Agent => AGENT_HANDOFF.to_string(),
                     HostReadiness::K3s => format!("{K3S_MEDIA_COPY}{K3S_COMMON}"),
                 },
@@ -1484,6 +1839,7 @@ fn build_apkovl_for_readiness(
             .replace("__SHELL_VSOCK_PORT__", &SHELL_VSOCK_PORT.to_string())
             .replace("__APP_USER_PROVISION__", &app_user_provision)
             .replace("__DEV_PROVISION__", if dev { DEV_PROVISION } else { "" })
+            .replace("__RUNTIME_PROVISION__", if runtime { RUNTIME_PROVISION } else { "" })
             .replace("__DEV_MOUNT__", if dev && mount { DEV_MOUNT } else { "" })
             .replace("__DOCKER_PROVISION__", if docker { DOCKER_PROVISION } else { "" })
             .replace("__EGRESS_PORT__", &egress_port.to_string())
@@ -1504,6 +1860,11 @@ fn build_apkovl_for_readiness(
     // The vsock shell agent (socat EXEC target). Always present — every
     // VM gets a k3s-independent host shell.
     file("usr/local/bin/appliance-shell-agent", 0o755, SHELL_AGENT.as_bytes())?;
+    file(
+        "usr/local/bin/appliance-runtime-supervisor",
+        0o755,
+        RUNTIME_SUPERVISOR.as_bytes(),
+    )?;
     // Transparent tmux config for the agent's reattachable sessions.
     file("etc/appliance/tmux.conf", 0o644, TMUX_CONF.as_bytes())?;
     // The bootstrap token the guest api-server verifies create-key
@@ -1574,8 +1935,15 @@ pub fn build_boot_media(
     // api-server's base config for deploy-result URLs.
     host_port: u16,
 ) -> Result<BootMedia> {
-    let readiness = readiness_for(agent_only, cluster);
+    let readiness = readiness_for(agent_only, cluster, dev);
+    let (alpine_arch, _) = arch_tuple()?;
     let modloop = ensure_modloop()?;
+    let runtime_repositories = if readiness == HostReadiness::Runtime {
+        crate::bringup::hostlog("mirroring signed Alpine packages into Runtime boot media");
+        crate::images::ensure_runtime_apk_repositories()?
+    } else {
+        Vec::new()
+    };
     let k3s = if readiness == HostReadiness::K3s {
         Some(ensure_k3s()?.0)
     } else {
@@ -1636,17 +2004,28 @@ pub fn build_boot_media(
         + k3s_data.as_ref().map_or(0, Vec::len)
         + apkovl.len()
         + apiserver_data.as_ref().map_or(0, Vec::len)
-        + console_data.as_ref().map_or(0, Vec::len);
+        + console_data.as_ref().map_or(0, Vec::len)
+        + runtime_repositories.iter().map(|repository| {
+            fs::metadata(&repository.index).map(|metadata| metadata.len() as usize).unwrap_or(0)
+                + repository.packages.iter().map(|package| {
+                    fs::metadata(package).map(|metadata| metadata.len() as usize).unwrap_or(0)
+                }).sum::<usize>()
+        }).sum::<usize>();
     let volume_bytes = ((content as u64 + 64 * 1024 * 1024) / (16 * 1024 * 1024) + 1) * (16 * 1024 * 1024);
 
     let image_path = vm_dir.join("boot-media.img");
+    // Build away from the canonical path and durably flush the FAT image
+    // before VZ/KVM can attach it. Without this boundary a cold VZ boot can
+    // observe the directory entry before the apkovl payload has reached the
+    // backing file, producing an intermittent "invalid magic / short read".
+    let partial = vm_dir.join("boot-media.img.partial");
     let file = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&image_path)
-        .with_context(|| format!("create {}", image_path.display()))?;
+        .open(&partial)
+        .with_context(|| format!("create {}", partial.display()))?;
     file.set_len(volume_bytes)?;
 
     let buf = fscommon::BufStream::new(&file);
@@ -1665,6 +2044,24 @@ pub fn build_boot_media(
         f.write_all(&modloop_data)?;
         let mut f = root.create_file("appliance.apkovl.tar.gz")?;
         f.write_all(&apkovl)?;
+        if !runtime_repositories.is_empty() {
+            let apks = root.create_dir("apks")?;
+            for repository in &runtime_repositories {
+                let directory = apks.create_dir(&repository.name)?;
+                directory.create_file(".boot_repository")?;
+                // `apk --repository <base>` appends its architecture, just
+                // like Alpine's own ISO layout (`apks/aarch64/...`).
+                let architecture = directory.create_dir(alpine_arch)?;
+                let mut index = architecture.create_file("APKINDEX.tar.gz")?;
+                index.write_all(&fs::read(&repository.index)?)?;
+                for package in &repository.packages {
+                    let filename = package.file_name().and_then(|name| name.to_str())
+                        .context("Runtime APK path has no UTF-8 filename")?;
+                    let mut output = architecture.create_file(filename)?;
+                    output.write_all(&fs::read(package)?)?;
+                }
+            }
+        }
         if let Some(data) = &k3s_data {
             let mut f = root.create_file("k3s")?;
             f.write_all(data)?;
@@ -1679,6 +2076,10 @@ pub fn build_boot_media(
         }
     }
     fs.unmount().context("unmount FAT volume")?;
+    file.sync_all().context("sync FAT boot media")?;
+    drop(file);
+    fs::rename(&partial, &image_path)
+        .with_context(|| format!("publish {}", image_path.display()))?;
 
     Ok(BootMedia {
         image: image_path,
@@ -1696,16 +2097,26 @@ pub fn guest_cmdline() -> String {
     )
 }
 
+/// Runtime auto-discovers the signed local repositories copied into its FAT media.
+/// DHCP remains enabled for the Netstack link, but no package/rootfs bytes
+/// traverse that boundary before the supervisor is ready.
+pub fn runtime_guest_cmdline() -> String {
+    "console=hvc0 ip=dhcp alpine_repo=auto modloop=/media/vdb/boot/modloop-virt".to_string()
+}
+
 /// Which independently observable guest layer `host_services` gates on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HostReadiness {
     Core,
+    Runtime,
     Agent,
     K3s,
 }
 
-fn readiness_for(agent_only: bool, cluster: bool) -> HostReadiness {
-    if agent_only {
+fn readiness_for(agent_only: bool, cluster: bool, dev: bool) -> HostReadiness {
+    if agent_only && !dev {
+        HostReadiness::Runtime
+    } else if agent_only {
         HostReadiness::Agent
     } else if cluster {
         HostReadiness::K3s
@@ -1738,8 +2149,8 @@ struct HostServicePlan {
 fn plan_host_services(spec: &crate::spec::VmSpec) -> HostServicePlan {
     HostServicePlan {
         persist_guest_ip: true,
-        wire_k3s_forwards: readiness_for(spec.agent_only, spec.cluster) == HostReadiness::K3s,
-        readiness: readiness_for(spec.agent_only, spec.cluster),
+        wire_k3s_forwards: readiness_for(spec.agent_only, spec.cluster, spec.dev) == HostReadiness::K3s,
+        readiness: readiness_for(spec.agent_only, spec.cluster, spec.dev),
     }
 }
 
@@ -1868,7 +2279,7 @@ pub fn host_services(
     fs::write(vm_dir.join("core-ready"), b"core-ready\n")?;
     crate::bringup::hostlog("core vsock shell ready");
 
-    if plan.readiness == HostReadiness::Core {
+    if matches!(plan.readiness, HostReadiness::Core | HostReadiness::Runtime) {
         crate::bringup::set(vm_dir, crate::bringup::Phase::Ready, None);
         return Ok(());
     }
@@ -2784,10 +3195,17 @@ mod tests {
         // Only the k3s forwards are dropped.
         let mut agent = crate::spec::VmSpec::defaults("sbx");
         agent.agent_only = true;
+        agent.dev = true;
         let plan = plan_host_services(&agent);
         assert!(plan.persist_guest_ip, "agent-only MUST still write guest-ip (Sasha #1)");
         assert!(!plan.wire_k3s_forwards, "agent-only skips the k3s host forwards");
         assert_eq!(plan.readiness, HostReadiness::Agent);
+
+        let runtime = crate::spec::VmSpec::runtime_defaults("appliance-runtime");
+        let plan = plan_host_services(&runtime);
+        assert!(plan.persist_guest_ip, "runtime VMs write guest-ip");
+        assert!(!plan.wire_k3s_forwards, "runtime VMs skip k3s host forwards");
+        assert_eq!(plan.readiness, HostReadiness::Runtime);
 
         // A normal (k3s) VM persists guest-ip AND wires the k3s forwards,
         // and gates on the kubeconfig handoff.
@@ -2797,6 +3215,80 @@ mod tests {
         assert!(plan.persist_guest_ip, "k3s VMs write guest-ip too");
         assert!(plan.wire_k3s_forwards, "k3s VMs wire the api/ingress/registry forwards");
         assert_eq!(plan.readiness, HostReadiness::K3s);
+    }
+
+    #[test]
+    fn runtime_overlay_selects_only_local_signed_repositories() {
+        let overlay = build_apkovl_for_readiness(
+            8102,
+            None,
+            false,
+            false,
+            false,
+            8103,
+            HostReadiness::Runtime,
+            "",
+            8100,
+            "",
+            false,
+        )
+        .unwrap();
+        let repositories = apkovl_file(&overlay, "etc/apk/repositories").unwrap();
+        assert_eq!(repositories, "/media/vdb/apks/main\n/media/vdb/apks/community\n");
+        assert!(!repositories.contains("https://"));
+        let world = apkovl_file(&overlay, "etc/apk/world").unwrap();
+        assert!(world.lines().any(|package| package == "containerd=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "containerd-ctr=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "nftables=1.1.1-r0"));
+        assert!(world.lines().any(|package| package == "socat=1.8.1.3-r0"));
+        assert!(world.lines().any(|package| package == "openssl=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libssl3=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libcrypto3=3.3.7-r0"));
+        let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
+        assert!(start.contains("cgroup.subtree_control"));
+        let self_check = start.find("socat -V").unwrap();
+        let ready = start.find("appliance-runtime: supervisor ready").unwrap();
+        assert!(self_check < ready, "socat ABI self-check must gate Runtime readiness");
+        assert!(start.contains("offline Runtime APK set is ABI-inconsistent"));
+    }
+
+    #[test]
+    fn runtime_supervisor_enforces_principal_isolation_and_bounded_logs() {
+        let supervisor = RUNTIME_SUPERVISOR;
+        assert!(supervisor.contains("--user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP\""));
+        assert!(supervisor.contains("--seccomp --with-ns"));
+        for capability in [
+            "CAP_CHOWN",
+            "CAP_DAC_OVERRIDE",
+            "CAP_FSETID",
+            "CAP_FOWNER",
+            "CAP_MKNOD",
+            "CAP_NET_RAW",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_SETFCAP",
+            "CAP_SETPCAP",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_SYS_CHROOT",
+            "CAP_KILL",
+            "CAP_AUDIT_WRITE",
+        ] {
+            assert!(supervisor.contains(&format!("--cap-drop {capability}")));
+        }
+        assert!(!supervisor.contains("echo $$ > \"$CG/cgroup.procs\""));
+        assert!(supervisor.contains("grep -qx \"$TASK_PID\" \"$CG/cgroup.procs\""));
+        assert!(supervisor.contains("net.ipv4.ip_forward=1"));
+        assert!(supervisor.contains("net.ipv4.conf.eth0.proxy_arp=1"));
+        assert!(supervisor.contains("net.ipv4.conf.$ROOT_IF.proxy_arp=1"));
+        assert!(supervisor.contains("principal_input iifname \"r*\" drop"));
+        assert!(supervisor.contains("principal_forward iifname \"r*\" oifname != \"eth0\" drop"));
+        assert!(supervisor.contains("TCP-LISTEN:$RELAY,bind=$ETH0_IP"));
+        assert!(supervisor.contains("MAX_LOG_BYTES=8388608"));
+        assert!(supervisor.contains("$STATE/log-base"));
+
+        for line in supervisor.lines().filter(|line| line.trim_start().starts_with("nft ")) {
+            assert!(!line.contains("|| true"), "nft rule must fail closed: {line}");
+        }
     }
 
     #[test]

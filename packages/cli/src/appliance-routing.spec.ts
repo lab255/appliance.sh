@@ -88,7 +88,7 @@ describe('appliance umbrella routing', () => {
         "entitlements",
       ]
     `);
-    expect(result.stdout).toContain('Runtime commands are coming in a later release.');
+    expect(result.stdout).toContain('Container run/ps/stop/logs are available');
   });
 
   it('resolves Builder and existing shortcut aliases without changing command help', () => {
@@ -99,19 +99,19 @@ describe('appliance umbrella routing', () => {
     expect(appliance('list', '--help').stdout).toBe(appliance('app', 'list', '--help').stdout);
   });
 
-  it('routes runtime aliases to the shared exit-2 stub', () => {
+  it('routes implemented runtime aliases to the shared command implementation', () => {
     const namespaced = appliance('runtime', 'run');
     const aliased = appliance('run');
     expect(namespaced.status).toBe(2);
     expect(aliased.status).toBe(2);
-    expect(namespaced.stderr).toContain('appliance runtime run: coming in a later release');
+    expect(namespaced.stderr).toContain('Usage: appliance runtime run <path-to-app.appliance.zip>');
     expect(aliased.stderr).toBe(namespaced.stderr);
 
     const namespacedHelp = appliance('runtime', 'run', '--help');
     const aliasedHelp = appliance('run', '--help');
     expect(namespacedHelp.status).toBe(0);
     expect(aliasedHelp.status).toBe(0);
-    expect(namespacedHelp.stdout).toContain('appliance runtime run: coming in a later release');
+    expect(namespacedHelp.stdout).toContain('Usage: appliance runtime run <path-to-app.appliance.zip>');
     expect(aliasedHelp.stdout).toBe(namespacedHelp.stdout);
   });
 
