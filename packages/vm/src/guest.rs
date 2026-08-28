@@ -1322,6 +1322,12 @@ CTR_NS=appliance-$APP
 CID=appliance-$APP
 MAX_LOG_BYTES=8388608
 
+if [ "$(printf '%s' "$REQ" | jq -r '.plan.kind // empty')" = compound ] || {
+  [ -f "$STATE/request.json" ] && [ "$(jq -r '.plan.kind // empty' "$STATE/request.json")" = compound ];
+}; then
+  exec /usr/local/bin/appliance-runtime-compound-supervisor "$REQ"
+fi
+
 task_pid() {
   ctr -n "$CTR_NS" tasks list 2>/dev/null | awk -v id="$CID" '$1 == id { print $2; exit }'
 }
@@ -1353,6 +1359,7 @@ cleanup_resources() {
     OLD_SHARE=/run/appliance/shares/$OLD_TAG
     grep -qs " $OLD_SHARE " /proc/mounts && umount "$OLD_SHARE" || true
   fi
+  rm -rf "$STATE/rootfs"
   rm -f "$STATE/relay.pids" "$STATE/logcap.pid"
 }
 
@@ -1426,7 +1433,7 @@ printf '%s\n' "$REQ" > "$STATE/request.json"
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
 UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
-IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath')
+KIND=$(printf '%s' "$REQ" | jq -r '.plan.kind // empty')
 TAG_HEX=${TAG#ap-}
 case "$TAG" in ap-*) ;; *) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
 case "$TAG_HEX" in ''|*[!0-9a-f]*) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
@@ -1439,11 +1446,34 @@ case "$IP_LEAF" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid princ
 [ "$IP_PREFIX" = 192.168.127 ] && [ "$IP_LEAF" -ge 10 ] && [ "$IP_LEAF" -le 239 ] || {
   echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;
 }
-case "/$IMAGE_PATH/" in
-  /payload/*) ;;
-  *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;;
+case "$KIND" in
+  container)
+    IMAGE_PATH=$(printf '%s' "$REQ" | jq -r '.plan.imagePath // empty')
+    case "/$IMAGE_PATH/" in /payload/*) ;; *) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+    case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
+    printf '%s' "$REQ" | jq -e '.plan.env | type == "object"' >/dev/null || {
+      echo '{"state":"failed","message":"invalid container environment"}'; exit 2;
+    }
+    ;;
+  binary)
+    BINARY_PATH=$(printf '%s' "$REQ" | jq -r '.plan.target.path // empty')
+    ENTRYPOINT=$(printf '%s' "$REQ" | jq -r '.plan.target.entrypoint // empty')
+    BINARY_CWD=$(printf '%s' "$REQ" | jq -r '.plan.target.cwd // empty')
+    case "/$BINARY_PATH/" in /payload/*) ;; *) echo '{"state":"failed","message":"invalid binary target path"}'; exit 2;; esac
+    case "/$BINARY_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid binary target path"}'; exit 2;; esac
+    case "$ENTRYPOINT" in ''|/*|*\\*) echo '{"state":"failed","message":"invalid binary entrypoint"}'; exit 2;; esac
+    case "/$ENTRYPOINT/" in *'/../'*|*'/./'*) echo '{"state":"failed","message":"invalid binary entrypoint"}'; exit 2;; esac
+    case "$BINARY_CWD" in .) BINARY_CWD=/;; ''|/*|*\\*) echo '{"state":"failed","message":"invalid binary working directory"}'; exit 2;;
+      *) case "/$BINARY_CWD/" in *'/../'*|*'/./'*) echo '{"state":"failed","message":"invalid binary working directory"}'; exit 2;; esac
+         BINARY_CWD=/$BINARY_CWD;;
+    esac
+    printf '%s' "$REQ" | jq -e '
+      (.plan.target.args | type == "array") and all(.plan.target.args[]; type == "string") and
+      (.plan.target.env | type == "object")
+    ' >/dev/null || { echo '{"state":"failed","message":"invalid binary arguments or environment"}'; exit 2; }
+    ;;
+  *) echo '{"state":"failed","message":"invalid runtime workload kind"}'; exit 2;;
 esac
-case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo '{"state":"failed","message":"invalid image path"}'; exit 2;; esac
 [ "$(printf '%s' "$REQ" | jq '.plan.ports | length')" -le 16 ] || {
   echo '{"state":"failed","message":"too many published ports"}'; exit 2;
 }
@@ -1453,6 +1483,38 @@ printf '%s' "$REQ" | jq -e --arg ip "$IP" '
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+
+if [ "$KIND" = binary ]; then
+  SOURCE=$SHARE/$BINARY_PATH
+  STAGED=$STATE/rootfs
+  [ -d "$SOURCE" ] && [ ! -L "$SOURCE" ] || {
+    echo '{"state":"failed","message":"binary target is not a regular directory"}'; cleanup_resources; exit 2;
+  }
+  mkdir -p "$STAGED"
+  if cp --help 2>&1 | grep -q -- '--no-preserve'; then
+    cp -R --no-preserve=mode,ownership "$SOURCE/." "$STAGED/"
+  else
+    # Alpine's runtime image ships BusyBox cp. Copy without archive mode,
+    # then explicitly discard source modes before validating the private copy.
+    cp -R "$SOURCE/." "$STAGED/"
+    find "$STAGED" -type d -exec chmod 0755 {} \;
+    find "$STAGED" -type f -exec chmod 0644 {} \;
+  fi
+  if find "$STAGED" -type l -print -quit | grep -q .; then
+    echo '{"state":"failed","message":"binary payload symlinks are not allowed"}'; cleanup_resources; exit 2
+  fi
+  if find "$STAGED" ! -type d ! -type f -print -quit | grep -q .; then
+    echo '{"state":"failed","message":"binary payload contains an unsupported file type"}'; cleanup_resources; exit 2
+  fi
+  chown -R "$UID_NUM:$UID_NUM" "$STAGED"
+  [ -f "$STAGED/$ENTRYPOINT" ] && [ ! -L "$STAGED/$ENTRYPOINT" ] || {
+    echo '{"state":"failed","message":"binary entrypoint is not a regular file"}'; cleanup_resources; exit 2;
+  }
+  [ -d "$STAGED$BINARY_CWD" ] && [ ! -L "$STAGED$BINARY_CWD" ] || {
+    echo '{"state":"failed","message":"binary working directory is not a directory"}'; cleanup_resources; exit 2;
+  }
+  chmod 0755 "$STAGED/$ENTRYPOINT"
+fi
 
 # A stable unprivileged identity exists even when the image config names
 # its own uid; ownership and audit records use this principal uid.
@@ -1515,21 +1577,24 @@ ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print ad
 
 rc-service containerd start >/dev/null 2>&1 || true
 for _ in $(seq 1 50); do [ -S /run/containerd/containerd.sock ] && break; sleep 0.1; done
-set +e
-IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" 2>&1)
-IMPORT_CODE=$?
-set -e
-printf '%s\n' "$IMPORT_OUTPUT" >> "$STATE/current.log"
-[ "$IMPORT_CODE" -eq 0 ] || { echo '{"state":"failed","message":"container image import failed"}'; cleanup_resources; exit 2; }
-IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
-if [ -z "$IMAGE" ]; then
-  IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+IMAGE=
+if [ "$KIND" = container ]; then
+  set +e
+  IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --base-name "appliance.local/$APP" "$SHARE/$IMAGE_PATH" 2>&1)
+  IMPORT_CODE=$?
+  set -e
+  printf '%s\n' "$IMPORT_OUTPUT" >> "$STATE/current.log"
+  [ "$IMPORT_CODE" -eq 0 ] || { echo '{"state":"failed","message":"container image import failed"}'; cleanup_resources; exit 2; }
+  IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
+  if [ -z "$IMAGE" ]; then
+    IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+  fi
+  [ -n "$IMAGE" ] || {
+    echo '{"state":"failed","message":"container image import produced no image"}'
+    cleanup_resources
+    exit 2
+  }
 fi
-[ -n "$IMAGE" ] || {
-  echo '{"state":"failed","message":"container image import produced no image"}'
-  cleanup_resources
-  exit 2
-}
 
 # Root-namespace relays are unique per app. Host listeners terminate at
 # these relay ports; each relay's final target is the app's /32.
@@ -1551,13 +1616,18 @@ if [ -f "$STATE/relay.pids" ]; then
   done < "$STATE/relay.pids"
 fi
 
-printf '%s' "$REQ" | jq -r '.plan.env | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+printf '%s' "$REQ" | jq -r '(.plan.target.env // .plan.env) | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+if [ "$KIND" = binary ]; then
+  printf '%s' "$REQ" | jq -r '.plan.target.args[] | @base64' > "$STATE/args.txt"
+else
+  : > "$STATE/args.txt"
+fi
 # The lifecycle RPC is a one-shot vsock shell. Ignore its closing SIGHUP so
 # the pooled workload outlives that control connection, and let containerd
 # place the actual task (rather than this short-lived launcher) in the app's
 # cgroup. Runtime status is task-based, and the child records its own PID
 # after setsid so teardown never races a short-lived wrapper.
-export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM
+export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM KIND STAGED ENTRYPOINT BINARY_CWD
 nohup setsid sh -c '
   echo $$ > "$STATE/logcap.pid"
   while true; do
@@ -1597,7 +1667,16 @@ nohup setsid sh -c '
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
   set +e
-  ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  if [ "$KIND" = container ]; then
+    ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
+  else
+    set -- "$@" --rootfs --cwd "$BINARY_CWD" "$STAGED" "$CID" "/$ENTRYPOINT"
+    while IFS= read -r VALUE; do
+      DECODED=$(printf '%s' "$VALUE" | base64 -d)
+      set -- "$@" "$DECODED"
+    done < "$STATE/args.txt"
+    ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" >> "$STATE/current.log" 2>&1
+  fi
   CODE=$?
   echo "$CODE" > "$STATE/exit-code"
   if [ -f "$STATE/relay.pids" ]; then
@@ -1607,6 +1686,7 @@ nohup setsid sh -c '
   ip netns del "$NS" 2>/dev/null || true
   ip link del "$ROOT_IF" 2>/dev/null || true
   grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+  [ "$KIND" = binary ] && rm -rf "$STAGED"
   rm -f "$STATE/pid" "$STATE/relay.pids" "$STATE/logcap.pid"
   exit "$CODE"
 ' </dev/null >/dev/null 2>&1 &
@@ -1619,8 +1699,15 @@ for _ in $(seq 1 100); do
   sleep 0.1
 done
 if [ -z "$TASK_PID" ]; then
+  if [ -f "$STATE/exit-code" ]; then
+    CODE=$(cat "$STATE/exit-code" 2>/dev/null || echo 1)
+    cleanup_resources
+    echo exited > "$STATE/desired"
+    printf '{"state":"exited","exitCode":%s}\n' "$CODE"
+    exit 0
+  fi
   cleanup_resources
-  echo '{"state":"failed","message":"container task did not start"}'
+  echo '{"state":"failed","message":"runtime task did not start"}'
   exit 2
 fi
 if ! grep -qx "$TASK_PID" "$CG/cgroup.procs"; then
@@ -1633,8 +1720,566 @@ echo running > "$STATE/desired"
 echo '{"state":"running"}'
 "#;
 
+/// Compound-only Runtime lifecycle path. It reuses one app principal,
+/// network namespace, and read-only payload share while giving each leaf
+/// its own containerd task, cgroup, logs, health state, and restart worker.
+/// The v1 single-workload script above remains unchanged after dispatch.
+const RUNTIME_COMPOUND_SUPERVISOR: &str = r#"#!/bin/sh
+set -eu
+REQ=${1:-'{}'}
+ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
+APP=$(printf '%s' "$REQ" | jq -r '.appId // .plan.appId // empty')
+case "$APP" in ''|*[!a-z0-9-]*) echo '{"state":"failed","message":"invalid app id"}'; exit 2;; esac
+STATE=/persist/runtime/apps/$APP
+SERVICES=$STATE/services
+NS=ap-$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+ROOT_IF=r$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+CTR_NS=appliance-$APP
+MAX_LOG_BYTES=8388608
+
+task_pid() {
+  SVC=$1
+  CID=appliance-$APP-$SVC
+  ctr -n "$CTR_NS" tasks list 2>/dev/null | awk -v id="$CID" '$1 == id { print $2; exit }'
+}
+
+service_ready() {
+  SVC_STATE=$(cat "$SERVICES/$1/state" 2>/dev/null || echo missing)
+  [ "$SVC_STATE" = running ] || [ "$SVC_STATE" = healthy ]
+}
+
+cap_service_log() {
+  SVC=$1
+  LOG=$SERVICES/$SVC/current.log
+  [ -f "$LOG" ] || return 0
+  SIZE=$(wc -c < "$LOG")
+  if [ "$SIZE" -gt "$MAX_LOG_BYTES" ]; then
+    DROP=$((SIZE - MAX_LOG_BYTES))
+    BASE=$(cat "$SERVICES/$SVC/log-base" 2>/dev/null || echo 0)
+    tail -c "$MAX_LOG_BYTES" "$LOG" > "$LOG.trim"
+    cat "$LOG.trim" > "$LOG"
+    rm -f "$LOG.trim"
+    echo "$((BASE + DROP))" > "$SERVICES/$SVC/log-base"
+  fi
+}
+
+cleanup_app_resources() {
+  if [ -f "$STATE/relay.pids" ]; then
+    while read -r P; do kill "$P" 2>/dev/null || true; done < "$STATE/relay.pids"
+  fi
+  if [ -f "$STATE/monitor.pid" ]; then
+    MONITOR=$(cat "$STATE/monitor.pid" 2>/dev/null || true)
+    [ -n "$MONITOR" ] && [ "$MONITOR" != "$$" ] && kill "$MONITOR" 2>/dev/null || true
+  fi
+  ip netns del "$NS" 2>/dev/null || true
+  ip link del "$ROOT_IF" 2>/dev/null || true
+  if [ -f "$STATE/request.json" ]; then
+    TAG=$(jq -r '.plan.share.tag // empty' "$STATE/request.json")
+    SHARE=/run/appliance/shares/$TAG
+    grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+  fi
+  rm -f "$STATE/relay.pids" "$STATE/monitor.pid"
+}
+
+stop_all() {
+  FINAL=$1
+  [ -f "$STATE/request.json" ] || { cleanup_app_resources; return 0; }
+  echo stopping > "$STATE/desired"
+  jq -r '.plan.services | reverse | .[].name' "$STATE/request.json" | while read -r SVC; do
+    CID=appliance-$APP-$SVC
+    mkdir -p "$SERVICES/$SVC"
+    ctr -n "$CTR_NS" tasks kill -s SIGTERM "$CID" >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+      [ -z "$(task_pid "$SVC")" ] && break
+      sleep 0.5
+    done
+    ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
+    if [ -f "$SERVICES/$SVC/worker.pid" ]; then
+      kill "$(cat "$SERVICES/$SVC/worker.pid")" 2>/dev/null || true
+    fi
+    rm -f "$SERVICES/$SVC/worker.pid"
+    [ "$FINAL" = stopped ] && echo stopped > "$SERVICES/$SVC/state"
+  done
+  cleanup_app_resources
+  echo "$FINAL" > "$STATE/desired"
+}
+
+status() {
+  if [ ! -f "$STATE/request.json" ]; then echo '{"state":"missing"}'; return; fi
+  ROWS=$STATE/status.rows
+  : > "$ROWS"
+  jq -r '.plan.services[].name' "$STATE/request.json" | while read -r SVC; do
+    SERVICE=$SERVICES/$SVC
+    SVC_STATE=$(cat "$SERVICE/state" 2>/dev/null || echo missing)
+    HEALTH=$(cat "$SERVICE/health" 2>/dev/null || echo none)
+    RESTARTS=$(cat "$SERVICE/restart-count" 2>/dev/null || echo 0)
+    EXIT=$(cat "$SERVICE/exit-code" 2>/dev/null || true)
+    jq -nc \
+      --arg name "$SVC" --arg state "$SVC_STATE" --arg health "$HEALTH" \
+      --argjson restarts "$RESTARTS" --arg exitCode "${EXIT:-}" \
+      --argjson plan "$(jq -c --arg svc "$SVC" '.plan.services[] | select(.name == $svc)' "$STATE/request.json")" '
+        {id: $name, name: $name, state: $state, required: $plan.required,
+         health: $health, restarts: $restarts, placement: "shared",
+         endpoint: (($plan.ports[]? | select(.primary) | "http://127.0.0.1:\(.guest)") // null)}
+        + (if $exitCode == "" then {} else {exitCode: ($exitCode | tonumber)} end)' >> "$ROWS"
+  done
+  SERVICES_JSON=$(jq -s '.' "$ROWS")
+  DESIRED=$(cat "$STATE/desired" 2>/dev/null || echo starting)
+  case "$DESIRED" in
+    failed|stopping|stopped|degraded|exited) APP_STATE=$DESIRED ;;
+    *)
+      if printf '%s' "$SERVICES_JSON" | jq -e 'any(.[]; .state == "starting" or .state == "restarting")' >/dev/null; then
+        APP_STATE=starting
+      elif printf '%s' "$SERVICES_JSON" | jq -e 'any(.[]; (.required == false) and (.state == "failed" or .state == "exited" or .state == "blocked"))' >/dev/null; then
+        APP_STATE=degraded
+      else APP_STATE=running; fi
+      ;;
+  esac
+  CULPRIT=$(cat "$STATE/culprit" 2>/dev/null || true)
+  EXIT_CODE=$(cat "$STATE/exit-code" 2>/dev/null || true)
+  jq -nc --arg state "$APP_STATE" --argjson services "$SERVICES_JSON" \
+    --arg culprit "$CULPRIT" --arg exitCode "$EXIT_CODE" '
+      {state: $state, serviceCount: ($services | length), services: $services}
+      + (if $culprit == "" then {} else {culprit: $culprit} end)
+      + (if $exitCode == "" then {} else {exitCode: ($exitCode | tonumber)} end)'
+}
+
+logs() {
+  SVC=$(printf '%s' "$REQ" | jq -r '.service // empty')
+  case "$SVC" in ''|*[!a-z0-9-]*) echo '{"state":"failed","message":"compound logs require a valid service"}'; exit 2;; esac
+  jq -e --arg svc "$SVC" '.plan.services | any(.name == $svc)' "$STATE/request.json" >/dev/null || {
+    echo '{"state":"failed","message":"unknown compound service"}'; exit 2;
+  }
+  OFFSET=$(printf '%s' "$REQ" | jq -r '.offset // 0')
+  case "$OFFSET" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid log offset"}'; exit 2;; esac
+  cap_service_log "$SVC"
+  LOG=$SERVICES/$SVC/current.log
+  SIZE=0
+  [ -f "$LOG" ] && SIZE=$(wc -c < "$LOG")
+  BASE=$(cat "$SERVICES/$SVC/log-base" 2>/dev/null || echo 0)
+  RESET=false
+  if [ "$OFFSET" -lt "$BASE" ] || [ "$OFFSET" -gt "$((BASE + SIZE))" ]; then OFFSET=$BASE; RESET=true; fi
+  LOCAL_OFFSET=$((OFFSET - BASE))
+  READ_BYTES=$((SIZE - LOCAL_OFFSET))
+  [ "$READ_BYTES" -le 65536 ] || READ_BYTES=65536
+  if [ -f "$LOG" ]; then
+    DATA=$(tail -c "+$((LOCAL_OFFSET + 1))" "$LOG" | head -c "$READ_BYTES" | base64 | tr -d '\n')
+  else DATA=; fi
+  jq -nc --arg service "$SVC" --argjson offset "$((OFFSET + READ_BYTES))" \
+    --argjson reset "$RESET" --arg data "$DATA" '{service: $service, offset: $offset, reset: $reset, data: $data}'
+}
+
+case "$ACTION" in
+  status) status; exit 0;;
+  logs) logs; exit 0;;
+  stop)
+    if [ ! -d "$STATE" ]; then echo '{"state":"missing"}'; exit 0; fi
+    stop_all stopped
+    echo '{"state":"stopped"}'
+    exit 0
+    ;;
+  fail)
+    CULPRIT=$(printf '%s' "$REQ" | jq -r '.service // "unknown"')
+    EXIT_CODE=$(cat "$SERVICES/$CULPRIT/exit-code" 2>/dev/null || echo 1)
+    case "$EXIT_CODE" in ''|*[!0-9]*|-*) EXIT_CODE=1;; esac
+    echo "$CULPRIT" > "$STATE/culprit"
+    echo "$EXIT_CODE" > "$STATE/exit-code"
+    stop_all failed
+    jq -nc --arg culprit "$CULPRIT" --argjson exitCode "$EXIT_CODE" \
+      '{state:"failed", culprit:$culprit, exitCode:$exitCode}'
+    exit 0
+    ;;
+  complete)
+    rm -f "$STATE/culprit"
+    echo 0 > "$STATE/exit-code"
+    stop_all exited
+    echo '{"state":"exited","exitCode":0}'
+    exit 0
+    ;;
+  start) ;;
+  *) echo '{"state":"failed","message":"unknown runtime action"}'; exit 2;;
+esac
+
+mkdir -p "$STATE" "$SERVICES" /run/appliance/shares /sys/fs/cgroup/appliance
+if [ -f "$STATE/request.json" ]; then
+  RUNNING=0
+  for SVC in $(jq -r '.plan.services[].name' "$STATE/request.json"); do
+    [ -z "$(task_pid "$SVC")" ] || RUNNING=1
+  done
+  [ "$RUNNING" -eq 0 ] || { echo '{"state":"failed","message":"instance already running"}'; exit 2; }
+fi
+cleanup_app_resources
+rm -rf "$SERVICES"
+mkdir -p "$SERVICES"
+printf '%s\n' "$REQ" > "$STATE/request.json"
+echo starting > "$STATE/desired"
+rm -f "$STATE/culprit" "$STATE/exit-code" "$STATE/start-failed" "$STATE/failed-service" \
+  "$STATE/clean-required" "$STATE/degraded"
+
+TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
+IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
+UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
+case "$TAG" in ap-[0-9a-f]*) ;; *) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
+[ "${#TAG}" -le 35 ] || { echo '{"state":"failed","message":"invalid share tag"}'; exit 2; }
+case "$UID_NUM" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid uid"}'; exit 2;; esac
+[ "$UID_NUM" -ge 20000 ] && [ "$UID_NUM" -le 20239 ] || { echo '{"state":"failed","message":"invalid uid"}'; exit 2; }
+IP_PREFIX=${IP%.*}; IP_LEAF=${IP##*.}
+case "$IP_LEAF" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;; esac
+[ "$IP_PREFIX" = 192.168.127 ] && [ "$IP_LEAF" -ge 10 ] && [ "$IP_LEAF" -le 239 ] || {
+  echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;
+}
+SHARE=/run/appliance/shares/$TAG
+mkdir -p "$SHARE"
+grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+
+USER_NAME=u$UID_NUM
+getent group "$USER_NAME" >/dev/null 2>&1 || addgroup -g "$UID_NUM" "$USER_NAME"
+id "$USER_NAME" >/dev/null 2>&1 || adduser -D -H -u "$UID_NUM" -G "$USER_NAME" "$USER_NAME"
+
+CG=/sys/fs/cgroup/appliance/$APP
+for CONTROL in cpu memory pids; do
+  grep -qw "$CONTROL" /sys/fs/cgroup/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/cgroup.subtree_control
+  grep -qw "$CONTROL" /sys/fs/cgroup/appliance/cgroup.controllers && echo "+$CONTROL" > /sys/fs/cgroup/appliance/cgroup.subtree_control
+done
+mkdir -p "$CG"
+CPUS=$(printf '%s' "$REQ" | jq -r '.plan.resources.cpus')
+MEM=$(printf '%s' "$REQ" | jq -r '.plan.resources.memoryMib')
+PIDS=$(printf '%s' "$REQ" | jq -r '.plan.resources.pids')
+echo "$((CPUS * 100000)) 100000" > "$CG/cpu.max"
+echo "$((MEM * 1024 * 1024))" > "$CG/memory.max"
+echo "$PIDS" > "$CG/pids.max"
+for CONTROL in cpu memory pids; do
+  grep -qw "$CONTROL" "$CG/cgroup.controllers" && echo "+$CONTROL" > "$CG/cgroup.subtree_control"
+done
+
+ip netns del "$NS" 2>/dev/null || true
+ip netns add "$NS"
+APP_IF=a$(printf '%s' "$APP" | sha256sum | cut -c1-10)
+ip link del "$ROOT_IF" 2>/dev/null || true
+ip link add "$ROOT_IF" type veth peer name "$APP_IF"
+ip link set "$APP_IF" netns "$NS"
+ip link set "$ROOT_IF" up
+ip route replace "$IP/32" dev "$ROOT_IF"
+ip netns exec "$NS" ip link set lo up
+ip netns exec "$NS" ip addr add "$IP/32" dev "$APP_IF"
+ip netns exec "$NS" ip link set "$APP_IF" up
+ip netns exec "$NS" ip route add default dev "$APP_IF"
+sysctl -q -w net.ipv4.ip_forward=1 net.ipv4.conf.eth0.proxy_arp=1 "net.ipv4.conf.$ROOT_IF.proxy_arp=1"
+if ! nft list table inet appliance_runtime >/dev/null 2>&1; then nft add table inet appliance_runtime; fi
+if ! nft list chain inet appliance_runtime principal_input >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_input { type filter hook input priority -10; policy accept; }'
+  nft add rule inet appliance_runtime principal_input ct state established,related accept
+  nft add rule inet appliance_runtime principal_input iifname "r*" drop
+fi
+if ! nft list chain inet appliance_runtime principal_forward >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_forward { type filter hook forward priority -10; policy accept; }'
+  nft add rule inet appliance_runtime principal_forward iifname "r*" oifname != "eth0" drop
+fi
+if ! nft list chain inet appliance_runtime principal_spoof >/dev/null 2>&1; then
+  nft 'add chain inet appliance_runtime principal_spoof { type filter hook forward priority -11; policy accept; }'
+fi
+nft add rule inet appliance_runtime principal_spoof iifname "$ROOT_IF" ip saddr != "$IP" drop
+
+ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print address[1]; exit }')
+[ -n "$ETH0_IP" ] || { echo '{"state":"failed","message":"guest eth0 has no IPv4 address"}'; exit 2; }
+rc-service containerd start >/dev/null 2>&1 || true
+for _ in $(seq 1 50); do [ -S /run/containerd/containerd.sock ] && break; sleep 0.1; done
+
+printf '%s' "$REQ" | jq -r '.plan.ports[] | [.relay,.guest] | @tsv' > "$STATE/ports.tsv"
+while IFS="$(printf '\t')" read -r RELAY GUEST; do
+  export RELAY GUEST ETH0_IP IP
+  nohup setsid sh -c 'exec socat "TCP-LISTEN:$RELAY,bind=$ETH0_IP,reuseaddr,fork" "TCP:$IP:$GUEST"' \
+    </dev/null >> "$STATE/relays.log" 2>&1 &
+  echo $! >> "$STATE/relay.pids"
+done < "$STATE/ports.tsv"
+
+start_service() {
+  SVC=$1
+  SERVICE=$SERVICES/$SVC
+  mkdir -p "$SERVICE"
+  jq -c --arg svc "$SVC" '.plan.services[] | select(.name == $svc)' "$STATE/request.json" > "$SERVICE/plan.json"
+  echo starting > "$SERVICE/state"
+  echo none > "$SERVICE/health"
+  echo 0 > "$SERVICE/restart-count"
+  echo 0 > "$SERVICE/log-base"
+  : > "$SERVICE/current.log"
+  KIND=$(jq -r '.kind' "$SERVICE/plan.json")
+  CID=appliance-$APP-$SVC
+  SVC_CG=$CG/$SVC
+  mkdir -p "$SVC_CG"
+  SVC_CPUS=$(jq -r '.resources.cpus' "$SERVICE/plan.json")
+  SVC_MEM=$(jq -r '.resources.memoryMib' "$SERVICE/plan.json")
+  SVC_PIDS=$(jq -r '.resources.pids' "$SERVICE/plan.json")
+  echo "$((SVC_CPUS * 100000)) 100000" > "$SVC_CG/cpu.max"
+  echo "$((SVC_MEM * 1024 * 1024))" > "$SVC_CG/memory.max"
+  echo "$SVC_PIDS" > "$SVC_CG/pids.max"
+  if [ "$KIND" = container ]; then
+    IMAGE_PATH=$(jq -r '.imagePath' "$SERVICE/plan.json")
+    case "/$IMAGE_PATH/" in /payload/*) ;; *) echo failed > "$SERVICE/state"; return 1;; esac
+    case "/$IMAGE_PATH/" in *'/../'*|*'/./'*|*'\\'*) echo failed > "$SERVICE/state"; return 1;; esac
+    case "$(uname -m)" in
+      aarch64|arm64) OCI_PLATFORM=linux/arm64;;
+      x86_64|amd64) OCI_PLATFORM=linux/amd64;;
+      *) echo failed > "$SERVICE/state"; return 1;;
+    esac
+    set +e
+    IMPORT_OUTPUT=$(ctr -n "$CTR_NS" images import --local --platform "$OCI_PLATFORM" \
+      --base-name "appliance.local/$APP/$SVC" "$SHARE/$IMAGE_PATH" 2>&1)
+    IMPORT_CODE=$?
+    set -e
+    printf '%s\n' "$IMPORT_OUTPUT" >> "$SERVICE/current.log"
+    [ "$IMPORT_CODE" -eq 0 ] || { echo failed > "$SERVICE/state"; return 1; }
+    IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$NF == "saved" { print $1; exit }')
+    [ -n "$IMAGE" ] || IMAGE=$(printf '%s\n' "$IMPORT_OUTPUT" | awk '$1 == "unpacking" { print $2; exit }')
+    [ -n "$IMAGE" ] || { echo failed > "$SERVICE/state"; return 1; }
+    echo "$IMAGE" > "$SERVICE/image"
+    jq -r '.env | to_entries[] | [.key,(.value|@base64)] | @tsv' "$SERVICE/plan.json" > "$SERVICE/env.tsv"
+    : > "$SERVICE/args.txt"
+  elif [ "$KIND" = binary ]; then
+    BINARY_PATH=$(jq -r '.target.path' "$SERVICE/plan.json")
+    ENTRYPOINT=$(jq -r '.target.entrypoint' "$SERVICE/plan.json")
+    BINARY_CWD=$(jq -r '.target.cwd' "$SERVICE/plan.json")
+    SOURCE=$SHARE/$BINARY_PATH
+    STAGED=$SERVICE/rootfs
+    [ -d "$SOURCE" ] && [ ! -L "$SOURCE" ] || { echo failed > "$SERVICE/state"; return 1; }
+    find "$SOURCE" -type l -print -quit | grep -q . && { echo failed > "$SERVICE/state"; return 1; }
+    find "$SOURCE" ! -type d ! -type f -print -quit | grep -q . && { echo failed > "$SERVICE/state"; return 1; }
+    mkdir -p "$STAGED"
+    cp -a "$SOURCE/." "$STAGED/"
+    [ -f "$STAGED/$ENTRYPOINT" ] && [ ! -L "$STAGED/$ENTRYPOINT" ] || { echo failed > "$SERVICE/state"; return 1; }
+    chmod 0755 "$STAGED/$ENTRYPOINT"
+    case "$BINARY_CWD" in .) BINARY_CWD=/;; *) BINARY_CWD=/$BINARY_CWD;; esac
+    [ -d "$STAGED$BINARY_CWD" ] || { echo failed > "$SERVICE/state"; return 1; }
+    printf '%s\n' "$ENTRYPOINT" > "$SERVICE/entrypoint"
+    printf '%s\n' "$BINARY_CWD" > "$SERVICE/cwd"
+    jq -r '.target.env | to_entries[] | [.key,(.value|@base64)] | @tsv' "$SERVICE/plan.json" > "$SERVICE/env.tsv"
+    jq -r '.target.args[] | @base64' "$SERVICE/plan.json" > "$SERVICE/args.txt"
+  else echo failed > "$SERVICE/state"; return 1; fi
+
+  jq -r '
+    .plan.services[] |
+    .name as $service |
+    (.ports // [])[] |
+    . as $port |
+    ("APPLIANCE_SVC_" + ($service | ascii_upcase | gsub("-"; "_"))) as $prefix |
+    ([($prefix + "_" + ($port.name | ascii_upcase | gsub("-"; "_")) + "_URL"),
+      (if $port.primary then ($prefix + "_URL") else empty end)][]) as $key |
+    [$key, (("http://127.0.0.1:" + ($port.guest | tostring)) | @base64)] | @tsv
+  ' "$STATE/request.json" >> "$SERVICE/env.tsv"
+
+  export APP SVC STATE SERVICE SERVICES CTR_NS NS CG UID_NUM KIND CID
+  nohup setsid sh -c '
+    echo $$ > "$SERVICE/worker.pid"
+    ATTEMPT=0
+    while true; do
+      DESIRED=$(cat "$STATE/desired" 2>/dev/null || echo stopped)
+      [ "$DESIRED" = starting ] || [ "$DESIRED" = running ] || [ "$DESIRED" = degraded ] || exit 0
+      echo starting > "$SERVICE/state"
+      echo starting > "$SERVICE/health"
+      rm -f "$SERVICE/exit-code"
+      STARTED=$(date +%s)
+      set -- \
+        --cap-drop CAP_CHOWN --cap-drop CAP_DAC_OVERRIDE --cap-drop CAP_FSETID \
+        --cap-drop CAP_FOWNER --cap-drop CAP_MKNOD --cap-drop CAP_NET_RAW \
+        --cap-drop CAP_SETGID --cap-drop CAP_SETUID --cap-drop CAP_SETFCAP \
+        --cap-drop CAP_SETPCAP --cap-drop CAP_NET_BIND_SERVICE \
+        --cap-drop CAP_SYS_CHROOT --cap-drop CAP_KILL --cap-drop CAP_AUDIT_WRITE
+      while IFS="$(printf "\t")" read -r KEY VALUE; do
+        DECODED=$(printf "%s" "$VALUE" | base64 -d)
+        set -- "$@" --env "$KEY=$DECODED"
+      done < "$SERVICE/env.tsv"
+      set +e
+      if [ "$KIND" = container ]; then
+        IMAGE=$(cat "$SERVICE/image")
+        ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP/$SVC" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$SERVICE/current.log" 2>&1 &
+      else
+        ENTRYPOINT=$(cat "$SERVICE/entrypoint"); BINARY_CWD=$(cat "$SERVICE/cwd")
+        set -- "$@" --rootfs --cwd "$BINARY_CWD" "$SERVICE/rootfs" "$CID" "/$ENTRYPOINT"
+        while IFS= read -r VALUE; do DECODED=$(printf "%s" "$VALUE" | base64 -d); set -- "$@" "$DECODED"; done < "$SERVICE/args.txt"
+        ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP/$SVC" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" >> "$SERVICE/current.log" 2>&1 &
+      fi
+      RUNNER=$!
+      set -e
+      TASK_PID=
+      for _ in $(seq 1 100); do
+        TASK_PID=$(ctr -n "$CTR_NS" tasks list 2>/dev/null | grep "^$CID " | tr -s " " | cut -d " " -f2)
+        [ -n "$TASK_PID" ] && break
+        kill -0 "$RUNNER" 2>/dev/null || break
+        sleep 0.1
+      done
+      FAILED_HEALTH=0
+      if [ -n "$TASK_PID" ] && grep -qx "$TASK_PID" "$CG/$SVC/cgroup.procs"; then
+        HEALTH_TYPE=$(jq -r ".health.type // \"none\"" "$SERVICE/plan.json")
+        INTERVAL=$(jq -r ".health.intervalSeconds // 5" "$SERVICE/plan.json")
+        TIMEOUT=$(jq -r ".health.timeoutSeconds // 2" "$SERVICE/plan.json")
+        THRESHOLD=$(jq -r ".health.failureThreshold // 3" "$SERVICE/plan.json")
+        FAILURES=0
+        while kill -0 "$RUNNER" 2>/dev/null; do
+          OK=0
+          case "$HEALTH_TYPE" in
+            none) OK=1;;
+            http)
+              PORT=$(jq -r ".health.port" "$SERVICE/plan.json"); PATH_PART=$(jq -r ".health.path" "$SERVICE/plan.json")
+              ip netns exec "$NS" wget -q -T "$TIMEOUT" --spider "http://127.0.0.1:$PORT$PATH_PART" && OK=1 || true
+              ;;
+            tcp)
+              PORT=$(jq -r ".health.port" "$SERVICE/plan.json")
+              ip netns exec "$NS" timeout "$TIMEOUT" socat - "TCP:127.0.0.1:$PORT,connect-timeout=$TIMEOUT" </dev/null >/dev/null 2>&1 && OK=1 || true
+              ;;
+            exec)
+              set --
+              jq -r ".health.command[] | @base64" "$SERVICE/plan.json" | while IFS= read -r ARG; do printf "%s\n" "$ARG"; done > "$SERVICE/health.args"
+              while IFS= read -r ARG; do DECODED=$(printf "%s" "$ARG" | base64 -d); set -- "$@" "$DECODED"; done < "$SERVICE/health.args"
+              timeout "$TIMEOUT" ctr -n "$CTR_NS" tasks exec --exec-id "health-$$-$(date +%s%N)" "$CID" "$@" >/dev/null 2>&1 && OK=1 || true
+              ;;
+          esac
+          if [ "$OK" -eq 1 ]; then
+            FAILURES=0
+            [ "$HEALTH_TYPE" = none ] && echo running > "$SERVICE/health" || echo healthy > "$SERVICE/health"
+            [ "$HEALTH_TYPE" = none ] && echo running > "$SERVICE/state" || echo healthy > "$SERVICE/state"
+          else
+            FAILURES=$((FAILURES + 1))
+            echo unhealthy > "$SERVICE/health"
+            if [ "$FAILURES" -ge "$THRESHOLD" ]; then
+              FAILED_HEALTH=1
+              ctr -n "$CTR_NS" tasks kill -s SIGTERM "$CID" >/dev/null 2>&1 || true
+              sleep 1
+              ctr -n "$CTR_NS" tasks kill -s SIGKILL "$CID" >/dev/null 2>&1 || true
+              break
+            fi
+          fi
+          sleep "$INTERVAL"
+        done
+      fi
+      set +e; wait "$RUNNER"; CODE=$?; set -e
+      [ "$FAILED_HEALTH" -eq 0 ] || CODE=1
+      echo "$CODE" > "$SERVICE/exit-code"
+      NOW=$(date +%s)
+      [ "$((NOW - STARTED))" -lt 60 ] || ATTEMPT=0
+      POLICY=$(jq -r ".restart.policy" "$SERVICE/plan.json")
+      MAX=$(jq -r ".restart.maxAttempts" "$SERVICE/plan.json")
+      BASE=$(jq -r ".restart.backoffSeconds" "$SERVICE/plan.json")
+      DESIRED=$(cat "$STATE/desired" 2>/dev/null || echo stopped)
+      [ "$DESIRED" = starting ] || [ "$DESIRED" = running ] || [ "$DESIRED" = degraded ] || exit 0
+      RESTART=0
+      [ "$POLICY" = always ] && RESTART=1
+      [ "$POLICY" = on-failure ] && [ "$CODE" -ne 0 ] && RESTART=1
+      if [ "$RESTART" -eq 0 ] || [ "$ATTEMPT" -ge "$MAX" ]; then
+        [ "$CODE" -eq 0 ] && echo exited > "$SERVICE/state" || echo failed > "$SERVICE/state"
+        exit 0
+      fi
+      ATTEMPT=$((ATTEMPT + 1))
+      echo "$ATTEMPT" > "$SERVICE/restart-count"
+      echo restarting > "$SERVICE/state"
+      DELAY=$BASE; N=1
+      while [ "$N" -lt "$ATTEMPT" ]; do DELAY=$((DELAY * 2)); N=$((N + 1)); done
+      [ "$DELAY" -le 30 ] || DELAY=30
+      sleep "$DELAY"
+    done
+  ' </dev/null >/dev/null 2>&1 &
+}
+
+START_FAILED=
+DEGRADED=0
+jq -r '.plan.services[].name' "$STATE/request.json" | while read -r SVC; do
+  SERVICE=$SERVICES/$SVC
+  mkdir -p "$SERVICE"
+  BLOCKED=0
+  jq -r --arg svc "$SVC" '.plan.services[] | select(.name == $svc) | .dependsOn[]' "$STATE/request.json" | while read -r DEP; do
+    service_ready "$DEP" || exit 1
+  done || BLOCKED=1
+  if [ "$BLOCKED" -eq 1 ]; then
+    echo blocked > "$SERVICE/state"
+  else
+    start_service "$SVC" || true
+    for _ in $(seq 1 1200); do
+      SVC_STATE=$(cat "$SERVICE/state" 2>/dev/null || echo starting)
+      case "$SVC_STATE" in running|healthy|failed|exited|blocked) break;; esac
+      sleep 0.25
+    done
+  fi
+  SVC_STATE=$(cat "$SERVICE/state" 2>/dev/null || echo failed)
+  case "$SVC_STATE" in running|healthy) ;;
+    *)
+      REQUIRED=$(jq -r --arg svc "$SVC" '.plan.services[] | select(.name == $svc) | .required' "$STATE/request.json")
+      if [ "$REQUIRED" = true ]; then echo "$SVC" > "$STATE/start-failed"; exit 1; else echo 1 > "$STATE/degraded"; fi
+      ;;
+  esac
+done || START_FAILED=$(cat "$STATE/start-failed" 2>/dev/null || echo unknown)
+
+if [ -n "$START_FAILED" ]; then
+  START_EXIT=$(cat "$SERVICES/$START_FAILED/exit-code" 2>/dev/null || echo 1)
+  case "$START_EXIT" in ''|*[!0-9]*|-*) START_EXIT=1;; esac
+  echo "$START_FAILED" > "$STATE/culprit"
+  echo "$START_EXIT" > "$STATE/exit-code"
+  stop_all failed
+  jq -nc --arg culprit "$START_FAILED" --argjson exitCode "$START_EXIT" \
+    '{state:"failed", culprit:$culprit, exitCode:$exitCode, message:("required service " + $culprit + " failed readiness")}'
+  exit 0
+fi
+[ -f "$STATE/degraded" ] && DEGRADED=1
+[ "$DEGRADED" -eq 1 ] && echo degraded > "$STATE/desired" || echo running > "$STATE/desired"
+
+export APP STATE SERVICES
+nohup setsid sh -c '
+  echo $$ > "$STATE/monitor.pid"
+  while true; do
+    DESIRED=$(cat "$STATE/desired" 2>/dev/null || echo stopped)
+    [ "$DESIRED" = running ] || [ "$DESIRED" = degraded ] || exit 0
+    CULPRIT=
+    rm -f "$STATE/failed-service"
+    : > "$STATE/clean-required"
+    REQUIRED_TOTAL=$(jq "[.plan.services[] | select(.required)] | length" "$STATE/request.json")
+    jq -r ".plan.services[] | select(.required) | .name" "$STATE/request.json" | while read -r SVC; do
+      SVC_STATE=$(cat "$SERVICES/$SVC/state" 2>/dev/null || echo failed)
+      case "$SVC_STATE" in
+        failed|blocked)
+          echo "$SVC" > "$STATE/failed-service"
+          exit 1
+          ;;
+        exited)
+          EXIT_CODE=$(cat "$SERVICES/$SVC/exit-code" 2>/dev/null || echo 1)
+          POLICY=$(jq -r --arg svc "$SVC" ".plan.services[] | select(.name == \$svc) | .restart.policy" "$STATE/request.json")
+          if [ "$EXIT_CODE" = 0 ] && [ "$POLICY" = never ]; then
+            echo "$SVC" >> "$STATE/clean-required"
+          else
+            echo "$SVC" > "$STATE/failed-service"
+            exit 1
+          fi
+          ;;
+      esac
+    done || CULPRIT=$(cat "$STATE/failed-service" 2>/dev/null || echo unknown)
+    if [ -n "$CULPRIT" ]; then
+      FAIL_REQ=$(printf "{\"action\":\"fail\",\"appId\":\"%s\",\"service\":\"%s\"}" "$APP" "$CULPRIT")
+      /usr/local/bin/appliance-runtime-compound-supervisor "$FAIL_REQ" >/dev/null 2>&1
+      exit 0
+    fi
+    CLEAN_REQUIRED=$(wc -l < "$STATE/clean-required" 2>/dev/null || echo 0)
+    if [ "$REQUIRED_TOTAL" -gt 0 ] && [ "$CLEAN_REQUIRED" -eq "$REQUIRED_TOTAL" ]; then
+      COMPLETE_REQ=$(printf "{\"action\":\"complete\",\"appId\":\"%s\"}" "$APP")
+      /usr/local/bin/appliance-runtime-compound-supervisor "$COMPLETE_REQ" >/dev/null 2>&1
+      exit 0
+    fi
+    OPTIONAL_FAILED=0
+    jq -r ".plan.services[] | select(.required == false) | .name" "$STATE/request.json" | while read -r SVC; do
+      SVC_STATE=$(cat "$SERVICES/$SVC/state" 2>/dev/null || echo failed)
+      case "$SVC_STATE" in failed|exited|blocked) exit 1;; esac
+    done || OPTIONAL_FAILED=1
+    [ "$OPTIONAL_FAILED" -eq 0 ] || echo degraded > "$STATE/desired"
+    sleep 0.5
+  done
+' </dev/null >/dev/null 2>&1 &
+
+status
+"#;
+
 const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
 # k3s, registry, BuildKit, Node, or development toolchain is installed.
+if ! SOCAT_SELF_CHECK=$(socat -V 2>&1); then
+  echo "appliance-runtime: socat self-check failed; offline Runtime APK set is ABI-inconsistent"
+  printf '%s\n' "$SOCAT_SELF_CHECK"
+  exit 1
+fi
 rc-service containerd start >/var/log/appliance-runtime-containerd.log 2>&1 || true
 mkdir -p /persist/runtime/apps /run/appliance/shares /sys/fs/cgroup/appliance
 find /persist/runtime/apps -type f \( -name pid -o -name relay.pids -o -name logcap.pid \) -delete
@@ -1860,6 +2505,11 @@ fn build_apkovl_for_readiness(
         0o755,
         RUNTIME_SUPERVISOR.as_bytes(),
     )?;
+    file(
+        "usr/local/bin/appliance-runtime-compound-supervisor",
+        0o755,
+        RUNTIME_COMPOUND_SUPERVISOR.as_bytes(),
+    )?;
     // Transparent tmux config for the agent's reattachable sessions.
     file("etc/appliance/tmux.conf", 0o644, TMUX_CONF.as_bytes())?;
     // The bootstrap token the guest api-server verifies create-key
@@ -2009,13 +2659,18 @@ pub fn build_boot_media(
     let volume_bytes = ((content as u64 + 64 * 1024 * 1024) / (16 * 1024 * 1024) + 1) * (16 * 1024 * 1024);
 
     let image_path = vm_dir.join("boot-media.img");
+    // Build away from the canonical path and durably flush the FAT image
+    // before VZ/KVM can attach it. Without this boundary a cold VZ boot can
+    // observe the directory entry before the apkovl payload has reached the
+    // backing file, producing an intermittent "invalid magic / short read".
+    let partial = vm_dir.join("boot-media.img.partial");
     let file = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&image_path)
-        .with_context(|| format!("create {}", image_path.display()))?;
+        .open(&partial)
+        .with_context(|| format!("create {}", partial.display()))?;
     file.set_len(volume_bytes)?;
 
     let buf = fscommon::BufStream::new(&file);
@@ -2066,6 +2721,10 @@ pub fn build_boot_media(
         }
     }
     fs.unmount().context("unmount FAT volume")?;
+    file.sync_all().context("sync FAT boot media")?;
+    drop(file);
+    fs::rename(&partial, &image_path)
+        .with_context(|| format!("publish {}", image_path.display()))?;
 
     Ok(BootMedia {
         image: image_path,
@@ -3223,11 +3882,19 @@ mod tests {
         assert_eq!(repositories, "/media/vdb/apks/main\n/media/vdb/apks/community\n");
         assert!(!repositories.contains("https://"));
         let world = apkovl_file(&overlay, "etc/apk/world").unwrap();
-        assert!(world.lines().any(|package| package == "containerd"));
-        assert!(world.lines().any(|package| package == "containerd-ctr"));
-        assert!(world.lines().any(|package| package == "nftables"));
+        assert!(world.lines().any(|package| package == "containerd=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "containerd-ctr=2.0.0-r5"));
+        assert!(world.lines().any(|package| package == "nftables=1.1.1-r0"));
+        assert!(world.lines().any(|package| package == "socat=1.8.1.3-r0"));
+        assert!(world.lines().any(|package| package == "openssl=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libssl3=3.3.7-r0"));
+        assert!(world.lines().any(|package| package == "libcrypto3=3.3.7-r0"));
         let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
         assert!(start.contains("cgroup.subtree_control"));
+        let self_check = start.find("socat -V").unwrap();
+        let ready = start.find("appliance-runtime: supervisor ready").unwrap();
+        assert!(self_check < ready, "socat ABI self-check must gate Runtime readiness");
+        assert!(start.contains("offline Runtime APK set is ABI-inconsistent"));
     }
 
     #[test]
@@ -3270,6 +3937,48 @@ mod tests {
     }
 
     #[test]
+    fn runtime_supervisor_stages_binary_without_following_symlinks_and_reuses_hardening() {
+        let supervisor = RUNTIME_SUPERVISOR;
+        let copy = supervisor
+            .find("cp -R --no-preserve=mode,ownership \"$SOURCE/.\" \"$STAGED/\"")
+            .expect("binary payload is copied into private staging");
+        let busybox_copy = supervisor
+            .find("cp -R \"$SOURCE/.\" \"$STAGED/\"")
+            .expect("BusyBox has an equivalent non-archive staging path");
+        let symlink_check = supervisor
+            .find("find \"$STAGED\" -type l -print -quit")
+            .expect("staged payload rejects symlinks");
+        let special_file_check = supervisor
+            .find("find \"$STAGED\" ! -type d ! -type f -print -quit")
+            .expect("staged payload rejects special files");
+        assert!(copy < symlink_check);
+        assert!(busybox_copy < symlink_check);
+        assert!(copy < special_file_check);
+        assert!(busybox_copy < special_file_check);
+        assert!(!supervisor.contains("find \"$SOURCE\""));
+        assert!(supervisor.contains("chown -R \"$UID_NUM:$UID_NUM\" \"$STAGED\""));
+        assert!(supervisor.contains("chmod 0755 \"$STAGED/$ENTRYPOINT\""));
+        assert!(supervisor.contains(".plan.target.args[] | @base64"));
+        assert!(supervisor.contains(
+            "set -- \"$@\" --rootfs --cwd \"$BINARY_CWD\" \"$STAGED\" \"$CID\" \"/$ENTRYPOINT\""
+        ));
+        assert!(supervisor.contains("set -- \"$@\" \"$DECODED\""));
+        assert!(supervisor.contains("\"network:/var/run/netns/$NS\" \"$@\" >>"));
+        assert!(!supervisor.contains("eval "));
+        assert!(supervisor.contains("--rootfs --cwd \"$BINARY_CWD\" \"$STAGED\" \"$CID\" \"/$ENTRYPOINT\""));
+        assert!(supervisor.contains("printf '{\"state\":\"exited\",\"exitCode\":%s}\\n' \"$CODE\""));
+        assert_eq!(
+            supervisor
+                .matches(
+                    "--user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP\" --seccomp --with-ns \"network:/var/run/netns/$NS\"",
+                )
+                .count(),
+            2,
+            "container and binary launchers must share the hardened ctr flags"
+        );
+    }
+
+    #[test]
     fn core_overlay_omits_lazy_platform_without_reordering_shared_bootstrap() {
         let core = build_apkovl_for_readiness(
             5052,
@@ -3291,5 +4000,46 @@ mod tests {
         assert!(!start.contains("k3s server"));
         assert!(!start.contains("appliance-buildkit: provisioning in-guest BuildKit"));
         assert!(!start.contains("agent-ready"));
+        }
     }
-}
+
+    #[test]
+    fn compound_supervisor_is_valid_shell_and_scopes_lifecycle_per_leaf() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let mut child = Command::new("sh")
+            .arg("-n")
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn shell syntax check");
+        child
+            .stdin
+            .take()
+            .expect("shell stdin")
+            .write_all(RUNTIME_COMPOUND_SUPERVISOR.as_bytes())
+            .expect("write compound supervisor");
+        let output = child.wait_with_output().expect("wait for shell syntax check");
+        assert!(
+            output.status.success(),
+            "compound supervisor shell syntax: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let supervisor = RUNTIME_COMPOUND_SUPERVISOR;
+        assert!(supervisor.contains(".plan.services | reverse | .[].name"));
+        assert!(supervisor.contains("--cgroup \"appliance/$APP/$SVC\""));
+        assert!(supervisor.contains("--with-ns \"network:/var/run/netns/$NS\""));
+        assert!(supervisor.contains("images import --local --platform \"$OCI_PLATFORM\""));
+        assert!(supervisor.contains("tasks list 2>/dev/null | grep \"^$CID \""));
+        assert!(supervisor.contains("wget -q -T \"$TIMEOUT\" --spider"));
+        assert!(supervisor.contains("--exec-id \"health-$$-$(date +%s%N)\""));
+        assert!(supervisor.contains("APPLIANCE_SVC_"));
+        assert!(supervisor.contains("echo \"$CULPRIT\" > \"$STATE/culprit\""));
+        assert!(supervisor.contains("stop_all exited"));
+        assert!(supervisor.contains("echo \"$ATTEMPT\" > \"$SERVICE/restart-count\""));
+        assert!(supervisor.contains("[ \"$DELAY\" -le 30 ] || DELAY=30"));
+        assert!(supervisor.contains("$SERVICES/$SVC/current.log"));
+        assert!(RUNTIME_SUPERVISOR.contains("appliance-runtime-compound-supervisor"));
+    }

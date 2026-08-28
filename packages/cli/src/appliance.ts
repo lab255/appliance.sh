@@ -404,7 +404,9 @@ function showNamespaceHelp(namespace: 'builder' | 'runtime'): void {
   }
   if (namespace === 'runtime') {
     console.log();
-    console.log('Container run/ps/stop/logs are available; install/list/uninstall are available per workspace target.');
+    console.log(
+      'Container run/ps/stop/logs are available; catalogue search and workspace-targeted install/list/uninstall are also available; the remaining verbs are staged for later releases.'
+    );
   }
   console.log();
   console.log(`Run \`appliance ${namespace} <verb> --help\` for command-specific options.`);

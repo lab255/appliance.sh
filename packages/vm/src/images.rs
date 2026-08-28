@@ -27,25 +27,30 @@ pub const RUNTIME_IMAGE: &str = "appliance-runtime-alpine-3.21.3";
 /// initramfs; the host bounds and sanitizes the mirror before embedding it.
 const RUNTIME_APK_BRANCH: &str = "v3.21";
 pub const RUNTIME_WORLD: &[&str] = &[
-    "alpine-base",
-    "e2fsprogs",
-    "ca-certificates",
-    "busybox-extras",
-    "socat",
-    "sudo",
-    "tmux",
-    "libstdc++",
-    "libgcc",
-    "unzip",
-    "containerd",
-    "containerd-ctr",
-    "runc",
-    "iproute2",
-    "nftables",
-    "jq",
+    "alpine-base=3.21.7-r0",
+    "e2fsprogs=1.47.1-r1",
+    "ca-certificates=20260413-r0",
+    "busybox-extras=1.37.0-r14",
+    "socat=1.8.1.3-r0",
+    "sudo=1.9.17_p1-r0",
+    "tmux=3.5a-r0",
+    "libstdc++=14.2.0-r4",
+    "libgcc=14.2.0-r4",
+    "unzip=6.0-r15",
+    "containerd=2.0.0-r5",
+    "containerd-ctr=2.0.0-r5",
+    "runc=1.2.2-r5",
+    "iproute2=6.11.0-r0",
+    "nftables=1.1.1-r0",
+    "jq=1.7.1-r0",
     // Alpine init adds openssl when verifying modloop, outside /etc/apk/world.
-    "openssl",
+    // Keep the CLI and both ABI libraries exact and identical: a newer socat
+    // against an older libssl/libcrypto relocates unsuccessfully at runtime.
+    "openssl=3.3.7-r0",
+    "libssl3=3.3.7-r0",
+    "libcrypto3=3.3.7-r0",
 ];
+const RUNTIME_CLOSURE_ROOTS: &[&str] = &["socat", "containerd", "containerd-ctr", "runc"];
 
 #[derive(Debug)]
 pub struct RuntimeApkRepository {
@@ -413,6 +418,91 @@ fn provided_name(value: &str) -> &str {
     &value[..end]
 }
 
+fn validate_runtime_world_pins(selected: &[ApkRecord], world: &[&str]) -> Result<()> {
+    for requirement in world {
+        let Some((name, version)) = requirement.split_once('=') else {
+            bail!("Runtime world entry must be exactly pinned: {requirement}");
+        };
+        let record = selected
+            .iter()
+            .find(|record| record.name == name)
+            .with_context(|| format!("pinned Runtime package is missing: {requirement}"))?;
+        if record.version != version {
+            bail!(
+                "pinned Runtime package {name} requires {version}, signed {RUNTIME_APK_BRANCH} index provides {}",
+                record.version
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Re-walk the selected package set itself, not the full repository index.
+/// This catches a resolver/index mismatch before media is built: every named
+/// or virtual dependency reachable from the runtime-critical binaries must
+/// have its chosen provider copied onto the offline disk.
+fn validate_runtime_dependency_closure(selected: &[ApkRecord], roots: &[&str]) -> Result<()> {
+    let mut packages = BTreeMap::<String, usize>::new();
+    let mut providers = BTreeMap::<String, usize>::new();
+    for (index, record) in selected.iter().enumerate() {
+        packages.insert(record.name.clone(), index);
+        providers.insert(record.name.clone(), index);
+        for provided in &record.provides {
+            providers
+                .entry(provided_name(provided).to_string())
+                .and_modify(|existing| {
+                    if record.provider_priority > selected[*existing].provider_priority {
+                        *existing = index;
+                    }
+                })
+                .or_insert(index);
+        }
+    }
+
+    let mut pending = VecDeque::<usize>::new();
+    for root in roots {
+        pending.push_back(
+            packages
+                .get(*root)
+                .copied()
+                .with_context(|| format!("Runtime closure root is missing from pinned set: {root}"))?,
+        );
+    }
+    let mut visited = BTreeSet::<usize>::new();
+    while let Some(index) = pending.pop_front() {
+        if !visited.insert(index) {
+            continue;
+        }
+        let record = &selected[index];
+        for requirement in &record.dependencies {
+            let Some(name) = dependency_name(requirement) else {
+                continue;
+            };
+            let provider = packages
+                .get(name)
+                .or_else(|| providers.get(name))
+                .copied()
+                .with_context(|| {
+                    format!(
+                        "pinned Runtime closure misses dependency '{requirement}' required by {}-{}",
+                        record.name, record.version
+                    )
+                })?;
+            pending.push_back(provider);
+        }
+    }
+    Ok(())
+}
+
+fn runtime_apk_cache_key(world: &[&str]) -> String {
+    let mut identity = format!("branch={RUNTIME_APK_BRANCH}\n");
+    for requirement in world {
+        identity.push_str(requirement);
+        identity.push('\n');
+    }
+    content_sha256_hex(identity.as_bytes())
+}
+
 fn resolve_runtime_packages(records: &[ApkRecord], world: &[&str]) -> Result<Vec<ApkRecord>> {
     let mut packages = BTreeMap::<String, usize>::new();
     let mut providers = BTreeMap::<String, usize>::new();
@@ -489,10 +579,12 @@ fn resolve_runtime_packages(records: &[ApkRecord], world: &[&str]) -> Result<Vec
 /// all guest bootstrap egress while preserving apk signature verification.
 pub fn ensure_runtime_apk_repositories() -> Result<Vec<RuntimeApkRepository>> {
     let arch = runtime_arch()?;
+    let cache_key = runtime_apk_cache_key(RUNTIME_WORLD);
     let root = crate::store::vm_root()
         .join("images")
         .join("runtime-apks")
         .join(RUNTIME_APK_BRANCH)
+        .join(cache_key)
         .join(arch);
     let repositories = ["main", "community"];
     let mut indexes = Vec::new();
@@ -509,6 +601,8 @@ pub fn ensure_runtime_apk_repositories() -> Result<Vec<RuntimeApkRepository>> {
     }
 
     let selected = resolve_runtime_packages(&records, RUNTIME_WORLD)?;
+    validate_runtime_world_pins(&selected, RUNTIME_WORLD)?;
+    validate_runtime_dependency_closure(&selected, RUNTIME_CLOSURE_ROOTS)?;
     let mut output: Vec<RuntimeApkRepository> = repositories
         .iter()
         .enumerate()
@@ -857,6 +951,44 @@ mod tests {
                 "openssl-libs"
             ])
         );
+    }
+
+    #[test]
+    fn runtime_world_exactly_pins_one_openssl_abi_and_keys_the_cache() {
+        assert!(RUNTIME_WORLD.iter().all(|requirement| requirement.contains('=')));
+        let pins: BTreeMap<&str, &str> = RUNTIME_WORLD
+            .iter()
+            .map(|requirement| requirement.split_once('=').unwrap())
+            .collect();
+        assert_eq!(pins["socat"], "1.8.1.3-r0");
+        assert_eq!(pins["openssl"], "3.3.7-r0");
+        assert_eq!(pins["libssl3"], pins["openssl"]);
+        assert_eq!(pins["libcrypto3"], pins["openssl"]);
+
+        let key = runtime_apk_cache_key(RUNTIME_WORLD);
+        assert_eq!(key.len(), 64);
+        let mut changed = RUNTIME_WORLD.to_vec();
+        changed[0] = "alpine-base=changed-r0";
+        assert_ne!(key, runtime_apk_cache_key(&changed));
+    }
+
+    #[test]
+    fn runtime_apk_validation_rejects_pin_skew_and_incomplete_critical_closure() {
+        let selected = parse_apkindex_text(
+            "P:socat\nV:1.8.1.3-r0\nD:libssl3 so:libcrypto.so.3\n\n\
+             P:libssl3\nV:3.3.7-r0\n\n",
+            0,
+        )
+        .unwrap();
+        let pin_error = validate_runtime_world_pins(&selected, &["socat=1.8.0.0-r0"])
+            .unwrap_err()
+            .to_string();
+        assert!(pin_error.contains("requires 1.8.0.0-r0"));
+
+        let closure_error = validate_runtime_dependency_closure(&selected, &["socat"])
+            .unwrap_err()
+            .to_string();
+        assert!(closure_error.contains("so:libcrypto.so.3"));
     }
 
     #[test]

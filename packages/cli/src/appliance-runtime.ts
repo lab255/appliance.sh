@@ -4,7 +4,12 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import { PINNED_CATALOGUE_TRUST, type ApplianceV2, type EntitlementGrant } from '@appliance.sh/sdk';
+import {
+  PINNED_CATALOGUE_TRUST,
+  type ApplianceV2,
+  type ApplianceV2Service,
+  type EntitlementGrant,
+} from '@appliance.sh/sdk';
 import { ensurePooledRuntime, runVm, vmBinary, vmDir } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { computeBundleDigest } from './utils/bundle-digest.js';
@@ -43,17 +48,67 @@ import {
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
-export interface RuntimePlan {
+interface RuntimePlanBase {
   appId: string;
   version: string;
   principalIp: string;
   uid: number;
   share: { tag: string; hostPath: string; readOnly: true };
-  imagePath: string;
-  env: Record<string, string>;
   ports: Array<RuntimeHostPort & { relay: number; target: string }>;
   resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
 }
+
+type RuntimeHealth =
+  | {
+      type: 'http';
+      port: number;
+      path: string;
+      intervalSeconds: number;
+      timeoutSeconds: number;
+      failureThreshold: number;
+    }
+  | {
+      type: 'tcp';
+      port: number;
+      intervalSeconds: number;
+      timeoutSeconds: number;
+      failureThreshold: number;
+    }
+  | {
+      type: 'exec';
+      command: string[];
+      intervalSeconds: number;
+      timeoutSeconds: number;
+      failureThreshold: number;
+    };
+
+type RuntimeLeafWorkload =
+  | { kind: 'container'; imagePath: string; env: Record<string, string> }
+  | {
+      kind: 'binary';
+      target: {
+        path: string;
+        entrypoint: string;
+        args: string[];
+        env: Record<string, string>;
+        cwd: string;
+      };
+    };
+
+export type RuntimeServicePlan = RuntimeLeafWorkload & {
+  name: string;
+  path: string[];
+  isolation: 'shared' | 'vm';
+  dependsOn: string[];
+  required: boolean;
+  health?: RuntimeHealth;
+  restart: { policy: 'never' | 'on-failure' | 'always'; maxAttempts: number; backoffSeconds: number };
+  ports: Array<{ name: string; guest: number; protocol: 'tcp' | 'udp'; primary: boolean }>;
+  resources: { cpus: number; memoryMib: number; diskGib: number; pids: number };
+};
+
+export type RuntimePlan = RuntimePlanBase &
+  (RuntimeLeafWorkload | { kind: 'compound'; services: RuntimeServicePlan[] });
 
 export type LoadedRuntimeBundle = VerifyBundleResult;
 
@@ -99,15 +154,104 @@ export function manifestToRuntimePlan(
   installDir: string,
   principalIp: string,
   uid: number,
-  hostPorts: RuntimeHostPort[]
+  hostPorts: RuntimeHostPort[],
+  runtimeArch: NodeJS.Architecture = process.arch
 ): RuntimePlan {
-  if (manifest.type !== 'container') throw new Error(`${manifest.type} runnable bundles are not yet supported`);
-  const platform = process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
-  const target = manifest.payload.images[platform];
-  if (!target) throw new Error(`bundle has no payload for host runtime platform ${platform}`);
-  const requested = manifest.resources ?? {};
-  const ports = manifest.ports ?? [];
-  const published = ports.filter((port) => port.expose === 'host');
+  const platform = runtimeLinuxPlatform(runtimeArch);
+  const workloadFor = (
+    service: Exclude<ApplianceV2, { type: 'compound' }> | Exclude<ApplianceV2Service, { type: 'compound' }>,
+    env: Record<string, string>
+  ): RuntimeLeafWorkload =>
+    service.type === 'container'
+      ? (() => {
+          const image = service.payload.images[platform];
+          if (!image) throw missingRuntimeTarget(manifest.name, platform, 'images');
+          return { kind: 'container' as const, imagePath: image.path, env };
+        })()
+      : (() => {
+          const target = service.payload.targets[platform];
+          if (!target)
+            throw missingRuntimeTarget(
+              manifest.name,
+              platform,
+              'targets',
+              service.native?.macos ? ' macOS native targets are out of scope.' : ''
+            );
+          return {
+            kind: 'binary' as const,
+            target: {
+              path: target.root,
+              entrypoint: target.entrypoint,
+              args: target.args,
+              env,
+              cwd: '.',
+            },
+          };
+        })();
+  let workload: RuntimeLeafWorkload | { kind: 'compound'; services: RuntimeServicePlan[] };
+  let requested: { cpus?: number; memoryMib?: number; diskGib?: number };
+  let published: Array<{ name: string; guest: number; protocol: 'tcp' | 'udp' }>;
+  if (manifest.type === 'compound') {
+    const leaves = compoundLeaves(manifest);
+    const leafEgress = leaves.find(({ service }) => service.network?.egress !== undefined);
+    if (leafEgress) {
+      throw new Error(
+        'compound apps declare network.egress at the root (shared principal); ' +
+          `move ${leafEgress.path.join('.')}.network.egress to the top level`
+      );
+    }
+    const isolated = leaves.find(({ isolation }) => isolation === 'vm');
+    if (isolated) throw new Error(`service '${isolated.name}' requests isolation: vm, which is not yet supported`);
+    const services = leaves.map(({ name, path: servicePath, service }) => {
+      const ports = service.ports ?? [];
+      const healthConfig = service.health;
+      const health =
+        healthConfig?.type === 'http' || healthConfig?.type === 'tcp'
+          ? {
+              ...healthConfig,
+              port: ports.find((port) => port.name === healthConfig.port)?.guest ?? 0,
+            }
+          : healthConfig;
+      const serviceResources = service.resources ?? {};
+      return {
+        name,
+        path: servicePath,
+        isolation: 'shared',
+        dependsOn: [...service.dependsOn],
+        required: service.required,
+        health,
+        restart: service.restart,
+        ports: ports.map((port) => ({
+          name: port.name,
+          guest: port.guest,
+          protocol: port.protocol,
+          primary: port.primary ?? false,
+        })),
+        resources: {
+          cpus: serviceResources.cpus ?? 1,
+          memoryMib: serviceResources.memoryMib ?? 512,
+          diskGib: serviceResources.diskGib ?? 2,
+          pids: 256,
+        },
+        ...workloadFor(service, { ...service.env }),
+      } satisfies RuntimeServicePlan;
+    });
+    workload = { kind: 'compound', services };
+    requested = {
+      cpus: services.reduce((sum, service) => sum + service.resources.cpus, 0),
+      memoryMib: services.reduce((sum, service) => sum + service.resources.memoryMib, 0),
+      diskGib: services.reduce((sum, service) => sum + service.resources.diskGib, 0),
+    };
+    published = leaves.flatMap(({ name, service }) =>
+      (service.ports ?? [])
+        .filter((port) => port.expose === 'host' && port.primary)
+        .map((port) => ({ ...port, name: `${name}.${port.name}` }))
+    );
+  } else {
+    workload = workloadFor(manifest, manifest.env);
+    requested = manifest.resources ?? {};
+    published = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+  }
   if (published.some((port) => port.protocol !== 'tcp')) throw new Error('UDP published ports are not yet supported');
   if (published.length > 16) throw new Error('runtime apps may publish at most 16 ports');
   if (hostPorts.length !== published.length) throw new Error('host port allocation does not match manifest');
@@ -118,8 +262,7 @@ export function manifestToRuntimePlan(
     principalIp,
     uid,
     share: { tag: shareTag, hostPath: installDir, readOnly: true },
-    imagePath: target.path,
-    env: manifest.env,
+    ...workload,
     ports: published.map((port, index) => ({
       ...hostPorts[index],
       relay: 22000 + (uid - 20000) * 16 + index,
@@ -129,9 +272,56 @@ export function manifestToRuntimePlan(
       cpus: requested.cpus ?? 1,
       memoryMib: requested.memoryMib ?? 512,
       diskGib: requested.diskGib ?? 2,
-      pids: 256,
+      pids: workload.kind === 'compound' ? workload.services.length * 256 : 256,
     },
   };
+}
+
+function compoundLeaves(manifest: Extract<ApplianceV2, { type: 'compound' }>): Array<{
+  name: string;
+  path: string[];
+  isolation: 'shared' | 'vm';
+  service: Exclude<ApplianceV2Service, { type: 'compound' }>;
+}> {
+  const leaves: Array<{
+    name: string;
+    path: string[];
+    isolation: 'shared' | 'vm';
+    service: Exclude<ApplianceV2Service, { type: 'compound' }>;
+  }> = [];
+  for (const [name, service] of Object.entries(manifest.services)) {
+    const isolation = service.isolation ?? 'shared';
+    if (service.type === 'compound') {
+      for (const [childName, child] of Object.entries(service.services)) {
+        if (child.type === 'compound')
+          throw new Error(`service containment exceeds depth two at '${name}/${childName}'`);
+        leaves.push({ name: childName, path: [name, childName], isolation, service: child });
+      }
+    } else {
+      leaves.push({ name, path: [name], isolation, service });
+    }
+  }
+  return leaves.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function runtimeLinuxPlatform(arch: NodeJS.Architecture): 'linux/amd64' | 'linux/arm64' {
+  if (arch === 'arm64') return 'linux/arm64';
+  if (arch === 'x64') return 'linux/amd64';
+  throw new Error(
+    `host architecture '${arch}' is not supported by the Linux Runtime VM; build on an amd64 or arm64 host`
+  );
+}
+
+function missingRuntimeTarget(
+  appName: string,
+  platform: 'linux/amd64' | 'linux/arm64',
+  branch: 'images' | 'targets',
+  suffix = ''
+): Error {
+  return new Error(
+    `bundle '${appName}' has no payload for host runtime platform ${platform}; ` +
+      `add payload.${branch}["${platform}"] and repackage.${suffix}`
+  );
 }
 
 export async function runRuntimeCommand(verb: string, args: string[]): Promise<void> {
@@ -175,8 +365,10 @@ export async function runRuntimeCommand(verb: string, args: string[]): Promise<v
 async function runtimeRun(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Usage: appliance runtime run <path-to-app.appliance.zip>');
+    console.log(
+      'Runs one container, binary, or compound bundle in the pooled appliance-runtime VM; Ctrl-C stops the app.'
+    );
     console.log('The argument may also be an installed app name; use --accept-unknown-publisher for headless opens.');
-    console.log('Runs one container-type bundle in the pooled appliance-runtime VM; Ctrl-C stops the app.');
     return;
   }
   const input = firstPositional(args, ['--target']);
@@ -266,10 +458,6 @@ async function runtimeRun(args: string[]): Promise<void> {
   }
   if (!opened) fail('Runtime pre-open verification did not produce an immutable bundle copy.', 2);
   const { bundlePath, loaded } = opened;
-  if (loaded.manifest.type !== 'container') {
-    fs.rmSync(bundlePath, { force: true });
-    fail(`${loaded.manifest.type} runnable bundle '${loaded.manifest.name}' is not yet supported`, 2);
-  }
   if (installed && loaded.digest !== installed.digest) {
     fs.rmSync(bundlePath, { force: true });
     fail(`installed bundle integrity check failed for '${installed.name}'`, 2);
@@ -289,8 +477,9 @@ async function runtimeRun(args: string[]): Promise<void> {
 
   const installDir = path.join(runtimeRoot(), 'apps', loaded.manifest.name, loaded.manifest.version);
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
+  let installChanged: boolean;
   try {
-    installRuntimeBundle(bundlePath, installDir, loaded);
+    installChanged = installRuntimeBundle(bundlePath, installDir, loaded);
   } finally {
     fs.rmSync(bundlePath, { force: true });
   }
@@ -341,7 +530,7 @@ async function runtimeRun(args: string[]): Promise<void> {
     loaded.manifest.name,
     effectiveGrants.filter((grant) => grant.control === 'egress-host').map((grant) => grant.id)
   );
-  const restartRequired = Boolean(prepared.restartRequired);
+  const restartRequired = runtimePoolRestartRequired(plan.kind, installChanged, Boolean(prepared.restartRequired));
   if (restartRequired) {
     updateRuntimeRecord(plan.appId, { poolRestartPending: true });
     console.log(
@@ -349,6 +538,9 @@ async function runtimeRun(args: string[]): Promise<void> {
     );
     const stop = runVm(['stop', RUNTIME_POOL_VM]);
     if (stop !== 0) fail(`could not stop ${RUNTIME_POOL_VM} for share reconciliation`, 1);
+    // Workloads must not race the asynchronous VZ shutdown: the next boot
+    // must attach the reconciled share regardless of payload kind.
+    await waitForRuntimePoolStop();
   }
   try {
     ensurePooledRuntime();
@@ -357,11 +549,20 @@ async function runtimeRun(args: string[]): Promise<void> {
     fail(`pooled VM '${RUNTIME_POOL_VM}' failed to become core-ready`, 1);
   }
   const started = vmJson(['runtime', 'start', RUNTIME_POOL_VM, JSON.stringify(plan)]);
-  if (started.state !== 'running') {
+  if (started.state !== 'running' && started.state !== 'degraded' && started.state !== 'exited') {
     updateRuntimeRecord(plan.appId, { state: 'failed', exitCode: numberOrUndefined(started.exitCode) });
-    fail(`runtime supervisor did not start '${plan.appId}': ${String(started.message ?? 'unknown error')}`, 1);
+    const culprit = typeof started.culprit === 'string' ? ` (culprit: ${started.culprit})` : '';
+    fail(
+      `runtime supervisor did not start '${plan.appId}'${culprit}: ${String(started.message ?? 'unknown error')}`,
+      1
+    );
   }
-  updateRuntimeRecord(plan.appId, { state: 'running', poolRestartPending: false });
+  const initialExitCode = started.state === 'exited' ? (numberOrUndefined(started.exitCode) ?? 1) : undefined;
+  updateRuntimeRecord(plan.appId, {
+    state: initialExitCode === undefined ? (started.state === 'degraded' ? 'degraded' : 'running') : 'exited',
+    exitCode: initialExitCode,
+    poolRestartPending: false,
+  });
   stampUsageBestEffort(
     loaded.manifest.name,
     effectiveGrants.filter((grant) => grant.control === 'published-port').map((grant) => grant.id)
@@ -400,21 +601,22 @@ function runtimePs(args: string[]): void {
   }
   const json = args.includes('--json');
   const kept: RuntimeRecord[] = [];
+  const statuses = new Map<string, RuntimeAppStatus>();
   for (const record of readRuntimeRegistry()) {
     const queried = runVmCapture(['runtime', 'status', record.poolVm, record.appId]);
     if (queried.status !== 0) {
       kept.push(record);
       continue;
     }
-    let status: Record<string, unknown>;
+    let status: RuntimeAppStatus;
     try {
-      status = JSON.parse(queried.stdout) as Record<string, unknown>;
+      status = JSON.parse(queried.stdout) as RuntimeAppStatus;
     } catch {
       kept.push(record);
       continue;
     }
     if (status.state === 'missing') continue;
-    const state = status.state === 'running' ? 'running' : status.state === 'exited' ? 'exited' : record.state;
+    const state = runtimeState(status.state) ?? record.state;
     const updated: RuntimeRecord = {
       ...record,
       state,
@@ -422,11 +624,22 @@ function runtimePs(args: string[]): void {
       updatedAt: new Date().toISOString(),
     };
     kept.push(updated);
+    statuses.set(record.appId, status);
   }
   // ps owns stale pruning: only entries the guest still recognizes survive.
   writeRuntimeRegistry(kept);
   if (json) {
-    console.log(JSON.stringify(kept, null, 2));
+    console.log(
+      JSON.stringify(
+        kept.map((record) => ({
+          ...record,
+          culprit: statuses.get(record.appId)?.culprit,
+          services: statuses.get(record.appId)?.services ?? [],
+        })),
+        null,
+        2
+      )
+    );
     return;
   }
   if (kept.length === 0) {
@@ -435,7 +648,14 @@ function runtimePs(args: string[]): void {
   }
   console.log('APP\tVERSION\tSTATE\tPRINCIPAL\tPORTS\tSIGNATURE\tUPTIME\tPOOL');
   for (const record of kept) {
-    const state = record.state === 'exited' ? `exited (${record.exitCode ?? '?'})` : record.state;
+    const status = statuses.get(record.appId);
+    const culprit = typeof status?.culprit === 'string' ? status.culprit : undefined;
+    const state =
+      record.state === 'exited'
+        ? `exited (${record.exitCode ?? '?'})`
+        : record.state === 'failed' && culprit
+          ? `failed (culprit: ${culprit}, exit: ${record.exitCode ?? '?'})`
+          : record.state;
     const ports = record.hostPorts.map((port) => `${port.name}=127.0.0.1:${port.host}->${port.guest}`).join(',') || '-';
     const signature = record.signatureKeyId
       ? record.signatureValid
@@ -446,6 +666,13 @@ function runtimePs(args: string[]): void {
     console.log(
       `${record.appId}\t${record.version}\t${state}\t${record.principalIp}\t${ports}\t${signature}\t${formatUptime(record.startedAt)}\t${record.poolVm}${pending}`
     );
+    for (const service of statuses.get(record.appId)?.services ?? []) {
+      const health = service.health === 'none' ? '-' : service.health;
+      const required = service.required ? 'required' : 'optional';
+      console.log(
+        `  ↳ ${service.name}\t-\t${service.state}\t${required}\thealth=${health}, restarts=${service.restarts}\t-\t-\t${service.endpoint ?? 'shared'}`
+      );
+    }
   }
 }
 
@@ -500,11 +727,6 @@ export function stageAndVerifyRuntimeOpenCopy(
   }
 }
 
-function optionValue(args: string[], option: string): string | undefined {
-  const index = args.indexOf(option);
-  return index >= 0 ? args[index + 1] : undefined;
-}
-
 function firstPositional(args: string[], valueOptions: string[]): string | undefined {
   for (let index = 0; index < args.length; index += 1) {
     if (valueOptions.includes(args[index]!)) {
@@ -518,32 +740,51 @@ function firstPositional(args: string[], valueOptions: string[]): string | undef
 
 async function runtimeLogs(args: string[]): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: appliance runtime logs <app> [-f|--follow]');
+    console.log('Usage: appliance runtime logs <app> [--service <name>] [-f|--follow]');
     return;
   }
   const appId = args.find((arg) => !arg.startsWith('-'));
-  if (!appId) fail('Usage: appliance runtime logs <app> [-f|--follow]', 2);
+  if (!appId) fail('Usage: appliance runtime logs <app> [--service <name>] [-f|--follow]', 2);
   if (!readRuntimeRegistry().some((entry) => entry.appId === appId))
     fail(`runtime app '${appId}' is not registered`, 2);
-  await followLogs(appId, args.includes('-f') || args.includes('--follow'));
+  const service = optionValue(args, '--service');
+  await followLogs(appId, args.includes('-f') || args.includes('--follow'), service);
 }
 
-async function followLogs(appId: string, follow: boolean): Promise<number | undefined> {
-  let offset = 0;
+async function followLogs(appId: string, follow: boolean, selectedService?: string): Promise<number | undefined> {
+  const offsets = new Map<string, number>();
   for (;;) {
     const record = readRuntimeRegistry().find((entry) => entry.appId === appId);
     if (!record) return undefined;
-    const logs = runVmCapture(['runtime', 'logs', record.poolVm, appId, String(offset)]);
+    const status = vmJson(['runtime', 'status', record.poolVm, appId], true) as RuntimeAppStatus;
+    const services = status.services ?? [];
+    if (selectedService && services.length > 0 && !services.some((service) => service.name === selectedService)) {
+      fail(`runtime app '${appId}' has no service '${selectedService}'`, 2);
+    }
+    const targets: Array<string | undefined> =
+      services.length > 0
+        ? selectedService
+          ? [selectedService]
+          : services.map((service) => service.name)
+        : [undefined];
     let receivedData = false;
-    if (logs.status === 0) {
+    for (const service of targets) {
+      const key = service ?? '';
+      const logArgs = ['runtime', 'logs', record.poolVm, appId, String(offsets.get(key) ?? 0)];
+      if (service) logArgs.push('--service', service);
+      const logs = runVmCapture(logArgs);
+      if (logs.status !== 0) continue;
       try {
-        const chunk = JSON.parse(logs.stdout) as { offset?: unknown; data?: unknown };
+        const chunk = JSON.parse(logs.stdout) as { offset?: unknown; data?: unknown; service?: unknown };
         if (typeof chunk.offset === 'number' && typeof chunk.data === 'string') {
-          offset = chunk.offset;
+          offsets.set(key, chunk.offset);
           const decoded = Buffer.from(chunk.data, 'base64').toString('utf8');
-          receivedData = decoded.length > 0;
+          receivedData ||= decoded.length > 0;
           const safe = sanitizeRuntimeLog(decoded);
-          if (safe) process.stdout.write(safe + (safe.endsWith('\n') ? '' : '\n'));
+          if (safe) {
+            const rendered = service ? prefixServiceLog(service, safe) : safe;
+            process.stdout.write(rendered + (rendered.endsWith('\n') ? '' : '\n'));
+          }
         }
       } catch {
         // A malformed log response is transient; status below still reports
@@ -551,16 +792,54 @@ async function followLogs(appId: string, follow: boolean): Promise<number | unde
       }
     }
     if (receivedData) continue;
-    const status = vmJson(['runtime', 'status', record.poolVm, appId], true);
-    if (status.state === 'exited') {
+    if (status.state === 'exited' || status.state === 'failed') {
       const exitCode = numberOrUndefined(status.exitCode) ?? 1;
-      updateRuntimeRecord(appId, { state: 'exited', exitCode });
-      if (follow) console.log(chalk.yellow(`${appId} exited (${exitCode})`));
+      updateRuntimeRecord(appId, { state: status.state, exitCode });
+      const culprit = typeof status.culprit === 'string' ? `, culprit: ${status.culprit}` : '';
+      if (follow) console.log(chalk.yellow(`${appId} ${status.state} (${exitCode}${culprit})`));
       return exitCode;
     }
     if (!follow) return undefined;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+}
+
+interface RuntimeServiceStatus {
+  id: string;
+  name: string;
+  state: string;
+  required: boolean;
+  health: string;
+  restarts: number;
+  endpoint?: string | null;
+}
+
+interface RuntimeAppStatus extends Record<string, unknown> {
+  state?: unknown;
+  exitCode?: unknown;
+  culprit?: unknown;
+  services?: RuntimeServiceStatus[];
+}
+
+function runtimeState(value: unknown): RuntimeRecord['state'] | undefined {
+  return typeof value === 'string' && ['starting', 'running', 'degraded', 'stopped', 'exited', 'failed'].includes(value)
+    ? (value as RuntimeRecord['state'])
+    : undefined;
+}
+
+function optionValue(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  if (!value || value.startsWith('-')) fail(`${name} requires a value`, 2);
+  return value;
+}
+
+export function prefixServiceLog(service: string, value: string): string {
+  return value
+    .split('\n')
+    .map((line, index, lines) => (line.length > 0 || index < lines.length - 1 ? `[${service}] ${line}` : ''))
+    .join('\n');
 }
 
 export function sanitizeRuntimeLog(value: string): string {
@@ -574,12 +853,12 @@ export function sanitizeRuntimeLog(value: string): string {
   return safe.split(String.fromCharCode(0x7f)).join('');
 }
 
-function installRuntimeBundle(bundlePath: string, destination: string, verified: LoadedRuntimeBundle): void {
+function installRuntimeBundle(bundlePath: string, destination: string, verified: LoadedRuntimeBundle): boolean {
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
   if (runtimeInstallMatches(destination, verified.digest)) {
     removePreviousRuntimeInstalls(destination);
-    return;
+    return false;
   }
 
   const staging = `${destination}.staging-${process.pid}-${Date.now()}`;
@@ -593,11 +872,24 @@ function installRuntimeBundle(bundlePath: string, destination: string, verified:
     fs.renameSync(staging, destination);
     if (fs.existsSync(previous)) fs.rmSync(previous, { recursive: true, force: true });
     removePreviousRuntimeInstalls(destination);
+    return true;
   } catch (error) {
     fs.rmSync(staging, { recursive: true, force: true });
     if (!fs.existsSync(destination) && fs.existsSync(previous)) fs.renameSync(previous, destination);
     throw error;
   }
+}
+
+export function runtimePoolRestartRequired(
+  kind: RuntimePlan['kind'],
+  installChanged: boolean,
+  prepareRequiresRestart: boolean
+): boolean {
+  // Replacing an installed directory preserves its path but changes its inode.
+  // A running VZ VirtioFS device still holds the old directory and must reboot
+  // before compound leaves can import the replacement payloads. Keep legacy
+  // single-workload reconciliation unchanged in this stacked increment.
+  return prepareRequiresRestart || (kind === 'compound' && installChanged);
 }
 
 function runtimeInstallMatches(destination: string, digest: string): boolean {
@@ -641,7 +933,6 @@ function removePreviousRuntimeInstalls(destination: string): void {
 function persistedRuntimeAllocation(
   manifest: ApplianceV2
 ): { principalIp: string; uid: number; hostPorts: RuntimeHostPort[] } | undefined {
-  if (manifest.type !== 'container') return undefined;
   try {
     const spec = JSON.parse(fs.readFileSync(path.join(vmDir(RUNTIME_POOL_VM), 'vm.json'), 'utf8')) as {
       published?: Array<{
@@ -650,7 +941,7 @@ function persistedRuntimeAllocation(
         runtimeTarget?: { principal?: string; address?: string };
       }>;
     };
-    const expected = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+    const expected = publishedManifestPorts(manifest);
     const published = (spec.published ?? []).filter((port) => port.runtimeTarget?.principal === manifest.name);
     if (published.length !== expected.length || published.some((port) => !port.runtimeTarget?.address))
       return undefined;
@@ -735,8 +1026,7 @@ function stampUsageBestEffort(appId: string, grantIds: string[]): void {
 }
 
 async function allocatePublishedPorts(manifest: ApplianceV2, records: RuntimeRecord[]): Promise<RuntimeHostPort[]> {
-  if (manifest.type !== 'container') return [];
-  const requested = (manifest.ports ?? []).filter((port) => port.expose === 'host');
+  const requested = publishedManifestPorts(manifest);
   const used = new Set(records.flatMap((record) => record.hostPorts.map((port) => port.host)));
   const result: RuntimeHostPort[] = [];
   for (const port of requested) {
@@ -753,6 +1043,17 @@ async function allocatePublishedPorts(manifest: ApplianceV2, records: RuntimeRec
     result.push({ name: port.name, host: selected, guest: port.guest, protocol: 'tcp' });
   }
   return result;
+}
+
+function publishedManifestPorts(
+  manifest: ApplianceV2
+): Array<{ name: string; guest: number; protocol: 'tcp' | 'udp' }> {
+  if (manifest.type !== 'compound') return (manifest.ports ?? []).filter((port) => port.expose === 'host');
+  return compoundLeaves(manifest).flatMap(({ name, service }) =>
+    (service.ports ?? [])
+      .filter((port) => port.expose === 'host' && port.primary)
+      .map((port) => ({ ...port, name: `${name}.${port.name}` }))
+  );
 }
 
 function portIsFree(port: number): Promise<boolean> {
@@ -795,6 +1096,23 @@ function vmJson(args: string[], tolerateFailure = false): Record<string, unknown
 
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+async function waitForRuntimePoolStop(timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = runVmCapture(['status', RUNTIME_POOL_VM]);
+    if (status.status === 0) {
+      try {
+        const parsed = JSON.parse(status.stdout) as { running?: unknown };
+        if (parsed.running === false) return;
+      } catch {
+        // The engine may be between process teardown and status-file cleanup.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  fail(`timed out waiting for ${RUNTIME_POOL_VM} to stop for payload share reconciliation`, 1);
 }
 
 function formatUptime(startedAt: string): string {
