@@ -20,6 +20,7 @@ import {
   uninstallInstalledApp,
 } from './appliance-runtime-install';
 import { EntitlementGrantRequiredError } from './appliance-runtime-entitlements';
+import { describeRuntimeApp } from './appliance-runtime-open';
 import { readDevSigningKey } from './utils/bundle-sign';
 import { latestEntitlement, readEntitlementStore } from './utils/entitlements';
 import {
@@ -319,18 +320,24 @@ describe('runtime uninstall/list', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-uninstall-'));
     roots.push(directory);
     const root = path.join(directory, 'runtime');
-    const digest = `sha256:${'1'.repeat(64)}`;
-    const legacy = path.join(root, 'bundles', `${digest}.appliance.zip`);
-    const installed = { ...app(root, 'local'), bundlePath: legacy };
+    const bundle = await unsignedBundle(directory);
+    const legacy = path.join(root, 'bundles', `${bundle.digest}.appliance.zip`);
+    const installed = { ...app(root, 'local'), digest: bundle.digest, bundlePath: legacy };
     fs.mkdirSync(path.dirname(legacy), { recursive: true });
-    fs.writeFileSync(legacy, 'legacy immutable bundle');
+    fs.copyFileSync(bundle.outputPath, legacy);
     upsertInstalledApp('local', installed, root);
 
     const listed = listInstalledTargets(root).flatMap((group) =>
       group.apps.map((listedApp) => ({ target: group.target, app: listedApp }))
     );
-    expect(listed[0]?.app.bundlePath).toBe(legacy);
+    expect(listed).toHaveLength(1);
+    const listedApp = listed[0]!.app;
+    expect(listedApp.bundlePath).toBe(legacy);
     expect(formatInstalledAppsTable(listed)).toContain('local\tJournal\t1.2.0');
+    expect(describeRuntimeApp('journal', 'local', { installed: listedApp })).toMatchObject({
+      appId: 'journal',
+      version: '1.2.0',
+    });
 
     await uninstallInstalledApp('journal', { target: 'local', root });
     expect(fs.existsSync(legacy)).toBe(false);
