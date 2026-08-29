@@ -669,6 +669,7 @@ fn run() -> Result<()> {
             agent_only,
             runtime,
         } => {
+            backend::ensure_runtime_supported(backend.name(), runtime)?;
             // A shared host folder only makes sense in a dev environment,
             // so --mount implies --dev. Agent-only implies --dev too: its
             // readiness handoff waits on the dev toolchain's .dev-ready.
@@ -751,6 +752,7 @@ fn run() -> Result<()> {
             time_budget,
         } => {
             let up_started = std::time::Instant::now();
+            backend::ensure_runtime_supported(backend.name(), runtime)?;
             backend.availability()?;
             let mut spec = ensure_spec_for_up(&name, runtime)?;
             // Persist resource overrides into the spec *before* spawning
@@ -1017,7 +1019,7 @@ fn run() -> Result<()> {
             Ok(())
         }
 
-        Cmd::Runtime { action } => run_runtime_command(action),
+        Cmd::Runtime { action } => run_runtime_command(action, backend.name()),
 
         Cmd::Timings { name } => {
             let paths = VmPaths::for_name(&name);
@@ -1274,7 +1276,8 @@ fn run() -> Result<()> {
     }
 }
 
-fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
+fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
+    backend::ensure_runtime_supported(backend_name, true)?;
     match action {
         RuntimeCmd::Prepare { name, plan } => {
             let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime plan")?;
@@ -2067,7 +2070,7 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             // the persisted serde-default Allow), so the JSON the desktop
             // and CLI read matches what's actually enforced. NAT is
             // unchanged (its persisted, cooperative policy).
-            let policy = egress::effective_policy(&name);
+            let policy = egress::effective_policy_output(&name);
             println!("{}", serde_json::to_string_pretty(&policy)?);
             Ok(())
         }
@@ -2082,8 +2085,13 @@ fn run_egress(action: EgressCmd) -> Result<()> {
         }
         EgressCmd::Denied { name, tail } => {
             let denied = traffic::denied(&name, tail);
-            let report =
-                traffic::render_denied_report(&name, name == DEFAULT_VM, &denied, traffic::now_millis());
+            let report = traffic::render_denied_report(
+                &name,
+                name == DEFAULT_VM,
+                egress::is_netstack(&name),
+                &denied,
+                traffic::now_millis(),
+            );
             print!("{report}");
             Ok(())
         }
@@ -2098,6 +2106,11 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             egress::save_policy(&name, &policy)?;
             let _ = egress::publish_configmap(&name);
             println!("egress default for '{name}' set to {:?}", parsed);
+            if !egress::is_netstack(&name) {
+                eprintln!(
+                    "note: this VM's boundary is a cooperative proxy — software in the guest can bypass it"
+                );
+            }
             Ok(())
         }
         EgressCmd::Allow { host, name } => {

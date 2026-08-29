@@ -4750,6 +4750,9 @@ struct EgressPolicy {
     deny: Vec<String>,
     #[serde(default)]
     mitm: bool,
+    /// Engine-owned boundary contract: `"enforced"` or `"cooperative"`.
+    #[serde(default)]
+    boundary: String,
     /// CA cert path, populated for the UI when interception is on and
     /// the cert exists — the user injects this into clients to trust
     /// the interceptor.
@@ -4759,8 +4762,7 @@ struct EgressPolicy {
     /// (`net_link=Netstack`): default-DENY plus the baked allowlist, and
     /// `microvm_egress_get` returns the *effective* merged policy. False
     /// for the cooperative NAT proxy (`net_link=Nat`, default-Allow).
-    /// Host-populated from the VM's persisted spec (the engine's JSON does
-    /// not carry it), like `ca_path` above — never round-tripped back.
+    /// Derived from the engine's boundary contract for legacy UI callers.
     #[serde(default)]
     enforced: bool,
     /// `"netstack"` | `"nat"` — the VM's resolved network link, so the
@@ -4827,12 +4829,16 @@ async fn microvm_egress_get(name: Option<String>) -> Result<EgressPolicy, String
     }
     // The engine prints the EFFECTIVE policy for a Netstack VM (default-Deny
     // + the baked allowlist merged over the operator's rules) — see
-    // `egress::effective_policy`. We display that as-is, and tag it with the
-    // VM's resolved link so the UI can label the boundary as enforced vs
-    // cooperative. Read-only: nothing here is ever written back.
+    // `egress::effective_policy`. We display that as-is and use its explicit
+    // boundary contract, falling back to the VM spec only for older engines
+    // that omit `boundary`.
     let mut policy: EgressPolicy = serde_json::from_str(&stdout).map_err(|e| e.to_string())?;
     policy.ca_path = microvm_ca_path(&name).map(|p| p.to_string_lossy().into_owned());
-    policy.enforced = microvm_netstack_enforced(&name);
+    policy.enforced = if policy.boundary.is_empty() {
+        microvm_netstack_enforced(&name)
+    } else {
+        policy.boundary == "enforced"
+    };
     policy.net_link = if policy.enforced {
         "netstack".into()
     } else {

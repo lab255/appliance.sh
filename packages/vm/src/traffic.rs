@@ -394,9 +394,11 @@ fn human_ago(now_ms: u64, then_ms: u64) -> String {
 /// permit each — making the blocked→allow remediation loop obvious. Pure
 /// (`now_ms` drives the relative last-seen) so it's unit-tested directly.
 /// `is_default_vm` decides whether the hint carries a `--name <name>`.
+/// `netstack` distinguishes the hard boundary from the cooperative proxy.
 pub fn render_denied_report(
     name: &str,
     is_default_vm: bool,
+    netstack: bool,
     denied: &[DeniedHost],
     now_ms: u64,
 ) -> String {
@@ -425,7 +427,13 @@ pub fn render_denied_report(
             human_ago(now_ms, d.last_seen)
         ));
     }
-    out.push_str("\nThese flows were BLOCKED by the egress boundary (default-deny).\n");
+    if netstack {
+        out.push_str("\nThese flows were BLOCKED by the egress boundary (default-deny).\n");
+    } else {
+        out.push_str(
+            "\nThese flows were BLOCKED by the cooperative egress proxy (bypassable from the guest).\n",
+        );
+    }
     out.push_str(
         "To permit one, allow its host and re-run the workload (the policy reloads live):\n",
     );
@@ -585,7 +593,7 @@ mod tests {
                 last_seen: now - 5 * 60_000,
             },
         ];
-        let out = render_denied_report("appliance", true, &denied, now);
+        let out = render_denied_report("appliance", true, true, &denied, now);
         // The blocked destinations, with count + a relative last-seen.
         assert!(out.contains("exfil.evil.test"));
         assert!(out.contains("12s ago"));
@@ -605,13 +613,16 @@ mod tests {
             count: 1,
             last_seen: 0,
         }];
-        let out = render_denied_report("agent", false, &denied, 1_000);
+        let out = render_denied_report("agent", false, false, &denied, 1_000);
+        assert!(out.contains(
+            "BLOCKED by the cooperative egress proxy (bypassable from the guest)."
+        ));
         assert!(out.contains("appliance vm egress allow x.test --name agent"));
     }
 
     #[test]
     fn render_denied_report_empty_is_reassuring() {
-        let out = render_denied_report("appliance", true, &[], 1_000);
+        let out = render_denied_report("appliance", true, true, &[], 1_000);
         assert!(out.contains("No denied egress attempts"));
         assert!(!out.contains("egress allow"));
     }

@@ -3,6 +3,12 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
+fn parse_spec_for_backend(raw: &str, backend: &str) -> serde_json::Result<(VmSpec, bool)> {
+    let mut spec: VmSpec = serde_json::from_str(raw)?;
+    let normalised = spec.normalise_net_link_for_backend(backend);
+    Ok((spec, normalised))
+}
+
 /// Root for all VM state: VM definitions, disks, cached guest images.
 /// Sits under the same `~/.appliance` umbrella as credentials and the
 /// helper-managed binaries so `rm -rf ~/.appliance` remains the one
@@ -44,9 +50,11 @@ fn migrate_legacy_root(legacy: &std::path::Path, root: &std::path::Path) {
 }
 
 pub fn save_spec(spec: &VmSpec) -> Result<()> {
+    let mut spec = spec.clone();
+    spec.normalise_net_link_for_backend(crate::backend::platform_backend_name());
     let paths = VmPaths::for_name(&spec.name);
     fs::create_dir_all(&paths.dir).with_context(|| format!("create {}", paths.dir.display()))?;
-    let json = serde_json::to_string_pretty(spec)?;
+    let json = serde_json::to_string_pretty(&spec)?;
     fs::write(paths.spec(), json).with_context(|| format!("write {}", paths.spec().display()))?;
     Ok(())
 }
@@ -58,7 +66,8 @@ pub fn load_spec(name: &str) -> Result<Option<VmSpec>> {
         return Ok(None);
     }
     let raw = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let spec = serde_json::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
+    let (spec, _) = parse_spec_for_backend(&raw, crate::backend::platform_backend_name())
+        .with_context(|| format!("parse {}", path.display()))?;
     Ok(Some(spec))
 }
 
@@ -84,13 +93,32 @@ pub fn list_specs() -> Vec<VmSpec> {
         }
         let spec_path = entry.path().join("vm.json");
         if let Ok(raw) = fs::read_to_string(&spec_path) {
-            if let Ok(spec) = serde_json::from_str::<VmSpec>(&raw) {
+            if let Ok((spec, _)) =
+                parse_spec_for_backend(&raw, crate::backend::platform_backend_name())
+            {
                 specs.push(spec);
             }
         }
     }
     specs.sort_by(|a, b| a.name.cmp(&b.name));
     specs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spec::NetLink;
+
+    #[test]
+    fn loading_a_persisted_wsl_netstack_spec_normalises_to_nat() {
+        let mut persisted = VmSpec::defaults("legacy-wsl");
+        persisted.net_link = NetLink::Netstack;
+        let raw = serde_json::to_string(&persisted).unwrap();
+
+        let (loaded, normalised) = parse_spec_for_backend(&raw, "wsl").unwrap();
+        assert!(normalised);
+        assert_eq!(loaded.net_link, NetLink::Nat);
+    }
 }
 
 /// Create the sparse raw data disk if it doesn't exist yet. Sparse so a

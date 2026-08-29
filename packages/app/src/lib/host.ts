@@ -625,6 +625,8 @@ export interface EgressPolicy {
   deny: string[];
   /** TLS interception on — the proxy decrypts allowed HTTPS. */
   mitm: boolean;
+  /** Whether the network boundary is host-enforced or a cooperative proxy. */
+  boundary?: 'enforced' | 'cooperative';
   /** Path to the VM's egress CA cert, when interception is on. */
   caPath?: string;
   /** True when the host netstack is the ENFORCED egress boundary
