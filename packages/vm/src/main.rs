@@ -417,7 +417,7 @@ enum RuntimePolicyCmd {
     Set { vm: String, principal: String },
     /// Print the installed effective policy for a principal.
     Get { vm: String, principal: String },
-    /// Remove an app's installed policy from the WSL VM-wide union.
+    /// Remove an app's installed policy and revoke its proxy credential.
     Remove { vm: String, principal: String },
 }
 
@@ -1434,6 +1434,11 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             normalize_runtime_service_order(&mut plan)?;
             validate_runtime_plan_against_spec(&name, &mut plan, backend_name)?;
             ensure_runtime_running(&name)?;
+            let credential_issued = inject_authenticated_runtime_proxy_environment(
+                &name,
+                &mut plan,
+                backend_name,
+            )?;
             let mut bound = Vec::new();
             for port in &plan.ports {
                 if let Err(error) = runtime_forward_request(
@@ -1445,6 +1450,9 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                 ) {
                     for (host, target, guest) in bound {
                         let _ = runtime_forward_request(&name, "unbind", host, target, guest);
+                    }
+                    if credential_issued {
+                        let _ = egress::revoke_runtime_proxy_credential(&name, &plan.app_id);
                     }
                     return Err(error);
                 }
@@ -1463,6 +1471,9 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                             port.relay,
                         );
                     }
+                    if credential_issued {
+                        let _ = egress::revoke_runtime_proxy_credential(&name, &plan.app_id);
+                    }
                     return Err(anyhow::anyhow!("runtime start RPC: {error}"));
                 }
             };
@@ -1479,6 +1490,9 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                         netstack::GUEST_IP,
                         port.relay,
                     );
+                }
+                if credential_issued {
+                    let _ = egress::revoke_runtime_proxy_credential(&name, &plan.app_id);
                 }
             }
             println!("{response}");
@@ -1904,11 +1918,24 @@ fn validate_runtime_plan_against_spec(
             bail!("runtime start port '{}' does not match the persisted pool spec", port.name);
         }
     }
-    if backend_name == "wsl" && spec.wsl_mode == WslMode::Cooperative {
-        let proxy = egress::guest_proxy_url(name, spec.egress_port);
-        inject_runtime_proxy_environment(plan, &proxy);
-    }
     Ok(())
+}
+
+fn inject_authenticated_runtime_proxy_environment(
+    name: &str,
+    plan: &mut RuntimePlan,
+    backend_name: &str,
+) -> Result<bool> {
+    if backend_name != "wsl" {
+        return Ok(false);
+    }
+    let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
+    if spec.wsl_mode != WslMode::Cooperative {
+        return Ok(false);
+    }
+    let proxy = egress::authenticated_guest_proxy_url(name, &plan.app_id, spec.egress_port)?;
+    inject_runtime_proxy_environment(plan, &proxy);
+    Ok(true)
 }
 
 fn runtime_start_host_path(persisted: &str, backend_name: &str) -> Result<String> {
@@ -2076,7 +2103,7 @@ fn run_runtime_policy(action: RuntimePolicyCmd) -> Result<()> {
         RuntimePolicyCmd::Set { vm, principal } => {
             let mut raw = String::new();
             std::io::stdin().read_to_string(&mut raw)?;
-            let runtime = egress::parse_runtime_policy(&raw)?;
+            let mut runtime = egress::parse_runtime_policy(&raw)?;
             if runtime.vm != vm || runtime.principal != principal {
                 bail!(
                     "stdin policy identity ({}/{}) does not match command ({vm}/{principal})",
@@ -2084,13 +2111,18 @@ fn run_runtime_policy(action: RuntimePolicyCmd) -> Result<()> {
                     runtime.principal
                 );
             }
+            // Credentials are minted only by the validated `runtime start`
+            // path. Policy rewrites retain an existing live credential but
+            // cannot inject or rotate one through stdin.
+            runtime.proxy_credential = None;
             egress::save_runtime_policy(&runtime)?;
             println!("{}", serde_json::to_string_pretty(&runtime)?);
             Ok(())
         }
         RuntimePolicyCmd::Get { vm, principal } => {
-            let runtime = egress::runtime_policy_for_principal(&vm, &principal)
+            let mut runtime = egress::runtime_policy_for_principal(&vm, &principal)
                 .ok_or_else(|| anyhow::anyhow!("no runtime policy for {vm}/{principal}"))?;
+            runtime.proxy_credential = None;
             println!("{}", serde_json::to_string_pretty(&runtime)?);
             Ok(())
         }
@@ -2244,7 +2276,7 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             );
             if spec.wsl_mode == WslMode::Cooperative {
                 eprintln!(
-                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through the proxy (CONNECT by hostname); direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across apps in this VM, dropping per-grant ports."
+                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through the proxy (CONNECT by hostname); direct UDP 53 is dropped. Proxy-aware Runtime traffic keeps each app's granted hosts and TCP ports separate."
                 );
             }
             Ok(())
