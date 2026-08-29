@@ -9,14 +9,20 @@
 //!     host, sourcing the value from the stored secret or from an
 //!     `apiKeyHelper` command (Claude-Code style) the host configures.
 //!
-//! Config + secrets live under the VM state dir on the host — the
-//! guest can't read them. Secrets are written 0600.
+//! Config + secrets live under the VM state dir on the host. Secret and
+//! rule files are restricted to the host user, and rules fail closed when
+//! their host-side ownership or permissions do not satisfy the trust check.
+//! This check is effective against OTHER principals only; it does NOT close a
+//! same-user guest write through WSL drvfs (tracked by the automount card).
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 
 use crate::egress::host_matches;
@@ -24,6 +30,38 @@ use crate::spec::VmPaths;
 
 fn default_header() -> String {
     "authorization".to_string()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, Hash, PartialEq)]
+#[serde(untagged)]
+pub enum CredentialHelper {
+    /// Preferred, cross-platform form. The first element is the executable and
+    /// every remaining element is passed as one literal argument.
+    Argv(Vec<String>),
+    /// Compatibility for rules persisted before argv helpers. Never accepted
+    /// on Windows because appliance-vm intentionally has no shell dependency.
+    LegacyShell(String),
+}
+
+impl CredentialHelper {
+    pub fn legacy(value: impl Into<String>) -> Self {
+        Self::LegacyShell(value.into())
+    }
+
+    /// Parse the single `--helper` CLI value. New callers pass a JSON array;
+    /// everything else remains a legacy shell command for persisted/manual
+    /// compatibility on Unix.
+    pub fn from_cli_arg(raw: String) -> anyhow::Result<Self> {
+        if raw.trim_start().starts_with('[') {
+            let argv: Vec<String> = serde_json::from_str(&raw).context("parse --helper argv JSON")?;
+            if argv.is_empty() || argv.iter().any(String::is_empty) {
+                bail!("credential helper argv must contain a non-empty executable and arguments");
+            }
+            Ok(Self::Argv(argv))
+        } else {
+            Ok(Self::legacy(raw))
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -40,10 +78,11 @@ pub struct CredentialRule {
     /// Header to capture/inject (lowercased; default `authorization`).
     #[serde(default = "default_header")]
     pub header: String,
-    /// Optional command whose stdout is the credential to inject
-    /// (overrides the stored secret). Run via `sh -c`.
+    /// Optional helper whose stdout is the credential to inject (overrides the
+    /// stored secret). New rules use an argv array; legacy strings run through
+    /// `sh -c` on Unix only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub helper: Option<String>,
+    pub helper: Option<CredentialHelper>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -62,19 +101,263 @@ fn secrets_path(name: &str) -> PathBuf {
 }
 
 pub fn load_config(name: &str) -> CredentialConfig {
-    std::fs::read_to_string(config_path(name))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    load_config_path(&config_path(name))
+}
+
+fn load_config_path(path: &Path) -> CredentialConfig {
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CredentialConfig::default(),
+        Err(error) => {
+            eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+            return CredentialConfig::default();
+        }
+    };
+    if verify_config_integrity(path, &file).is_err() {
+        // Deliberately omit the principal, ACL, and file contents. This log
+        // can be surfaced to untrusted workloads and must remain secret-free.
+        eprintln!("egress creds: refusing credential config with unsafe ownership or permissions");
+        return CredentialConfig::default();
+    }
+    let mut raw = String::new();
+    if let Err(error) = file.read_to_string(&mut raw) {
+        eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+        return CredentialConfig::default();
+    }
+    match serde_json::from_str(&raw) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+            CredentialConfig::default()
+        }
+    }
 }
 
 pub fn save_config(name: &str, cfg: &CredentialConfig) -> anyhow::Result<()> {
     let path = config_path(name);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
+        crate::fs_acl::restrict_to_current_user(parent)?;
     }
     std::fs::write(&path, serde_json::to_string_pretty(cfg)?)?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(&path) {
+        let _ = std::fs::remove_file(&path);
+        return Err(error);
+    }
     Ok(())
+}
+
+#[cfg(unix)]
+fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let uid = unsafe { libc::geteuid() };
+    let file_metadata = file.metadata()?;
+    let path_metadata = std::fs::symlink_metadata(path)?;
+    let parent = path.parent().context("credential config has no parent directory")?;
+    let parent_metadata = std::fs::symlink_metadata(parent)?;
+    if path_metadata.file_type().is_symlink()
+        || parent_metadata.file_type().is_symlink()
+        || !file_metadata.is_file()
+        || !parent_metadata.is_dir()
+        || file_metadata.uid() != uid
+        || parent_metadata.uid() != uid
+        || file_metadata.mode() & 0o022 != 0
+        || parent_metadata.mode() & 0o022 != 0
+    {
+        bail!("unsafe credential config ownership or permissions");
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+
+    let parent = path.parent().context("credential config has no parent directory")?;
+    let parent_file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(parent)
+        .with_context(|| format!("open credential config parent {}", parent.display()))?;
+    windows_config_integrity::verify(&parent_file)?;
+    windows_config_integrity::verify(file)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn verify_config_integrity(_path: &Path, _file: &std::fs::File) -> anyhow::Result<()> {
+    bail!("credential config integrity checks are unsupported on this platform")
+}
+
+#[cfg(windows)]
+mod windows_config_integrity {
+    use super::*;
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle;
+    use std::ptr::null_mut;
+    use windows_sys::Win32::Foundation::{
+        LocalFree, ERROR_SUCCESS, GENERIC_ALL, GENERIC_WRITE, HANDLE,
+    };
+    use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
+    use windows_sys::Win32::Security::{
+        CreateWellKnownSid, EqualSid, GetAce, GetLengthSid, IsValidAcl, IsValidSid, ACL,
+        ACE_INHERITED_OBJECT_TYPE_PRESENT, ACE_OBJECT_TYPE_PRESENT, DACL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE,
+        WinBuiltinAdministratorsSid, WinLocalSystemSid,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        DELETE, FILE_APPEND_DATA, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, WRITE_DAC,
+        WRITE_OWNER,
+    };
+    use windows_sys::Win32::System::SystemServices::{
+        ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE_TYPE,
+        ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_ALLOWED_COMPOUND_ACE_TYPE,
+        ACCESS_ALLOWED_OBJECT_ACE_TYPE,
+    };
+
+    struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
+    impl Drop for LocalSecurityDescriptor {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = LocalFree(self.0);
+            }
+        }
+    }
+
+    fn last_os_error(context: &'static str) -> anyhow::Error {
+        anyhow::anyhow!("{context}: {}", std::io::Error::last_os_error())
+    }
+
+    fn well_known_sid(kind: i32) -> anyhow::Result<Vec<u8>> {
+        let mut buffer = vec![0u8; SECURITY_MAX_SID_SIZE as usize];
+        let mut size = buffer.len() as u32;
+        if unsafe { CreateWellKnownSid(kind, null_mut(), buffer.as_mut_ptr().cast(), &mut size) } == 0 {
+            return Err(last_os_error("create well-known SID"));
+        }
+        Ok(buffer)
+    }
+
+    unsafe fn allowed_ace_sid(ace: *const u8, ace_size: usize, ace_type: u32) -> anyhow::Result<PSID> {
+        let mut offset = 8usize; // ACE_HEADER + ACCESS_MASK
+        if ace_type == ACCESS_ALLOWED_OBJECT_ACE_TYPE || ace_type == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE {
+            if ace_size < 12 {
+                bail!("truncated object ACE");
+            }
+            let flags = ace.add(8).cast::<u32>().read_unaligned();
+            offset = 12;
+            if flags & ACE_OBJECT_TYPE_PRESENT != 0 {
+                offset += 16;
+            }
+            if flags & ACE_INHERITED_OBJECT_TYPE_PRESENT != 0 {
+                offset += 16;
+            }
+        }
+        if offset >= ace_size {
+            bail!("truncated allowed ACE SID");
+        }
+        let sid = ace.add(offset) as PSID;
+        if IsValidSid(sid) == 0 {
+            bail!("allowed ACE has an invalid SID");
+        }
+        if offset + GetLengthSid(sid) as usize > ace_size {
+            bail!("allowed ACE SID extends past the ACE");
+        }
+        Ok(sid)
+    }
+
+    /// Inspect the binary security descriptor directly. This deliberately
+    /// avoids `icacls` output parsing, whose account names and prose are
+    /// localized and therefore unsuitable for a fail-closed trust check.
+    pub(super) fn verify(file: &std::fs::File) -> anyhow::Result<()> {
+        let mut owner: PSID = null_mut();
+        let mut dacl: *mut ACL = null_mut();
+        let mut descriptor: PSECURITY_DESCRIPTOR = null_mut();
+        let status = unsafe {
+            GetSecurityInfo(
+                file.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                &mut owner,
+                null_mut(),
+                &mut dacl,
+                null_mut(),
+                &mut descriptor,
+            )
+        };
+        if status != ERROR_SUCCESS {
+            return Err(anyhow::anyhow!(
+                "read credential config ACL: {}",
+                std::io::Error::from_raw_os_error(status as i32)
+            ));
+        }
+        let _descriptor = LocalSecurityDescriptor(descriptor);
+        if owner.is_null() || dacl.is_null() || unsafe { IsValidAcl(dacl) } == 0 {
+            bail!("credential config owner or DACL is missing");
+        }
+
+        let current_sid = crate::fs_acl::current_user_sid()?;
+        if unsafe { EqualSid(owner, current_sid.as_psid()) } == 0 {
+            bail!("credential config is not owned by the current user");
+        }
+        let system = well_known_sid(WinLocalSystemSid)?;
+        let administrators = well_known_sid(WinBuiltinAdministratorsSid)?;
+        let system_sid = system.as_ptr() as PSID;
+        let administrators_sid = administrators.as_ptr() as PSID;
+        let write_mask = GENERIC_ALL
+            | GENERIC_WRITE
+            | FILE_WRITE_DATA
+            | FILE_APPEND_DATA
+            | FILE_WRITE_EA
+            | FILE_WRITE_ATTRIBUTES
+            | DELETE
+            | WRITE_DAC
+            | WRITE_OWNER;
+
+        let ace_count = unsafe { (*dacl).AceCount as u32 };
+        for index in 0..ace_count {
+            let mut raw_ace: *mut c_void = null_mut();
+            if unsafe { GetAce(dacl, index, &mut raw_ace) } == 0 {
+                return Err(last_os_error("read credential config ACE"));
+            }
+            let ace = raw_ace.cast::<u8>();
+            let header = unsafe { &*ace.cast::<windows_sys::Win32::Security::ACE_HEADER>() };
+            let ace_type = header.AceType as u32;
+            let allowed = matches!(
+                ace_type,
+                ACCESS_ALLOWED_ACE_TYPE
+                    | ACCESS_ALLOWED_OBJECT_ACE_TYPE
+                    | ACCESS_ALLOWED_CALLBACK_ACE_TYPE
+                    | ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE
+                    | ACCESS_ALLOWED_COMPOUND_ACE_TYPE
+            );
+            if !allowed {
+                continue;
+            }
+            if header.AceSize < 8 {
+                bail!("credential config has a truncated allowed ACE");
+            }
+            let mask = unsafe { ace.add(4).cast::<u32>().read_unaligned() };
+            if mask & write_mask == 0 {
+                continue;
+            }
+            // Compound ACEs are obsolete and encode multiple principals;
+            // fail closed rather than attempting an incomplete SID parse.
+            if ace_type == ACCESS_ALLOWED_COMPOUND_ACE_TYPE {
+                bail!("credential config has an unsupported write-granting ACE");
+            }
+            let sid = unsafe { allowed_ace_sid(ace, header.AceSize as usize, ace_type)? };
+            let trusted = unsafe {
+                EqualSid(sid, owner) != 0
+                    || EqualSid(sid, system_sid) != 0
+                    || EqualSid(sid, administrators_sid) != 0
+            };
+            if !trusted {
+                bail!("credential config is writable by an untrusted principal");
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Add or update (by host) a rule.
@@ -119,12 +402,22 @@ fn save_secrets(name: &str, map: &SecretMap) -> anyhow::Result<()> {
     let path = secrets_path(name);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
+        crate::fs_acl::restrict_to_current_user(parent)?;
     }
-    std::fs::write(&path, serde_json::to_string_pretty(map)?)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let tmp = path.with_file_name(format!(
+        "{}.tmp",
+        path.file_name()
+            .context("egress secrets path has no file name")?
+            .to_string_lossy()
+    ));
+    std::fs::write(&tmp, serde_json::to_string_pretty(map)?)?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(&tmp) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(error);
+    }
+    if let Err(error) = std::fs::rename(&tmp, &path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(error.into());
     }
     Ok(())
 }
@@ -236,7 +529,13 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
         return Injection::NoRule;
     };
     let value = match &rule.helper {
-        Some(cmd) => run_helper(cmd),
+        Some(helper) => match run_helper(helper) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("egress mitm: credential helper failed: {e:#}");
+                None
+            }
+        },
         None => get_secret(name, host, &rule.header),
     };
     match value {
@@ -247,8 +546,8 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
 
 /// Short TTL for the resolved-helper cache. The brokered key rotates
 /// rarely; a few-second cache is invisible to correctness and removes a
-/// per-request `sh -c` fork of the host helper (`appliance agent
-/// print-key`) on streaming/keep-alive traffic where one CONNECT carries
+/// per-request process spawn of the host helper (`appliance agent print-key`)
+/// on streaming/keep-alive traffic where one CONNECT carries
 /// many intercepted requests.
 ///
 /// Staleness vs rotation (accepted): after the host key is rotated, a
@@ -258,37 +557,140 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
 /// so the 15s window is an accepted trade for not forking per request.
 const HELPER_TTL: Duration = Duration::from_secs(15);
 
-/// `helper command -> (resolved_at, value)`. Process-global so it spans
+/// `helper definition -> (resolved_at, value)`. Process-global so it spans
 /// the per-connection threads the proxy spawns. Never logged.
-fn helper_cache() -> &'static Mutex<HashMap<String, (Instant, String)>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, String)>>> = OnceLock::new();
+fn helper_cache() -> &'static Mutex<HashMap<CredentialHelper, (Instant, String)>> {
+    static CACHE: OnceLock<Mutex<HashMap<CredentialHelper, (Instant, String)>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Run an apiKeyHelper command; stdout (trimmed) is the credential. The
-/// result is cached for `HELPER_TTL` keyed on the command string so we
-/// don't fork `sh -c` per intercepted request. The value is a secret —
-/// it is never logged here or by callers.
-fn run_helper(cmd: &str) -> Option<String> {
+/// Resolve a helper program to an absolute executable. Emitters pin their
+/// running appliance executable. Unix also accepts a bare PATH name for the
+/// generic credential-rule API; Windows requires an absolute program path.
+fn resolve_helper_program(program: &str) -> anyhow::Result<PathBuf> {
+    let path = Path::new(program);
+    if path.is_absolute() {
+        return validate_helper_program(path);
+    }
+
+    #[cfg(windows)]
+    {
+        bail!("credential helper executable must be an absolute path on Windows");
+    }
+
+    #[cfg(not(windows))]
+    {
+        if path.components().count() != 1 {
+            bail!("credential helper executable must be absolute or resolvable on PATH");
+        }
+
+        let path_var = std::env::var_os("PATH").unwrap_or_default();
+        for dir in std::env::split_paths(&path_var) {
+            for candidate in helper_program_candidates(&dir, program) {
+                if let Ok(valid) = validate_helper_program(&candidate) {
+                    return Ok(valid);
+                }
+            }
+        }
+        bail!("credential helper executable '{program}' was not found on PATH")
+    }
+}
+
+#[cfg(not(windows))]
+fn helper_program_candidates(dir: &Path, program: &str) -> Vec<PathBuf> {
+    vec![dir.join(program)]
+}
+
+fn validate_helper_program(path: &Path) -> anyhow::Result<PathBuf> {
+    if !path.is_absolute() {
+        bail!("credential helper executable must resolve to an absolute path");
+    }
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("credential helper executable does not exist: {}", path.display()))?;
+    if !metadata.is_file() {
+        bail!("credential helper executable is not a file: {}", path.display());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            bail!("credential helper file is not executable: {}", path.display());
+        }
+    }
+    #[cfg(windows)]
+    {
+        let extension = path.extension().and_then(|x| x.to_str()).unwrap_or_default();
+        if !extension.eq_ignore_ascii_case("exe") && !extension.eq_ignore_ascii_case("com") {
+            bail!("credential helper executable must be an .exe or .com file on Windows");
+        }
+    }
+    Ok(path.to_path_buf())
+}
+
+#[cfg(windows)]
+fn hide_helper_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_helper_window(_command: &mut Command) {}
+
+/// Run an apiKeyHelper; stdout (trimmed) is the credential. The result is
+/// cached for `HELPER_TTL` keyed on the complete helper definition. The value
+/// is a secret — it is never logged here or by callers.
+fn run_helper(helper: &CredentialHelper) -> anyhow::Result<String> {
     {
         let cache = helper_cache().lock().unwrap_or_else(|p| p.into_inner());
-        if let Some((at, value)) = cache.get(cmd) {
+        if let Some((at, value)) = cache.get(helper) {
             if at.elapsed() < HELPER_TTL {
-                return Some(value.clone());
+                return Ok(value.clone());
             }
         }
     }
-    let out = std::process::Command::new("sh").arg("-c").arg(cmd).output().ok()?;
+
+    let mut command = match helper {
+        CredentialHelper::Argv(argv) => {
+            let (program, args) = argv
+                .split_first()
+                .filter(|(program, _)| !program.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("credential helper argv must start with an executable"))?;
+            let mut command = Command::new(resolve_helper_program(program)?);
+            command.args(args);
+            command.stdin(std::process::Stdio::null());
+            hide_helper_window(&mut command);
+            command
+        }
+        CredentialHelper::LegacyShell(cmd) => {
+            #[cfg(windows)]
+            {
+                let _ = cmd;
+                bail!("legacy shell helper is not supported on Windows; re-run `appliance agent login`");
+            }
+            #[cfg(not(windows))]
+            {
+                let mut command = Command::new("sh");
+                command.args(["-c", cmd]);
+                command.stdin(std::process::Stdio::null());
+                command
+            }
+        }
+    };
+    let out = command.output().context("run credential helper")?;
     if !out.status.success() {
-        return None;
+        bail!("credential helper exited with status {}", out.status);
     }
     let value = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if value.is_empty() {
-        return None;
+        bail!("credential helper returned an empty value");
+    }
+    if value.contains(['\r', '\n']) {
+        bail!("credential helper output must be a single line");
     }
     let mut cache = helper_cache().lock().unwrap_or_else(|p| p.into_inner());
-    cache.insert(cmd.to_string(), (Instant::now(), value.clone()));
-    Some(value)
+    cache.insert(helper.clone(), (Instant::now(), value.clone()));
+    Ok(value)
 }
 
 /// Rewrite an HTTP head to set `header: value`, replacing any existing
@@ -321,6 +723,87 @@ pub fn set_header(head: &str, header: &str, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn integrity_test_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "appliance-credential-integrity-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    fn integrity_test_config() -> CredentialConfig {
+        CredentialConfig {
+            rules: vec![CredentialRule {
+                host: "safe.example".into(),
+                capture: false,
+                inject: true,
+                header: "authorization".into(),
+                helper: None,
+            }],
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_config_integrity_accepts_private_and_refuses_world_writable_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = integrity_test_path("unix");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-credentials.json");
+        std::fs::write(&file, serde_json::to_vec(&integrity_test_config()).unwrap()).unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&file).unwrap();
+        assert_eq!(load_config_path(&file).rules.len(), 1);
+
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_config_integrity_refuses_world_writable_parent() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = integrity_test_path("unix-bad-parent");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-credentials.json");
+        std::fs::write(&file, serde_json::to_vec(&integrity_test_config()).unwrap()).unwrap();
+        crate::fs_acl::restrict_to_current_user(&file).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_config_integrity_accepts_private_and_refuses_untrusted_write_ace() {
+        use std::os::windows::process::CommandExt;
+
+        let dir = integrity_test_path("windows");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-credentials.json");
+        std::fs::write(&file, serde_json::to_vec(&integrity_test_config()).unwrap()).unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&file).unwrap();
+        assert_eq!(load_config_path(&file).rules.len(), 1);
+
+        let status = Command::new("icacls")
+            .arg(&file)
+            .args(["/grant", "*S-1-1-0:(W)"])
+            .creation_flags(0x0800_0000)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn set_header_replaces_existing() {
@@ -385,6 +868,7 @@ mod tests {
         let _ = remove_rule(name, "api.example.com");
     }
 
+    #[cfg(unix)]
     #[test]
     fn helper_overrides_stored_secret() {
         let name = "creds-test-helper";
@@ -397,7 +881,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "authorization".into(),
-                helper: Some("printf 'Bearer from-helper'".into()),
+                helper: Some(CredentialHelper::legacy("printf 'Bearer from-helper'")),
             },
         )
         .unwrap();
@@ -407,6 +891,107 @@ mod tests {
         };
         assert_eq!(value, "Bearer from-helper");
         let _ = remove_rule(name, "h.test");
+    }
+
+    fn build_test_helper() -> (PathBuf, PathBuf) {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("appliance-cred-helper-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("helper.rs");
+        std::fs::write(
+            &source,
+            r###"fn main() {
+                if std::env::args().any(|arg| arg == "--multiline") {
+                    print!("first\nsecond");
+                } else {
+                    print!("{}", r#"{"kind":"api-key","value":"from-argv"}"#);
+                }
+            }"###,
+        )
+        .unwrap();
+        let executable = dir.join(if cfg!(windows) { "helper.exe" } else { "helper" });
+        #[cfg(not(windows))]
+        let rustc = resolve_helper_program("rustc").expect("rustc is on PATH during cargo test");
+        #[cfg(windows)]
+        let rustc = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .flat_map(|dir| [dir.join("rustc.exe"), dir.join("rustc.com")])
+            .find(|candidate| candidate.is_file())
+            .expect("rustc is on PATH during cargo test");
+        let status = Command::new(rustc)
+            .args([source.as_os_str(), std::ffi::OsStr::new("-o"), executable.as_os_str()])
+            .status()
+            .expect("compile argv credential helper");
+        assert!(status.success());
+        (dir, executable)
+    }
+
+    #[test]
+    fn argv_helper_resolves_kind_value_envelope() {
+        let (dir, executable) = build_test_helper();
+        let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned()]);
+        let value = run_helper(&helper).expect("run argv credential helper");
+        let envelope: serde_json::Value = serde_json::from_str(&value).expect("helper envelope JSON");
+        assert_eq!(envelope, serde_json::json!({ "kind": "api-key", "value": "from-argv" }));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn helper_rejects_multiline_output() {
+        let (dir, executable) = build_test_helper();
+        let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned(), "--multiline".into()]);
+        assert_eq!(run_helper(&helper).unwrap_err().to_string(), "credential helper output must be a single line");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_helper_program_must_be_absolute() {
+        assert_eq!(
+            resolve_helper_program("rustc").unwrap_err().to_string(),
+            "credential helper executable must be an absolute path on Windows"
+        );
+    }
+
+    #[test]
+    fn helper_json_round_trips_argv_and_legacy_forms() {
+        let argv = CredentialHelper::Argv(vec![
+            if cfg!(windows) {
+                r"C:\Program Files\Appliance\appliance.exe".into()
+            } else {
+                "/Applications/Appliance.app/Contents/MacOS/appliance".into()
+            },
+            "agent".into(),
+            "print-key".into(),
+            "--type".into(),
+            "claude-code".into(),
+        ]);
+        let encoded = serde_json::to_string(&argv).unwrap();
+        assert!(encoded.starts_with('['));
+        assert_eq!(serde_json::from_str::<CredentialHelper>(&encoded).unwrap(), argv);
+        assert_eq!(
+            serde_json::from_str::<CredentialHelper>(r#""printf legacy""#).unwrap(),
+            CredentialHelper::legacy("printf legacy")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn legacy_shell_helper_still_works_on_unix() {
+        let helper = CredentialHelper::legacy("printf legacy-helper");
+        assert_eq!(run_helper(&helper).unwrap(), "legacy-helper");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_shell_helper_is_rejected_on_windows_with_migration_error() {
+        let helper = CredentialHelper::legacy("echo legacy-helper");
+        assert_eq!(
+            run_helper(&helper).unwrap_err().to_string(),
+            "legacy shell helper is not supported on Windows; re-run `appliance agent login`"
+        );
     }
 
     #[test]
@@ -424,7 +1009,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("exit 7".into()),
+                helper: Some(CredentialHelper::legacy("exit 7")),
             },
         )
         .unwrap();
@@ -458,7 +1043,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("printf real-key".into()),
+                helper: Some(CredentialHelper::legacy("printf real-key")),
             },
         )
         .unwrap();

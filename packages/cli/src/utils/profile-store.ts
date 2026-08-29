@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
+
+export { restrictWindowsAcl } from './fs-acl.js';
 
 // Unified credentials store shared between the desktop and the CLI.
 //
@@ -73,9 +75,7 @@ const LOCK_TIMEOUT_MS = 2_000;
 export const DEFAULT_PROFILE_NAME = 'default';
 
 function ensureDir(): void {
-  if (!fs.existsSync(APPLIANCE_DIR)) {
-    fs.mkdirSync(APPLIANCE_DIR, { recursive: true, mode: 0o700 });
-  }
+  ensurePrivateDirectory(APPLIANCE_DIR);
 }
 
 /** Synchronous sleep (the store API is sync). Uses Atomics.wait so it
@@ -186,26 +186,13 @@ export function readProfiles(): ProfilesFile {
 function atomicWriteJson(p: string, value: unknown, mode: number): void {
   const tmp = `${p}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode });
-  fs.renameSync(tmp, p);
-  restrictWindowsAcl(p);
-}
-
-/**
- * Windows analogue of the 0600 mode above (which Node maps to nothing
- * useful there): strip inherited ACEs and grant only the current user,
- * the same posture OpenSSH enforces for key files. Best-effort — a
- * missing icacls or an exotic principal must never break a write; the
- * file still ends up owner-readable like before.
- */
-function restrictWindowsAcl(p: string): void {
-  if (process.platform !== 'win32') return;
-  const user = process.env.USERNAME;
-  if (!user) return;
   try {
-    spawnSync('icacls', [p, '/inheritance:r', '/grant:r', `${user}:F`], { stdio: 'ignore', windowsHide: true });
-  } catch {
-    // best-effort
+    restrictWindowsAcl(tmp);
+  } catch (cause) {
+    fs.rmSync(tmp, { force: true });
+    throw cause;
   }
+  fs.renameSync(tmp, p);
 }
 
 /**
