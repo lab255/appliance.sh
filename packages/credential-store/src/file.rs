@@ -112,10 +112,19 @@ impl AclFileStore {
 
     fn path(&self, key: &StoreKey) -> Result<PathBuf, StoreError> {
         match key {
+            StoreKey::Cluster(profile) => Ok(self
+                .root
+                .join("cluster")
+                .join(format!("{}-cred", profile.as_str()))),
+            StoreKey::Agent(provider) => Ok(self
+                .root
+                .join("agent")
+                .join(format!("{}-cred", provider.as_str()))),
+            StoreKey::EntitlementKey => Ok(self.root.join("device-entitlement-key.json")),
+            StoreKey::EntitlementAnchor => Ok(self.root.join("device-entitlement-anchor.json")),
             StoreKey::VmBroker { name, file } => {
                 Ok(self.root.join(name.as_str()).join(file.file_name()))
             }
-            _ => Err(StoreError::Unsupported(key.canonical_name())),
         }
     }
 
@@ -333,6 +342,38 @@ mod tests {
             fs::metadata(file).unwrap().permissions().mode() & 0o777,
             0o600
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
+    #[test]
+    fn linux_file_backend_supports_cluster_and_agent_credentials() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = test_root("linux-desktop");
+        let store = AclFileStore::new(&root);
+        let cluster = StoreKey::cluster("dev%20profile").unwrap();
+        let agent = StoreKey::agent("anthropic").unwrap();
+
+        store.put(&cluster, b"cluster secret").unwrap();
+        store.put(&agent, b"agent secret").unwrap();
+        assert_eq!(
+            store.get(&cluster).unwrap().as_deref(),
+            Some(b"cluster secret".as_slice())
+        );
+        assert_eq!(
+            store.get(&agent).unwrap().as_deref(),
+            Some(b"agent secret".as_slice())
+        );
+        for file in [
+            root.join("cluster/dev%20profile-cred"),
+            root.join("agent/anthropic-cred"),
+        ] {
+            assert_eq!(
+                fs::metadata(file).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -16,7 +16,6 @@
 //! same-user guest write through WSL drvfs (tracked by the automount card).
 
 use std::collections::HashMap;
-#[cfg(test)]
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -131,73 +130,49 @@ fn credential_path(name: &str, file: VmBrokerFile) -> PathBuf {
 
 pub fn load_config(name: &str) -> CredentialConfig {
     let path = config_path(name);
-    let key = match credential_key(name, VmBrokerFile::Credentials) {
-        Ok(key) => key,
-        Err(error) => {
-            eprintln!("egress creds: ignoring invalid VM credential key: {error}");
-            return CredentialConfig::default();
-        }
+    let Some(raw) = read_verified_broker_file(&path) else {
+        return CredentialConfig::default();
     };
-    let raw = match credential_store().get(&key) {
-        Ok(Some(raw)) => raw,
-        Ok(None) => return CredentialConfig::default(),
-        Err(error) => {
-            eprintln!(
-                "egress creds: ignoring unreadable {}: {error}",
-                path.display()
-            );
-            return CredentialConfig::default();
-        }
-    };
-    let file = match std::fs::File::open(&path) {
+    parse_config(&path, &raw)
+}
+
+/// Open once, verify that exact handle, then read from it. Keeping the
+/// integrity check and read on one `File` closes the rename/swap window that
+/// exists when a store read and a later verification open are separate.
+fn read_verified_broker_file(path: &Path) -> Option<Vec<u8>> {
+    let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
         Err(error) => {
             eprintln!(
                 "egress creds: ignoring unreadable {}: {error}",
                 path.display()
             );
-            return CredentialConfig::default();
+            return None;
         }
     };
     if verify_config_integrity(&path, &file).is_err() {
         // Deliberately omit the principal, ACL, and file contents. This log
         // can be surfaced to untrusted workloads and must remain secret-free.
         eprintln!("egress creds: refusing credential config with unsafe ownership or permissions");
-        return CredentialConfig::default();
+        return None;
     }
-    parse_config(&path, &raw)
-}
-
-#[cfg(test)]
-fn load_config_path(path: &Path) -> CredentialConfig {
-    let mut file = match std::fs::File::open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return CredentialConfig::default()
-        }
-        Err(error) => {
-            eprintln!(
-                "egress creds: ignoring unreadable {}: {error}",
-                path.display()
-            );
-            return CredentialConfig::default();
-        }
-    };
-    if verify_config_integrity(path, &file).is_err() {
-        // Deliberately omit the principal, ACL, and file contents. This log
-        // can be surfaced to untrusted workloads and must remain secret-free.
-        eprintln!("egress creds: refusing credential config with unsafe ownership or permissions");
-        return CredentialConfig::default();
-    }
-    let mut raw = String::new();
-    if let Err(error) = file.read_to_string(&mut raw) {
+    let mut raw = Vec::new();
+    if let Err(error) = file.read_to_end(&mut raw) {
         eprintln!(
             "egress creds: ignoring unreadable {}: {error}",
             path.display()
         );
-        return CredentialConfig::default();
+        return None;
     }
-    parse_config(path, raw.as_bytes())
+    Some(raw)
+}
+
+#[cfg(test)]
+fn load_config_path(path: &Path) -> CredentialConfig {
+    read_verified_broker_file(path)
+        .map(|raw| parse_config(path, &raw))
+        .unwrap_or_default()
 }
 
 fn parse_config(path: &Path, raw: &[u8]) -> CredentialConfig {
@@ -495,8 +470,7 @@ fn secret_key(host: &str, header: &str) -> String {
 }
 
 fn load_secrets(name: &str) -> SecretMap {
-    let key = credential_key(name, VmBrokerFile::Secrets).ok();
-    key.and_then(|key| credential_store().get(&key).ok().flatten())
+    read_verified_broker_file(&credential_path(name, VmBrokerFile::Secrets))
         .and_then(|raw| serde_json::from_slice(&raw).ok())
         .unwrap_or_default()
 }
@@ -939,6 +913,22 @@ mod tests {
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
 
         assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn verified_reader_refuses_unsafe_secret_file_before_parsing() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = integrity_test_path("unix-secret");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-secrets.json");
+        std::fs::write(&file, br#"{"api.test\tauthorization":"Bearer secret"}"#).unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o666)).unwrap();
+
+        assert!(read_verified_broker_file(&file).is_none());
         std::fs::remove_dir_all(dir).unwrap();
     }
 

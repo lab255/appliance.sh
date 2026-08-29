@@ -1,8 +1,10 @@
 mod terminal;
 
-use appliance_credential_store::{
-    encode_identifier, CredentialStore, KeyringStore, StoreError, StoreKey,
-};
+#[cfg(not(any(windows, target_os = "macos")))]
+use appliance_credential_store::AclFileStore;
+#[cfg(any(windows, target_os = "macos"))]
+use appliance_credential_store::KeyringStore;
+use appliance_credential_store::{encode_identifier, CredentialStore, StoreError, StoreKey};
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead as _, Write as _};
@@ -1249,6 +1251,10 @@ fn shared_secret_for_platform(secret: String, uses_os_store: bool) -> String {
     }
 }
 
+fn vm_profile_uses_os_store(managed: Option<&str>) -> bool {
+    cfg!(windows) || (cfg!(target_os = "macos") && managed == Some("desktop"))
+}
+
 /// Reflect the current desktop-side state into the shared file. Reads
 /// each cluster's secret out of the OS store (for key_id metadata, and the
 /// secret itself on Linux); clusters without an OS-store
@@ -1670,9 +1676,22 @@ fn cluster_store_key(account: &str) -> Result<StoreKey, HostError> {
     Ok(StoreKey::cluster(encode_identifier(cluster_id))?)
 }
 
+#[cfg(any(windows, target_os = "macos"))]
+fn desktop_credential_store() -> impl CredentialStore {
+    KeyringStore::new()
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn desktop_credential_store() -> impl CredentialStore {
+    let root = home_dir()
+        .map(|home| home.join(SHARED_PROFILES_DIR))
+        .unwrap_or_else(|| PathBuf::from(SHARED_PROFILES_DIR));
+    AclFileStore::new(root)
+}
+
 fn read_api_key(account: &str) -> Option<ApiKey> {
     let key = cluster_store_key(account).ok()?;
-    KeyringStore::new()
+    desktop_credential_store()
         .get(&key)
         .ok()
         .flatten()
@@ -1681,13 +1700,13 @@ fn read_api_key(account: &str) -> Option<ApiKey> {
 
 fn write_api_key(account: &str, key: &ApiKey) -> Result<(), HostError> {
     let payload = serde_json::to_string(key)?;
-    KeyringStore::new().put(&cluster_store_key(account)?, payload.as_bytes())?;
+    desktop_credential_store().put(&cluster_store_key(account)?, payload.as_bytes())?;
     Ok(())
 }
 
 fn delete_api_key(account: &str) {
     if let Ok(key) = cluster_store_key(account) {
-        let _ = KeyringStore::new().delete(&key);
+        let _ = desktop_credential_store().delete(&key);
     }
 }
 
@@ -4626,11 +4645,11 @@ fn persist_vm_profile_entry(
         vec![cluster_id]
     };
     for id in ids {
-        let uses_os_store = cfg!(any(target_os = "macos", target_os = "windows"));
+        let prev = file.profiles.get(id).cloned().unwrap_or_default();
+        let uses_os_store = vm_profile_uses_os_store(prev.managed.as_deref());
         if uses_os_store {
             write_api_key(&cluster_keychain_account(id), key)?;
         }
-        let prev = file.profiles.get(id).cloned().unwrap_or_default();
         file.profiles.insert(
             id.to_string(),
             SharedProfileEntry {
@@ -6301,7 +6320,7 @@ struct AgentCredentialEnvelope<'a> {
 }
 
 fn store_agent_cred_envelope(provider: &str, envelope: &str) -> Result<(), String> {
-    KeyringStore::new()
+    desktop_credential_store()
         .put(&agent_store_key(provider)?, envelope.as_bytes())
         .map_err(|error| error.to_string())
 }
@@ -6381,7 +6400,7 @@ fn parse_cred_kind(raw: &str) -> Option<String> {
 }
 
 fn read_agent_cred_status(provider: &str) -> Result<AgentAuthStatus, String> {
-    let raw = KeyringStore::new()
+    let raw = desktop_credential_store()
         .get(&agent_store_key(provider)?)
         .map_err(|error| error.to_string())?;
     let kind = raw
@@ -6407,7 +6426,7 @@ async fn microvm_agent_login_status(agent_type: String) -> Result<AgentAuthStatu
 }
 
 fn forget_agent_cred(provider: &str) -> Result<(), String> {
-    KeyringStore::new()
+    desktop_credential_store()
         .delete(&agent_store_key(provider)?)
         .map_err(|error| error.to_string())
 }
@@ -7833,6 +7852,19 @@ mod tests {
     #[test]
     fn windows_keeps_the_secret_out_of_the_shared_file() {
         assert_eq!(shared_secret_for_platform("s3cr3t".to_string(), true), "");
+    }
+
+    #[test]
+    fn vm_profiles_only_use_the_platform_store_when_the_cli_can_read_it() {
+        assert_eq!(
+            vm_profile_uses_os_store(Some("cli")),
+            cfg!(windows),
+            "macOS CLI-managed profiles stay file-backed"
+        );
+        assert_eq!(
+            vm_profile_uses_os_store(Some("desktop")),
+            cfg!(any(windows, target_os = "macos"))
+        );
     }
 
     #[test]
