@@ -176,19 +176,18 @@ existing legacy proxy is VM-scoped and loads only `load_policy(vm)` per request
 (`packages/vm/src/egress.rs:890-927`); it is not sufficient for per-app policy
 without the authenticated Runtime policy selector.
 
-Decision: ship enforce-what-we-can, with no silent equivalence claim. Do not
-refuse every WSL app that requests egress; that would make the owner-mandated
-Runtime support unusable for networked apps. Grant prompts remain meaningful for
-proxy-aware traffic, but must include the cooperative limitation. Make the
-downgrade configurable per VM or globally, for example
-`appliance vm egress wsl-mode cooperative|strict`. `cooperative` starts apps
-with the prominent bypass warning; `strict` refuses to start any app whose
-manifest requests egress grants on WSL. The proposed default is `cooperative`,
-but that default is a Manager decision pending owner confirmation.
+Decision: make the downgrade configurable per VM or globally, for example
+`appliance vm egress wsl-mode cooperative|strict`, and default to `strict`.
+`strict` refuses to start any app whose manifest requests egress grants on WSL.
+The user must explicitly opt into `cooperative`, which ships
+enforce-what-we-can with no silent equivalence claim and displays the prominent
+bypass warning. Grant prompts remain meaningful for proxy-aware traffic in
+`cooperative` mode, but must include that limitation.
 
 `appliance vm egress policy appliance-runtime` must report effective capability,
-not infer a host boundary from the persisted `netLink=netstack`. Its JSON uses
-AP-193's flattened policy fields and adds effective enforcement metadata:
+not infer a host boundary from the persisted `netLink=netstack`. When the user
+opts into `cooperative`, its JSON uses AP-193's flattened policy fields and adds
+effective enforcement metadata:
 
 ```json
 {
@@ -283,10 +282,10 @@ and WSL versions with the result.
 - **3a. Truthful capability labeling, VM-wide cooperative policy, configurable
   `wsl-mode`, and live certification (M).** Acceptance:
   proxy-aware HTTP(S) obeys the VM-wide policy; policy output says bypassable
-  cooperative WSL; `strict` refuses apps that request egress grants;
-  `cooperative` carries the prominent warning; compound/app-window behavior
-  passes; and the owner records the one live run above. The proposed
-  `cooperative` default is a Manager decision pending owner confirmation.
+  cooperative WSL; `strict` is the default and refuses apps that request egress
+  grants; users can opt into `cooperative`, which carries the prominent warning;
+  compound/app-window behavior passes; and the owner records the one live run
+  above.
 - **3b. Authenticated per-app selector and revocation (L).** Acceptance:
   each app's proxy credential selects only its granted host/port policy;
   MITM/log attribution is per app; and stopping an app revokes its credential.
@@ -297,30 +296,31 @@ unblocks the owner run; 3b builds on its truthful VM-wide policy.
 
 ## Alternatives considered
 
-| Alternative                                                      | Decision            | Reason                                                                                                                                                        |
-| ---------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| WSL NAT forwards + shared guest + cooperative proxy              | **Chosen**          | Uses the implemented WSL primitives and keeps the loopback product contract.                                                                                  |
-| VM-wide cooperative policy only on WSL v1 (no per-app selector)  | Considered          | Ships in weeks not months, matches today's `load_policy` proxy exactly, but unions app grants; chosen as the FIRST step (3a) with the per-app selector as 3b. |
-| Require the VZ-style host netstack on Windows                    | Rejected            | WSL does not expose the raw NIC/socketpair the smoltcp boundary requires.                                                                                     |
-| `netsh interface portproxy` for app ports                        | Rejected            | Adds administrator requirements and machine-global, failure-prone state.                                                                                      |
-| Depend on WSL mirrored networking/automatic localhost forwarding | Rejected for v1     | Current guest-IP and gateway discovery require NAT; behavior varies by Windows/WSL version.                                                                   |
-| Refuse all WSL apps with per-app egress grants                   | Rejected by default | Honest but makes common networked apps unusable; cooperative enforcement plus a prominent limitation meets the owner decision.                                |
-| Fork both Runtime supervisors for WSL                            | Rejected            | The lifecycle/isolation logic would drift; only share acquisition and host networking differ.                                                                 |
+| Alternative                                                      | Decision           | Reason                                                                                                                                                        |
+| ---------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WSL NAT forwards + shared guest + cooperative proxy              | **Chosen**         | Uses the implemented WSL primitives and keeps the loopback product contract.                                                                                  |
+| VM-wide cooperative policy only on WSL v1 (no per-app selector)  | Considered         | Ships in weeks not months, matches today's `load_policy` proxy exactly, but unions app grants; chosen as the FIRST step (3a) with the per-app selector as 3b. |
+| Require the VZ-style host netstack on Windows                    | Rejected           | WSL does not expose the raw NIC/socketpair the smoltcp boundary requires.                                                                                     |
+| `netsh interface portproxy` for app ports                        | Rejected           | Adds administrator requirements and machine-global, failure-prone state.                                                                                      |
+| Depend on WSL mirrored networking/automatic localhost forwarding | Rejected for v1    | Current guest-IP and gateway discovery require NAT; behavior varies by Windows/WSL version.                                                                   |
+| Default to refusing WSL apps with egress grants                  | **Chosen default** | `strict` is safe by default; users must explicitly opt into bypassable `cooperative` enforcement for networked apps.                                          |
+| Fork both Runtime supervisors for WSL                            | Rejected           | The lifecycle/isolation logic would drift; only share acquisition and host networking differ.                                                                 |
 
-## Owner decisions and remaining gates
+## Owner decisions
 
 1. **Security posture — DECIDED:** expose per-VM/global `wsl-mode` as described
-   in Decision 3. The proposed `cooperative` default remains a Manager decision
-   pending owner confirmation; never market WSL as a hard sandbox boundary.
+   in Decision 3. Default to `strict`; users must opt into `cooperative`, which
+   displays the prominent bypass warning. Never market WSL as a hard sandbox
+   boundary.
 2. **Networking mode — DECIDED:** NAT-only for v1 with the existing fail-fast
    remediation; mirrored networking is not release-blocking.
 3. **Restart semantics — DECIDED:** no auto-start; revalidate bundle and grants
    on the next `runtime open`, retaining the same URL.
 4. **Live evidence — DECIDED:** one owner-run Windows session at the end, as
    specified in Decision 5. No additional human wait is part of AP-190.
-5. **Attribution model — PENDING owner answer:** on WSL, audit/entitlement logs
-   and grant prompts identify apps by credential, not source IP — recommended
-   default: accept credential-based attribution on WSL.
-6. **drvfs read-only bind-remount is not an integrity boundary — PENDING owner
-   answer:** Windows can mutate payload bytes after verification — recommended
-   default: verify-on-open, accept TOCTOU on drvfs.
+5. **Attribution model — DECIDED:** on WSL, audit/entitlement logs and grant
+   prompts identify apps by credential, not source IP. Credential-based
+   attribution is accepted on WSL.
+6. **drvfs integrity — DECIDED:** a read-only bind-remount is not an integrity
+   boundary because Windows can mutate payload bytes after verification.
+   Verify-on-open and accept TOCTOU on drvfs.
