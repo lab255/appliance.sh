@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "api-key",
+    "value": "plain-api-key",
+    "encoded": "{\"kind\":\"api-key\",\"value\":\"plain-api-key\"}"
+  },
+  {
+    "kind": "oauth",
+    "value": "quote: \"hello\"",
+    "encoded": "{\"kind\":\"oauth\",\"value\":\"quote: \\\"hello\\\"\"}"
+  },
+  {
+    "kind": "pat",
+    "value": "C:\\Users\\appliance\\token",
+    "encoded": "{\"kind\":\"pat\",\"value\":\"C:\\\\Users\\\\appliance\\\\token\"}"
+  },
+  {
+    "kind": "api-key",
+    "value": "雪だるま☃️ café",
+    "encoded": "{\"kind\":\"api-key\",\"value\":\"雪だるま☃️ café\"}"
+  },
+  {
+    "kind": "control",
+    "value": "line one\nline two\tend",
+    "encoded": "{\"kind\":\"control\",\"value\":\"line one\\nline two\\tend\"}"
+  }
+]

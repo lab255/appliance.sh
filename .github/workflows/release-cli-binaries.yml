@@ -22,6 +22,8 @@ jobs:
   build:
     name: Build + publish CLI binaries
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,6 +47,36 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust for Windows credential helper
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache credential-helper Cargo inputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/credhelper
+
+      - name: Install pinned Windows cross-builder
+        run: cargo install cargo-xwin --version 0.23.1 --locked
+
+      # TODO(AP-202): Authenticode-sign the Windows helper before upload.
+      # Until then, the baked SHA-256 is the release trust boundary.
+      - name: Build + verify Windows credential helper
+        env:
+          APPLIANCE_CREDHELPER_CACHE_DIR: ${{ runner.temp }}/appliance-credhelper-digest
+        run: pnpm --filter @appliance.sh/cli credhelper:digest -- --check
+
+      - name: Stage Windows credential helper
+        run: |
+          set -euo pipefail
+          ASSET=appliance-credhelper-x86_64-pc-windows-msvc.exe
+          SOURCE=packages/credhelper/target/x86_64-pc-windows-msvc/release/appliance-credhelper.exe
+          mkdir -p packages/cli/dist
+          cp "$SOURCE" "packages/cli/dist/$ASSET"
+          DIGEST=$(sha256sum "packages/cli/dist/$ASSET" | cut -d ' ' -f 1)
+          printf '%s  %s\n' "$DIGEST" "$ASSET" > "packages/cli/dist/$ASSET.sha256"
 
       # Build the CLI and its workspace deps in topological order straight
       # from the nx dependency graph (sdk → infra → bootstrap → helper →
@@ -124,6 +156,8 @@ jobs:
             appliance-x86_64-unknown-linux-gnu
             appliance-aarch64-unknown-linux-gnu
             appliance-x86_64-pc-windows-msvc.exe
+            appliance-credhelper-x86_64-pc-windows-msvc.exe
+            appliance-credhelper-x86_64-pc-windows-msvc.exe.sha256
           )
           # `--clobber` overwrites pre-existing assets so a re-run of
           # this workflow (e.g. fixing a build issue) updates the
@@ -145,3 +179,76 @@ jobs:
             appliance-api-server-linux-x64 \
             appliance-api-server-linux-arm64 \
             appliance-console.tar.gz
+
+  build-credential-helper:
+    name: Build + publish credential helper (${{ matrix.triple }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: aarch64-apple-darwin
+            runs_on: macos-14
+            extension: ''
+          - triple: x86_64-apple-darwin
+            runs_on: macos-15-intel
+            extension: ''
+          - triple: x86_64-unknown-linux-gnu
+            runs_on: ubuntu-latest
+            extension: ''
+          - triple: aarch64-unknown-linux-gnu
+            runs_on: ubuntu-24.04-arm
+            extension: ''
+    runs-on: ${{ matrix.runs_on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/credhelper
+
+      - name: Build credential helper (native target)
+        run: >-
+          cargo build --locked --release
+          --manifest-path packages/credhelper/Cargo.toml
+          --target ${{ matrix.triple }}
+
+      - name: Stage binary + SHA-256
+        id: stage
+        shell: bash
+        env:
+          TRIPLE: ${{ matrix.triple }}
+          EXTENSION: ${{ matrix.extension }}
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/credential-helper-release"
+          ASSET="appliance-credhelper-${TRIPLE}${EXTENSION}"
+          SOURCE="packages/credhelper/target/${TRIPLE}/release/appliance-credhelper${EXTENSION}"
+          mkdir -p "$OUT"
+          cp "$SOURCE" "$OUT/$ASSET"
+          if command -v sha256sum >/dev/null 2>&1; then
+            DIGEST=$(sha256sum "$OUT/$ASSET" | cut -d ' ' -f 1)
+          else
+            DIGEST=$(shasum -a 256 "$OUT/$ASSET" | cut -d ' ' -f 1)
+          fi
+          printf '%s  %s\n' "$DIGEST" "$ASSET" > "$OUT/$ASSET.sha256"
+          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+
+      - name: Upload helper + SHA-256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.build.outputs.tag }}
+          OUT: ${{ steps.stage.outputs.out }}
+          ASSET: ${{ steps.stage.outputs.asset }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" --clobber "$OUT/$ASSET" "$OUT/$ASSET.sha256"

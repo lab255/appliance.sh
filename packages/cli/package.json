@@ -28,6 +28,7 @@
     "compile:linux-arm64": "bun build src/appliance.ts --compile --target=bun-linux-arm64 --outfile=dist/appliance-aarch64-unknown-linux-gnu",
     "compile:windows-x64": "bun build src/appliance.ts --compile --target=bun-windows-x64 --outfile=dist/appliance-x86_64-pc-windows-msvc.exe",
     "compile:all": "pnpm run compile:darwin-arm64 && pnpm run compile:darwin-x64 && pnpm run compile:linux-x64 && pnpm run compile:linux-arm64 && pnpm run compile:windows-x64",
+    "credhelper:digest": "node scripts/credential-helper-digest.mjs",
     "postinstall": "node scripts/install-binary.mjs",
     "clean": "rm -rf ./dist/",
     "dev:setup": "pnpm link --global",

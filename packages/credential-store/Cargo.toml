@@ -1,0 +1,26 @@
+[package]
+name = "appliance-credential-store"
+version = "0.1.0"
+description = "Neutral typed credential storage seam for Appliance"
+authors = ["Eliot Lim"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[features]
+default = ["file"]
+file = []
+keyring = ["dep:base64", "dep:keyring"]
+
+[dependencies]
+base64 = { version = "0.22", optional = true }
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native", "windows-native"], optional = true }
+sha2 = "0.10"
+thiserror = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

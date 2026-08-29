@@ -91,7 +91,9 @@ jobs:
       - name: Cache cargo
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: packages/desktop/src-tauri
+          workspaces: |
+            packages/credhelper
+            packages/desktop/src-tauri
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -344,6 +346,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: |
+            packages/credhelper
             packages/desktop/src-tauri
             packages/vm
 
