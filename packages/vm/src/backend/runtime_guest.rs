@@ -183,13 +183,31 @@ pub fn validate_mount_excludes_state_dir(
     mount: &std::path::Path,
     state_dir: &std::path::Path,
 ) -> Result<()> {
-    if mount == state_dir || state_dir.starts_with(mount) || mount.starts_with(state_dir) {
+    let mount_cmp = path_for_state_comparison(mount);
+    let state_cmp = path_for_state_comparison(state_dir);
+    if mount_cmp == state_cmp
+        || state_cmp.starts_with(&mount_cmp)
+        || mount_cmp.starts_with(&state_cmp)
+    {
         bail!(
             "mount path must not contain the appliance state dir ({})",
             state_dir.display()
         );
     }
     Ok(())
+}
+
+fn path_for_state_comparison(path: &std::path::Path) -> std::path::PathBuf {
+    let canonical = crate::store::canonicalize_with_missing_tail(path);
+    #[cfg(windows)]
+    {
+        let rendered = canonical.to_string_lossy();
+        // Windows path identity is case-insensitive, and canonicalize may add
+        // a verbatim prefix even when the persisted path did not have one.
+        return std::path::PathBuf::from(strip_verbatim(&rendered).to_lowercase());
+    }
+    #[cfg(not(windows))]
+    canonical
 }
 
 /// Pure receive plan for a host-streamed artifact. Only fixed absolute guest
@@ -424,6 +442,19 @@ mod tests {
             std::path::Path::new("/users/avery"),
             state,
             std::path::Path::new("/users/avery/.appliance/vm/pool"),
+        ] {
+            assert!(validate_mount_excludes_state_dir(mount, state).is_err());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn mount_containment_ignores_windows_case_and_verbatim_prefixes() {
+        let state = std::path::Path::new(r"\\?\C:\Users\Avery\.appliance\vm");
+        for mount in [
+            std::path::Path::new(r"c:\users\avery"),
+            std::path::Path::new(r"C:\USERS\AVERY\.APPLIANCE\VM"),
+            std::path::Path::new(r"c:\Users\Avery\.appliance\vm\pool"),
         ] {
             assert!(validate_mount_excludes_state_dir(mount, state).is_err());
         }
