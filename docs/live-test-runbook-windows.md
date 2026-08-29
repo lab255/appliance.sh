@@ -87,6 +87,21 @@ writeFileSync(file, JSON.stringify(manifest, null, 2));
 NODE
 "$PROBE_SRC/build-bundle.sh" "$OUT/egress-probe.appliance.zip"
 rm -rf "$PROBE_SRC"
+
+PROBE_B_SRC="$PWD/examples/runtime/.ap206-egress-probe-b"
+rm -rf "$PROBE_B_SRC"
+cp -R examples/runtime/journal "$PROBE_B_SRC"
+node --input-type=module - "$PROBE_B_SRC/appliance.json" <<'NODE'
+import { readFileSync, writeFileSync } from 'node:fs';
+const file = process.argv[2];
+const manifest = JSON.parse(readFileSync(file, 'utf8'));
+manifest.name = 'egress-probe-b';
+manifest.description = 'AP-206 per-app egress isolation probe without grants';
+manifest.network = { egress: [] };
+writeFileSync(file, JSON.stringify(manifest, null, 2));
+NODE
+"$PROBE_B_SRC/build-bundle.sh" "$OUT/egress-probe-b.appliance.zip"
+rm -rf "$PROBE_B_SRC"
 ```
 
 ## 0. Drive-exposure gate — before any payload runs
@@ -106,8 +121,10 @@ wsl.exe -d appliance-vm-appliance -u root -- sh -c 'test ! -e /mnt/c && ! grep -
 "$AP" runtime stop dashboard 2>/dev/null || true
 "$AP" runtime stop notes-suite 2>/dev/null || true
 "$AP" runtime stop egress-probe 2>/dev/null || true
+"$AP" runtime stop egress-probe-b 2>/dev/null || true
 "$AP" runtime uninstall journal dashboard notes-suite || true
 "$AP" runtime uninstall egress-probe 2>/dev/null || true
+"$AP" runtime uninstall egress-probe-b 2>/dev/null || true
 "$AP" vm stop --name appliance-runtime 2>/dev/null || true
 "$AP" vm egress wsl-mode strict
 "$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-strict.json"
@@ -226,9 +243,10 @@ Desktop window URL (must equal item 10's URL): `________________________________
 
 ## 5. Strict refusal, then cooperative allow/deny
 
-The temporary fixture copies the Journal container and requests
-`example.com:443`. After it starts, `wget` enters its task network namespace so
-both requests use the same WSL principal path as the app.
+Fixture A copies the Journal container and requests `example.com:443`; fixture
+B requests no egress. The proxy URLs are read from each task's environment into
+shell variables and are never printed or written to the worksheet. `wget`
+enters the task network namespaces so both requests traverse the WSL proxy path.
 
 ```sh
 "$AP" vm egress wsl-mode strict
@@ -241,52 +259,78 @@ printf '%s\n' "$STRICT_OUTPUT" | tee "$OUT/strict-refusal.txt"
 "$AP" vm egress wsl-mode cooperative
 "$AP" runtime run "$OUT/egress-probe.appliance.zip" --detach \
   2> >(tee "$OUT/cooperative-warning.txt" >&2)
+"$AP" runtime run "$OUT/egress-probe-b.appliance.zip" --detach
 grep -c 'WSL cooperative mode is bypassable' "$OUT/cooperative-warning.txt"
-TASK_PID=$("$APPLIANCE_VM" shell appliance-runtime --root -- \
+TASK_A_PID=$("$APPLIANCE_VM" shell appliance-runtime --root -- \
   "ctr -n appliance-egress-probe tasks list | awk '\$1 == \"appliance-egress-probe\" { print \$2; exit }'")
-PROXY=$("$APPLIANCE_VM" egress gateway appliance-runtime | sed -n 's/^HTTPS_PROXY=//p')
+TASK_B_PID=$("$APPLIANCE_VM" shell appliance-runtime --root -- \
+  "ctr -n appliance-egress-probe-b tasks list | awk '\$1 == \"appliance-egress-probe-b\" { print \$2; exit }'")
+PROXY_A=$("$APPLIANCE_VM" shell appliance-runtime --root -- \
+  "tr '\\0' '\\n' </proc/$TASK_A_PID/environ | sed -n 's/^HTTPS_PROXY=//p' | head -n1")
+PROXY_B=$("$APPLIANCE_VM" shell appliance-runtime --root -- \
+  "tr '\\0' '\\n' </proc/$TASK_B_PID/environ | sed -n 's/^HTTPS_PROXY=//p' | head -n1")
+test -n "$PROXY_A" && test -n "$PROXY_B" && test "$PROXY_A" != "$PROXY_B"
 "$APPLIANCE_VM" shell appliance-runtime --root -- \
-  "nsenter -t $TASK_PID -n env https_proxy=$PROXY HTTPS_PROXY=$PROXY wget -S --spider https://example.com" \
+  "nsenter -t $TASK_A_PID -n env https_proxy='$PROXY_A' HTTPS_PROXY='$PROXY_A' wget -S --spider https://example.com" \
   2>&1 | tee "$OUT/proxy-allow.txt"
 set +e
 "$APPLIANCE_VM" shell appliance-runtime --root -- \
-  "nsenter -t $TASK_PID -n env https_proxy=$PROXY HTTPS_PROXY=$PROXY wget -S --spider https://not-granted.example.test" \
-  >"$OUT/proxy-deny.txt" 2>&1
-DENY_RC=$?
+  "nsenter -t $TASK_B_PID -n env https_proxy='$PROXY_B' HTTPS_PROXY='$PROXY_B' wget -S --spider https://example.com" \
+  >"$OUT/proxy-cross-app-deny.txt" 2>&1
+CROSS_APP_RC=$?
 set -e
 grep -E 'HTTP/[0-9.]+ 200' "$OUT/proxy-allow.txt"
-grep -E 'HTTP/[0-9.]+ 403' "$OUT/proxy-deny.txt"
-printf 'strict_rc=%s deny_rc=%s\n' "$STRICT_RC" "$DENY_RC"
+grep -E 'HTTP/[0-9.]+ 403' "$OUT/proxy-cross-app-deny.txt"
+
+"$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-cooperative.json"
+"$AP" vm egress list --name appliance-runtime | tee "$OUT/list-cooperative.txt"
+jq -e '.enforcement.scope == ["http","https","per-app"]' "$OUT/policy-cooperative.json"
+jq -e '.apps[] | select(.app == "egress-probe") | .hosts[] | select(.host == "example.com" and .ports == [443])' \
+  "$OUT/policy-cooperative.json"
+
+REVOKED_PROXY="$PROXY_A"
+"$AP" runtime stop egress-probe
+set +e
+"$APPLIANCE_VM" shell appliance-runtime --root -- \
+  "nsenter -t $TASK_B_PID -n env https_proxy='$REVOKED_PROXY' HTTPS_PROXY='$REVOKED_PROXY' wget -S --spider https://example.com" \
+  >"$OUT/proxy-revoked.txt" 2>&1
+REVOKED_RC=$?
+set -e
+grep -E 'HTTP/[0-9.]+ 407' "$OUT/proxy-revoked.txt"
+unset PROXY_A PROXY_B REVOKED_PROXY
+printf 'strict_rc=%s cross_app_rc=%s revoked_rc=%s\n' "$STRICT_RC" "$CROSS_APP_RC" "$REVOKED_RC"
 ```
 
 Pass criterion: strict exits 2 with the exact setting name and
 `appliance vm egress wsl-mode cooperative` remediation. The `runtime run`
-command prints the prominent bypass warning exactly once; the granted HTTPS
-request succeeds; the ungranted proxy request returns 403. Cooperative DNS
-must use proxy CONNECT by hostname; direct UDP 53 remains dropped. No direct
-egress success is interpreted as policy enforcement.
+command prints the prominent bypass warning exactly once. App A's granted HTTPS
+request succeeds; the same destination under app B's credential returns 403;
+and app A's captured credential returns 407 after `runtime stop` revokes it.
+The JSON and human list attribute the exact host+port grant to app A without
+printing either credential. Cooperative DNS must use proxy CONNECT by hostname;
+direct UDP 53 remains dropped. No direct egress success is interpreted as
+policy enforcement.
 
 12. Strict refusal exit code: `__________` (must be 2)
 13. Allowed HTTPS status: `__________` (must be 200)
-14. Denied HTTPS status: `__________` (must be 403)
+14. Same host under app B status: `__________` (must be 403)
+15. App A credential after stop status: `__________` (must be 407)
 
 Bypass-warning line count: `____` (must be 1)
 
 ## 6. Cooperative policy wording
 
-```sh
-"$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-cooperative.json"
-"$AP" vm egress list --name appliance-runtime | tee "$OUT/list-cooperative.txt"
-jq '.allow | length' "$OUT/policy-cooperative.json"
-```
+The section 5 capture supplies both files used here.
 
 Pass criterion: JSON remains flattened and contains the sibling
-`enforcement: {backend:"wsl", bypassable:true, scope:["http","https"]}` plus
-`wslMode:"cooperative"`. The list begins exactly `WSL NAT - cooperative proxy,
-bypassable; direct TCP/UDP is not blocked` and never says `host-enforced`. The
-VM-wide union is host-only and drops each manifest grant's port restriction.
+`enforcement: {backend:"wsl", bypassable:true,
+scope:["http","https","per-app"]}` plus `wslMode:"cooperative"` and an
+`apps` block with each app's exact hosts and TCP ports. The list begins exactly
+`WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked`, shows
+per-app rows, never exposes a proxy credential, and never says `host-enforced`.
+The VM-wide compatibility policy applies only to requests without credentials.
 
-15. Cooperative union host count: `__________` (must equal the union of granted hosts; 1 for the probe fixture)
+16. Per-app rows with expected host+port (count): `__________` (must be 2 rows; only app A has `example.com:443`)
 
 ## 7. Pool restart and same-URL reopen
 
@@ -308,8 +352,8 @@ Pass criterion: after pool restart `runtime ps` reconciles Notes Suite to
 stopped, no app/listener auto-starts, `runtime open` revalidates and starts it,
 and the exact loopback URL is reused.
 
-16. Reopen seconds: `__________` (target under 15s, compare to item 8)
-17. URL-stable result (1 pass / 0 fail): `__________`
+17. Reopen seconds: `__________` (target under 15s, compare to item 8)
+18. URL-stable result (1 pass / 0 fail): `__________`
 
 ## 8. Mirrored networking fails fast, then NAT recovers
 
@@ -361,6 +405,9 @@ Post-mirrored NAT recovery (1/0): `__________`
 ```sh
 "$AP" runtime stop notes-suite 2>/dev/null || true
 "$AP" runtime stop egress-probe 2>/dev/null || true
+"$AP" runtime stop egress-probe-b 2>/dev/null || true
+"$AP" runtime uninstall egress-probe 2>/dev/null || true
+"$AP" runtime uninstall egress-probe-b 2>/dev/null || true
 "$AP" vm egress wsl-mode strict
 "$AP" vm egress wsl-mode
 ```
