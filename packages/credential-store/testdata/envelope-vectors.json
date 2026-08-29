@@ -18,5 +18,10 @@
     "kind": "api-key",
     "value": "雪だるま☃️ café",
     "encoded": "{\"kind\":\"api-key\",\"value\":\"雪だるま☃️ café\"}"
+  },
+  {
+    "kind": "control",
+    "value": "line one\nline two\tend",
+    "encoded": "{\"kind\":\"control\",\"value\":\"line one\\nline two\\tend\"}"
   }
 ]

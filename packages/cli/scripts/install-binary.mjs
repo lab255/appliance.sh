@@ -186,6 +186,10 @@ function downloadFollowingRedirects(srcUrl, dest, redirectsLeft = 5) {
           reject(new Error('Too many redirects'));
           return;
         }
+        if (!res.headers.location.startsWith('https://')) {
+          reject(new Error('refusing non-HTTPS redirect'));
+          return;
+        }
         res.resume();
         downloadFollowingRedirects(res.headers.location, dest, redirectsLeft - 1).then(resolve, reject);
         return;

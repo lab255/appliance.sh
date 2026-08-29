@@ -52,7 +52,12 @@ async function download(url, destination, redirectsLeft = 5) {
   await new Promise((resolve, reject) => {
     https
       .get(url, (response) => {
-        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        if (
+          response.statusCode &&
+          response.statusCode >= 300 &&
+          response.statusCode < 400 &&
+          response.headers.location
+        ) {
           response.resume();
           if (redirectsLeft <= 0) return reject(new Error('too many sysroot redirects'));
           if (!response.headers.location.startsWith('https://')) {
@@ -69,10 +74,12 @@ async function download(url, destination, redirectsLeft = 5) {
         const partial = `${destination}.partial`;
         const output = fs.createWriteStream(partial);
         response.pipe(output);
-        output.on('finish', () => output.close(() => {
-          fs.renameSync(partial, destination);
-          resolve();
-        }));
+        output.on('finish', () =>
+          output.close(() => {
+            fs.renameSync(partial, destination);
+            resolve();
+          })
+        );
         output.on('error', reject);
       })
       .on('error', reject);

@@ -3,6 +3,9 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use zeroize::Zeroizing;
+
+const MAX_VALUE_BYTES: u64 = 1024 * 1024;
 
 pub const EXIT_OK: i32 = 0;
 pub const EXIT_INTERNAL: i32 = 1;
@@ -81,14 +84,13 @@ pub fn execute<S: CredentialStore, R: Read, W: Write>(
     match request {
         Request::Store { operation, key } => match operation {
             Operation::Get => {
-                let value = store.get(key)?.ok_or(CommandError::Missing)?;
+                let value = Zeroizing::new(store.get(key)?.ok_or(CommandError::Missing)?);
                 output.write_all(&value)?;
                 output.flush()?;
                 Ok(())
             }
             Operation::Put => {
-                let mut value = Vec::new();
-                input.read_to_end(&mut value)?;
+                let value = read_secret(input)?;
                 store.put(key, &value)?;
                 Ok(())
             }
@@ -108,17 +110,19 @@ pub fn execute<S: CredentialStore, R: Read, W: Write>(
             Ok(())
         }
         Request::EntitlementAnchorGet => {
-            let value = store
-                .get(&StoreKey::entitlement_anchor())?
-                .ok_or(CommandError::Missing)?;
+            let value = Zeroizing::new(
+                store
+                    .get(&StoreKey::entitlement_anchor())?
+                    .ok_or(CommandError::Missing)?,
+            );
             validate_entitlement_anchor(&value)?;
             output.write_all(&value)?;
             output.flush()?;
             Ok(())
         }
         Request::EntitlementAnchorPut => {
-            let mut value = Vec::new();
-            input.read_to_end(&mut value)?;
+            let _lock = UserGlobalLock::acquire()?;
+            let value = read_secret(input)?;
             validate_entitlement_anchor(&value)?;
             store.put(&StoreKey::entitlement_anchor(), &value)?;
             Ok(())
@@ -126,11 +130,30 @@ pub fn execute<S: CredentialStore, R: Read, W: Write>(
     }
 }
 
+fn read_secret<R: Read>(input: &mut R) -> Result<Zeroizing<Vec<u8>>, CommandError> {
+    let mut value = Zeroizing::new(Vec::new());
+    {
+        let mut limited = (&mut *input).take(MAX_VALUE_BYTES);
+        limited.read_to_end(&mut value)?;
+    }
+    if value.len() == MAX_VALUE_BYTES as usize {
+        let mut overflow = [0_u8; 1];
+        if input.read(&mut overflow)? != 0 {
+            return Err(StoreError::Malformed(format!(
+                "credential value exceeds {MAX_VALUE_BYTES} bytes"
+            ))
+            .into());
+        }
+    }
+    Ok(value)
+}
+
 fn get_or_create_entitlement_key<S: CredentialStore>(
     store: &S,
     key: &StoreKey,
-) -> Result<Vec<u8>, CommandError> {
+) -> Result<Zeroizing<Vec<u8>>, CommandError> {
     if let Some(existing) = store.get(key)? {
+        let existing = Zeroizing::new(existing);
         validate_entitlement_key(&existing)?;
         return Ok(existing);
     }
@@ -139,21 +162,25 @@ fn get_or_create_entitlement_key<S: CredentialStore>(
     // same user-global lock; this second read also protects a caller that
     // completed a legacy write just before it joined that protocol.
     if let Some(existing) = store.get(key)? {
+        let existing = Zeroizing::new(existing);
         validate_entitlement_key(&existing)?;
         return Ok(existing);
     }
 
-    let mut seed = [0_u8; 32];
-    getrandom::fill(&mut seed)
+    let mut seed = Zeroizing::new([0_u8; 32]);
+    getrandom::fill(&mut *seed)
         .map_err(|error| StoreError::Internal(format!("secure randomness unavailable: {error}")))?;
-    let generated = format!("ed25519:{}", URL_SAFE_NO_PAD.encode(seed));
+    let generated = Zeroizing::new(format!(
+        "ed25519:{}",
+        URL_SAFE_NO_PAD.encode(seed.as_slice())
+    ));
     store.put(key, generated.as_bytes())?;
 
     // The OS store is canonical. Always re-read instead of returning our
     // candidate so an interleaving writer's value wins visibly.
-    let canonical = store.get(key)?.ok_or_else(|| {
+    let canonical = Zeroizing::new(store.get(key)?.ok_or_else(|| {
         StoreError::Internal("entitlement key disappeared after its write".to_owned())
-    })?;
+    })?);
     validate_entitlement_key(&canonical)?;
     Ok(canonical)
 }
@@ -164,9 +191,9 @@ fn validate_entitlement_key(value: &[u8]) -> Result<(), StoreError> {
     let encoded = wire
         .strip_prefix("ed25519:")
         .ok_or_else(|| StoreError::Malformed("entitlement key has an invalid prefix".to_owned()))?;
-    let decoded = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| {
+    let decoded = Zeroizing::new(URL_SAFE_NO_PAD.decode(encoded).map_err(|_| {
         StoreError::Malformed("entitlement key is not canonical base64url".to_owned())
-    })?;
+    })?);
     if decoded.len() != 32 || URL_SAFE_NO_PAD.encode(&decoded) != encoded {
         return Err(StoreError::Malformed(
             "entitlement key has an invalid seed".to_owned(),
@@ -210,10 +237,16 @@ struct UserGlobalLock {
 
 impl UserGlobalLock {
     fn acquire() -> Result<Self, CommandError> {
+        #[cfg(not(test))]
         let home = dirs::home_dir().ok_or_else(|| {
             StoreError::Internal("cannot resolve the current user's home directory".to_owned())
         })?;
+        #[cfg(not(test))]
         let directory = home.join(".appliance");
+        #[cfg(test)]
+        let directory = std::env::temp_dir()
+            .join("appliance-credhelper-tests")
+            .join(std::process::id().to_string());
         fs::create_dir_all(&directory)?;
         let path = directory.join("credential-store.lock");
         let mut options = OpenOptions::new();
@@ -224,9 +257,69 @@ impl UserGlobalLock {
             options.mode(0o600);
         }
         let file = options.open(path)?;
+        restrict_lock_to_current_user(&file)?;
         fs2::FileExt::lock_exclusive(&file)?;
         Ok(Self { file })
     }
+}
+
+#[cfg(not(windows))]
+fn restrict_lock_to_current_user(_file: &File) -> Result<(), CommandError> {
+    Ok(())
+}
+
+#[cfg(windows)]
+fn restrict_lock_to_current_user(file: &File) -> Result<(), CommandError> {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::process::CommandExt;
+
+    // Resolve the final path from the already-open handle, then bind its DACL
+    // to the current process SID. `*SID` avoids localized account names.
+    let mut path = vec![0_u16; 32_768];
+    let length = unsafe {
+        windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW(
+            file.as_raw_handle(),
+            path.as_mut_ptr(),
+            path.len() as u32,
+            0,
+        )
+    };
+    if length == 0 || length as usize >= path.len() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let path = String::from_utf16(&path[..length as usize])
+        .map_err(|error| StoreError::Internal(format!("lock path is not valid UTF-16: {error}")))?;
+    let whoami = std::process::Command::new("whoami")
+        .args(["/user", "/fo", "csv", "/nh"])
+        .creation_flags(0x0800_0000)
+        .output()?;
+    if !whoami.status.success() {
+        return Err(StoreError::Denied(
+            "could not resolve the current Windows user SID".to_owned(),
+        )
+        .into());
+    }
+    let line = String::from_utf8_lossy(&whoami.stdout);
+    let sid = line
+        .trim()
+        .trim_matches('"')
+        .rsplit_once("\",\"")
+        .map(|(_, sid)| sid.trim_matches('"'))
+        .filter(|sid| sid.starts_with("S-1-"))
+        .ok_or_else(|| StoreError::Internal("whoami returned an invalid user SID".to_owned()))?;
+    let principal = format!("*{sid}:F");
+    let icacls = std::process::Command::new("icacls")
+        .arg(path)
+        .args(["/inheritance:r", "/grant:r", &principal])
+        .creation_flags(0x0800_0000)
+        .output()?;
+    if !icacls.status.success() {
+        return Err(StoreError::Denied(
+            "could not restrict the credential-store lock ACL".to_owned(),
+        )
+        .into());
+    }
+    Ok(())
 }
 
 impl Drop for UserGlobalLock {
@@ -321,6 +414,26 @@ mod tests {
     }
 
     #[test]
+    fn put_rejects_values_larger_than_one_megabyte_without_writing() {
+        let store = MemoryStore::default();
+        let key = StoreKey::cluster("bounded-put").unwrap();
+        let mut oversized = vec![b'x'; MAX_VALUE_BYTES as usize + 1];
+        let error = execute(
+            &store,
+            &Request::Store {
+                operation: Operation::Put,
+                key,
+            },
+            &mut oversized.as_slice(),
+            &mut Vec::new(),
+        )
+        .unwrap_err();
+        oversized.fill(0);
+        assert_eq!(error.exit_code(), EXIT_MALFORMED);
+        assert_eq!(store.put_count.get(), 0);
+    }
+
+    #[test]
     fn existing_entitlement_key_always_wins_without_a_write() {
         let store = MemoryStore::default();
         let key = StoreKey::entitlement_key();
@@ -329,10 +442,8 @@ mod tests {
             .values
             .borrow_mut()
             .insert(key.canonical_name(), existing.as_bytes().to_vec());
-        assert_eq!(
-            get_or_create_entitlement_key(&store, &key).unwrap(),
-            existing.as_bytes()
-        );
+        let actual = get_or_create_entitlement_key(&store, &key).unwrap();
+        assert_eq!(&*actual, existing.as_bytes());
         assert_eq!(store.put_count.get(), 0);
     }
 
@@ -342,10 +453,8 @@ mod tests {
         let winner = format!("ed25519:{}", URL_SAFE_NO_PAD.encode([9_u8; 32]));
         *store.canonical_after_put.borrow_mut() = Some(winner.as_bytes().to_vec());
         let key = StoreKey::entitlement_key();
-        assert_eq!(
-            get_or_create_entitlement_key(&store, &key).unwrap(),
-            winner.as_bytes()
-        );
+        let actual = get_or_create_entitlement_key(&store, &key).unwrap();
+        assert_eq!(&*actual, winner.as_bytes());
         assert_eq!(store.put_count.get(), 1);
     }
 

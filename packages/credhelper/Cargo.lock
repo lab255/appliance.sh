@@ -75,6 +75,8 @@ dependencies = [
  "getrandom 0.3.4",
  "serde",
  "serde_json",
+ "windows-sys 0.59.0",
+ "zeroize",
 ]
 
 [[package]]

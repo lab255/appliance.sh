@@ -53,6 +53,11 @@ export function resolveCredHelperSibling(executablePath: string, platform: NodeJ
   if (!pathApi.isAbsolute(executablePath)) {
     throw new Error('Cannot resolve appliance-credhelper from a non-absolute executable path.');
   }
+  if (
+    !['appliance-bin', 'appliance-bin.exe', 'appliance', 'appliance.exe'].includes(pathApi.basename(executablePath))
+  ) {
+    throw new Error('credential helper is unavailable outside a packaged CLI');
+  }
   const extension = platform === 'win32' ? '.exe' : '';
   return pathApi.join(pathApi.dirname(executablePath), `appliance-credhelper${extension}`);
 }

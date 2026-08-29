@@ -175,7 +175,7 @@ resources/*
 # Appliance builds
 **/appliance.zip
 **/*.appliance.zip
-target/
+/target/
 
 # CLI-written local state (project/env link from `appliance deploy`/`link`).
 # Per-directory, so it appears wherever a deploy is run from — never tracked.

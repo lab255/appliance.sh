@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+// This module is imported by Vitest; keep it free of an executable hashbang.
+// Production callers invoke it explicitly with Node.
 import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -18,18 +19,61 @@ export function normalizePeForDistribution(bytes) {
   }
   bytes.fill(0, peOffset + 8, peOffset + 12);
 
-  const marker = Buffer.from('RSDS');
-  const matches = [];
-  let cursor = 0;
-  while ((cursor = bytes.indexOf(marker, cursor)) !== -1) {
-    matches.push(cursor);
-    cursor += marker.length;
+  const sectionCount = bytes.readUInt16LE(peOffset + 6);
+  const optionalHeaderSize = bytes.readUInt16LE(peOffset + 20);
+  const optionalHeader = peOffset + 24;
+  const magic = bytes.readUInt16LE(optionalHeader);
+  const dataDirectoryOffset = magic === 0x10b ? 96 : magic === 0x20b ? 112 : 0;
+  const directoryCountOffset = magic === 0x10b ? 92 : magic === 0x20b ? 108 : 0;
+  if (!dataDirectoryOffset || optionalHeaderSize < dataDirectoryOffset + 7 * 8) {
+    throw new Error('credential helper has no valid PE optional header');
   }
-  if (matches.length !== 1 || matches[0] + 20 > bytes.length) {
-    throw new Error(`credential helper must contain exactly one complete CodeView record (found ${matches.length})`);
+  const directoryCount = bytes.readUInt32LE(optionalHeader + directoryCountOffset);
+  if (directoryCount <= 6) {
+    throw new Error('credential helper has no CodeView debug directory');
   }
-  bytes.fill(0, matches[0] + 4, matches[0] + 20);
+  const debugDirectoryEntry = optionalHeader + dataDirectoryOffset + 6 * 8;
+  const debugRva = bytes.readUInt32LE(debugDirectoryEntry);
+  const debugSize = bytes.readUInt32LE(debugDirectoryEntry + 4);
+  const sectionTable = optionalHeader + optionalHeaderSize;
+  const debugOffset = rvaToFileOffset(bytes, debugRva, debugSize, sectionTable, sectionCount);
+  if (debugSize === 0 || debugSize % 28 !== 0 || debugOffset === null) {
+    throw new Error('credential helper has an invalid PE debug directory');
+  }
+
+  const codeViewRecords = [];
+  for (let offset = debugOffset; offset < debugOffset + debugSize; offset += 28) {
+    if (bytes.readUInt32LE(offset + 12) !== 2) continue; // IMAGE_DEBUG_TYPE_CODEVIEW
+    const dataSize = bytes.readUInt32LE(offset + 16);
+    const dataRva = bytes.readUInt32LE(offset + 20);
+    const rawPointer = bytes.readUInt32LE(offset + 24);
+    const dataOffset = rawPointer || rvaToFileOffset(bytes, dataRva, dataSize, sectionTable, sectionCount);
+    if (dataOffset === null || dataSize < 20 || dataOffset + dataSize > bytes.length) continue;
+    if (bytes.toString('ascii', dataOffset, dataOffset + 4) === 'RSDS') codeViewRecords.push(dataOffset);
+  }
+  if (codeViewRecords.length !== 1) {
+    throw new Error(
+      `credential helper must contain exactly one complete CodeView record (found ${codeViewRecords.length})`
+    );
+  }
+  bytes.fill(0, codeViewRecords[0] + 4, codeViewRecords[0] + 20);
   return bytes;
+}
+
+function rvaToFileOffset(bytes, rva, size, sectionTable, sectionCount) {
+  for (let index = 0; index < sectionCount; index++) {
+    const section = sectionTable + index * 40;
+    if (section + 40 > bytes.length) return null;
+    const virtualSize = bytes.readUInt32LE(section + 8);
+    const virtualAddress = bytes.readUInt32LE(section + 12);
+    const rawSize = bytes.readUInt32LE(section + 16);
+    const rawPointer = bytes.readUInt32LE(section + 20);
+    const span = Math.max(virtualSize, rawSize);
+    if (rva < virtualAddress || rva + size > virtualAddress + span) continue;
+    const offset = rawPointer + (rva - virtualAddress);
+    if (offset + size <= bytes.length && rva + size <= virtualAddress + rawSize) return offset;
+  }
+  return null;
 }
 
 function main(filePath) {

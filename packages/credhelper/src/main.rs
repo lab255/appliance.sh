@@ -89,7 +89,7 @@ fn main() -> ExitCode {
                 error.kind(),
                 clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
             );
-            let _ = error.print();
+            eprint!("{}", error.render().ansi());
             return exit_code(if help_or_version {
                 EXIT_OK
             } else {
