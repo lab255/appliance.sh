@@ -25,10 +25,11 @@
 //! errors) as UTF-16LE, while output of Linux commands passes through
 //! as the guest wrote it (UTF-8). `decode_wsl` sniffs per call.
 
+use super::runtime_guest::{shell_squote, strip_verbatim};
 use super::VmBackend;
 use crate::spec::{VmPaths, VmSpec};
 use anyhow::{bail, Context, Result};
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -53,6 +54,19 @@ const MINIROOTFS_SHA256_AARCH64: &str =
 
 /// Where the bootstrap script lives inside the distro.
 const BOOTSTRAP_GUEST_PATH: &str = "/opt/appliance/bootstrap.sh";
+const ARTIFACT_GUEST_ROOT: &str = "/opt/appliance/artifacts";
+const K3S_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/k3s";
+const APISERVER_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server";
+const CONSOLE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-console.tar.gz";
+
+pub(crate) const WSL_CONF: &str = r#"[automount]
+enabled=false
+mountFsTab=false
+
+[interop]
+enabled=false
+appendWindowsPath=false
+"#;
 
 /// The WSL distro registered for a VM. Prefixed so `wsl --list` keeps
 /// user distros and appliance VMs visually (and namespace-) separate.
@@ -109,7 +123,6 @@ impl VmBackend for WslBackend {
     }
 
     fn run_foreground(&self, spec: &VmSpec) -> Result<()> {
-        crate::backend::ensure_runtime_supported(self.name(), spec.runtime)?;
         self.availability()?;
         let paths = VmPaths::for_name(&spec.name);
         let distro = distro_name(&spec.name);
@@ -121,26 +134,45 @@ impl VmBackend for WslBackend {
             crate::bringup::Phase::Media,
             Some("download (WSL)".to_string()),
         );
-        // The pinned k3s binary is copied into the distro over drvfs and
-        // re-verified guest-side. Agent-only VMs run no k3s at all.
-        let k3s: Option<(PathBuf, &'static str)> = if spec.agent_only || !spec.cluster {
+        // The pinned k3s binary is streamed into the distro over stdin and
+        // verified guest-side. Agent-only VMs run no k3s at all.
+        let k3s: Option<(PathBuf, &'static str)> = if spec.runtime || spec.agent_only || !spec.cluster {
             None
         } else {
             Some(crate::guest::ensure_k3s()?)
         };
+        let runtime_repositories = if spec.runtime {
+            crate::bringup::hostlog("mirroring signed Alpine packages for the WSL Runtime");
+            crate::images::ensure_runtime_apk_repositories()?
+        } else {
+            Vec::new()
+        };
         ensure_distro(&distro, &paths)?;
-        crate::bringup::set(
-            &paths.dir,
-            crate::bringup::Phase::Media,
-            Some("skipped (WSL)".to_string()),
-        );
 
-        // A previous host process may have died without terminating the
-        // distro (crash, hard kill) — its k3s would still be running in
-        // there, and launching a second bootstrap beside it doubles every
-        // daemon. Terminate best-effort so each boot starts from a clean
-        // guest, the WSL equivalent of a fresh VM launch.
+        // Stop any stale resident bootstrap before changing the distro. The
+        // one-shot config write is the imported distro's only launch with the
+        // WSL defaults; terminating immediately makes the hardened config
+        // effective before gateway discovery, artifact receipt, or bootstrap.
         let _ = wsl_cmd().args(["--terminate", &distro]).output();
+        push_wsl_conf(&distro)?;
+        terminate_distro(&distro).context("apply hardened WSL configuration")?;
+
+        // A short WSL command starts the utility VM and gives us the exact
+        // Windows-host gateway before the strict Runtime nft rules are baked.
+        // Persist the same value consumed by the host egress URL machinery.
+        let runtime_gateway = if spec.runtime {
+            let _ = std::fs::remove_file(paths.gateway_ip());
+            let gateway = discover_gateway_ip(&distro)
+                .and_then(|ip| match ip {
+                    IpAddr::V4(ip) => Some(ip),
+                    IpAddr::V6(_) => None,
+                })
+                .context("discover WSL Runtime gateway for strict egress")?;
+            std::fs::write(paths.gateway_ip(), gateway.to_string())?;
+            Some(gateway)
+        } else {
+            None
+        };
 
         // Per-VM egress CA, trusted node-wide by the bootstrap (same
         // best-effort contract as the vz boot media).
@@ -151,7 +183,7 @@ impl VmBackend for WslBackend {
         };
         // CLI-staged api-server artifacts + the VM's bootstrap token
         // (generated once, persisted host-side for the CLI to mint keys).
-        let apiserver = if spec.agent_only || !spec.cluster {
+        let apiserver = if spec.runtime || spec.agent_only || !spec.cluster {
             None
         } else {
             crate::guest::apiserver_assets()
@@ -167,7 +199,27 @@ impl VmBackend for WslBackend {
             egress_ca.as_deref(),
             apiserver.as_ref(),
             &bootstrap_token,
+            &runtime_repositories,
+            runtime_gateway,
         )?;
+        // Build first so all pure validation (including repository names and
+        // mount rendering) succeeds before the distro artifact stage changes.
+        crate::bringup::set(
+            &paths.dir,
+            crate::bringup::Phase::Media,
+            Some("streaming artifacts (WSL)".to_string()),
+        );
+        stream_boot_artifacts(
+            &distro,
+            k3s.as_ref().map(|(path, sha)| (path.as_path(), *sha)),
+            apiserver.as_ref(),
+            &runtime_repositories,
+        )?;
+        crate::bringup::set(
+            &paths.dir,
+            crate::bringup::Phase::Media,
+            Some("skipped (WSL)".to_string()),
+        );
         push_bootstrap(&distro, &script)?;
 
         // Fresh boot state: truncate the console log (the primary
@@ -495,6 +547,186 @@ fn ensure_distro(distro: &str, paths: &VmPaths) -> Result<()> {
     Ok(())
 }
 
+/// Install the distro policy over stdin. Windows interop is unnecessary: all
+/// lifecycle and shell entrypoints invoke `wsl.exe` from the host, while the
+/// guest bootstrap contains Linux commands only.
+fn push_wsl_conf(distro: &str) -> Result<()> {
+    let mut child = wsl_cmd()
+        .args([
+            "-d",
+            distro,
+            "-u",
+            "root",
+            "--",
+            "sh",
+            "-c",
+            "rm -f /etc/wsl.conf && cat > /etc/wsl.conf && chmod 0644 /etc/wsl.conf",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("provision /etc/wsl.conf")?;
+    let stream_result = child
+        .stdin
+        .take()
+        .expect("piped stdin")
+        .write_all(WSL_CONF.as_bytes())
+        .context("stream /etc/wsl.conf");
+    let out = child.wait_with_output()?;
+    if !out.status.success() {
+        bail!(
+            "could not provision /etc/wsl.conf: {}",
+            combined_output(&out).trim()
+        );
+    }
+    stream_result?;
+    Ok(())
+}
+
+fn terminate_distro(distro: &str) -> Result<()> {
+    let out = wsl_cmd()
+        .args(["--terminate", distro])
+        .output()
+        .context("wsl --terminate")?;
+    if !out.status.success() {
+        bail!(
+            "could not terminate WSL distro '{distro}': {}",
+            combined_output(&out).trim()
+        );
+    }
+    Ok(())
+}
+
+fn digest_open_file(file: &mut std::fs::File) -> Result<String> {
+    use std::fmt::Write as _;
+    let mut context = ring::digest::Context::new(&ring::digest::SHA256);
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        context.update(&buffer[..read]);
+    }
+    let mut digest = String::with_capacity(64);
+    for byte in context.finish().as_ref() {
+        let _ = write!(digest, "{byte:02x}");
+    }
+    Ok(digest)
+}
+
+/// Stream the bytes from the same open file handle used to compute the host
+/// digest, then require the guest to verify size + sha256 before installation.
+/// Api-server and console callers use this as integrity-only transport: those
+/// artifacts are not pinned to a separately authenticated release identity.
+fn stream_guest_artifact(
+    distro: &str,
+    source: &Path,
+    destination: &str,
+    expected_sha256: Option<&str>,
+) -> Result<()> {
+    let mut source_file = std::fs::File::open(source)
+        .with_context(|| format!("open artifact {}", source.display()))?;
+    let size = source_file
+        .metadata()
+        .with_context(|| format!("stat artifact {}", source.display()))?
+        .len();
+    let sha256 = digest_open_file(&mut source_file)
+        .with_context(|| format!("hash artifact {}", source.display()))?;
+    if let Some(expected) = expected_sha256 {
+        if !sha256.eq_ignore_ascii_case(expected) {
+            bail!(
+                "artifact sha256 changed before streaming {}: expected {expected}, got {sha256}",
+                source.display()
+            );
+        }
+    }
+    source_file.seek(SeekFrom::Start(0))?;
+    let receive =
+        crate::backend::runtime_guest::artifact_receive_command(destination, size, &sha256)?;
+    let mut child = wsl_cmd()
+        .args(["-d", distro, "-u", "root", "--", "sh", "-c", &receive])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("start artifact receiver for {destination}"))?;
+    let stream_result = {
+        let mut stdin = child.stdin.take().expect("piped stdin");
+        std::io::copy(&mut source_file, &mut stdin)
+            .with_context(|| format!("stream artifact {}", source.display()))
+    };
+    let out = child.wait_with_output()?;
+    if !out.status.success() {
+        bail!(
+            "guest rejected artifact {}: {}",
+            source.display(),
+            combined_output(&out).trim()
+        );
+    }
+    stream_result?;
+    Ok(())
+}
+
+fn clear_guest_artifacts(distro: &str) -> Result<()> {
+    let command = format!("rm -rf {ARTIFACT_GUEST_ROOT} && mkdir -p {ARTIFACT_GUEST_ROOT}");
+    let out = wsl_cmd()
+        .args(["-d", distro, "-u", "root", "--", "sh", "-c", &command])
+        .output()
+        .context("clear stale guest artifacts")?;
+    if !out.status.success() {
+        bail!(
+            "could not clear stale guest artifacts: {}",
+            combined_output(&out).trim()
+        );
+    }
+    Ok(())
+}
+
+fn stream_boot_artifacts(
+    distro: &str,
+    k3s: Option<(&Path, &str)>,
+    apiserver: Option<&crate::guest::ApiServerAssets>,
+    runtime_repositories: &[crate::images::RuntimeApkRepository],
+) -> Result<()> {
+    clear_guest_artifacts(distro)?;
+    if let Some((path, expected_sha256)) = k3s {
+        stream_guest_artifact(distro, path, K3S_GUEST_ARTIFACT, Some(expected_sha256))?;
+    }
+    if let Some(assets) = apiserver {
+        stream_guest_artifact(distro, &assets.binary, APISERVER_GUEST_ARTIFACT, None)?;
+        if let Some(console) = &assets.console {
+            stream_guest_artifact(distro, console, CONSOLE_GUEST_ARTIFACT, None)?;
+        }
+    }
+    for repository in runtime_repositories {
+        let guest_directory = format!("{ARTIFACT_GUEST_ROOT}/runtime-apks/{}", repository.name);
+        stream_guest_artifact(
+            distro,
+            &repository.index,
+            &format!("{guest_directory}/APKINDEX.tar.gz"),
+            None,
+        )?;
+        for package in &repository.packages {
+            let filename = package
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context("Runtime APK artifact has no UTF-8 filename")?;
+            if filename.contains(['/', '\\', '\0', '\n', '\r']) || matches!(filename, "." | "..") {
+                bail!("invalid Runtime APK artifact filename '{filename}'");
+            }
+            stream_guest_artifact(
+                distro,
+                package,
+                &format!("{guest_directory}/{filename}"),
+                None,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Write the bootstrap script into the distro over stdin — no path
 /// translation, no automount dependency, works on a distro that has
 /// nothing but busybox yet.
@@ -564,20 +796,8 @@ fi
 PERSIST=/persist
 mkdir -p "$PERSIST"
 
-# --- base packages ----------------------------------------------------
-# Idempotent; served from the persistent apk cache after the first
-# boot. busybox-extras brings httpd (the kubeconfig handoff); sudo +
-# tmux back the appliance user and reattachable sessions, exactly like
-# the vz world file.
-cat > /etc/apk/repositories <<'REPOS'
-https://dl-cdn.alpinelinux.org/alpine/__ALPINE_BRANCH__/main
-https://dl-cdn.alpinelinux.org/alpine/__ALPINE_BRANCH__/community
-REPOS
-mkdir -p /persist/apk-cache /etc/apk
-ln -sfn /persist/apk-cache /etc/apk/cache
-apk update --no-progress >/dev/null 2>&1 || true
-apk add --no-progress ca-certificates busybox-extras sudo tmux libstdc++ libgcc unzip \
-  || echo "WARNING: base package install failed (offline?)"
+# --- packages ---------------------------------------------------------
+__PACKAGE_PROVISION__
 
 # --- egress CA trust (node-side) --------------------------------------
 __EGRESS_CA__
@@ -593,8 +813,35 @@ cat > /etc/appliance/tmux.conf <<'TMUXCONF'
 __TMUX_CONF__
 TMUXCONF
 
+# --- shared Runtime lifecycle and backend adapters -------------------
+mkdir -p /usr/local/bin
+cat > /usr/local/bin/appliance-runtime-supervisor <<'APPLIANCE_RUNTIME_SUPERVISOR'
+__RUNTIME_SUPERVISOR__
+APPLIANCE_RUNTIME_SUPERVISOR
+cat > /usr/local/bin/appliance-runtime-compound-supervisor <<'APPLIANCE_RUNTIME_COMPOUND_SUPERVISOR'
+__RUNTIME_COMPOUND_SUPERVISOR__
+APPLIANCE_RUNTIME_COMPOUND_SUPERVISOR
+cat > /usr/local/bin/runtime-share-mount <<'APPLIANCE_RUNTIME_SHARE_MOUNT'
+__RUNTIME_SHARE_MOUNT__
+APPLIANCE_RUNTIME_SHARE_MOUNT
+cat > /usr/local/bin/runtime-share-unmount <<'APPLIANCE_RUNTIME_SHARE_UNMOUNT'
+__RUNTIME_SHARE_UNMOUNT__
+APPLIANCE_RUNTIME_SHARE_UNMOUNT
+cat > /usr/local/bin/runtime-principal-snat <<'APPLIANCE_RUNTIME_PRINCIPAL_SNAT'
+__RUNTIME_PRINCIPAL_SNAT__
+APPLIANCE_RUNTIME_PRINCIPAL_SNAT
+chmod 0755 \
+  /usr/local/bin/appliance-runtime-supervisor \
+  /usr/local/bin/appliance-runtime-compound-supervisor \
+  /usr/local/bin/runtime-share-mount \
+  /usr/local/bin/runtime-share-unmount \
+  /usr/local/bin/runtime-principal-snat
+
 # --- dev environment (appliance vm dev) ---------------------------------
 __DEV_PROVISION__
+# --- pooled Appliance Runtime --------------------------------------------
+__RUNTIME_PROVISION__
+__RUNTIME_BOOTSTRAP_GATE__
 # --- docker engine (appliance vm ... --docker) ---------------------------
 __DOCKER_PROVISION__
 # --- buildkit (docker-free image builds) ----------------------------------
@@ -608,15 +855,78 @@ __APISERVER_PROVISION__
 while :; do sleep 3600; done
 "#;
 
-/// WSL replacement for `K3S_MEDIA_COPY`: the pinned binary lives in the
-/// host's asset cache, reached over the drvfs automount; re-verify the
-/// committed sha256 guest-side before first use (the host verified the
-/// download; this re-checks the bytes that actually crossed drvfs).
+const WSL_BASE_PACKAGE_PROVISION: &str = r#"# Idempotent; served from the persistent apk cache after the first boot.
+cat > /etc/apk/repositories <<'REPOS'
+https://dl-cdn.alpinelinux.org/alpine/__ALPINE_BRANCH__/main
+https://dl-cdn.alpinelinux.org/alpine/__ALPINE_BRANCH__/community
+REPOS
+mkdir -p /persist/apk-cache /etc/apk
+ln -sfn /persist/apk-cache /etc/apk/cache
+apk update --no-progress >/dev/null 2>&1 || true
+apk add --no-progress ca-certificates busybox-extras sudo tmux libstdc++ libgcc unzip \
+  || echo "WARNING: base package install failed (offline?)"
+"#;
+
+/// Fail the resident bootstrap promptly when the shared Runtime provision did
+/// not produce a usable lifecycle endpoint. `host_services` independently
+/// mirrors these checks before publishing the host-side marker.
+const WSL_RUNTIME_BOOTSTRAP_GATE: &str = r#"RUNTIME_READY=0
+for _ in $(seq 1 900); do
+  if [ -x /usr/local/bin/appliance-runtime-supervisor ] && \
+     [ -x /usr/local/bin/appliance-runtime-compound-supervisor ] && \
+     [ -S /run/containerd/containerd.sock ] && \
+     ctr version >/dev/null 2>&1 && socat -V >/dev/null 2>&1 && \
+     nft --version >/dev/null 2>&1 && jq --version >/dev/null 2>&1 && \
+     ip -V >/dev/null 2>&1; then
+    RUNTIME_READY=1
+    break
+  fi
+  sleep 0.1
+done
+if [ "$RUNTIME_READY" -ne 1 ]; then
+  echo "FATAL: Appliance Runtime provision did not become ready" >&2
+  exit 1
+fi
+"#;
+
+const WSL_RUNTIME_READINESS_PROBE: &str = "test -x /usr/local/bin/appliance-runtime-supervisor \
+&& test -x /usr/local/bin/appliance-runtime-compound-supervisor \
+&& test -S /run/containerd/containerd.sock \
+&& ctr version >/dev/null 2>&1 \
+&& socat -V >/dev/null 2>&1 \
+&& nft --version >/dev/null 2>&1 \
+&& jq --version >/dev/null 2>&1 \
+&& ip -V >/dev/null 2>&1";
+
+/// WSL imports the Alpine minirootfs without init. OpenRC supports standalone
+/// service invocation once its softlevel marker exists; if that attempt still
+/// leaves no containerd socket, launch the daemon directly like dockerd.
+const WSL_RUNTIME_OPENRC_STANDALONE: &str = r#"# No init runs in an imported WSL minirootfs. This is OpenRC's standalone
+# service-manager state, created before the shared Runtime provision calls
+# rc-service. The shared fragment stays byte-identical with VZ.
+mkdir -p /run/openrc
+touch /run/openrc/softlevel
+"#;
+
+const WSL_RUNTIME_CONTAINERD_FALLBACK: &str = r#"# rc-service may be unavailable or ineffective without an OpenRC init process.
+for _ in $(seq 1 20); do
+  [ -S /run/containerd/containerd.sock ] && break
+  sleep 0.1
+done
+if [ ! -S /run/containerd/containerd.sock ]; then
+  echo "appliance-runtime: launching containerd directly (WSL has no init)"
+  nohup setsid containerd </dev/null >>/var/log/appliance-runtime-containerd.log 2>&1 &
+fi
+"#;
+
+/// WSL replacement for `K3S_MEDIA_COPY`: the host streams the pinned binary to
+/// a fixed guest path before bootstrap. Re-verify the committed sha256 before
+/// installing it, in addition to the receive-time size + digest check.
 /// Prepended to the shared `guest::K3S_COMMON`.
 const WSL_K3S_COPY: &str = r#"# --- k3s -------------------------------------------------------------
-K3S_SRC=$(wslpath -u '__K3S_WIN_PATH__')
+K3S_SRC=/opt/appliance/artifacts/k3s
 if [ ! -f "$K3S_SRC" ]; then
-  echo "FATAL: k3s binary not reachable at $K3S_SRC (is the Windows drive automounted?)"
+  echo "FATAL: streamed k3s binary not present at $K3S_SRC"
   exit 1
 fi
 mkdir -p /usr/local/bin
@@ -625,6 +935,10 @@ mkdir -p /usr/local/bin
 # persisted distro its sha256sum shadows busybox, rejects `-s`, and
 # fails this check (and every subsequent boot) unconditionally.
 if ! echo '__K3S_SHA256__  /usr/local/bin/k3s' | sha256sum -c >/dev/null 2>&1; then
+  if ! echo '__K3S_SHA256__  /opt/appliance/artifacts/k3s' | sha256sum -c >/dev/null 2>&1; then
+    echo "FATAL: streamed k3s binary failed its sha256 check"
+    exit 1
+  fi
   cp "$K3S_SRC" /usr/local/bin/k3s
   chmod +x /usr/local/bin/k3s
 fi
@@ -635,23 +949,28 @@ fi
 "#;
 
 /// WSL replacement for `guest::APISERVER_MEDIA_COPY`: the CLI-staged
-/// api-server binary (and optional console bundle) live in the host's
-/// asset cache, reached over the drvfs automount, and the bootstrap
-/// token is embedded in this root-only script (the same trust level as
-/// the vz apkovl). Prepended to the shared `guest::APISERVER_COMMON`.
+/// api-server binary (and optional console bundle) are streamed into fixed
+/// guest paths before bootstrap, and the bootstrap token is embedded in this
+/// root-only script (the same trust level as the vz apkovl). Prepended to the
+/// shared `guest::APISERVER_COMMON`.
 const WSL_APISERVER_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
-# no docker anywhere. Copy it (and the console bundle) over drvfs.
+# no docker anywhere. Copy it from the verified guest artifact stage.
 mkdir -p /persist/appliance /usr/local/bin /etc/appliance
-APISERVER_SRC=$(wslpath -u '__APISERVER_WIN_PATH__')
+APISERVER_SRC=/opt/appliance/artifacts/appliance-api-server
 if [ -f "$APISERVER_SRC" ]; then
   cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
   chmod +x /usr/local/bin/appliance-api-server
 else
-  echo "appliance-api-server: staged binary not reachable at $APISERVER_SRC"
+  echo "appliance-api-server: streamed binary missing at $APISERVER_SRC"
 fi
-CONSOLE_SRC=$(wslpath -u '__CONSOLE_WIN_PATH__')
-if [ -n '__CONSOLE_WIN_PATH__' ] && [ -f "$CONSOLE_SRC" ]; then
+__CONSOLE_PROVISION__
+printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
+chmod 600 /etc/appliance/bootstrap-token
+"#;
+
+const WSL_CONSOLE_COPY: &str = r#"CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
+if [ -f "$CONSOLE_SRC" ]; then
   rm -rf /persist/appliance/console.new
   mkdir -p /persist/appliance/console.new
   if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
@@ -661,8 +980,6 @@ if [ -n '__CONSOLE_WIN_PATH__' ] && [ -f "$CONSOLE_SRC" ]; then
     echo "appliance-api-server: console bundle extraction failed (API still serves)"
   fi
 fi
-printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
-chmod 600 /etc/appliance/bootstrap-token
 "#;
 
 /// The agent-runtime handoff for an agent-only VM on WSL. There is no
@@ -698,28 +1015,15 @@ mkdir -p /srv/handoff
 "#;
 
 /// Substituted into `DEV_PROVISION`'s `__DEV_MOUNT__` marker when a
-/// host folder is shared in: WSL already presents Windows drives under
-/// /mnt, so the share is a bind mount of the translated path — the WSL
-/// analogue of the vz VirtioFS mount.
-const WSL_DEV_MOUNT: &str = r#"# Host folder shared in over the WSL drvfs automount (appliance vm dev
-# up --mount), bind-mounted as the workspace so edits flow both ways.
-APPLIANCE_MOUNT_SRC=$(wslpath -u '__MOUNT_WIN_PATH__')
-if [ -d "$APPLIANCE_MOUNT_SRC" ] && mount --bind "$APPLIANCE_MOUNT_SRC" /persist/workspace; then
+/// host folder is shared in: mount exactly the validated Windows workspace,
+/// without exposing its parent drive through WSL's automount.
+const WSL_DEV_MOUNT: &str = r#"# Targeted drvfs workspace mount (appliance vm dev up --mount).
+APPLIANCE_MOUNT_SRC='__MOUNT_WIN_PATH__'
+if mount -t drvfs "$APPLIANCE_MOUNT_SRC" /persist/workspace -o uid=1000,gid=1000,metadata; then
   echo "appliance-dev: mounted shared host folder at /persist/workspace"
 else
-  echo "appliance-dev: WARNING bind mount of the shared host folder failed"
+  echo "appliance-dev: WARNING targeted drvfs mount of the shared host folder failed"
 fi"#;
-
-/// Escape a value for embedding inside a single-quoted shell string.
-fn shell_squote(value: &str) -> String {
-    value.replace('\'', r#"'\''"#)
-}
-
-/// Windows paths come out of `fs::canonicalize` with the `\\?\` verbatim
-/// prefix, which `wslpath` refuses — strip it for the guest.
-fn strip_verbatim(path: &str) -> &str {
-    path.strip_prefix(r"\\?\").unwrap_or(path)
-}
 
 /// Assemble the per-VM bootstrap script. Mirrors `guest::build_apkovl`'s
 /// substitution rules: provisioning blocks are injected BEFORE the port
@@ -732,8 +1036,44 @@ fn build_bootstrap(
     // `None` for agent-only VMs or when nothing was staged.
     apiserver: Option<&crate::guest::ApiServerAssets>,
     bootstrap_token: &str,
+    runtime_repositories: &[crate::images::RuntimeApkRepository],
+    runtime_gateway: Option<std::net::Ipv4Addr>,
 ) -> Result<String> {
-    crate::backend::ensure_runtime_supported("wsl", spec.runtime)?;
+    let state_dir = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
+    build_bootstrap_with_inputs(
+        spec,
+        BootstrapInputs {
+            k3s,
+            egress_ca_pem,
+            apiserver,
+            bootstrap_token,
+            runtime_repositories,
+            runtime_gateway,
+            state_dir: &state_dir,
+        },
+    )
+}
+
+struct BootstrapInputs<'a> {
+    k3s: Option<(&'a Path, &'static str)>,
+    egress_ca_pem: Option<&'a str>,
+    apiserver: Option<&'a crate::guest::ApiServerAssets>,
+    bootstrap_token: &'a str,
+    runtime_repositories: &'a [crate::images::RuntimeApkRepository],
+    runtime_gateway: Option<std::net::Ipv4Addr>,
+    state_dir: &'a Path,
+}
+
+fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Result<String> {
+    let BootstrapInputs {
+        k3s,
+        egress_ca_pem,
+        apiserver,
+        bootstrap_token,
+        runtime_repositories,
+        runtime_gateway,
+        state_dir,
+    } = inputs;
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -741,34 +1081,35 @@ fn build_bootstrap(
     let project_id = mount
         .map(|p| crate::images::content_sha256_hex(p.as_bytes())[..16].to_string())
         .unwrap_or_default();
+    let state_dir = strip_verbatim(&state_dir.to_string_lossy()).to_string();
+    let runtime_share_mount =
+        crate::backend::runtime_guest::wsl_runtime_share_mount_script(&state_dir);
 
-    let k3s_block = if spec.agent_only {
+    let k3s_block = if spec.runtime {
+        String::new()
+    } else if spec.agent_only {
         WSL_AGENT_HANDOFF.to_string()
-    } else if let Some((path, sha)) = k3s {
-        format!("{WSL_K3S_COPY}{}", crate::guest::K3S_COMMON)
-            .replace("__K3S_WIN_PATH__", &shell_squote(strip_verbatim(&path.to_string_lossy())))
-            .replace("__K3S_SHA256__", sha)
+    } else if let Some((_path, sha)) = k3s {
+        format!("{WSL_K3S_COPY}{}", crate::guest::K3S_COMMON).replace("__K3S_SHA256__", sha)
     } else {
         String::new()
     };
     // The api-server guest binary rides k3s VMs whose assets were
     // staged. Same substitution rules as the k3s block: injected before
     // the port markers so its nested markers expand too.
-    let apiserver_block = match (spec.cluster, spec.agent_only, apiserver) {
-        (true, false, Some(assets)) => format!("{WSL_APISERVER_COPY}{}", crate::guest::APISERVER_COMMON)
-            .replace(
-                "__APISERVER_WIN_PATH__",
-                &shell_squote(strip_verbatim(&assets.binary.to_string_lossy())),
-            )
-            .replace(
-                "__CONSOLE_WIN_PATH__",
-                &assets
-                    .console
-                    .as_ref()
-                    .map(|c| shell_squote(strip_verbatim(&c.to_string_lossy())))
-                    .unwrap_or_default(),
-            )
-            .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token)),
+    let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, apiserver) {
+        (false, true, false, Some(assets)) => {
+            format!("{WSL_APISERVER_COPY}{}", crate::guest::APISERVER_COMMON)
+                .replace(
+                    "__CONSOLE_PROVISION__",
+                    if assets.console.is_some() {
+                        WSL_CONSOLE_COPY
+                    } else {
+                        ""
+                    },
+                )
+                .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
+        }
         _ => String::new(),
     };
     let ca_block = egress_ca_pem
@@ -781,9 +1122,39 @@ fn build_bootstrap(
             )
         })
         .unwrap_or_default();
+    let package_provision = if spec.runtime {
+        let borrowed: Vec<&str> = runtime_repositories
+            .iter()
+            .map(|repository| repository.name.as_str())
+            .collect();
+        crate::backend::runtime_guest::wsl_runtime_apk_install(
+            &borrowed,
+            crate::images::RUNTIME_WORLD,
+        )?
+    } else {
+        WSL_BASE_PACKAGE_PROVISION.to_string()
+    };
+    let runtime_principal_snat = if spec.runtime {
+        crate::backend::runtime_guest::runtime_principal_snat_script(
+            crate::backend::runtime_guest::RuntimeGuestBackend::WslDrvFs,
+            runtime_gateway,
+            spec.egress_port,
+        )?
+    } else {
+        "#!/bin/sh\nset -eu\n".to_string()
+    };
+    let runtime_provision = if spec.runtime {
+        format!(
+            "{WSL_RUNTIME_OPENRC_STANDALONE}{}{WSL_RUNTIME_CONTAINERD_FALLBACK}",
+            crate::guest::RUNTIME_PROVISION
+        )
+    } else {
+        String::new()
+    };
 
     Ok(WSL_BOOTSTRAP
         // Blocks first (they carry nested markers), then the markers.
+        .replace("__PACKAGE_PROVISION__", &package_provision)
         .replace("__K3S_PROVISION__", &k3s_block)
         .replace("__APISERVER_PROVISION__", &apiserver_block)
         .replace(
@@ -818,9 +1189,31 @@ fn build_bootstrap(
             "__DOCKER_PROVISION__",
             if spec.docker { crate::guest::DOCKER_PROVISION } else { "" },
         )
-        // Runtime specs have already failed through the AP-190 guard;
-        // non-Runtime WSL bootstraps must still consume the shared marker.
-        .replace("__RUNTIME_PROVISION__", "")
+        .replace(
+            "__RUNTIME_PROVISION__",
+            &runtime_provision,
+        )
+        .replace(
+            "__RUNTIME_BOOTSTRAP_GATE__",
+            if spec.runtime { WSL_RUNTIME_BOOTSTRAP_GATE } else { "" },
+        )
+        .replace("__RUNTIME_SUPERVISOR__", crate::guest::RUNTIME_SUPERVISOR)
+        .replace(
+            "__RUNTIME_COMPOUND_SUPERVISOR__",
+            crate::guest::RUNTIME_COMPOUND_SUPERVISOR,
+        )
+        .replace(
+            "__RUNTIME_SHARE_MOUNT__",
+            &runtime_share_mount,
+        )
+        .replace(
+            "__RUNTIME_SHARE_UNMOUNT__",
+            crate::backend::runtime_guest::runtime_share_unmount_script(),
+        )
+        .replace(
+            "__RUNTIME_PRINCIPAL_SNAT__",
+            &runtime_principal_snat,
+        )
         // BuildKit rides every k3s VM, exactly as on the vz backend —
         // injected before the port markers below so its nested
         // __REGISTRY_*__/__BUILDKITD_GUEST_PORT__ markers expand too.
@@ -847,12 +1240,33 @@ fn build_bootstrap(
         .replace("__ALPINE_BRANCH__", ALPINE_BRANCH))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WslHostReadiness {
+    Core,
+    Runtime,
+    Agent,
+    Platform,
+}
+
+fn wsl_host_readiness(spec: &VmSpec) -> WslHostReadiness {
+    if spec.runtime {
+        WslHostReadiness::Runtime
+    } else if spec.agent_only {
+        WslHostReadiness::Agent
+    } else if spec.cluster {
+        WslHostReadiness::Platform
+    } else {
+        WslHostReadiness::Core
+    }
+}
+
 /// Guest-facing host services — the WSL sibling of `guest::host_services`'
 /// NAT branch. The guest address comes from `ip addr` inside the distro
 /// (there is no macOS lease table here); everything downstream — the TCP
 /// forwards, the kubeconfig/agent handoff, the bringup phases and marker
 /// files `up` polls on — is the same contract.
 fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: bool) -> Result<()> {
+    let readiness = wsl_host_readiness(spec);
     let (guest_ip, prefix_len) = discover_guest_ip(distro, Duration::from_secs(120))?;
     crate::bringup::hostlog(&format!("guest address: {guest_ip}"));
     std::fs::write(vm_dir.join("guest-ip"), guest_ip.to_string())?;
@@ -907,24 +1321,41 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
         ));
     }
 
+    let (core_message, core_probe) = if readiness == WslHostReadiness::Runtime {
+        ("waiting for WSL Runtime provision", WSL_RUNTIME_READINESS_PROBE)
+    } else {
+        ("waiting for WSL core shell", "true")
+    };
+    crate::bringup::hostlog(core_message);
     let core_deadline = Instant::now() + Duration::from_secs(120);
     loop {
-        if crate::guest_exec::run_wrapped(&spec.name, "true").is_ok() {
+        if crate::guest_exec::run_wrapped(&spec.name, core_probe).is_ok() {
             break;
         }
         if Instant::now() >= core_deadline {
+            if readiness == WslHostReadiness::Runtime {
+                bail!("WSL Runtime provision did not become ready within 120s");
+            }
             bail!("guest core shell did not answer within 120s");
         }
         std::thread::sleep(Duration::from_millis(250));
     }
     std::fs::write(vm_dir.join("core-ready"), b"core-ready\n")?;
 
-    if !spec.cluster && !spec.agent_only {
+    // Runtime is selected before the agent-only profile: it has no dev
+    // provision and must never enter the `.dev-ready`/600-second handoff.
+    if readiness == WslHostReadiness::Runtime {
+        crate::bringup::hostlog("WSL Runtime provision and supervisor ready");
         crate::bringup::set(vm_dir, crate::bringup::Phase::Ready, None);
         return Ok(());
     }
 
-    if spec.agent_only {
+    if readiness == WslHostReadiness::Core {
+        crate::bringup::set(vm_dir, crate::bringup::Phase::Ready, None);
+        return Ok(());
+    }
+
+    if readiness == WslHostReadiness::Agent {
         crate::bringup::hostlog("agent-only: gating on the agent runtime (node toolchain)");
         crate::bringup::set(vm_dir, crate::bringup::Phase::Agent, None);
         let handoff = format!(
@@ -1018,10 +1449,54 @@ mod tests {
         VmSpec::defaults(name)
     }
 
+    fn build_bootstrap(
+        spec: &VmSpec,
+        k3s: Option<(&Path, &'static str)>,
+        egress_ca_pem: Option<&str>,
+        apiserver: Option<&crate::guest::ApiServerAssets>,
+        bootstrap_token: &str,
+        runtime_repositories: &[crate::images::RuntimeApkRepository],
+        runtime_gateway: Option<std::net::Ipv4Addr>,
+    ) -> Result<String> {
+        super::build_bootstrap_with_inputs(
+            spec,
+            BootstrapInputs {
+                k3s,
+                egress_ca_pem,
+                apiserver,
+                bootstrap_token,
+                runtime_repositories,
+                runtime_gateway,
+                state_dir: Path::new(r"C:\Users\appliance-test\.appliance\vm"),
+            },
+        )
+    }
+
     #[test]
     fn distro_names_are_namespaced() {
         assert_eq!(distro_name("appliance"), "appliance-vm-appliance");
         assert_eq!(distro_name("traffic"), "appliance-vm-traffic");
+    }
+
+    #[test]
+    fn wsl_conf_disables_drive_automount_and_interop() {
+        let mut section = "";
+        let mut values = std::collections::BTreeMap::new();
+        for raw in WSL_CONF.lines() {
+            let line = raw.trim();
+            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+                continue;
+            }
+            if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                section = name;
+                continue;
+            }
+            let (key, value) = line.split_once('=').expect("valid INI assignment");
+            values.insert((section, key.trim()), value.trim());
+        }
+        assert_eq!(values.get(&("automount", "enabled")), Some(&"false"));
+        assert_eq!(values.get(&("interop", "enabled")), Some(&"false"));
+        assert_eq!(values.get(&("interop", "appendWindowsPath")), Some(&"false"));
     }
 
     #[test]
@@ -1101,11 +1576,13 @@ mod tests {
             Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"),
             Some(&assets),
             "tok3n",
+            &[],
+            None,
         )
         .unwrap();
         for marker in [
             "__K3S_PROVISION__",
-            "__K3S_WIN_PATH__",
+            "__PACKAGE_PROVISION__",
             "__K3S_SHA256__",
             "__KUBECONFIG_PORT__",
             "__REGISTRY_NODEPORT__",
@@ -1118,12 +1595,17 @@ mod tests {
             "__MOUNT_WIN_PATH__",
             "__DOCKER_PROVISION__",
             "__RUNTIME_PROVISION__",
+            "__RUNTIME_BOOTSTRAP_GATE__",
+            "__RUNTIME_SUPERVISOR__",
+            "__RUNTIME_COMPOUND_SUPERVISOR__",
+            "__RUNTIME_SHARE_MOUNT__",
+            "__RUNTIME_SHARE_UNMOUNT__",
+            "__RUNTIME_PRINCIPAL_SNAT__",
             "__BUILDKIT_PROVISION__",
             "__BUILDKITD_GUEST_PORT__",
             "__K3S_AIRGAP_PREAMBLE__",
             "__APISERVER_PROVISION__",
-            "__APISERVER_WIN_PATH__",
-            "__CONSOLE_WIN_PATH__",
+            "__CONSOLE_PROVISION__",
             "__APISERVER_TOKEN__",
             "__APISERVER_GUEST_PORT__",
             "__HOST_PORT__",
@@ -1152,13 +1634,15 @@ mod tests {
             "httpd -f -p {} -h /srv/handoff",
             crate::guest::KUBECONFIG_PORT
         )));
-        let k3s_path = shell_squote(strip_verbatim(&k3s.to_string_lossy()));
-        assert!(script.contains(&format!("wslpath -u '{k3s_path}'")));
+        assert!(script.contains("K3S_SRC=/opt/appliance/artifacts/k3s"));
         assert!(script.contains("abc123  /usr/local/bin/k3s"));
-        // The verbatim prefix is stripped for wslpath.
         let mount_path = shell_squote(strip_verbatim(mount));
-        assert!(script.contains(&format!("wslpath -u '{mount_path}'")));
-        assert!(!script.contains(r"\\?\"));
+        assert!(script.contains(&format!("APPLIANCE_MOUNT_SRC='{mount_path}'")));
+        assert!(script.contains(
+            "mount -t drvfs \"$APPLIANCE_MOUNT_SRC\" /persist/workspace -o uid=1000,gid=1000,metadata"
+        ));
+        assert!(!script.contains("wslpath"));
+        assert!(!script.contains("/mnt/c"));
         // Dev + docker + CA blocks are present; core-ready omits BuildKit.
         assert!(script.contains("appliance-dev: provisioning development environment"));
         assert!(script.contains("appliance-docker: provisioning in-guest Docker engine"));
@@ -1171,8 +1655,8 @@ mod tests {
         assert!(script.contains("-----BEGIN CERTIFICATE-----"));
         // VmSpec::defaults is core-only: even supplied assets are not
         // staged until the spec is promoted to the cluster layer.
-        assert!(!script.contains("APISERVER_SRC=$(wslpath"));
-        assert!(!script.contains("CONSOLE_SRC=$(wslpath"));
+        assert!(!script.contains("APISERVER_SRC="));
+        assert!(!script.contains("CONSOLE_SRC="));
         assert!(!script.contains("/persist/.apiserver-ready"));
         // The user is pinned to the conventional 1000/1000 on WSL.
         assert!(script.contains("APP_UID=1000"));
@@ -1186,10 +1670,19 @@ mod tests {
     #[test]
     fn plain_vm_omits_dev_docker_and_mount_blocks() {
         let s = spec("x");
-        let script = build_bootstrap(&s, Some((Path::new(r"C:\k3s"), "sha")), None, None, "").unwrap();
+        let script = build_bootstrap(
+            &s,
+            Some((Path::new(r"C:\k3s"), "sha")),
+            None,
+            None,
+            "",
+            &[],
+            None,
+        )
+        .unwrap();
         assert!(!script.contains("appliance-dev: provisioning"));
         assert!(!script.contains("appliance-docker: provisioning"));
-        assert!(!script.contains("mount --bind"));
+        assert!(!script.contains("mounted shared host folder at /persist/workspace"));
         assert!(!script.contains("EGRESSCA"));
         // The k3s control plane and its handoff are present.
         assert!(script.contains("k3s server"));
@@ -1199,14 +1692,65 @@ mod tests {
     }
 
     #[test]
-    fn runtime_bootstrap_fails_before_substitution() {
+    fn runtime_bootstrap_selects_pinned_profile_before_agent() {
         let mut s = spec("runtime");
         s.runtime = true;
-        let error = build_bootstrap(&s, None, None, None, "").unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "the Appliance Runtime is not supported on the WSL backend yet"
-        );
+        s.agent_only = true;
+        s.dev = false;
+        s.cluster = false;
+        assert_eq!(wsl_host_readiness(&s), WslHostReadiness::Runtime);
+        let repositories = vec![
+            crate::images::RuntimeApkRepository {
+                name: "main".to_string(),
+                index: PathBuf::from(r"C:\runtime-apks\main\APKINDEX.tar.gz"),
+                packages: Vec::new(),
+            },
+            crate::images::RuntimeApkRepository {
+                name: "community".to_string(),
+                index: PathBuf::from(r"C:\runtime-apks\community\APKINDEX.tar.gz"),
+                packages: Vec::new(),
+            },
+        ];
+        let script = build_bootstrap(
+            &s,
+            None,
+            None,
+            None,
+            "",
+            &repositories,
+            Some("172.25.64.1".parse().unwrap()),
+        )
+        .unwrap();
+        assert!(script.contains("containerd=2.0.0-r5"));
+        assert!(script.contains("nftables=1.1.1-r0"));
+        assert!(script.contains("--no-network"));
+        assert!(script.contains(crate::guest::RUNTIME_PROVISION));
+        let openrc = script.find("touch /run/openrc/softlevel").unwrap();
+        let shared = script.find(crate::guest::RUNTIME_PROVISION).unwrap();
+        let fallback = script
+            .find("nohup setsid containerd </dev/null")
+            .unwrap();
+        assert!(openrc < shared && shared < fallback);
+        assert!(script.contains("for _ in $(seq 1 900)"));
+        for tool_probe in ["nft --version", "jq --version", "ip -V"] {
+            assert!(WSL_RUNTIME_BOOTSTRAP_GATE.contains(tool_probe));
+            assert!(WSL_RUNTIME_READINESS_PROBE.contains(tool_probe));
+        }
+        assert!(script.contains(crate::guest::RUNTIME_SUPERVISOR));
+        assert!(script.contains(crate::guest::RUNTIME_COMPOUND_SUPERVISOR));
+        assert!(script.contains("runtime-share-mount"));
+        assert!(script.contains(
+            "mount -t drvfs \"$HOST_PATH\" \"$SHARE\" -o ro,uid=1000,gid=1000,metadata"
+        ));
+        assert!(script.contains("APK_SOURCE=/opt/appliance/artifacts/runtime-apks/main"));
+        assert!(!script.contains("wslpath"));
+        assert!(!script.contains("/mnt/c"));
+        assert!(script.contains("ip saddr 192.168.127.0/24 oifname \"eth0\" masquerade"));
+        assert!(!script.contains("https://dl-cdn.alpinelinux.org"));
+        assert!(!script.contains("while [ ! -f /persist/.dev-ready ]"));
+        assert!(!script.contains("agent-ready"));
+        assert!(!script.contains("k3s server"));
+        assert!(!script.contains("__"), "template marker leaked into Runtime bootstrap");
     }
 
     #[test]
@@ -1214,7 +1758,7 @@ mod tests {
         let mut s = spec("sbx");
         s.agent_only = true;
         s.dev = true;
-        let script = build_bootstrap(&s, None, None, None, "").unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(!script.contains("k3s server"), "agent-only provisions NO k3s");
         assert!(!script.contains("buildkitd"), "agent-only provisions no buildkit either");
         assert!(script.contains("while [ ! -f /persist/.dev-ready ]"));
@@ -1226,7 +1770,7 @@ mod tests {
         s.agent_only = true;
         s.dev = true;
         s.docker = true;
-        let script = build_bootstrap(&s, None, None, None, "").unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(!script.contains("docker is not provisioned in this agent sandbox."));
         assert!(script.contains("apk add --no-progress docker docker-cli-compose"));
     }
@@ -1237,15 +1781,43 @@ mod tests {
         s.dev = true;
         s.agent_only = true;
         s.dev_mount = Some(r"C:\Users\dev\proj".to_string());
-        let script = build_bootstrap(&s, None, None, None, "").unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(script.contains("rm -rf /persist/npm-global"));
         assert!(!script.contains("APPLIANCE_PROJECT=''"), "a mount must stamp a project id");
         // No mount ⇒ empty identity ⇒ the guard is inert.
         let mut s = spec("x");
         s.dev = true;
         s.agent_only = true;
-        let script = build_bootstrap(&s, None, None, None, "").unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(script.contains("APPLIANCE_PROJECT=''"));
+    }
+
+    #[test]
+    fn cluster_bootstrap_uses_only_streamed_api_artifacts() {
+        let mut s = spec("cluster");
+        s.cluster = true;
+        let assets = crate::guest::ApiServerAssets {
+            binary: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\appliance-api-server"),
+            console: Some(PathBuf::from(
+                r"C:\Users\Avery\.appliance\guest-assets\appliance-console.tar.gz",
+            )),
+        };
+        let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
+        assert!(script.contains(
+            "APISERVER_SRC=/opt/appliance/artifacts/appliance-api-server"
+        ));
+        assert!(script.contains(
+            "CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz"
+        ));
+        assert!(!script.contains(r"C:\Users\Avery"));
+        assert!(!script.contains("wslpath"));
+        assert!(!script.contains("/mnt/c"));
+
+        let mut assets = assets;
+        assets.console = None;
+        let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
+        assert!(!script.contains("__CONSOLE_PROVISION__"));
+        assert!(!script.contains("CONSOLE_SRC="));
     }
 
     #[test]
@@ -1262,12 +1834,12 @@ mod tests {
         s.dev_mount = Some(r"C:\proj".to_string());
         for script in [
             build_bootstrap(&s, Some((Path::new(r"C:\k3s"), "sha"))
-                , Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"), None, "").unwrap(),
+                , Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"), None, "", &[], None).unwrap(),
             {
                 let mut a = spec("sbx");
                 a.agent_only = true;
                 a.dev = true;
-                build_bootstrap(&a, None, None, None, "").unwrap()
+                build_bootstrap(&a, None, None, None, "", &[], None).unwrap()
             },
         ] {
             let lines: Vec<&str> = script.lines().collect();

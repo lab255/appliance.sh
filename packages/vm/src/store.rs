@@ -1,7 +1,7 @@
 use crate::spec::{VmPaths, VmSpec};
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn parse_spec_for_backend(raw: &str, backend: &str) -> serde_json::Result<(VmSpec, bool)> {
     let mut spec: VmSpec = serde_json::from_str(raw)?;
@@ -25,6 +25,30 @@ pub fn vm_root() -> PathBuf {
     let root = home.join(".appliance").join("vm");
     migrate_legacy_root(&home.join(".appliance").join("vmm"), &root);
     root
+}
+
+/// Canonicalize as much of `path` as currently exists, then append any
+/// missing tail. State paths are needed before their directories are created
+/// during validation and bootstrap rendering, especially on fresh hosts.
+pub fn canonicalize_with_missing_tail(path: &Path) -> PathBuf {
+    let mut existing = path;
+    let mut tail = Vec::new();
+    loop {
+        if let Ok(mut canonical) = std::fs::canonicalize(existing) {
+            for component in tail.iter().rev() {
+                canonical.push(component);
+            }
+            return canonical;
+        }
+        let Some(name) = existing.file_name() else {
+            return path.to_path_buf();
+        };
+        tail.push(name.to_os_string());
+        let Some(parent) = existing.parent() else {
+            return path.to_path_buf();
+        };
+        existing = parent;
+    }
 }
 
 /// One-time move of pre-rename state (`~/.appliance/vmm`, binary then
@@ -186,6 +210,31 @@ pub fn clear_pidfile(name: &str) {
 mod tests {
     use super::*;
     use crate::spec::NetLink;
+
+    #[test]
+    fn canonicalize_preserves_a_missing_state_tail() {
+        let existing = std::env::temp_dir().join(format!(
+            "appliance-canonicalize-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&existing).unwrap();
+        let missing = existing.join(".appliance").join("vm");
+
+        let resolved = canonicalize_with_missing_tail(&missing);
+
+        assert_eq!(
+            resolved,
+            std::fs::canonicalize(&existing)
+                .unwrap()
+                .join(".appliance")
+                .join("vm")
+        );
+        std::fs::remove_dir_all(existing).unwrap();
+    }
 
     #[test]
     fn loading_a_persisted_wsl_netstack_spec_normalises_to_nat() {

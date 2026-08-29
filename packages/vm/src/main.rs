@@ -673,7 +673,6 @@ fn run() -> Result<()> {
             agent_only,
             runtime,
         } => {
-            backend::ensure_runtime_supported(backend.name(), runtime)?;
             reject_unsupported_windows_sizing(cfg!(windows), cpus, memory, disk)?;
             let cpus = cpus.unwrap_or(spec::DEFAULT_CPUS);
             let memory = memory.unwrap_or(spec::DEFAULT_MEMORY_MIB);
@@ -760,7 +759,6 @@ fn run() -> Result<()> {
             time_budget,
         } => {
             let up_started = std::time::Instant::now();
-            backend::ensure_runtime_supported(backend.name(), runtime)?;
             reject_unsupported_windows_sizing(cfg!(windows), cpus, memory, None)?;
             backend.availability()?;
             let mut spec = ensure_spec_for_up(&name, runtime)?;
@@ -1286,7 +1284,6 @@ fn run() -> Result<()> {
 }
 
 fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
-    backend::ensure_runtime_supported(backend_name, true)?;
     match action {
         RuntimeCmd::Prepare { name, plan } => {
             let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime plan")?;
@@ -1296,6 +1293,15 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             }
             let host_path = std::fs::canonicalize(&plan.share.host_path)
                 .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
+            if !host_path.is_dir() {
+                bail!("runtime payload share '{}' is not a directory", host_path.display());
+            }
+            let state_root = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
+            backend::runtime_guest::validate_mount_excludes_state_dir(&host_path, &state_root)
+                .context("validate runtime payload share")?;
+            if backend_name == "wsl" {
+                backend::runtime_guest::validate_wsl_runtime_host_path(&host_path.to_string_lossy())?;
+            }
 
             let prior = store::load_spec(&name)?;
             let mut spec = match prior.clone() {
@@ -1379,8 +1385,11 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                 )?);
             }
             spec.published.sort_by_key(|published| published.host);
-            let restart_required = store::read_live_pid(&name).is_some()
-                && prior.as_ref().is_some_and(|old| old.runtime_mounts != spec.runtime_mounts);
+            let restart_required = backend::runtime_guest::runtime_share_requires_restart(
+                backend_name,
+                store::read_live_pid(&name).is_some(),
+                prior.as_ref().is_some_and(|old| old.runtime_mounts != spec.runtime_mounts),
+            );
             store::save_spec(&spec)?;
             store::ensure_disk(&spec)?;
             println!(
@@ -1388,6 +1397,7 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                 serde_json::json!({
                     "poolVm": name,
                     "restartRequired": restart_required,
+                    "shareTransport": if backend_name == "wsl" { "drvfs" } else { "virtiofs" },
                     "profile": {
                         "agentOnly": true,
                         "dev": false,
@@ -1395,7 +1405,7 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                         "cluster": false,
                         "cpus": spec.cpus,
                         "memoryMib": spec.memory_mib,
-                        "netLink": "netstack"
+                        "netLink": if backend_name == "wsl" { "nat" } else { "netstack" }
                     }
                 })
             );
@@ -1405,8 +1415,8 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             let mut plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime start plan")?;
             validate_runtime_plan(&plan)?;
             normalize_runtime_service_order(&mut plan)?;
+            validate_runtime_plan_against_spec(&name, &mut plan, backend_name)?;
             ensure_runtime_running(&name)?;
-            validate_runtime_plan_against_spec(&name, &plan)?;
             let mut bound = Vec::new();
             for port in &plan.ports {
                 if let Err(error) = runtime_forward_request(
@@ -1799,7 +1809,11 @@ fn validate_runtime_env(env: &std::collections::BTreeMap<String, String>, compou
     Ok(())
 }
 
-fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<()> {
+fn validate_runtime_plan_against_spec(
+    name: &str,
+    plan: &mut RuntimePlan,
+    backend_name: &str,
+) -> Result<()> {
     let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
     if !spec.runtime {
         bail!("VM '{name}' is not an Appliance Runtime pool");
@@ -1819,6 +1833,7 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
     {
         bail!("runtime start share does not match the persisted pool spec");
     }
+    plan.share.host_path = runtime_start_host_path(&share.host, backend_name)?;
     let published: Vec<_> = spec
         .published
         .iter()
@@ -1843,6 +1858,29 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
         }
     }
     Ok(())
+}
+
+fn runtime_start_host_path(persisted: &str, backend_name: &str) -> Result<String> {
+    let state_root = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
+    runtime_start_host_path_with_state_root(persisted, backend_name, &state_root)
+}
+
+fn runtime_start_host_path_with_state_root(
+    persisted: &str,
+    backend_name: &str,
+    state_root: &std::path::Path,
+) -> Result<String> {
+    if backend_name == "wsl" {
+        backend::runtime_guest::validate_wsl_runtime_host_path(persisted)?;
+    }
+    backend::runtime_guest::validate_mount_excludes_state_dir(
+        std::path::Path::new(backend::runtime_guest::strip_verbatim(persisted)),
+        state_root,
+    )?;
+    if backend_name == "wsl" {
+        return Ok(backend::runtime_guest::strip_verbatim(persisted).to_string());
+    }
+    Ok(persisted.to_string())
 }
 
 fn ensure_runtime_running(name: &str) -> Result<()> {
@@ -2229,36 +2267,22 @@ fn run_egress(action: EgressCmd) -> Result<()> {
 /// host-side fails fast with a clear message instead of a cryptic boot
 /// error.
 fn resolve_mount(path: &str) -> Result<String> {
+    if backend::runtime_guest::is_wsl_drive_root(path) {
+        bail!("--mount path must not be a drive root");
+    }
     let abs = std::fs::canonicalize(path).with_context(|| format!("--mount path '{path}' not found"))?;
     if !abs.is_dir() {
         bail!("--mount path '{}' is not a directory", abs.display());
     }
-    let root = canonicalize_with_missing_tail(&crate::store::vm_root());
-    if abs == root || root.starts_with(&abs) {
-        bail!("--mount path must not contain the appliance state dir ({})", root.display());
-    }
+    let root = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
+    backend::runtime_guest::validate_mount_excludes_state_dir(&abs, &root)
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "--mount path must not contain the appliance state dir ({})",
+                root.display()
+            )
+        })?;
     Ok(abs.to_string_lossy().into_owned())
-}
-
-fn canonicalize_with_missing_tail(path: &std::path::Path) -> std::path::PathBuf {
-    let mut existing = path;
-    let mut tail = Vec::new();
-    loop {
-        if let Ok(mut canonical) = std::fs::canonicalize(existing) {
-            for component in tail.iter().rev() {
-                canonical.push(component);
-            }
-            return canonical;
-        }
-        let Some(name) = existing.file_name() else {
-            return path.to_path_buf();
-        };
-        tail.push(name.to_os_string());
-        let Some(parent) = existing.parent() else {
-            return path.to_path_buf();
-        };
-        existing = parent;
-    }
 }
 
 fn ensure_spec(name: &str) -> Result<VmSpec> {
@@ -2450,6 +2474,12 @@ mod tests {
         assert!(error.to_string().contains("--mount path must not contain the appliance state dir"));
     }
 
+    #[test]
+    fn bare_windows_drive_root_is_rejected_before_canonicalize() {
+        let error = resolve_mount(r"D:\").unwrap_err();
+        assert!(error.to_string().contains("must not be a drive root"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn detached_host_process_uses_its_own_process_group() {
@@ -2523,6 +2553,44 @@ mod tests {
             })
             .collect();
         assert!(validate_runtime_plan(&too_many).unwrap_err().to_string().contains("at most 16"));
+    }
+
+    #[test]
+    fn runtime_start_forwards_only_valid_persisted_wsl_paths() {
+        #[cfg(windows)]
+        let state_root =
+            std::path::Path::new(r"\\?\C:\Users\appliance-test\.appliance\vm");
+        #[cfg(not(windows))]
+        let state_root = std::path::Path::new("/test-home/.appliance/vm");
+        assert_eq!(
+            runtime_start_host_path_with_state_root(
+                r"\\?\D:\runtime\payload",
+                "wsl",
+                state_root,
+            )
+            .unwrap(),
+            r"D:\runtime\payload"
+        );
+        assert!(runtime_start_host_path_with_state_root(
+            r"\\server\share\payload",
+            "wsl",
+            state_root,
+        )
+        .is_err());
+        assert!(runtime_start_host_path_with_state_root(r"D:\", "wsl", state_root).is_err());
+        assert_eq!(
+            runtime_start_host_path_with_state_root("/persisted/vz/payload", "vz", state_root)
+                .unwrap(),
+            "/persisted/vz/payload"
+        );
+        #[cfg(windows)]
+        let persisted_state_root = r"c:\USERS\APPLIANCE-TEST\.APPLIANCE\VM";
+        #[cfg(not(windows))]
+        let persisted_state_root = state_root.to_str().unwrap();
+        assert!(
+            runtime_start_host_path_with_state_root(persisted_state_root, "vz", state_root)
+                .is_err()
+        );
     }
 
     #[test]

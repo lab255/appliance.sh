@@ -69,14 +69,16 @@ The following guest code remains shared, with no WSL fork:
 Only payload acquisition is backend-specific. Extract the supervisors' current
 VirtioFS mount/unmount operations into generated `runtime-share-mount` and
 `runtime-share-unmount` helpers. VZ keeps `mount -t virtiofs -o ro <tag>`; WSL
-translates the host path with `wslpath`, bind-mounts the drvfs directory at the
-same `/run/appliance/shares/<tag>` path, then remounts that bind read-only. The
-host has already canonicalized the share and matched it to the persisted spec
-before the request reaches the guest (`packages/vm/src/main.rs:1282-1287`,
-`packages/vm/src/main.rs:1790-1810`). Non-translatable and UNC paths fail during
-prepare, before the app starts, in v1. WSL does not add `runtime_mounts` as boot
-devices and therefore does not restart the pool merely to add a payload; VZ
-still must restart because its shares are boot-configured devices
+uses a targeted `mount -t drvfs <validated-Windows-path>` at the same
+`/run/appliance/shares/<tag>` path with `ro,uid=1000,gid=1000,metadata`. Drive
+automounting and Windows interop are disabled distro-wide; no `/mnt/c` bind is
+involved. The host has already canonicalized the share, rejected any overlap
+with the appliance state directory, and matched it to the persisted spec before
+the request reaches the guest (`packages/vm/src/main.rs`). Non-local-drive, UNC,
+automount-relative, and traversal paths fail during prepare, before the app
+starts. WSL does not add `runtime_mounts` as boot devices and therefore does not
+restart the pool merely to add a payload; VZ still must restart because its
+shares are boot-configured devices
 (`packages/vm/src/spec.rs:120-123`, `packages/vm/src/backend/vz/mod.rs:482-503`).
 
 The WSL login user remains pinned to 1000:1000 because drvfs owns host mapping
@@ -245,8 +247,9 @@ pieces:
 1. WSL bootstrap assembly selects Runtime before Agent, installs the shared
    provision/supervisor scripts and pinned world, leaves no template markers,
    and selects only `core-ready`.
-2. The drvfs share adapter quotes translated paths, rejects unsupported paths,
-   bind-remounts read-only, and cannot escape the granted target.
+2. The drvfs share adapter quotes direct local-drive paths, rejects unsupported
+   and automount-relative paths, mounts only the payload read-only, and cannot
+   escape the granted target.
 3. A pure forward-table test covers bind/idempotent bind/collision/unbind,
    20000-29999 validation, and the WSL target derivation
    `<current guest IP>:<relay>` with a fake listener.
@@ -259,7 +262,15 @@ pieces:
 6. Egress rendering tests prove WSL never prints `host-enforced`, per-app proxy
    selection never unions grants, and direct-traffic limitations are present.
 
-One owner-run Windows 11/WSL2 NAT session is the release gate. From a clean pool
+One owner-run Windows 11/WSL2 NAT session is the release gate. AP-200 must begin
+that live run with the guest-side drive-exposure check below (the dedicated
+`docs/live-test-runbook-windows.md` does not exist yet):
+
+```powershell
+wsl.exe -d appliance-vm-appliance -u root -- sh -c 'test ! -e /mnt/c && ! grep -qE "[[:space:]]/mnt/[a-z][[:space:]]" /proc/mounts'
+```
+
+The command must exit 0 before any payload is started. From a clean pool
 it must: cold-run and stop the container and binary samples; run the compound
 Notes Suite and observe dependency health plus both service logs; open the
 declared UI in the default browser and a Desktop app window; prove an allowed
@@ -321,6 +332,6 @@ unblocks the owner run; 3b builds on its truthful VM-wide policy.
 5. **Attribution model — DECIDED:** on WSL, audit/entitlement logs and grant
    prompts identify apps by credential, not source IP. Credential-based
    attribution is accepted on WSL.
-6. **drvfs integrity — DECIDED:** a read-only bind-remount is not an integrity
-   boundary because Windows can mutate payload bytes after verification.
-   Verify-on-open and accept TOCTOU on drvfs.
+6. **drvfs integrity — DECIDED:** a targeted read-only drvfs mount is not an
+   integrity boundary because Windows can mutate payload bytes after
+   verification. Verify-on-open and accept TOCTOU on drvfs.
