@@ -39,8 +39,11 @@ HOST_PATH=${HOST_PATH#\\\\?\\}
 case "$HOST_PATH" in ''|\\\\*|//* ) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 case "$HOST_PATH" in [A-Za-z]:[\\/]* ) ;; *) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 case "$HOST_PATH" in *'\'..'\'*|*'\'..'/'*|*/..'\'*|*/../*|*'\'..|*/..) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
-case "$HOST_PATH" in [A-Za-z]:[\\/] ) echo "WSL runtime share path must not be a drive root" >&2; exit 2;; esac
-case "$HOST_PATH" in "$STATE_DIR_WIN"|"$STATE_DIR_WIN"[\\/]*) echo "WSL runtime share path must not include appliance state" >&2; exit 2;; esac
+DRIVE_TAIL=${HOST_PATH#??}
+case "$DRIVE_TAIL" in *[!\\/]*) ;; *) echo "WSL runtime share path must not be a drive root" >&2; exit 2;; esac
+HOST_PATH_CMP=$(printf '%s' "$HOST_PATH" | tr '[:upper:]' '[:lower:]')
+STATE_DIR_CMP=$(printf '%s' "$STATE_DIR_WIN" | tr '[:upper:]' '[:lower:]')
+case "$HOST_PATH_CMP" in "$STATE_DIR_CMP"|"$STATE_DIR_CMP"[\\/]*) echo "WSL runtime share path must not include appliance state" >&2; exit 2;; esac
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 if ! grep -qs " $SHARE " /proc/mounts; then
@@ -365,6 +368,7 @@ mod tests {
         };
         write_executable("mkdir", "#!/bin/sh\nexit 0\n");
         write_executable("grep", "#!/bin/sh\nexit 1\n");
+        write_executable("tr", "#!/bin/sh\nexec /usr/bin/tr \"$@\"\n");
         write_executable(
             "mount",
             "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$MOUNT_LOG\"\nexit 0\n",
@@ -401,8 +405,10 @@ mod tests {
         assert!(!run("/mnt/c/payload").status.success());
         assert!(!run(r"\\server\share").status.success());
         assert!(!run(r"D:\").status.success());
+        assert!(!run(r"D:\\\").status.success());
         assert!(!run(r"C:\Users\Avery\.appliance\vm").status.success());
         assert!(!run(r"C:\Users\Avery\.appliance\vm\pool").status.success());
+        assert!(!run(r"c:\users\avery\.appliance\vm\pool").status.success());
         assert!(run(r"D:\payload").status.success());
         assert_confined();
         assert!(run(r"\\?\D:\payload").status.success());

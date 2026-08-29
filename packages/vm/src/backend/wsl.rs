@@ -220,7 +220,7 @@ impl VmBackend for WslBackend {
         crate::bringup::set(
             &paths.dir,
             crate::bringup::Phase::Media,
-            Some("skipped (WSL)".to_string()),
+            Some("artifacts streamed (WSL)".to_string()),
         );
         push_bootstrap(&distro, &script)?;
 
