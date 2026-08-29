@@ -105,23 +105,6 @@ pub fn list_specs() -> Vec<VmSpec> {
     specs
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::spec::NetLink;
-
-    #[test]
-    fn loading_a_persisted_wsl_netstack_spec_normalises_to_nat() {
-        let mut persisted = VmSpec::defaults("legacy-wsl");
-        persisted.net_link = NetLink::Netstack;
-        let raw = serde_json::to_string(&persisted).unwrap();
-
-        let (loaded, normalised) = parse_spec_for_backend(&raw, "wsl").unwrap();
-        assert!(normalised);
-        assert_eq!(loaded.net_link, NetLink::Nat);
-    }
-}
-
 /// Create the sparse raw data disk if it doesn't exist yet. Sparse so a
 /// 10 GiB disk costs nothing until the guest writes to it.
 ///
@@ -197,4 +180,21 @@ pub fn write_pidfile(name: &str) -> Result<()> {
 pub fn clear_pidfile(name: &str) {
     let paths = VmPaths::for_name(name);
     let _ = fs::remove_file(paths.pidfile());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spec::NetLink;
+
+    #[test]
+    fn loading_a_persisted_wsl_netstack_spec_normalises_to_nat() {
+        let mut persisted = VmSpec::defaults("legacy-wsl");
+        persisted.net_link = NetLink::Netstack;
+        let raw = serde_json::to_string(&persisted).unwrap();
+
+        let (loaded, normalised) = parse_spec_for_backend(&raw, "wsl").unwrap();
+        assert!(normalised);
+        assert_eq!(loaded.net_link, NetLink::Nat);
+    }
 }

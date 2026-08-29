@@ -60,14 +60,14 @@ impl CurrentUserSid {
         if unsafe { ConvertSidToStringSidW(self.sid, &mut raw) } == 0 {
             return Err(std::io::Error::last_os_error()).context("convert current user SID to text");
         }
-        let result = (|| {
+        let result = {
             let mut len = 0;
             while unsafe { *raw.add(len) } != 0 {
                 len += 1;
             }
             String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) })
                 .context("current user SID is not valid UTF-16")
-        })();
+        };
         unsafe {
             let _ = LocalFree(raw.cast());
         }
@@ -91,8 +91,7 @@ pub(crate) fn current_user_sid() -> Result<CurrentUserSid> {
             .context("size current process token user");
     }
     // usize storage gives TOKEN_USER its required pointer alignment.
-    let words = (needed as usize + std::mem::size_of::<usize>() - 1)
-        / std::mem::size_of::<usize>();
+    let words = (needed as usize).div_ceil(std::mem::size_of::<usize>());
     let mut buffer = vec![0usize; words];
     if unsafe {
         GetTokenInformation(
