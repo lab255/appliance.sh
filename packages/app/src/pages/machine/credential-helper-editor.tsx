@@ -118,6 +118,11 @@ export function CredentialHelperEditor({
         label="Helper program"
         htmlFor="credential-helper-program"
         hint="Optional. Use an absolute executable path; its standard output becomes the credential."
+        error={
+          showErrors && validation.program ? (
+            <span id="credential-helper-program-error">{validation.program}</span>
+          ) : undefined
+        }
       >
         <div className="flex gap-2">
           <Input
@@ -133,7 +138,6 @@ export function CredentialHelperEditor({
               type="button"
               size="sm"
               variant="outline"
-              aria-label="Choose helper program"
               onClick={() => void onPickProgram().then((picked) => picked && onProgramChange(picked))}
             >
               <FolderOpen className="h-3.5 w-3.5" aria-hidden />
@@ -141,16 +145,11 @@ export function CredentialHelperEditor({
             </Button>
           ) : null}
         </div>
-        {showErrors && validation.program ? (
-          <p id="credential-helper-program-error" className="mt-1 text-xs text-[var(--color-destructive-foreground)]">
-            {validation.program}
-          </p>
-        ) : null}
       </Field>
 
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-xs font-medium">Arguments</span>
+          <span className="text-xs font-medium leading-4">Arguments</span>
           <Button id="credential-helper-add-arg" type="button" size="sm" variant="ghost" onClick={() => addArg()}>
             <Plus className="h-3.5 w-3.5" aria-hidden />
             Add argument
@@ -163,9 +162,9 @@ export function CredentialHelperEditor({
               return (
                 <div key={index}>
                   <div className="flex items-center gap-2">
-                    <label htmlFor={`credential-helper-arg-${index}`} className="w-8 shrink-0 text-xs">
+                    <span aria-hidden className="w-8 shrink-0 text-xs">
                       {index + 1}
-                    </label>
+                    </span>
                     <Input
                       id={`credential-helper-arg-${index}`}
                       aria-label={`Helper argument ${index + 1}`}
@@ -178,7 +177,7 @@ export function CredentialHelperEditor({
                         if (event.key === 'Enter') {
                           event.preventDefault();
                           addArg(index);
-                        } else if (event.key === 'Backspace' && !arg && args.length > 1) {
+                        } else if (event.key === 'Backspace' && !arg) {
                           event.preventDefault();
                           removeArg(index);
                         }
@@ -196,7 +195,11 @@ export function CredentialHelperEditor({
                     </button>
                   </div>
                   {showErrors && validation.args[index] ? (
-                    <p id={errorId} className="ml-10 mt-1 text-xs text-[var(--color-destructive-foreground)]">
+                    <p
+                      id={errorId}
+                      role="alert"
+                      className="ml-10 mt-1 text-xs leading-4 text-[var(--color-destructive-foreground)]"
+                    >
                       {validation.args[index]}
                     </p>
                   ) : null}

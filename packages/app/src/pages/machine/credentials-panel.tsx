@@ -91,7 +91,7 @@ export function CredentialsPanel({
     setShowHelperErrors(true);
     if (invalidHelper) return;
     const program = helperProgram.trim();
-    const helper = program ? [program, ...helperArgs] : undefined;
+    const helper = program ? [program, ...helperArgs.map((arg) => arg.trim())] : undefined;
     const added = await act(() =>
       creds.add({ host: h, capture, inject, header: header.trim() || 'authorization', helper })
     );
@@ -290,33 +290,39 @@ export function CredentialsPanel({
                     </button>
                   </div>
                   {typeof r.helper === 'string' ? (
-                    <div className="mt-1.5 rounded border border-[var(--color-warning-border)] bg-[var(--color-warning-background)] p-2">
-                      <div className="flex items-start gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-[var(--color-warning-foreground)]">
-                            Legacy shell helper — read only
-                          </p>
-                          <code className="mt-1 block overflow-x-auto whitespace-pre font-mono text-xs">
-                            {r.helper}
-                          </code>
-                          <p className="mt-1 text-xs leading-4 text-[var(--color-muted-foreground)]">
-                            Conversion splits on whitespace; matching single or double quotes keep text together.
-                          </p>
-                        </div>
-                        <Button type="button" size="sm" variant="outline" onClick={() => convertLegacyRule(r)}>
+                    <Banner
+                      className="mt-1.5"
+                      tone="warning"
+                      title="Legacy shell helper — read only"
+                      action={
+                        <Button size="sm" variant="outline" onClick={() => convertLegacyRule(r)}>
                           Convert to argv
                         </Button>
-                      </div>
+                      }
+                    >
+                      <code className="block overflow-x-auto whitespace-pre font-mono text-xs">{r.helper}</code>
+                      <p className="mt-1">
+                        Conversion splits on whitespace; matching single or double quotes keep text together.
+                        Backslashes stay literal on conversion.
+                      </p>
+                      <p className="mt-1">Not used on Windows until you convert it.</p>
                       {conversionError?.host === r.host ? (
-                        <p role="alert" className="mt-1 text-xs text-[var(--color-destructive-foreground)]">
+                        <p role="alert" className="mt-1 text-xs leading-4 text-[var(--color-destructive-foreground)]">
                           {conversionError.message}
                         </p>
                       ) : null}
-                    </div>
+                    </Banner>
                   ) : Array.isArray(r.helper) ? (
-                    <code className="mt-1.5 block overflow-x-auto whitespace-pre font-mono text-xs text-[var(--color-muted-foreground)]">
-                      {JSON.stringify(r.helper)}
-                    </code>
+                    <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Helper arguments">
+                      {r.helper.map((value, index) => (
+                        <code
+                          key={index}
+                          className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-xs text-[var(--color-muted-foreground)]"
+                        >
+                          {value}
+                        </code>
+                      ))}
+                    </div>
                   ) : null}
                 </li>
               ))}

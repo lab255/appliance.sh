@@ -88,7 +88,7 @@ describe('credential helper argv conversion', () => {
 
     await act(async () => {
       inputValue(container.querySelector<HTMLInputElement>('#credential-host')!, 'api.example.com');
-      container.querySelector<HTMLButtonElement>('[aria-label="Choose helper program"]')!.click();
+      button(container, 'Browse').click();
       await Promise.resolve();
       button(container, 'Add argument').click();
     });
@@ -105,6 +105,31 @@ describe('credential helper argv conversion', () => {
     });
 
     expect(add.mock.calls[0][0].helper).toEqual(['C:\\picked\\helper.exe', '--type', 'codex']);
+  });
+
+  it('trims arguments on save and lets Backspace remove the final empty row', async () => {
+    const { add, container } = await renderPanel();
+    await act(async () => button(container, 'Add credential rule').click());
+    await act(async () => container.querySelector('summary')!.click());
+    await act(async () => {
+      inputValue(container.querySelector<HTMLInputElement>('#credential-host')!, 'api.example.com');
+      button(container, 'Browse').click();
+      await Promise.resolve();
+      button(container, 'Add argument').click();
+    });
+    const argument = container.querySelector<HTMLInputElement>('[aria-label="Helper argument 1"]')!;
+    await act(async () => argument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true })));
+    expect(container.querySelector('[aria-label="Helper argument 1"]')).toBeNull();
+
+    await act(async () => button(container, 'Add argument').click());
+    await act(async () =>
+      inputValue(container.querySelector<HTMLInputElement>('[aria-label="Helper argument 1"]')!, '  --type=codex  ')
+    );
+    await act(async () => {
+      button(container, 'Add rule').click();
+      await vi.waitFor(() => expect(add).toHaveBeenCalledOnce());
+    });
+    expect(add.mock.calls[0][0].helper).toEqual(['C:\\picked\\helper.exe', '--type=codex']);
   });
 
   it('shows helpful errors and does not submit invalid argv', async () => {
