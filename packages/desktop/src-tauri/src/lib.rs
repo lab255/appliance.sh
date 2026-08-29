@@ -4984,6 +4984,13 @@ async fn microvm_egress_clear_log(name: Option<String>) -> Result<(), String> {
 // `appliance-vm creds` surface the CLI uses.
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+enum CredentialHelper {
+    Argv(Vec<String>),
+    LegacyShell(String),
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CredentialRule {
     host: String,
@@ -4994,7 +5001,7 @@ struct CredentialRule {
     #[serde(default)]
     header: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    helper: Option<String>,
+    helper: Option<CredentialHelper>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -5035,7 +5042,25 @@ struct CredsAddInput {
     #[serde(default)]
     header: Option<String>,
     #[serde(default)]
-    helper: Option<String>,
+    helper: Option<CredentialHelper>,
+}
+
+/// Encode the helper for appliance-vm's one-argument `--helper` transport.
+/// The VM parses argv JSON and persists the array itself; legacy strings pass
+/// through unchanged for Unix compatibility.
+fn credential_helper_cli_arg(helper: CredentialHelper) -> Result<Option<String>, String> {
+    match helper {
+        CredentialHelper::Argv(argv) => {
+            if argv.is_empty() || argv.iter().any(String::is_empty) {
+                return Err("credential helper argv must contain a non-empty executable and arguments".into());
+            }
+            serde_json::to_string(&argv).map(Some).map_err(|e| e.to_string())
+        }
+        CredentialHelper::LegacyShell(command) => {
+            let command = command.trim().to_string();
+            Ok((!command.is_empty()).then_some(command))
+        }
+    }
 }
 
 #[tauri::command]
@@ -5061,7 +5086,7 @@ async fn microvm_creds_add(name: Option<String>, input: CredsAddInput) -> Result
         args.push("--header".into());
         args.push(h);
     }
-    if let Some(c) = input.helper.filter(|c| !c.trim().is_empty()) {
+    if let Some(c) = input.helper.map(credential_helper_cli_arg).transpose()?.flatten() {
         args.push("--helper".into());
         args.push(c);
     }
@@ -6881,6 +6906,31 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn credential_helper_argv_stays_an_array_across_desktop_vm_boundary() {
+        let argv = vec![
+            r"C:\Program Files\Appliance\appliance.exe".to_string(),
+            "agent".to_string(),
+            "print-key".to_string(),
+            "--type".to_string(),
+            "claude-code".to_string(),
+        ];
+        let transport = credential_helper_cli_arg(CredentialHelper::Argv(argv.clone()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Vec<String>>(&transport).unwrap(), argv);
+
+        let rule = CredentialRule {
+            host: "api.anthropic.com".into(),
+            capture: false,
+            inject: true,
+            header: "x-api-key".into(),
+            helper: Some(CredentialHelper::Argv(argv.clone())),
+        };
+        let json = serde_json::to_value(rule).unwrap();
+        assert_eq!(json["helper"], serde_json::json!(argv));
+    }
 
     #[test]
     fn app_window_identity_matches_the_desktop_contract() {

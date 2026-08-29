@@ -453,7 +453,13 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
           list() {
             return invoke<CredentialsState>('microvm_creds_list', { name: vm });
           },
-          async add(rule: { host: string; capture: boolean; inject: boolean; header?: string; helper?: string }) {
+          async add(rule: {
+            host: string;
+            capture: boolean;
+            inject: boolean;
+            header?: string;
+            helper?: string | string[];
+          }) {
             await invoke('microvm_creds_add', { name: vm, input: rule });
           },
           async remove(host: string) {

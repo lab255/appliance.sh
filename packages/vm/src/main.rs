@@ -2020,7 +2020,7 @@ fn run_creds(action: CredsCmd) -> Result<()> {
                 capture,
                 inject,
                 header: header.unwrap_or_else(|| "authorization".to_string()).to_ascii_lowercase(),
-                helper,
+                helper: helper.map(creds::CredentialHelper::from_cli_arg).transpose()?,
             };
             creds::upsert_rule(&name, rule)?;
             println!("credential rule for '{host}' saved (capture={capture}, inject={inject})");

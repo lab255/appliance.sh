@@ -1237,7 +1237,13 @@ export function createMockHost(): ConsoleHost {
                 secrets: vm.creds.secrets.map((s) => ({ ...s })),
               };
             },
-            async add(rule: { host: string; capture: boolean; inject: boolean; header?: string; helper?: string }) {
+            async add(rule: {
+              host: string;
+              capture: boolean;
+              inject: boolean;
+              header?: string;
+              helper?: string | string[];
+            }) {
               await sleep(120);
               const next = {
                 host: rule.host,
@@ -1348,7 +1354,7 @@ interface MockVm {
     netLink?: 'netstack' | 'nat';
   };
   creds: {
-    rules: Array<{ host: string; capture: boolean; inject: boolean; header: string; helper?: string }>;
+    rules: Array<{ host: string; capture: boolean; inject: boolean; header: string; helper?: string | string[] }>;
     secrets: Array<{ host: string; header: string; masked: string }>;
   };
   /** Coding agents launched into this VM (Phase 5, A5). */
