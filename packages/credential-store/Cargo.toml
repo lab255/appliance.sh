@@ -18,7 +18,7 @@ keyring = { version = "3.6.3", default-features = false, features = ["apple-nati
 thiserror = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

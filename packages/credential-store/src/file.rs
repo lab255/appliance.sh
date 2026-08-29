@@ -4,7 +4,101 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+#[cfg(windows)]
+use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+#[cfg(windows)]
+use windows_sys::Win32::Security::{
+    GetTokenInformation, IsValidSid, TokenUser, PSID, TOKEN_QUERY, TOKEN_USER,
+};
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(windows)]
+struct OwnedHandle(HANDLE);
+
+#[cfg(windows)]
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.0);
+        }
+    }
+}
+
+/// The aligned token buffer owns the memory referenced by `sid`.
+#[cfg(windows)]
+struct CurrentUserSid {
+    _buffer: Vec<usize>,
+    sid: PSID,
+}
+
+#[cfg(windows)]
+impl CurrentUserSid {
+    fn to_string(&self) -> Result<String, StoreError> {
+        let mut raw = std::ptr::null_mut();
+        if unsafe { ConvertSidToStringSidW(self.sid, &mut raw) } == 0 {
+            return Err(map_io_error(std::io::Error::last_os_error()));
+        }
+        let result = (|| {
+            let mut len = 0;
+            while unsafe { *raw.add(len) } != 0 {
+                len += 1;
+            }
+            String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) }).map_err(|error| {
+                StoreError::Internal(format!("current user SID is not valid UTF-16: {error}"))
+            })
+        })();
+        unsafe {
+            let _ = LocalFree(raw.cast());
+        }
+        result
+    }
+}
+
+#[cfg(windows)]
+fn current_user_sid() -> Result<CurrentUserSid, StoreError> {
+    let mut token = std::ptr::null_mut();
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(map_io_error(std::io::Error::last_os_error()));
+    }
+    let token = OwnedHandle(token);
+    let mut needed = 0;
+    unsafe {
+        GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+    }
+    if needed == 0 {
+        return Err(map_io_error(std::io::Error::last_os_error()));
+    }
+    // usize storage gives TOKEN_USER its required pointer alignment.
+    let words = (needed as usize + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
+    let mut buffer = vec![0_usize; words];
+    if unsafe {
+        GetTokenInformation(
+            token.0,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    } == 0
+    {
+        return Err(map_io_error(std::io::Error::last_os_error()));
+    }
+    let sid = unsafe { (*(buffer.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+        return Err(StoreError::Internal(
+            "current process token has an invalid user SID".to_owned(),
+        ));
+    }
+    Ok(CurrentUserSid {
+        _buffer: buffer,
+        sid,
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct AclFileStore {
@@ -159,16 +253,15 @@ fn restrict_to_current_user(path: &Path) -> Result<(), StoreError> {
 fn restrict_to_current_user(path: &Path) -> Result<(), StoreError> {
     use std::os::windows::process::CommandExt;
 
-    let username = std::env::var("USERNAME")
-        .map_err(|error| StoreError::Internal(format!("USERNAME is unavailable: {error}")))?;
-    let principal = std::env::var("USERDOMAIN")
-        .ok()
-        .filter(|domain| !domain.is_empty() && domain != ".")
-        .map(|domain| format!(r"{domain}\{username}"))
-        .unwrap_or(username);
+    let principal = format!("*{}", current_user_sid()?.to_string()?);
+    let permission = if path.is_dir() { "(OI)(CI)F" } else { "F" };
     let output = std::process::Command::new("icacls")
         .arg(path)
-        .args(["/inheritance:r", "/grant:r", &format!("{principal}:F")])
+        .args([
+            "/inheritance:r",
+            "/grant:r",
+            &format!("{principal}:{permission}"),
+        ])
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .output()
         .map_err(map_io_error)?;
@@ -262,7 +355,22 @@ mod tests {
         assert!(output.status.success());
         let listing = String::from_utf8_lossy(&output.stdout);
         let acl_lines: Vec<_> = listing.lines().filter(|line| line.contains(":(")).collect();
+        let principal = String::from_utf8_lossy(
+            &std::process::Command::new("whoami")
+                .creation_flags(0x0800_0000)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_owned();
         assert_eq!(acl_lines.len(), 1, "unexpected ACL listing:\n{listing}");
+        assert!(
+            acl_lines[0]
+                .to_ascii_lowercase()
+                .contains(&principal.to_ascii_lowercase()),
+            "current principal missing from ACL listing:\n{listing}"
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }
