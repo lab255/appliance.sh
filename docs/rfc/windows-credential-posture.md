@@ -38,16 +38,20 @@ not API contracts.
 
 ## Decision by secret class
 
-| Secret class                      | Windows canonical store                                                                                                                               | File contents after migration                                                                                                              | Reason                                                                                                                                                                                                                                                                                                       |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Cluster API key                   | Credential Manager via `keyring`; service `sh.appliance.desktop`, account `cluster:<profile-name>` for every Windows profile, regardless of `managed` | `profiles.json` retains URL, key ID, name, and other metadata with an empty `secret`; stop putting the active secret in `credentials.json` | Both desktop and CLI need the value, and the desktop already writes the selected OS API. A helper closes the CLI-read gap.                                                                                                                                                                                   |
-| Agent credentials                 | Credential Manager via `keyring`; service `sh.appliance.agent`, account `<provider>`                                                                  | No `<provider>-cred` after verified migration                                                                                              | These are long-lived, user-global secrets. Store the existing UTF-8 `{kind,value}` envelope as one opaque value.                                                                                                                                                                                             |
-| Entitlement device key and anchor | Credential Manager via `keyring`; existing accounts `device:entitlements:v1` and `device:entitlements-anchor:v1` under `sh.appliance.desktop`         | Remove the default-home key and anchor files after verified migration; explicit non-default/test homes remain file-backed                  | The seed is a private signing key. Keeping the independent anchor outside ordinary files makes simple file rollback/restore harder, even though it cannot defeat same-user compromise.                                                                                                                       |
-| Per-VM broker state               | ACL'd files under `~/.appliance/vm/<name>`: `egress-credentials.json` and `egress-secrets.json`                                                       | Unchanged format and location; AP-195 resets the directory and files to the current user                                                   | Rules are VM-scoped structured state and need atomic whole-file updates. Normal agent rules contain only helper argv and `capture:false`, so no agent credential lands here. An explicitly configured capture rule can put a cleartext header in `egress-secrets.json`; that exception is owner-gated below. |
+| Secret class                      | Windows canonical store                                                                                                                                                                                                                                                                                                                                                                   | File contents after migration                                                                                                              | Reason                                                                                                                                                                                                                                                                                                       |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cluster API key                   | Credential Manager via `keyring`; service `sh.appliance.desktop`, account `cluster:<profile-name>` for every Windows profile, regardless of `managed`                                                                                                                                                                                                                                     | `profiles.json` retains URL, key ID, name, and other metadata with an empty `secret`; stop putting the active secret in `credentials.json` | Both desktop and CLI need the value, and the desktop already writes the selected OS API. A helper closes the CLI-read gap.                                                                                                                                                                                   |
+| Agent credentials                 | Credential Manager via `keyring`; service `sh.appliance.agent`, account `<provider>`                                                                                                                                                                                                                                                                                                      | No `<provider>-cred` after verified migration                                                                                              | These are long-lived, user-global secrets. Store the existing UTF-8 `{kind,value}` envelope as one opaque value.                                                                                                                                                                                             |
+| Entitlement device key and anchor | Credential Manager via `keyring`; existing accounts `device:entitlements:v1` and `device:entitlements-anchor:v1` under `sh.appliance.desktop`; under the user-global lock; after any write the helper re-reads and returns the value now canonical in Credential Manager — an existing key always wins (create-if-absent; `keyring::set_password` alone overwrites and is not sufficient) | Remove the default-home key and anchor files after verified migration; explicit non-default/test homes remain file-backed                  | The seed is a private signing key. Keeping the independent anchor outside ordinary files makes simple file rollback/restore harder, even though it cannot defeat same-user compromise.                                                                                                                       |
+| Per-VM broker state               | ACL'd files under `~/.appliance/vm/<name>`: `egress-credentials.json` and `egress-secrets.json`                                                                                                                                                                                                                                                                                           | Unchanged format and location; AP-195 resets the directory and files to the current user                                                   | Rules are VM-scoped structured state and need atomic whole-file updates. Normal agent rules contain only helper argv and `capture:false`, so no agent credential lands here. An explicitly configured capture rule can put a cleartext header in `egress-secrets.json`; that exception is owner-gated below. |
 
 Linux keeps owner-only files and macOS keeps Keychain. This RFC does not adopt
 Secret Service on Linux and does not change AP-194's helper argv contract or
 AP-195's complete Windows ACL work.
+
+Windows deliberately covers all profiles; the macOS `managed === 'desktop'`
+restriction is unchanged here and its cleartext CLI-managed case is a separate
+follow-up.
 
 ## CLI access: ship `appliance-credhelper.exe`
 
@@ -69,8 +73,23 @@ exit codes. Secrets never appear in argv or logs. The TS caller uses
 The helper validates cluster/profile/provider identifiers against the same
 allowlists and length limits as its callers.
 
-The CLI release workflow publishes the helper as a target-tagged asset, the
-npm postinstall downloads it beside `appliance-bin.exe`, and the desktop bundle
+The helper sets stdin/stdout to binary mode (`_setmode(_O_BINARY)`); values are
+written raw with no trailing newline, no BOM, no CRLF translation; callers read
+the exact byte count and never `.trim()` before storing. Exit codes: 0 ok, 3
+missing, 4 denied, 5 malformed, 6 invalid-identifier, 1 internal; every
+non-zero exit is fail-closed at every hop.
+
+The CLI resolves the helper only as an absolute sibling of its own executable
+path (never `PATH`, `cwd`, or an env override), and spawns with
+`CREATE_NO_WINDOW`. Because the install dir is user-writable, a swapped helper
+is same-user compromise, not a boundary this defends.
+
+The release publishes a SHA-256 for the helper asset; postinstall verifies the
+digest against a value baked into the published npm package before the file is
+made executable, and deletes on mismatch. (The existing `appliance-bin`
+download has no such check — tracked separately.)
+
+The helper is installed beside `appliance-bin.exe`, and the desktop bundle
 includes it beside its bundled CLI. Packaging tests must cover npm, direct
 release download, and Tauri resource layouts; a missing helper is a fail-closed
 credential error, not a fallback write to cleartext.
@@ -130,19 +149,27 @@ envelope continues to fail closed.
 
 Migration is lazy and idempotent under a user-global migration lock:
 
-1. Read Credential Manager first. If the item exists, it wins; do not overwrite
-   it from a file.
-2. If missing, read the legacy file value. For clusters, migrate each non-empty
-   profile and the legacy active-profile mirror; for agents, consider
-   `<provider>-cred` then the legacy `anthropic-key`; for entitlements, validate
-   the key/anchor structures before import.
-3. Write Credential Manager, read it back, and require exact logical equality
-   (exact bytes for agent envelopes).
+1. Read Credential Manager first. If the item exists and a legacy file value
+   also exists: if they are byte-equal, scrub the file (steps 3–5); if they
+   differ, keep both, do NOT overwrite either, and surface a doctor `conflict`
+   state instructing re-login. Credential Manager remains the read source; no
+   path may leave an unscrubbed cleartext copy silently.
+2. If the item is missing, read the legacy file value and write it to Credential
+   Manager. For clusters, migrate each non-empty profile and the legacy
+   active-profile mirror; for agents, consider `<provider>-cred` then the legacy
+   `anthropic-key`; for entitlements, validate the key/anchor structures before
+   import.
+3. Read Credential Manager back and require exact logical equality (exact bytes
+   for agent envelopes).
 4. Only after verification, atomically blank the cluster secret fields and
    delete the migrated agent/device files. If any step fails, leave the
    original file untouched and fail closed; never silently choose file-canonical.
 5. Record a non-secret schema marker so every surface can distinguish
    not-yet-migrated from already-scrubbed. Re-running is safe after a crash.
+
+The marker is a non-secret hint for surfacing state only; no scrub, trust, or
+read decision may be gated on it, and a flipped marker cannot cause an overwrite
+because an existing Credential Manager item is never replaced from a file.
 
 Per-VM files do not move. AP-195 tightens their existing files and parent
 directories in place. The scrub creates a downgrade boundary: an older Windows
@@ -158,12 +185,26 @@ that is owner-gated below.
 | Node native module                                                  | Similar once it reaches Credential Manager                                                       | Same residual; native supply-chain/loader code runs as the user   | Same as Credential Manager                                                                                                      | Same-user interop residual                                                                                                            | Rejected: Bun single-binary, Node ABI, npm prebuild, Tauri, and five release targets create a larger packaging/ABI surface than a narrow Rust helper; it also duplicates the working Rust backend |
 | ACL'd file canonical for all secrets                                | ACL reset blocks ordinary other users; administrators/SYSTEM can take ownership                  | Reads cleartext directly                                          | Cleartext leaks when `~/.appliance` is backed up or synced                                                                      | DrvFS exposes the Windows file to a distro running as that user; ACLs do not create a second trust boundary                           | Rejected for durable global secrets; retained for per-VM state only                                                                                                                               |
 
+Windows generic credentials carry no per-application ACL: any process
+running as the user can `CredRead` them, and unlike macOS Keychain there is no
+per-binary prompt. The helper does not add exposure but does lower attacker
+effort by naming the items. The real delta versus an ACL'd file is therefore
+narrow: no cleartext in ordinary home-directory backup/sync, and no file for a
+WSL distro to read over `/mnt/c`. Credential Manager stores generic credentials
+under the same user DPAPI master key an app could use directly; choosing it over
+a hand-rolled DPAPI blob buys enumeration, lifecycle, and a shared `keyring`
+backend — not a stronger trust boundary.
+
 The honest residual is **same-user execution**: neither Credential Manager nor
 ACLs defend against malware already running as the Appliance user, an elevated
 administrator, screen/input capture at login, or a malicious replacement
 helper. Release signing, hash verification, and fail-closed helper discovery
 protect distribution integrity, not a compromised account. Credential Manager
 also does not make entitlement signing hardware-backed or non-exportable.
+
+One WSL mitigation option is to ship `/etc/wsl.conf` with `[interop]
+enabled=false` and `appendWindowsPath=false` in the appliance distro — partial:
+does not constrain other distros or the user.
 
 ## Required documentation edits after implementation
 
@@ -195,30 +236,35 @@ also does not make entitlement signing hardware-backed or non-exportable.
 1. **Windows store core + helper packaging — L.** Add the neutral Rust crate,
    typed helper, Windows store tests, and all CLI/npm/Tauri release layouts.
    Acceptance: round-trip/probe/delete tests pass under a non-admin Windows
-   user; stdin/stdout contract never puts a secret in argv/logs; missing helper
-   fails closed; signed asset/install layout is verified.
+   user; binary-mode pipe contract test with golden bytes; digest-pinned
+   download; sibling-only discovery test; stdin/stdout never puts a secret in
+   argv/logs; missing helper fails closed; signed asset/install layout is
+   verified.
 2. **Thin callers + migration — L.** Add the single TS module, move desktop
    agent calls to the Rust seam, move VM files behind `AclFileStore`, and run
    the idempotent scrub migration. Acceptance: cross-language envelope golden
    vectors match byte-for-byte; legacy cluster/agent/entitlement fixtures
-   migrate without loss; injected agents still fail closed; doctor reports all
-   Windows states. Merge after card 1. AP-194 may land before it; consume its
-   argv contract rather than changing it. AP-195 must land before declaring the
-   retained per-VM file posture complete.
+   migrate without loss; conflict-state migration test; injected agents still
+   fail closed; doctor reports all Windows states. Merge after card 1.
+   AP-194 may land before it; consume its argv contract rather than changing it.
+   AP-195 must land before declaring the retained per-VM file posture complete.
 3. **Posture documentation and release guard — S.** Apply the bullets above
    and add a release check that the Windows CLI and desktop both contain the
    matching helper. Acceptance: no doc promises `0600` as Windows protection or
    calls Windows keychain checks not-applicable. Merge after card 2.
 
-## Owner gates, with proposed defaults
+## Owner gates and decisions
 
-1. **Accept cleartext for opt-in per-VM captured secrets?** Default **yes**:
-   retain ACL files because capture is explicit and normal agent rules use a
-   global helper with `capture:false`. If no, disable capture on Windows until
-   a separate high-cardinality Credential Manager design exists.
-2. **Accept the post-scrub downgrade boundary?** Default **yes**: preserve data
-   on failed migration, but after verified import remove cleartext and require
-   upgrade/re-login for old binaries rather than retaining a downgrade copy.
-3. **Treat same-user code execution and WSL interop as host compromise?**
-   Default **yes**. Do not claim Credential Manager protects against either;
-   addressing them requires a different trust boundary, not another store API.
+1. **DECIDED (owner, 2026-08-29): Accept cleartext for opt-in per-VM captured
+   secrets — yes, the proposed default.** Retain ACL files because capture is
+   explicit and normal agent rules use a global helper with `capture:false`.
+   **DECIDED: capture keeps macOS parity (opt-in, same default); doctor warns
+   when enabled on Windows; AP-195 landed the Rust-side directory+file ACLs.**
+2. **DECIDED (owner, 2026-08-29): Accept the post-scrub downgrade boundary —
+   yes, the proposed default.** Preserve data on failed migration, but after
+   verified import remove cleartext and require upgrade/re-login for old
+   binaries rather than retaining a downgrade copy.
+3. **DECIDED (owner, 2026-08-29): Treat same-user code execution and WSL interop
+   as host compromise — yes, the proposed default.** Do not claim Credential
+   Manager protects against either; addressing them requires a different trust
+   boundary, not another store API.
