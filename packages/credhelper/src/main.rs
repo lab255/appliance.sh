@@ -150,12 +150,9 @@ fn request_from_cli(cli: Cli) -> Result<Request, CommandError> {
         TopLevelCommand::EntitlementKey {
             command: EntitlementKeyCommand::GetOrCreate,
         } => Ok(Request::EntitlementKeyGetOrCreate),
-        TopLevelCommand::EntitlementAnchor { command } => Ok(Request::Store {
-            operation: match command {
-                EntitlementAnchorCommand::Get => Operation::Get,
-                EntitlementAnchorCommand::Put => Operation::Put,
-            },
-            key: parse_store_key(KeyKind::EntitlementAnchor)?,
+        TopLevelCommand::EntitlementAnchor { command } => Ok(match command {
+            EntitlementAnchorCommand::Get => Request::EntitlementAnchorGet,
+            EntitlementAnchorCommand::Put => Request::EntitlementAnchorPut,
         }),
     }
 }
