@@ -6278,6 +6278,8 @@ fn windows_setup_token_launchers() -> Vec<Vec<String>> {
             "",
             "wt.exe",
             "--",
+            "cmd",
+            "/K",
             "claude",
             "setup-token",
         ]
@@ -7201,6 +7203,8 @@ mod tests {
                     "",
                     "wt.exe",
                     "--",
+                    "cmd",
+                    "/K",
                     "claude",
                     "setup-token"
                 ],

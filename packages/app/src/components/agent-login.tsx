@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Banner } from '@/components/ui/banner';
 import { CommandSnippet } from '@/components/ui/command-snippet';
 import { Input } from '@/components/ui/input';
-import { localMachineLabel, type AgentAuthKind, type AgentAuthStatus, type HostPlatform } from '@/lib/host';
+import {
+  localMachineLabel,
+  localMachineLabelInline,
+  type AgentAuthKind,
+  type AgentAuthStatus,
+  type HostPlatform,
+} from '@/lib/host';
 import {
   AGENT_ADAPTERS,
   agentAdapter,
@@ -278,6 +284,7 @@ function ClaudeLogin({
   store: StoreFn;
 }) {
   const machineLabel = localMachineLabel(platform);
+  const machineLabelInline = localMachineLabelInline(platform);
   const [mode, setMode] = React.useState<'oauth' | 'api-key'>('oauth');
   const [apiKey, setApiKey] = React.useState('');
   const [paste, setPaste] = React.useState('');
@@ -389,18 +396,24 @@ function ClaudeLogin({
             <p>
               {machineLabel} needs Claude Code before you can sign in with a Claude subscription.
               {platform === 'windows'
-                ? ' Install it from Windows Terminal, then return here — or use an API key instead.'
+                ? ' Copy one of these commands and run it in a terminal — or use an API key instead.'
                 : ' Copy this command and run it in a terminal to install it — or use an API key instead.'}
             </p>
             {platform === 'windows' ? (
               <>
-                <div className="space-y-1">
-                  <span>Install with WinGet:</span>
-                  <CommandSnippet command="winget install Anthropic.ClaudeCode" />
+                <div className="space-y-1" role="group" aria-labelledby="winget-install-label">
+                  <span id="winget-install-label">Install with WinGet:</span>
+                  <CommandSnippet
+                    command="winget install Anthropic.ClaudeCode"
+                    copyButtonAriaLabel="Copy the WinGet command"
+                  />
                 </div>
                 <div className="space-y-1">
                   <span>Or, if Node.js is installed:</span>
-                  <CommandSnippet command="npm install -g @anthropic-ai/claude-code" />
+                  <CommandSnippet
+                    command="npm install -g @anthropic-ai/claude-code"
+                    copyButtonAriaLabel="Copy the npm command"
+                  />
                 </div>
               </>
             ) : (
@@ -414,7 +427,8 @@ function ClaudeLogin({
           <div className="space-y-2">
             <p className="text-[var(--color-muted-foreground)]">
               Sign in with your Claude Pro/Max/Team subscription — no API key needed. A sign-in terminal opens on{' '}
-              {machineLabel}, your browser asks you to approve, and the terminal then shows a token to paste below.
+              {machineLabelInline}, your browser asks you to approve, and the terminal then shows a token to paste
+              below.
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -439,8 +453,8 @@ function ClaudeLogin({
                 auto-launch a visible terminal. */}
             {terminalAutoOpenFailed ? (
               <p className="text-[var(--color-muted-foreground)]">
-                A terminal couldn&rsquo;t be opened automatically on {machineLabel} — copy the command below and run it
-                in any terminal instead.
+                A terminal couldn&rsquo;t be opened automatically on {machineLabelInline} — copy the command below and
+                run it in any terminal instead.
               </p>
             ) : null}
             <div className="space-y-1">

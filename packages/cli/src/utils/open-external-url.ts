@@ -8,9 +8,10 @@ export interface ExternalUrlCommand {
 export function externalUrlCommand(url: string, platform: NodeJS.Platform): ExternalUrlCommand {
   if (platform === 'darwin') return { command: 'open', args: [url] };
   if (platform === 'win32') {
-    // cmd.exe parses `&` even when Node supplies the URL as one argv entry.
-    // Escape it before handing the command line to `start`.
-    return { command: 'cmd.exe', args: ['/C', 'start', '', url.replace(/&/g, '^&')] };
+    // Windows: rundll32's FileProtocolHandler takes the URL as a plain
+    // argument. `cmd /c start` re-parses its command line, so URLs containing
+    // shell metacharacters or `%VAR%` pairs can be split or rewritten.
+    return { command: 'rundll32', args: ['url.dll,FileProtocolHandler', url] };
   }
   return { command: 'xdg-open', args: [url] };
 }
