@@ -313,6 +313,34 @@ export function classifyWslFailure(output: string): { detail: string; remediatio
   };
 }
 
+export const WSL_MIRRORED_REMEDIATION =
+  'Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` (or remove the setting), run `wsl --shutdown`, then retry.';
+
+/** Parse the one WSL setting the managed VM cannot support. The last
+ * networkingMode assignment under [wsl2] wins; comments and other
+ * sections are ignored. Exported for fixture-driven tests on any OS. */
+export function wslConfigUsesMirroredNetworking(text: string): boolean {
+  let inWsl2 = false;
+  let mode: string | undefined;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim().replace(/^\uFEFF/, '');
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    const section = line.match(/^\[([^\]]+)\]$/);
+    if (section) {
+      inWsl2 = section[1].trim().toLowerCase() === 'wsl2';
+      continue;
+    }
+    if (!inWsl2) continue;
+    const equals = line.indexOf('=');
+    if (equals < 0 || line.slice(0, equals).trim().toLowerCase() !== 'networkingmode') continue;
+    mode = line
+      .slice(equals + 1)
+      .split(/[;#]/, 1)[0]
+      .trim();
+  }
+  return mode?.toLowerCase() === 'mirrored';
+}
+
 /**
  * WSL2 is THE gating prerequisite on Windows — the managed VM is a WSL2
  * distro. Probe `wsl --status` so a machine without it fails preflight
@@ -324,6 +352,14 @@ export function checkWsl(): CheckResult {
   const label = 'WSL2 (runs the managed VM)';
   if (process.platform !== 'win32') {
     return pass(id, label, 'not applicable on this platform');
+  }
+  try {
+    const configPath = path.join(os.homedir(), '.wslconfig');
+    if (wslConfigUsesMirroredNetworking(fs.readFileSync(configPath, 'utf8'))) {
+      return fail(id, label, 'WSL mirrored networking is not supported by the managed VM', WSL_MIRRORED_REMEDIATION);
+    }
+  } catch {
+    // Missing/unreadable config means WSL's default NAT mode.
   }
   let r;
   try {

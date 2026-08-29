@@ -8,6 +8,8 @@ import {
   classifyWslFailure,
   decodeWindowsToolOutput,
   runFixes,
+  wslConfigUsesMirroredNetworking,
+  WSL_MIRRORED_REMEDIATION,
 } from './preflight.js';
 import type { PreflightReport } from './preflight.js';
 
@@ -107,6 +109,27 @@ describe('classifyWslFailure', () => {
   it('falls back to pointing at wsl --status for unrecognized failures', () => {
     const { remediation } = classifyWslFailure('some novel breakage');
     expect(remediation).toMatch(/wsl --status/);
+  });
+});
+
+describe('wslConfigUsesMirroredNetworking', () => {
+  it('detects mirrored mode from a representative .wslconfig fixture', () => {
+    const fixture = `
+      ; user config
+      [experimental]
+      networkingMode=NAT
+      [wsl2]
+      memory=8GB
+      networkingMode = mirrored # unsupported
+    `;
+    expect(wslConfigUsesMirroredNetworking(fixture)).toBe(true);
+    expect(WSL_MIRRORED_REMEDIATION).toContain('networkingMode=NAT');
+    expect(WSL_MIRRORED_REMEDIATION).toContain('wsl --shutdown');
+  });
+
+  it('ignores comments and lets the final [wsl2] value win', () => {
+    expect(wslConfigUsesMirroredNetworking('[wsl2]\n# networkingMode=mirrored\nnetworkingMode=NAT')).toBe(false);
+    expect(wslConfigUsesMirroredNetworking('[wsl2]\nnetworkingMode=mirrored\nnetworkingMode = NAT')).toBe(false);
   });
 });
 

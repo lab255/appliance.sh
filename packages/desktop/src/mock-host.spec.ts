@@ -70,6 +70,21 @@ describe('mock host platform', () => {
     expect(mockHostEnabled()).toBe(true);
     expect(createMockHost().platform).toBe('macos');
   });
+
+  it('renders the exact WSL mirrored-networking remediation scenario', async () => {
+    vi.stubGlobal('window', {
+      location: { search: '?mock-host&platform=windows&scenario=wsl-mirrored' },
+    });
+    expect(mockHostEnabled()).toBe(true);
+    const checks = await createMockHost().local!.preflight();
+    expect(checks[0]).toMatchObject({
+      tool: 'wsl',
+      installed: false,
+      error: 'WSL mirrored networking is enabled.',
+    });
+    expect(checks[0].installHint).toContain('networkingMode=NAT');
+    expect(checks[0].installHint).toContain('wsl --shutdown');
+  });
 });
 
 describe('mock host catalogue scenarios', () => {

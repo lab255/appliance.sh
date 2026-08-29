@@ -2554,11 +2554,58 @@ fn decode_wsl_text(bytes: &[u8]) -> String {
     }
 }
 
+#[cfg(windows)]
+const WSL_MIRRORED_REMEDIATION: &str =
+    "Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
+     (or remove the setting), run `wsl --shutdown`, then retry.";
+
+#[cfg(windows)]
+fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
+    let mut in_wsl2 = false;
+    let mut mode: Option<&str> = None;
+    for raw in text.lines() {
+        let line = raw.trim().trim_start_matches('\u{feff}');
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_wsl2 = line[1..line.len() - 1].trim().eq_ignore_ascii_case("wsl2");
+            continue;
+        }
+        if !in_wsl2 {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim().eq_ignore_ascii_case("networkingMode") {
+            mode = Some(value.split(['#', ';']).next().unwrap_or_default().trim());
+        }
+    }
+    mode.is_some_and(|value| value.eq_ignore_ascii_case("mirrored"))
+}
+
 /// Probe WSL2 readiness for the doctor view. Reports "installed but
 /// broken" with wsl.exe's own first diagnostic line (virtualization
 /// disabled, kernel outdated, …) rather than a bare boolean.
 #[cfg(windows)]
 async fn wsl_preflight_check() -> PreflightCheck {
+    let mirrored = std::env::var_os("USERPROFILE")
+        .and_then(|home| std::fs::read_to_string(std::path::PathBuf::from(home).join(".wslconfig")).ok())
+        .is_some_and(|text| wslconfig_uses_mirrored_networking(&text));
+    if mirrored {
+        return PreflightCheck {
+            tool: "wsl".to_string(),
+            installed: false,
+            version: None,
+            purpose: "Windows Subsystem for Linux 2 — mirrored networking is unsupported by the Dev Machine.".to_string(),
+            install_hint: WSL_MIRRORED_REMEDIATION.to_string(),
+            auto_installable: false,
+            error: Some("WSL mirrored networking is enabled.".to_string()),
+            daemon_running: None,
+            daemon_startable: None,
+        };
+    }
     let probe = quiet_command("wsl.exe").arg("--status").output().await;
     let (installed, version, error) = match probe {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
