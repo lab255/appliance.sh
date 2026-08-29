@@ -128,6 +128,23 @@ impl VmBackend for WslBackend {
         // guest, the WSL equivalent of a fresh VM launch.
         let _ = wsl_cmd().args(["--terminate", &distro]).output();
 
+        // A short WSL command starts the utility VM and gives us the exact
+        // Windows-host gateway before the strict Runtime nft rules are baked.
+        // Persist the same value consumed by the host egress URL machinery.
+        let runtime_gateway = if spec.runtime {
+            let _ = std::fs::remove_file(paths.gateway_ip());
+            let gateway = discover_gateway_ip(&distro)
+                .and_then(|ip| match ip {
+                    IpAddr::V4(ip) => Some(ip),
+                    IpAddr::V6(_) => None,
+                })
+                .context("discover WSL Runtime gateway for strict egress")?;
+            std::fs::write(paths.gateway_ip(), gateway.to_string())?;
+            Some(gateway)
+        } else {
+            None
+        };
+
         // Per-VM egress CA, trusted node-wide by the bootstrap (same
         // best-effort contract as the vz boot media).
         let egress_ca: Option<String> = if crate::mitm::ensure_ca(&spec.name).is_ok() {
@@ -154,6 +171,7 @@ impl VmBackend for WslBackend {
             apiserver.as_ref(),
             &bootstrap_token,
             &runtime_repositories,
+            runtime_gateway,
         )?;
         push_bootstrap(&distro, &script)?;
 
@@ -165,7 +183,9 @@ impl VmBackend for WslBackend {
         let _ = std::fs::remove_file(paths.agent_ready());
         let _ = std::fs::remove_file(paths.core_ready());
         let _ = std::fs::remove_file(paths.guest_ip());
-        let _ = std::fs::remove_file(paths.gateway_ip());
+        if !spec.runtime {
+            let _ = std::fs::remove_file(paths.gateway_ip());
+        }
         let _ = std::fs::remove_file(paths.stop_request());
 
         let log = std::fs::OpenOptions::new()
@@ -696,6 +716,7 @@ fn build_bootstrap(
     apiserver: Option<&crate::guest::ApiServerAssets>,
     bootstrap_token: &str,
     runtime_repositories: &[crate::images::RuntimeApkRepository],
+    runtime_gateway: Option<std::net::Ipv4Addr>,
 ) -> Result<String> {
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
@@ -768,6 +789,15 @@ fn build_bootstrap(
     } else {
         WSL_BASE_PACKAGE_PROVISION.to_string()
     };
+    let runtime_principal_snat = if spec.runtime {
+        crate::backend::runtime_guest::runtime_principal_snat_script(
+            crate::backend::runtime_guest::RuntimeGuestBackend::WslDrvFs,
+            runtime_gateway,
+            spec.egress_port,
+        )?
+    } else {
+        "#!/bin/sh\nset -eu\n".to_string()
+    };
 
     Ok(WSL_BOOTSTRAP
         // Blocks first (they carry nested markers), then the markers.
@@ -831,9 +861,7 @@ fn build_bootstrap(
         )
         .replace(
             "__RUNTIME_PRINCIPAL_SNAT__",
-            &crate::backend::runtime_guest::runtime_principal_snat_script(
-                crate::backend::runtime_guest::RuntimeGuestBackend::WslDrvFs,
-            ),
+            &runtime_principal_snat,
         )
         // BuildKit rides every k3s VM, exactly as on the vz backend —
         // injected before the port markers below so its nested
@@ -1165,6 +1193,7 @@ mod tests {
             Some(&assets),
             "tok3n",
             &[],
+            None,
         )
         .unwrap();
         for marker in [
@@ -1269,6 +1298,7 @@ mod tests {
             None,
             "",
             &[],
+            None,
         )
         .unwrap();
         assert!(!script.contains("appliance-dev: provisioning"));
@@ -1302,7 +1332,16 @@ mod tests {
                 packages: Vec::new(),
             },
         ];
-        let script = build_bootstrap(&s, None, None, None, "", &repositories).unwrap();
+        let script = build_bootstrap(
+            &s,
+            None,
+            None,
+            None,
+            "",
+            &repositories,
+            Some("172.25.64.1".parse().unwrap()),
+        )
+        .unwrap();
         assert!(script.contains("containerd=2.0.0-r5"));
         assert!(script.contains("nftables=1.1.1-r0"));
         assert!(script.contains("--no-network"));
@@ -1325,7 +1364,7 @@ mod tests {
         let mut s = spec("sbx");
         s.agent_only = true;
         s.dev = true;
-        let script = build_bootstrap(&s, None, None, None, "", &[]).unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(!script.contains("k3s server"), "agent-only provisions NO k3s");
         assert!(!script.contains("buildkitd"), "agent-only provisions no buildkit either");
         assert!(script.contains("while [ ! -f /persist/.dev-ready ]"));
@@ -1337,7 +1376,7 @@ mod tests {
         s.agent_only = true;
         s.dev = true;
         s.docker = true;
-        let script = build_bootstrap(&s, None, None, None, "", &[]).unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(!script.contains("docker is not provisioned in this agent sandbox."));
         assert!(script.contains("apk add --no-progress docker docker-cli-compose"));
     }
@@ -1348,14 +1387,14 @@ mod tests {
         s.dev = true;
         s.agent_only = true;
         s.dev_mount = Some(r"C:\Users\dev\proj".to_string());
-        let script = build_bootstrap(&s, None, None, None, "", &[]).unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(script.contains("rm -rf /persist/npm-global"));
         assert!(!script.contains("APPLIANCE_PROJECT=''"), "a mount must stamp a project id");
         // No mount ⇒ empty identity ⇒ the guard is inert.
         let mut s = spec("x");
         s.dev = true;
         s.agent_only = true;
-        let script = build_bootstrap(&s, None, None, None, "", &[]).unwrap();
+        let script = build_bootstrap(&s, None, None, None, "", &[], None).unwrap();
         assert!(script.contains("APPLIANCE_PROJECT=''"));
     }
 
@@ -1373,12 +1412,12 @@ mod tests {
         s.dev_mount = Some(r"C:\proj".to_string());
         for script in [
             build_bootstrap(&s, Some((Path::new(r"C:\k3s"), "sha"))
-                , Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"), None, "", &[]).unwrap(),
+                , Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"), None, "", &[], None).unwrap(),
             {
                 let mut a = spec("sbx");
                 a.agent_only = true;
                 a.dev = true;
-                build_bootstrap(&a, None, None, None, "", &[]).unwrap()
+                build_bootstrap(&a, None, None, None, "", &[], None).unwrap()
             },
         ] {
             let lines: Vec<&str> = script.lines().collect();

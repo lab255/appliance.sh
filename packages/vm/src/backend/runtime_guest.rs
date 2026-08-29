@@ -5,6 +5,7 @@
 //! that every development host can test.
 
 use anyhow::{bail, Result};
+use std::net::Ipv4Addr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RuntimeGuestBackend {
@@ -72,32 +73,56 @@ pub const fn runtime_share_unmount_script() -> &'static str {
     SHARE_UNMOUNT
 }
 
-const WSL_PRINCIPAL_SNAT_RULES: &str = r#"table ip appliance_runtime_nat {
+// AP-205 widens this behind wsl-mode cooperative.
+const WSL_PRINCIPAL_RULES: &str = r#"table ip appliance_runtime_nat {
   chain principal_snat {
     type nat hook postrouting priority srcnat; policy accept;
     ip saddr 192.168.127.0/24 oifname "eth0" masquerade
   }
+  chain principal_egress {
+    type filter hook forward priority -9; policy accept;
+    iifname "r*" ip saddr 192.168.127.0/24 ct state established,related accept
+    iifname "r*" ip saddr 192.168.127.0/24 ip daddr __WSL_GATEWAY__ tcp dport __EGRESS_PORT__ accept
+    iifname "r*" ip saddr 192.168.127.0/24 drop
+  }
 }
 "#;
 
-/// Pure nft ruleset for the WSL principal address space. Every packet leaving
-/// a Runtime principal via eth0 is translated; this is deliberately not
-/// limited to HTTP proxy traffic.
-pub const fn wsl_principal_snat_rules() -> &'static str {
-    WSL_PRINCIPAL_SNAT_RULES
+/// Pure nft ruleset for the WSL principal address space. Translation remains
+/// broad, but the later forward hook fails closed: principals may only use an
+/// established flow or reach the host egress broker at the WSL NAT gateway.
+pub fn wsl_principal_rules(gateway: Ipv4Addr, egress_port: u16) -> String {
+    WSL_PRINCIPAL_RULES
+        .replace("__WSL_GATEWAY__", &gateway.to_string())
+        .replace("__EGRESS_PORT__", &egress_port.to_string())
 }
 
-pub fn runtime_principal_snat_script(backend: RuntimeGuestBackend) -> String {
+pub fn runtime_principal_snat_script(
+    backend: RuntimeGuestBackend,
+    wsl_gateway: Option<Ipv4Addr>,
+    egress_port: u16,
+) -> Result<String> {
     match backend {
-        RuntimeGuestBackend::VirtioFs => "#!/bin/sh\nset -eu\n".to_string(),
-        RuntimeGuestBackend::WslDrvFs => format!(
-            "#!/bin/sh\nset -eu\n\
-             if ! nft list table ip appliance_runtime_nat >/dev/null 2>&1; then\n\
-               nft -f - <<'APPLIANCE_RUNTIME_NFT'\n\
-             {}APPLIANCE_RUNTIME_NFT\n\
-             fi\n",
-            wsl_principal_snat_rules()
-        ),
+        RuntimeGuestBackend::VirtioFs => Ok("#!/bin/sh\nset -eu\n".to_string()),
+        RuntimeGuestBackend::WslDrvFs => {
+            let gateway = wsl_gateway.ok_or_else(|| {
+                anyhow::anyhow!("WSL Runtime requires its NAT gateway for strict egress")
+            })?;
+            let rules = wsl_principal_rules(gateway, egress_port);
+            Ok(format!(
+                "#!/bin/sh\nset -eu\n\
+                 if ! nft list table ip appliance_runtime_nat >/dev/null 2>&1; then\n\
+                   nft -f - <<'APPLIANCE_RUNTIME_NFT'\n\
+                 {}APPLIANCE_RUNTIME_NFT\n\
+                 elif ! nft list chain ip appliance_runtime_nat principal_egress >/dev/null 2>&1; then\n\
+                   nft 'add chain ip appliance_runtime_nat principal_egress {{ type filter hook forward priority -9; policy accept; }}'\n\
+                   nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 ct state established,related accept\n\
+                   nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 ip daddr {gateway} tcp dport {egress_port} accept\n\
+                   nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 drop\n\
+                 fi\n",
+                rules
+            ))
+        }
     }
 }
 
@@ -238,14 +263,26 @@ mod tests {
     }
 
     #[test]
-    fn snat_rules_cover_every_principal_egress_packet() {
-        let rules = wsl_principal_snat_rules();
+    fn wsl_rules_fail_closed_after_the_broker_allows() {
+        let rules = wsl_principal_rules("172.25.64.1".parse().unwrap(), 5053);
         assert!(rules.contains("type nat hook postrouting priority srcnat"));
         assert!(rules.contains("ip saddr 192.168.127.0/24 oifname \"eth0\" masquerade"));
-        assert!(!rules.contains("tcp dport"));
-        assert!(!rules.contains("proxy"));
+        let established = rules
+            .find("ct state established,related accept")
+            .expect("established flow allow");
+        let broker = rules
+            .find("ip daddr 172.25.64.1 tcp dport 5053 accept")
+            .expect("host egress broker allow");
+        let drop = rules
+            .find("iifname \"r*\" ip saddr 192.168.127.0/24 drop")
+            .expect("principal default drop");
+        assert!(
+            established < broker && broker < drop,
+            "allows must precede the drop"
+        );
+        assert!(rules.contains("type filter hook forward priority -9"));
         assert_eq!(
-            runtime_principal_snat_script(RuntimeGuestBackend::VirtioFs),
+            runtime_principal_snat_script(RuntimeGuestBackend::VirtioFs, None, 5053).unwrap(),
             "#!/bin/sh\nset -eu\n"
         );
     }

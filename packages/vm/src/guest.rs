@@ -2528,7 +2528,10 @@ fn build_apkovl_for_readiness(
         0o755,
         crate::backend::runtime_guest::runtime_principal_snat_script(
             crate::backend::runtime_guest::RuntimeGuestBackend::VirtioFs,
+            None,
+            egress_port,
         )
+        ?
         .as_bytes(),
     )?;
     // Transparent tmux config for the agent's reattachable sessions.
