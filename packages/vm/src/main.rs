@@ -1234,6 +1234,13 @@ fn run() -> Result<()> {
             backend.destroy(&name)?;
             store::delete_vm_dir(&name)?;
             println!("deleted VM '{name}'");
+            for (principal, result) in egress::prune_runtime_policies_for_vm(&name) {
+                match result {
+                    Ok(true) => println!("removed Runtime policy '{principal}'"),
+                    Ok(false) => {}
+                    Err(e) => eprintln!("warn: could not remove Runtime policy '{principal}': {e}"),
+                }
+            }
             // Prune the credential profiles this VM owned — previously
             // only the CLI's deleteVmAndProfile did this, so an
             // engine-side delete left orphan clusters behind in both
@@ -2215,6 +2222,7 @@ fn run_egress(action: EgressCmd) -> Result<()> {
         EgressCmd::WslMode { mode, name } => {
             let mut spec = match store::load_spec(&name)? {
                 Some(spec) => spec,
+                None if mode.is_none() => VmSpec::defaults(&name),
                 None if name == DEFAULT_RUNTIME_VM => ensure_spec_for_up(&name, true)?,
                 None => bail!("VM '{name}' does not exist; create it before setting wsl-mode"),
             };
@@ -2236,7 +2244,7 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             );
             if spec.wsl_mode == WslMode::Cooperative {
                 eprintln!(
-                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are unioned across apps in this VM."
+                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through the proxy (CONNECT by hostname); direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across apps in this VM, dropping per-grant ports."
                 );
             }
             Ok(())

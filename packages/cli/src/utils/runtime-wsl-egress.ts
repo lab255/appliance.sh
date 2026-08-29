@@ -17,9 +17,19 @@ export type RuntimeWslEgressDecision =
 export function decideRuntimeWslEgress(
   appId: string,
   capability: RuntimeEgressCapability,
-  requestsEgress: boolean
+  requestsEgress: boolean,
+  platform = process.platform
 ): RuntimeWslEgressDecision {
-  if (capability.enforcement?.backend !== 'wsl') return { action: 'allow' };
+  const backend = capability.enforcement?.backend;
+  if (backend !== 'wsl') {
+    if (platform !== 'win32' || (typeof backend === 'string' && backend.length > 0)) return { action: 'allow' };
+    return {
+      action: 'refuse',
+      message:
+        `Runtime start refused on WSL: '${appId}' cannot verify wsl-mode because the engine is too old for wsl-mode; ` +
+        'update appliance-vm.',
+    };
+  }
   const mode = capability.wslMode === 'cooperative' ? 'cooperative' : 'strict';
   if (mode === 'strict' && requestsEgress) {
     return {
@@ -37,7 +47,8 @@ export function decideRuntimeWslEgress(
   };
 }
 
-export function runtimeEgressCapability(): RuntimeEgressCapability {
+export function runtimeEgressCapability(platform = process.platform): RuntimeEgressCapability {
+  if (platform !== 'win32') return {};
   const result = runVmCapture(['egress', 'policy', RUNTIME_POOL_VM]);
   if (result.status !== 0) throw new Error(`could not read wsl-mode for '${RUNTIME_POOL_VM}'`);
   try {

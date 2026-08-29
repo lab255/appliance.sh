@@ -286,6 +286,18 @@ describe('manifest to effective Runtime policy', () => {
     });
   });
 
+  it('fails closed on Windows when an old engine omits or malforms the enforcement backend', () => {
+    const expected = {
+      action: 'refuse',
+      message:
+        "Runtime start refused on WSL: 'journal' cannot verify wsl-mode because the engine is too old for wsl-mode; " +
+        'update appliance-vm.',
+    };
+    expect(decideRuntimeWslEgress('journal', {}, true, 'win32')).toEqual(expected);
+    expect(decideRuntimeWslEgress('journal', { enforcement: { backend: undefined } }, true, 'win32')).toEqual(expected);
+    expect(decideRuntimeWslEgress('journal', {}, true, 'darwin')).toEqual({ action: 'allow' });
+  });
+
   it('installs a default-deny principal policy with normalized host/port grants', () => {
     const value = manifest();
     value.network = {

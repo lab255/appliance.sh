@@ -1617,10 +1617,16 @@ if [ -f "$STATE/relay.pids" ]; then
 fi
 
 printf '%s' "$REQ" | jq -r '(.plan.target.env // .plan.env) | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+EGRESS_CA=/usr/local/share/ca-certificates/appliance-egress.crt
+if grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ ! -f "$EGRESS_CA" ]; then
+  echo '{"state":"failed","message":"egress CA certificate is unavailable"}'
+  cleanup_resources
+  exit 2
+fi
 if [ "$KIND" = binary ]; then
   printf '%s' "$REQ" | jq -r '.plan.target.args[] | @base64' > "$STATE/args.txt"
-  if grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv"; then
-    cp /usr/local/share/ca-certificates/appliance-egress.crt "$STAGED/appliance-egress-ca.pem"
+  if grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ -f "$EGRESS_CA" ]; then
+    cp "$EGRESS_CA" "$STAGED/appliance-egress-ca.pem"
     chown "$UID_NUM:$UID_NUM" "$STAGED/appliance-egress-ca.pem"
     chmod 0444 "$STAGED/appliance-egress-ca.pem"
   fi
@@ -1632,7 +1638,7 @@ fi
 # place the actual task (rather than this short-lived launcher) in the app's
 # cgroup. Runtime status is task-based, and the child records its own PID
 # after setsid so teardown never races a short-lived wrapper.
-export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM KIND STAGED ENTRYPOINT BINARY_CWD
+export STATE CTR_NS NS IMAGE CID CG APP ROOT_IF SHARE UID_NUM KIND STAGED ENTRYPOINT BINARY_CWD EGRESS_CA
 nohup setsid sh -c '
   echo $$ > "$STATE/logcap.pid"
   while true; do
@@ -1671,8 +1677,8 @@ nohup setsid sh -c '
     DECODED=$(printf '%s' "$VALUE" | base64 -d)
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
-  if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv"; then
-    set -- "$@" --mount type=bind,src=/usr/local/share/ca-certificates/appliance-egress.crt,dst=/appliance-egress-ca.pem,options=rbind:ro
+  if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ -f "$EGRESS_CA" ]; then
+    set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
   fi
   set +e
   if [ "$KIND" = container ]; then
@@ -1920,7 +1926,7 @@ rm -rf "$SERVICES"
 mkdir -p "$SERVICES"
 printf '%s\n' "$REQ" > "$STATE/request.json"
 echo starting > "$STATE/desired"
-rm -f "$STATE/culprit" "$STATE/exit-code" "$STATE/start-failed" "$STATE/failed-service" \
+rm -f "$STATE/culprit" "$STATE/exit-code" "$STATE/start-failed" "$STATE/failed-service" "$STATE/ca-missing" \
   "$STATE/clean-required" "$STATE/degraded"
 
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
@@ -2064,8 +2070,16 @@ start_service() {
     jq -r '.target.args[] | @base64' "$SERVICE/plan.json" > "$SERVICE/args.txt"
   else echo failed > "$SERVICE/state"; return 1; fi
 
-  if [ "$KIND" = binary ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$SERVICE/env.tsv"; then
-    cp /usr/local/share/ca-certificates/appliance-egress.crt "$STAGED/appliance-egress-ca.pem"
+  EGRESS_CA=/usr/local/share/ca-certificates/appliance-egress.crt
+  if grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$SERVICE/env.tsv" && [ ! -f "$EGRESS_CA" ]; then
+    echo failed > "$SERVICE/state"
+    echo 1 > "$SERVICE/exit-code"
+    echo 'egress CA certificate is unavailable' >> "$SERVICE/current.log"
+    echo 1 > "$STATE/ca-missing"
+    return 1
+  fi
+  if [ "$KIND" = binary ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$SERVICE/env.tsv" && [ -f "$EGRESS_CA" ]; then
+    cp "$EGRESS_CA" "$STAGED/appliance-egress-ca.pem"
     chown "$UID_NUM:$UID_NUM" "$STAGED/appliance-egress-ca.pem"
     chmod 0444 "$STAGED/appliance-egress-ca.pem"
   fi
@@ -2081,7 +2095,7 @@ start_service() {
     [$key, (("http://127.0.0.1:" + ($port.guest | tostring)) | @base64)] | @tsv
   ' "$STATE/request.json" >> "$SERVICE/env.tsv"
 
-  export APP SVC STATE SERVICE SERVICES CTR_NS NS CG UID_NUM KIND CID
+  export APP SVC STATE SERVICE SERVICES CTR_NS NS CG UID_NUM KIND CID EGRESS_CA
   nohup setsid sh -c '
     echo $$ > "$SERVICE/worker.pid"
     ATTEMPT=0
@@ -2102,8 +2116,8 @@ start_service() {
         DECODED=$(printf "%s" "$VALUE" | base64 -d)
         set -- "$@" --env "$KEY=$DECODED"
       done < "$SERVICE/env.tsv"
-      if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf "\t")" "$SERVICE/env.tsv"; then
-        set -- "$@" --mount type=bind,src=/usr/local/share/ca-certificates/appliance-egress.crt,dst=/appliance-egress-ca.pem,options=rbind:ro
+      if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf "\t")" "$SERVICE/env.tsv" && [ -f "$EGRESS_CA" ]; then
+        set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
       fi
       set +e
       if [ "$KIND" = container ]; then
@@ -2225,6 +2239,11 @@ jq -r '.plan.services[].name' "$STATE/request.json" | while read -r SVC; do
 done || START_FAILED=$(cat "$STATE/start-failed" 2>/dev/null || echo unknown)
 
 if [ -n "$START_FAILED" ]; then
+  if [ -f "$STATE/ca-missing" ]; then
+    stop_all failed
+    echo '{"state":"failed","message":"egress CA certificate is unavailable"}'
+    exit 0
+  fi
   START_EXIT=$(cat "$SERVICES/$START_FAILED/exit-code" 2>/dev/null || echo 1)
   case "$START_EXIT" in ''|*[!0-9]*|-*) START_EXIT=1;; esac
   echo "$START_FAILED" > "$STATE/culprit"
@@ -3973,6 +3992,11 @@ mod tests {
         assert!(supervisor.contains("$STATE/log-base"));
         assert!(supervisor.contains("APPLIANCE_EGRESS_CA"));
         assert!(supervisor.contains("dst=/appliance-egress-ca.pem"));
+        assert!(supervisor.contains("[ ! -f \"$EGRESS_CA\" ]"));
+        assert!(supervisor.contains("[ -f \"$EGRESS_CA\" ]"));
+        assert!(supervisor.contains(
+            "{\"state\":\"failed\",\"message\":\"egress CA certificate is unavailable\"}"
+        ));
 
         for line in supervisor.lines().filter(|line| line.trim_start().starts_with("nft ")) {
             assert!(!line.contains("|| true"), "nft rule must fail closed: {line}");
@@ -4086,5 +4110,10 @@ mod tests {
         assert!(supervisor.contains("$SERVICES/$SVC/current.log"));
         assert!(supervisor.contains("APPLIANCE_EGRESS_CA"));
         assert!(supervisor.contains("dst=/appliance-egress-ca.pem"));
+        assert!(supervisor.contains("[ ! -f \"$EGRESS_CA\" ]"));
+        assert!(supervisor.contains("[ -f \"$EGRESS_CA\" ]"));
+        assert!(supervisor.contains(
+            "{\"state\":\"failed\",\"message\":\"egress CA certificate is unavailable\"}"
+        ));
         assert!(RUNTIME_SUPERVISOR.contains("appliance-runtime-compound-supervisor"));
     }

@@ -730,6 +730,26 @@ fn all_runtime_policies() -> Vec<RuntimePolicy> {
     policies
 }
 
+/// Best-effort removal of every Runtime principal owned by a deleted VM.
+/// Results stay per-principal so VM deletion can report store failures without
+/// resurrecting or failing an otherwise-complete backend deletion.
+pub fn prune_runtime_policies_for_vm(vm: &str) -> Vec<(String, Result<bool>)> {
+    let mut principals = all_runtime_policies()
+        .into_iter()
+        .filter(|runtime| runtime.vm == vm)
+        .map(|runtime| runtime.principal)
+        .collect::<Vec<_>>();
+    principals.sort();
+    principals.dedup();
+    principals
+        .into_iter()
+        .map(|principal| {
+            let result = remove_runtime_policy(vm, &principal);
+            (principal, result)
+        })
+        .collect()
+}
+
 pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<RuntimePolicy> {
     let mut matches = all_runtime_policies()
         .into_iter()
@@ -860,6 +880,18 @@ fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
 /// is what leaves NAT-VM behaviour unchanged.
 pub fn effective_policy(name: &str) -> EgressPolicy {
     effective_policy_for_backend(name, crate::backend::platform_backend_name())
+}
+
+fn proxy_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_wsl_runtime(name, backend) {
+        effective_policy_for_backend(name, backend)
+    } else {
+        load_policy(name)
+    }
+}
+
+fn proxy_policy(name: &str) -> EgressPolicy {
+    proxy_policy_for_backend(name, crate::backend::platform_backend_name())
 }
 
 pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
@@ -1018,7 +1050,7 @@ pub fn save_policy(name: &str, policy: &EgressPolicy) -> Result<()> {
 /// connection so the desktop's edits take effect without a restart.
 pub fn run_proxy(name: &str, addr: SocketAddr, log: bool) -> Result<()> {
     let (listener, ctx) = build(name, addr, log)?;
-    let policy = effective_policy(name);
+    let policy = proxy_policy(name);
     println!(
         "egress proxy for VM '{name}' listening on {}",
         listener.local_addr().unwrap_or(addr)
@@ -1133,7 +1165,7 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
-    let policy = effective_policy(&ctx.name);
+    let policy = proxy_policy(&ctx.name);
 
     if method.eq_ignore_ascii_case("CONNECT") {
         // target is `host:port`.
@@ -2035,6 +2067,50 @@ mod tests {
         assert_eq!(strict.default, Action::Deny);
         assert!(strict.allow.is_empty());
         assert!(!strict.mitm);
+    }
+
+    #[test]
+    fn pruning_a_vm_removes_all_of_its_runtime_principals_only() {
+        with_runtime_test_root("delete-prune", |_root| {
+            let mut journal = runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443);
+            let mut notes = runtime_policy("notes", Ipv4Addr::new(192, 168, 127, 11), 443);
+            let mut other = runtime_policy("other", Ipv4Addr::new(192, 168, 127, 12), 443);
+            journal.vm = "deleted-runtime".into();
+            notes.vm = "deleted-runtime".into();
+            other.vm = "surviving-runtime".into();
+            save_runtime_policy(&journal).unwrap();
+            save_runtime_policy(&notes).unwrap();
+            save_runtime_policy(&other).unwrap();
+
+            let removed = prune_runtime_policies_for_vm("deleted-runtime");
+            assert_eq!(removed.len(), 2);
+            assert!(removed.into_iter().all(|(_, result)| result.unwrap()));
+            assert!(runtime_policy_for_principal("deleted-runtime", "journal").is_none());
+            assert!(runtime_policy_for_principal("deleted-runtime", "notes").is_none());
+            assert_eq!(runtime_policy_for_principal("surviving-runtime", "other"), Some(other));
+        });
+    }
+
+    #[test]
+    fn proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist() {
+        let name = format!("egress-vz-proxy-selection-{}", std::process::id());
+        let mut spec = crate::spec::VmSpec::defaults(&name);
+        spec.runtime = true;
+        spec.net_link = NetLink::Netstack;
+        crate::store::save_spec(&spec).unwrap();
+        let persisted = EgressPolicy {
+            default: Action::Deny,
+            allow: vec!["operator.example".into()],
+            deny: vec![],
+            mitm: false,
+        };
+        save_policy(&name, &persisted).unwrap();
+
+        let selected = proxy_policy_for_backend(&name, "vz");
+        assert_eq!(selected, persisted);
+        assert!(!selected.allows("api.openai.com:443"));
+
+        crate::store::delete_vm_dir(&name).unwrap();
     }
 
     #[test]

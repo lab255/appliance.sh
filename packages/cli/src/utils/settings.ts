@@ -19,7 +19,7 @@ const SETTINGS_DIR = path.join(os.homedir(), '.appliance');
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 
 export const WSL_COOPERATIVE_WARNING =
-  'WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are unioned across apps in this VM.';
+  'WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through the proxy (CONNECT by hostname); direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across apps in this VM, dropping per-grant ports.';
 
 export function loadSettings(): Settings {
   try {
