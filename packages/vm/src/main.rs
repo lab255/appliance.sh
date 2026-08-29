@@ -74,11 +74,11 @@ enum Cmd {
     Create {
         #[arg(default_value = DEFAULT_VM)]
         name: String,
-        #[arg(long)]
+        #[arg(long, help = "Virtual CPUs [default: 2]")]
         cpus: Option<usize>,
-        #[arg(long)]
+        #[arg(long, help = "Guest memory in MiB [default: 4096]")]
         memory: Option<u64>,
-        #[arg(long)]
+        #[arg(long, help = "Data disk size in GiB [default: 10]")]
         disk: Option<u64>,
         /// Provision this VM as a development environment (dev toolchain
         /// + persistent /persist/workspace you shell into).

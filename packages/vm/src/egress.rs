@@ -1167,12 +1167,18 @@ fn guest_admission_prefix(name: &str) -> (std::net::Ipv4Addr, u8) {
         .and_then(|raw| raw.trim().parse().ok());
     let prefix_len = std::fs::read_to_string(paths.guest_prefix_len())
         .ok()
-        .and_then(|raw| raw.trim().parse::<u8>().ok())
-        .filter(|prefix| *prefix <= 32);
+        .and_then(|raw| parse_guest_prefix_len(&raw));
     match (gateway, prefix_len) {
         (Some(gateway), Some(prefix_len)) => (gateway, prefix_len),
         _ => (std::net::Ipv4Addr::new(192, 168, 64, 1), 24),
     }
+}
+
+fn parse_guest_prefix_len(raw: &str) -> Option<u8> {
+    raw.trim()
+        .parse::<u8>()
+        .ok()
+        .filter(|prefix| (8..=32).contains(prefix))
 }
 
 /// The proxy URL a guest workload should point `HTTPS_PROXY` at,
@@ -1414,6 +1420,15 @@ mod tests {
         assert!(!peer_allowed("172.25.80.1".parse().unwrap(), name));
 
         let _ = std::fs::remove_dir_all(&paths.dir);
+    }
+
+    #[test]
+    fn peer_guard_rejects_corrupt_overbroad_prefixes() {
+        for prefix in ["0", "2", "7", "33"] {
+            assert_eq!(parse_guest_prefix_len(prefix), None);
+        }
+        assert_eq!(parse_guest_prefix_len("8\n"), Some(8));
+        assert_eq!(parse_guest_prefix_len("32"), Some(32));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
 import {
   REQUIRED_PORTS,
   checkDiskSpace,
@@ -7,6 +8,7 @@ import {
   checkWsl,
   classifyWslFailure,
   decodeWindowsToolOutput,
+  decodeWslConfig,
   runFixes,
   wslConfigUsesMirroredNetworking,
   WSL_MIRRORED_REMEDIATION,
@@ -113,16 +115,11 @@ describe('classifyWslFailure', () => {
 });
 
 describe('wslConfigUsesMirroredNetworking', () => {
-  it('detects mirrored mode from a representative .wslconfig fixture', () => {
-    const fixture = `
-      ; user config
-      [experimental]
-      networkingMode=NAT
-      [wsl2]
-      memory=8GB
-      networkingMode = mirrored # unsupported
-    `;
-    expect(wslConfigUsesMirroredNetworking(fixture)).toBe(true);
+  it('detects mirrored mode from the shared UTF-8 and UTF-16LE fixtures', () => {
+    for (const name of ['wslconfig-mirrored.ini', 'wslconfig-mirrored-utf16le.ini']) {
+      const bytes = fs.readFileSync(new URL(`../../../vm/tests/fixtures/${name}`, import.meta.url));
+      expect(wslConfigUsesMirroredNetworking(decodeWslConfig(bytes))).toBe(true);
+    }
     expect(WSL_MIRRORED_REMEDIATION).toContain('networkingMode=NAT');
     expect(WSL_MIRRORED_REMEDIATION).toContain('wsl --shutdown');
   });

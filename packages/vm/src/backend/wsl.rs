@@ -32,6 +32,10 @@ use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::{Duration, Instant};
 
 const ALPINE_BRANCH: &str = "v3.21";
@@ -114,7 +118,7 @@ impl VmBackend for WslBackend {
         crate::bringup::set(
             &paths.dir,
             crate::bringup::Phase::Media,
-            Some("skipped (WSL)".to_string()),
+            Some("download (WSL)".to_string()),
         );
         // The pinned k3s binary is copied into the distro over drvfs and
         // re-verified guest-side. Agent-only VMs run no k3s at all.
@@ -124,6 +128,11 @@ impl VmBackend for WslBackend {
             Some(crate::guest::ensure_k3s()?)
         };
         ensure_distro(&distro, &paths)?;
+        crate::bringup::set(
+            &paths.dir,
+            crate::bringup::Phase::Media,
+            Some("skipped (WSL)".to_string()),
+        );
 
         // A previous host process may have died without terminating the
         // distro (crash, hard kill) — its k3s would still be running in
@@ -186,7 +195,9 @@ impl VmBackend for WslBackend {
             .stderr(Stdio::from(log_err))
             .spawn()
             .context("launch the WSL guest bootstrap")?;
-        spawn_clock_sync(distro.clone());
+        let clock_sync_stop = Arc::new(AtomicBool::new(false));
+        let _clock_sync_guard = ClockSyncStop(clock_sync_stop.clone());
+        spawn_clock_sync(distro.clone(), clock_sync_stop.clone());
         eprintln!("VM '{}' started (WSL distro '{distro}')", spec.name);
         crate::bringup::set(&paths.dir, crate::bringup::Phase::Booting, None);
 
@@ -219,6 +230,7 @@ impl VmBackend for WslBackend {
         loop {
             std::thread::sleep(Duration::from_millis(200));
             if let Some(status) = child.try_wait().context("poll WSL guest")? {
+                clock_sync_stop.store(true, Ordering::Release);
                 if status.success() {
                     eprintln!("VM '{}' stopped (guest)", spec.name);
                     return Ok(());
@@ -239,6 +251,10 @@ impl VmBackend for WslBackend {
             if paths.stop_request().exists() {
                 eprintln!("stop requested — shutting down VM '{}'", spec.name);
                 let _ = std::fs::remove_file(paths.stop_request());
+                // A sync command starts a stopped distro, so close the gate
+                // before termination. The guard closes it on every other
+                // return/error path out of run_foreground.
+                clock_sync_stop.store(true, Ordering::Release);
                 let out = wsl_cmd()
                     .args(["--terminate", &distro])
                     .output()
@@ -283,16 +299,32 @@ const CLOCK_RESYNC_INTERVAL: Duration = Duration::from_secs(30);
 const CLOCK_WATCH_TICK: Duration = Duration::from_secs(2);
 const WAKE_JUMP_SLACK: Duration = Duration::from_secs(45);
 
+struct ClockSyncStop(Arc<AtomicBool>);
+
+impl Drop for ClockSyncStop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+
 /// Keep WSL's shared utility-VM clock aligned with the Windows host. WSL's
 /// clock commonly stops across host sleep; without this resident push the
 /// api-server's 15-second signature tolerance turns the drift into 401s.
-fn spawn_clock_sync(distro: String) {
+fn spawn_clock_sync(distro: String, stop: Arc<AtomicBool>) {
     std::thread::spawn(move || loop {
+        if !super::clock_sync_should_tick(&stop) {
+            return;
+        }
         let epoch = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs());
         if let Ok(epoch) = epoch {
             let command = format!("{}; hwclock -w 2>/dev/null || true", crate::shell::clock_set_command(epoch));
+            // Keep the final gate adjacent to the process launch: after a
+            // stop is observed this worker must never revive the distro.
+            if !super::clock_sync_should_tick(&stop) {
+                return;
+            }
             match wsl_cmd()
                 .args(["-d", &distro, "-u", "root", "--", "sh", "-c", &command])
                 .output()
@@ -304,13 +336,15 @@ fn spawn_clock_sync(distro: String) {
                 _ => {}
             }
         }
-        if wait_watching_for_wake(CLOCK_RESYNC_INTERVAL, CLOCK_WATCH_TICK) {
-            eprintln!("clock sync: post-wake clock push");
+        match wait_watching_for_wake(CLOCK_RESYNC_INTERVAL, CLOCK_WATCH_TICK, &stop) {
+            Some(true) => eprintln!("clock sync: post-wake clock push"),
+            Some(false) => {}
+            None => return,
         }
     });
 }
 
-fn wait_watching_for_wake(total: Duration, tick: Duration) -> bool {
+fn wait_watching_for_wake(total: Duration, tick: Duration, stop: &AtomicBool) -> Option<bool> {
     let deadline = Instant::now() + total;
     loop {
         let wall_before = std::time::SystemTime::now();
@@ -318,11 +352,14 @@ fn wait_watching_for_wake(total: Duration, tick: Duration) -> bool {
         let wall_elapsed = std::time::SystemTime::now()
             .duration_since(wall_before)
             .unwrap_or(tick);
+        if !super::clock_sync_should_tick(stop) {
+            return None;
+        }
         if wall_elapsed > tick + WAKE_JUMP_SLACK {
-            return true;
+            return Some(true);
         }
         if Instant::now() >= deadline {
-            return false;
+            return Some(false);
         }
     }
 }
@@ -331,17 +368,7 @@ fn wait_watching_for_wake(total: Duration, tick: Duration) -> bool {
 /// is UTF-8. Interior NULs in the head are the UTF-16 tell. pub(crate)
 /// so `shell.rs`'s Windows capture path decodes wsl.exe-level errors
 /// the same way.
-pub(crate) fn decode_wsl(bytes: &[u8]) -> String {
-    if bytes.iter().take(64).any(|&b| b == 0) {
-        let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
-            .collect();
-        String::from_utf16_lossy(&units)
-    } else {
-        String::from_utf8_lossy(bytes).into_owned()
-    }
-}
+pub(crate) use crate::wsl_config::decode_wsl;
 
 /// Targeted guidance for the WSL failure classes a fresh machine
 /// actually hits, keyed on the error text wsl.exe prints. The raw HCS
@@ -828,7 +855,8 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
     let (guest_ip, prefix_len) = discover_guest_ip(distro, Duration::from_secs(120))?;
     crate::bringup::hostlog(&format!("guest address: {guest_ip}"));
     std::fs::write(vm_dir.join("guest-ip"), guest_ip.to_string())?;
-    std::fs::write(vm_dir.join("guest-prefix-len"), prefix_len.to_string())?;
+    let paths = VmPaths { dir: vm_dir.to_path_buf() };
+    std::fs::write(paths.guest_prefix_len(), prefix_len.to_string())?;
     // The guest reaches host-side services (the egress proxy) at its
     // default gateway. The WSL NAT prefix is a /20 — NOT the vz /24 —
     // so record the real gateway for egress::guest_proxy_url instead of

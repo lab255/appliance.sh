@@ -341,6 +341,14 @@ export function wslConfigUsesMirroredNetworking(text: string): boolean {
   return mode?.toLowerCase() === 'mirrored';
 }
 
+/** Decode a `.wslconfig` at the filesystem boundary. Windows PowerShell 5.1
+ * and Notepad commonly write this file as BOM-marked UTF-16LE. */
+export function decodeWslConfig(bytes: Buffer): string {
+  return bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe
+    ? bytes.toString('utf16le')
+    : bytes.toString('utf8');
+}
+
 /**
  * WSL2 is THE gating prerequisite on Windows — the managed VM is a WSL2
  * distro. Probe `wsl --status` so a machine without it fails preflight
@@ -355,7 +363,7 @@ export function checkWsl(): CheckResult {
   }
   try {
     const configPath = path.join(os.homedir(), '.wslconfig');
-    if (wslConfigUsesMirroredNetworking(fs.readFileSync(configPath, 'utf8'))) {
+    if (wslConfigUsesMirroredNetworking(decodeWslConfig(fs.readFileSync(configPath)))) {
       return fail(id, label, 'WSL mirrored networking is not supported by the managed VM', WSL_MIRRORED_REMEDIATION);
     }
   } catch {

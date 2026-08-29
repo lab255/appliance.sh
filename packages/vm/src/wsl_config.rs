@@ -39,14 +39,28 @@ pub fn uses_mirrored_networking(text: &str) -> bool {
     mode.is_some_and(|value| value.eq_ignore_ascii_case("mirrored"))
 }
 
+/// Decode Windows tool/editor output at the byte-reading boundary. WSL's own
+/// output may be BOM-less UTF-16LE; Notepad and PowerShell 5.1 use `FF FE`.
+pub(crate) fn decode_wsl(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xff, 0xfe]) || bytes.iter().take(64).any(|&b| b == 0) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 /// Read the current Windows user's config. Missing/unreadable config means
 /// WSL's default NAT networking and is therefore supported.
 pub fn current_uses_mirrored_networking() -> bool {
     let Some(home) = std::env::var_os("USERPROFILE") else {
         return false;
     };
-    std::fs::read_to_string(PathBuf::from(home).join(".wslconfig"))
-        .is_ok_and(|text| uses_mirrored_networking(&text))
+    std::fs::read(PathBuf::from(home).join(".wslconfig"))
+        .is_ok_and(|bytes| uses_mirrored_networking(&decode_wsl(&bytes)))
 }
 
 #[cfg(test)]
@@ -55,8 +69,12 @@ mod tests {
 
     #[test]
     fn detects_mirrored_mode_from_fixture() {
-        let fixture = include_str!("../tests/fixtures/wslconfig-mirrored.ini");
-        assert!(uses_mirrored_networking(fixture));
+        for fixture in [
+            include_bytes!("../tests/fixtures/wslconfig-mirrored.ini").as_slice(),
+            include_bytes!("../tests/fixtures/wslconfig-mirrored-utf16le.ini").as_slice(),
+        ] {
+            assert!(uses_mirrored_networking(&decode_wsl(fixture)));
+        }
     }
 
     #[test]

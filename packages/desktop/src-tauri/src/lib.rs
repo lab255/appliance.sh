@@ -2559,7 +2559,7 @@ const WSL_MIRRORED_REMEDIATION: &str =
     "Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
      (or remove the setting), run `wsl --shutdown`, then retry.";
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
     let mut in_wsl2 = false;
     let mut mode: Option<&str> = None;
@@ -2585,14 +2585,27 @@ fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
     mode.is_some_and(|value| value.eq_ignore_ascii_case("mirrored"))
 }
 
+#[cfg(any(windows, test))]
+fn decode_wslconfig(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xff, 0xfe]) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 /// Probe WSL2 readiness for the doctor view. Reports "installed but
 /// broken" with wsl.exe's own first diagnostic line (virtualization
 /// disabled, kernel outdated, …) rather than a bare boolean.
 #[cfg(windows)]
 async fn wsl_preflight_check() -> PreflightCheck {
     let mirrored = std::env::var_os("USERPROFILE")
-        .and_then(|home| std::fs::read_to_string(std::path::PathBuf::from(home).join(".wslconfig")).ok())
-        .is_some_and(|text| wslconfig_uses_mirrored_networking(&text));
+        .and_then(|home| std::fs::read(std::path::PathBuf::from(home).join(".wslconfig")).ok())
+        .is_some_and(|bytes| wslconfig_uses_mirrored_networking(&decode_wslconfig(&bytes)));
     if mirrored {
         return PreflightCheck {
             tool: "wsl".to_string(),
@@ -6928,6 +6941,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wslconfig_reader_detects_shared_utf8_and_utf16le_fixtures() {
+        for fixture in [
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored.ini").as_slice(),
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored-utf16le.ini").as_slice(),
+        ] {
+            assert!(wslconfig_uses_mirrored_networking(&decode_wslconfig(
+                fixture
+            )));
+        }
+    }
 
     #[test]
     fn app_window_identity_matches_the_desktop_contract() {
