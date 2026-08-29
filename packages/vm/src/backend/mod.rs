@@ -21,6 +21,21 @@ pub(super) fn clock_sync_should_tick(stop: &AtomicBool) -> bool {
     !stop.load(Ordering::Acquire)
 }
 
+/// Wait until the foreground owner exits, bounded by the caller's deadline.
+/// The injected seams keep the WSL destroy ordering testable on every host.
+#[cfg(any(windows, test))]
+pub(super) fn wait_for_foreground_exit<D, P>(mut deadline_reached: D, mut foreground_live: P)
+where
+    D: FnMut() -> bool,
+    P: FnMut() -> bool,
+{
+    while foreground_live() {
+        if deadline_reached() {
+            break;
+        }
+    }
+}
+
 /// The seam between everything platform-neutral (CLI, state store,
 /// image cache, guest provisioning) and the hypervisor underneath.
 /// One implementation per platform:
@@ -99,5 +114,41 @@ mod tests {
             invocations += 1;
         }
         assert_eq!(invocations, 1);
+    }
+
+    #[test]
+    fn foreground_exit_wait_is_bounded_by_deadline() {
+        let mut deadline_probes = 0;
+        let mut live_probes = 0;
+        wait_for_foreground_exit(
+            || {
+                deadline_probes += 1;
+                deadline_probes == 2
+            },
+            || {
+                live_probes += 1;
+                true
+            },
+        );
+        assert_eq!(deadline_probes, 2);
+        assert_eq!(live_probes, 2);
+    }
+
+    #[test]
+    fn foreground_exit_wait_stops_when_pidfile_clears_early() {
+        let mut deadline_probes = 0;
+        let mut live_probes = 0;
+        wait_for_foreground_exit(
+            || {
+                deadline_probes += 1;
+                false
+            },
+            || {
+                live_probes += 1;
+                live_probes < 2
+            },
+        );
+        assert_eq!(deadline_probes, 1);
+        assert_eq!(live_probes, 2);
     }
 }

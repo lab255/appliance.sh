@@ -92,7 +92,7 @@ pub fn load_spec(name: &str) -> Result<Option<VmSpec>> {
     load_spec_path(&path, crate::backend::platform_backend_name())
 }
 
-fn load_spec_path(path: &Path, backend: &str) -> Result<Option<VmSpec>> {
+pub(crate) fn load_spec_path(path: &Path, backend: &str) -> Result<Option<VmSpec>> {
     let mut file = match fs::File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),

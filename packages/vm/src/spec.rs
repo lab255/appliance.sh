@@ -403,18 +403,29 @@ impl VmSpec {
     /// the default VM gets the canonical block; any other new VM gets
     /// the lowest free contiguous block of five from 8100 upward
     /// (ingress, api, registry, egress, buildkit).
-    pub fn allocate_ports(name: &str) -> (u16, u16, u16, u16, u16) {
-        if let Ok(Some(existing)) = crate::store::load_spec(name) {
-            return (
-                existing.host_port,
-                existing.api_port,
-                existing.registry_port,
-                existing.egress_port,
-                existing.buildkit_port,
-            );
+    pub fn allocate_ports(name: &str) -> anyhow::Result<(u16, u16, u16, u16, u16)> {
+        Self::allocate_ports_from(name, crate::store::load_spec(name))
+    }
+
+    fn allocate_ports_from(
+        name: &str,
+        existing: anyhow::Result<Option<VmSpec>>,
+    ) -> anyhow::Result<(u16, u16, u16, u16, u16)> {
+        match existing {
+            Ok(Some(existing)) => {
+                return Ok((
+                    existing.host_port,
+                    existing.api_port,
+                    existing.registry_port,
+                    existing.egress_port,
+                    existing.buildkit_port,
+                ))
+            }
+            Ok(None) => {}
+            Err(error) => return Err(error),
         }
         if name == DEFAULT_VM_NAME {
-            return (8081, 6443, 5052, 5053, 5054);
+            return Ok((8081, 6443, 5052, 5053, 5054));
         }
         let mut used: std::collections::HashSet<u16> = RESERVED_HOST_PORTS.into_iter().collect();
         for spec in crate::store::list_specs() {
@@ -431,7 +442,7 @@ impl VmSpec {
             let base = 8100 + slot * 5;
             let block = [base, base + 1, base + 2, base + 3, base + 4];
             if block.iter().all(|p| !used.contains(p)) {
-                return (block[0], block[1], block[2], block[3], block[4]);
+                return Ok((block[0], block[1], block[2], block[3], block[4]));
             }
             slot += 1;
         }
@@ -810,6 +821,35 @@ mod tests {
         for nodeport in NODEPORT_FORWARD_RANGE {
             assert_ne!(port, nodeport);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn allocation_fails_closed_for_an_unsafe_mode_vm_json() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-allocation-integrity-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("vm.json");
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&VmSpec::defaults("unsafe")).unwrap(),
+        )
+        .unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+
+        let loaded = crate::store::load_spec_path(&path, "vz");
+        assert!(VmSpec::allocate_ports_from("unsafe", loaded).is_err());
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

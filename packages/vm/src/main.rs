@@ -699,7 +699,7 @@ fn run() -> Result<()> {
             // alongside others (the default VM keeps the canonical
             // 8081/6443/5052/5053; an existing VM keeps its ports).
             let (host_port, api_port, registry_port, egress_port, buildkit_port) =
-                VmSpec::allocate_ports(&name);
+                VmSpec::allocate_ports(&name)?;
             let mut spec = if runtime {
                 VmSpec::runtime_defaults(&name)
             } else {
@@ -1330,7 +1330,7 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                 }
                 None => {
                     let mut fresh = VmSpec::runtime_defaults(&name);
-                    let ports = VmSpec::allocate_ports(&name);
+                    let ports = VmSpec::allocate_ports(&name)?;
                     fresh.host_port = ports.0;
                     fresh.api_port = ports.1;
                     fresh.registry_port = ports.2;
@@ -2414,7 +2414,8 @@ fn ensure_spec_for_up(name: &str, runtime: bool) -> Result<VmSpec> {
     }
     // A VM started without an explicit `create` still needs a
     // non-colliding port block so it can run beside existing VMs.
-    let (host_port, api_port, registry_port, egress_port, buildkit_port) = VmSpec::allocate_ports(name);
+    let (host_port, api_port, registry_port, egress_port, buildkit_port) =
+        VmSpec::allocate_ports(name)?;
     let defaults = if runtime {
         VmSpec::runtime_defaults(name)
     } else {

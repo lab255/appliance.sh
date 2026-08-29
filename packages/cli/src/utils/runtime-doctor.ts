@@ -654,14 +654,22 @@ export function classifyWindowsCaptureRules(
 
 function readVmCredentialRulesFixtures(): VmCredentialRulesFixture[] {
   if (process.platform !== 'win32') return [];
-  const root = path.dirname(vmDir(DEFAULT_VM_NAME));
+  // This is intentionally an unverified diagnostic read: only hostnames escape
+  // into findings, never captured credential values.
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '.';
+  const root = path.resolve(home, '.appliance', 'vm');
   try {
     return fs
       .readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .flatMap((entry) => {
         try {
-          const raw = fs.readFileSync(path.join(root, entry.name, 'egress-credentials.json'), 'utf8');
+          const vmRoot = path.resolve(root, entry.name);
+          if (path.dirname(vmRoot) !== root) return [];
+          const credentialPath = path.resolve(vmRoot, 'egress-credentials.json');
+          if (path.dirname(credentialPath) !== vmRoot) return [];
+          if (fs.statSync(credentialPath).size > 1024 * 1024) return [];
+          const raw = fs.readFileSync(credentialPath, 'utf8');
           return [{ vm: entry.name, config: JSON.parse(raw) }];
         } catch {
           return [];

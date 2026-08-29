@@ -347,17 +347,21 @@ const DESTROY_STOP_TIMEOUT: Duration = Duration::from_secs(10);
 /// cannot issue a final `wsl -d` that revives the distro after termination.
 fn stop_foreground_before_destroy(name: &str) -> Result<()> {
     let paths = VmPaths::for_name(name);
-    std::fs::create_dir_all(&paths.dir)
-        .with_context(|| format!("create {}", paths.dir.display()))?;
-    std::fs::write(paths.stop_request(), b"stop\n")
-        .with_context(|| format!("write {}", paths.stop_request().display()))?;
-    let deadline = Instant::now() + DESTROY_STOP_TIMEOUT;
-    while paths.pidfile().exists() && crate::store::read_live_pid(name).is_some() {
-        if Instant::now() >= deadline {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(100));
+    if paths.dir.exists() {
+        std::fs::write(paths.stop_request(), b"stop\n")
+            .with_context(|| format!("write {}", paths.stop_request().display()))?;
     }
+    let deadline = Instant::now() + DESTROY_STOP_TIMEOUT;
+    super::wait_for_foreground_exit(
+        || {
+            if Instant::now() >= deadline {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            false
+        },
+        || paths.pidfile().exists() && crate::store::read_live_pid(name).is_some(),
+    );
     Ok(())
 }
 
