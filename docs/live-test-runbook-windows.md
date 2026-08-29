@@ -282,6 +282,14 @@ set -e
 grep -E 'HTTP/[0-9.]+ 200' "$OUT/proxy-allow.txt"
 grep -E 'HTTP/[0-9.]+ 403' "$OUT/proxy-cross-app-deny.txt"
 
+set +e
+"$APPLIANCE_VM" shell appliance-runtime --root -- \
+  "nsenter -t $TASK_A_PID -n env HTTPS_PROXY= HTTP_PROXY= curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' -x 'http://${PROXY_A#*@}' https://example.com" \
+  >"$OUT/proxy-credentialless.txt" 2>&1
+CREDENTIALLESS_RC=$?
+set -e
+grep -E '^407$' "$OUT/proxy-credentialless.txt"
+
 "$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-cooperative.json"
 "$AP" vm egress list --name appliance-runtime | tee "$OUT/list-cooperative.txt"
 jq -e '.enforcement.scope == ["http","https","per-app"]' "$OUT/policy-cooperative.json"
@@ -298,7 +306,9 @@ REVOKED_RC=$?
 set -e
 grep -E 'HTTP/[0-9.]+ 407' "$OUT/proxy-revoked.txt"
 unset PROXY_A PROXY_B REVOKED_PROXY
-printf 'strict_rc=%s cross_app_rc=%s revoked_rc=%s\n' "$STRICT_RC" "$CROSS_APP_RC" "$REVOKED_RC"
+printf 'strict_rc=%s cross_app_rc=%s credentialless_rc=%s revoked_rc=%s\n' \
+  "$STRICT_RC" "$CROSS_APP_RC" "$CREDENTIALLESS_RC" "$REVOKED_RC"
+
 ```
 
 Pass criterion: strict exits 2 with the exact setting name and
@@ -316,6 +326,25 @@ policy enforcement.
 14. Same host under app B status: `__________` (must be 403)
 15. App A credential after stop status: `__________` (must be 407)
 
+```sh
+"$AP" vm egress traffic --name appliance-runtime | tee "$OUT/traffic.json"
+jq '[.[] | select(.decision == "deny" and .app != null and .reason == "policy")] | length' \
+  "$OUT/traffic.json"
+jq '[.[] | select(.reason == "proxy-auth")] | length' "$OUT/traffic.json"
+jq '[.[] | select(.reason == "proxy-auth" and .principal == null)] | length' \
+  "$OUT/traffic.json"
+```
+
+Per-app deny count: `__________`
+
+Proxy-auth-failure count: `__________`
+
+Credential-less count (`principal == null`): `__________`
+
+```sh
+"$AP" runtime stop egress-probe-b
+```
+
 Bypass-warning line count: `____` (must be 1)
 
 ## 6. Cooperative policy wording
@@ -328,9 +357,10 @@ scope:["http","https","per-app"]}` plus `wslMode:"cooperative"` and an
 `apps` block with each app's exact hosts and TCP ports. The list begins exactly
 `WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked`, shows
 per-app rows, never exposes a proxy credential, and never says `host-enforced`.
-The VM-wide compatibility policy applies only to requests without credentials.
+Requests without credentials receive 407 and never inherit another app's
+hosts.
 
-16. Per-app rows with expected host+port (count): `__________` (must be 2 rows; only app A has `example.com:443`)
+16. Per-app rows with expected host+port (count): `__________` (must literally show `egress-probe-b … (no hosts)`; only app A has `example.com:443`)
 
 ## 7. Pool restart and same-URL reopen
 
@@ -410,6 +440,7 @@ Post-mirrored NAT recovery (1/0): `__________`
 "$AP" runtime uninstall egress-probe-b 2>/dev/null || true
 "$AP" vm egress wsl-mode strict
 "$AP" vm egress wsl-mode
+! grep -Eq '://[^/ ]*:[^/ ]*@' "$OUT"/proxy-*.txt
 ```
 
 Final strict-mode restore confirmed (1/0): `__________`

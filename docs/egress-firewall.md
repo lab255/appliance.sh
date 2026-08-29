@@ -57,12 +57,13 @@ without egress grants may run; the WSL guest chain drops their outbound
 traffic. Cooperative is an explicit opt-in: Runtime tasks receive the VM proxy
 and CA environment plus a per-start proxy credential. Credential-bearing
 requests select only that app's host-and-port policy; stopped, uninstalled, and
-VM-deleted apps lose the credential. Credentialless legacy/dev requests retain
-the VM-wide compatibility policy only in cooperative mode. Cooperative mode is
-bypassable: an app can ignore the proxy and use direct TCP, UDP other than DNS,
-or raw IP. DNS must go through the proxy using CONNECT by hostname; direct UDP
-53 is dropped. `egress list` states the bypass limitation in its header and
-shows per-app rows without exposing credentials.
+VM-deleted apps lose the credential. Runtime proxy requests without a valid app
+credential receive `407 Proxy Authentication Required`; there is no VM-wide
+union fallback. Cooperative mode is bypassable: an app can ignore the proxy and
+use direct TCP, UDP other than DNS, or raw IP. DNS must go through the proxy
+using CONNECT by hostname; direct UDP 53 is dropped. `egress list` states the
+bypass limitation in its header and shows per-app rows without exposing
+credentials.
 
 The per-VM value is persisted as `wslMode` in `vm.json`. New VMs capture the
 optional global default from `~/.appliance/settings.json`:
