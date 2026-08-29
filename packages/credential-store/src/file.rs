@@ -208,6 +208,11 @@ mod tests {
         store.put(&key, value).unwrap();
         assert_eq!(store.probe(&key).unwrap(), Presence::Present);
         assert_eq!(store.get(&key).unwrap().as_deref(), Some(value.as_slice()));
+        store.put(&key, b"replacement").unwrap();
+        assert_eq!(
+            store.get(&key).unwrap().as_deref(),
+            Some(b"replacement".as_slice())
+        );
         store.delete(&key).unwrap();
         assert_eq!(store.probe(&key).unwrap(), Presence::Missing);
         store.delete(&key).unwrap();

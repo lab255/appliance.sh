@@ -92,10 +92,21 @@ fn map_keyring_error(error: keyring::Error) -> StoreError {
         | keyring::Error::Invalid(_, _)
         | keyring::Error::Ambiguous(_) => StoreError::Malformed(error.to_string()),
         keyring::Error::NoEntry => StoreError::Internal("unexpected missing credential".to_owned()),
-        keyring::Error::PlatformFailure(source) => StoreError::Internal(source.to_string()),
+        keyring::Error::PlatformFailure(source) => map_platform_failure(source),
         keyring::Error::TooLong(_, _) => StoreError::Internal(error.to_string()),
         _ => StoreError::Internal(error.to_string()),
     }
+}
+
+fn map_platform_failure(source: Box<dyn std::error::Error + Send + Sync>) -> StoreError {
+    #[cfg(windows)]
+    if source
+        .downcast_ref::<keyring::windows::Error>()
+        .is_some_and(|error| error.0 == 5)
+    {
+        return StoreError::Denied("Windows Credential Manager refused access".to_owned());
+    }
+    StoreError::Internal(source.to_string())
 }
 
 #[cfg(test)]

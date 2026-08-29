@@ -8,7 +8,7 @@
 #
 # Sections:
 #   TS:   build -> typecheck -> lint:check -> test  (Nx run-many across packages)
-#   Rust: cargo build -> cargo test -> cargo clippy  (credential-store + vm)
+#   Rust: cargo build -> cargo test -> cargo clippy  (credential-store + credhelper + vm)
 #
 # Usage: pnpm verify   (or: bash scripts/verify.sh)
 
@@ -44,6 +44,12 @@ step "5/5 rust (cargo build && cargo test && cargo clippy)"
   cargo build --all-features
   cargo test --all-features
   cargo clippy --all-features --all-targets -- -D warnings
+)
+(
+  cd packages/credhelper
+  cargo build
+  cargo test
+  cargo clippy --all-targets -- -D warnings
 )
 (
   cd packages/vm

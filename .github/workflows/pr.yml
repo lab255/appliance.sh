@@ -111,6 +111,7 @@ jobs:
         with:
           workspaces: |
             packages/credential-store
+            packages/credhelper
             packages/vm
       - name: cargo build / test / clippy (credential store)
         working-directory: packages/credential-store
@@ -118,6 +119,12 @@ jobs:
           cargo build --all-features
           cargo test --all-features
           cargo clippy --all-features --all-targets -- -D warnings
+      - name: cargo build / test / clippy (credential helper)
+        working-directory: packages/credhelper
+        run: |
+          cargo build
+          cargo test
+          cargo clippy --all-targets -- -D warnings
       - name: cargo build / test / clippy
         working-directory: packages/vm
         run: |
@@ -154,6 +161,7 @@ jobs:
         with:
           workspaces: |
             packages/credential-store
+            packages/credhelper
             packages/desktop/src-tauri
             packages/vm
       - name: Install dependencies
@@ -189,5 +197,8 @@ jobs:
         run: >-
           cargo test --manifest-path packages/credential-store/Cargo.toml
           --all-features
+      - name: Test credential helper Rust
+        run: >-
+          cargo test --manifest-path packages/credhelper/Cargo.toml
       - name: Check microVM Rust
         run: cargo check --manifest-path packages/vm/Cargo.toml
