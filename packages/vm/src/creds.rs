@@ -101,10 +101,18 @@ fn config_path(name: &str) -> PathBuf {
 }
 
 #[cfg(test)]
-fn credential_store_root() -> PathBuf {
+fn credential_store_root(name: &str) -> PathBuf {
+    static RUN_NONCE: OnceLock<u128> = OnceLock::new();
+    let nonce = RUN_NONCE.get_or_init(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock before Unix epoch")
+            .as_nanos()
+    });
     std::env::temp_dir().join(format!(
-        "appliance-vm-credential-tests-{}",
-        std::process::id()
+        "appliance-vm-credential-tests-{}-{nonce}-{}",
+        std::process::id(),
+        encode_identifier(name)
     ))
 }
 
@@ -115,7 +123,7 @@ fn credential_vm_dir(name: &str) -> PathBuf {
     }
     #[cfg(test)]
     {
-        credential_store_root().join(name)
+        credential_store_root(name).join(name)
     }
 }
 
@@ -1032,9 +1040,12 @@ mod tests {
     #[test]
     fn broker_files_keep_the_legacy_vm_directory_name() {
         let name = "creds test+legacy";
-        let raw_dir = credential_store_root().join(name);
-        let encoded_dir = credential_store_root().join(encode_identifier(name));
-        let _ = std::fs::remove_dir_all(&raw_dir);
+        let root = credential_store_root(name);
+        let raw_dir = root.join(name);
+        let encoded_dir = root.join(encode_identifier(name));
+        std::fs::create_dir_all(&raw_dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&root).unwrap();
+        crate::fs_acl::restrict_to_current_user(&raw_dir).unwrap();
         let cfg = integrity_test_config();
 
         save_config(name, &cfg).unwrap();
@@ -1044,17 +1055,19 @@ mod tests {
         assert!(!encoded_dir.exists());
         assert_eq!(load_config(name).rules.len(), 1);
 
-        std::fs::remove_dir_all(raw_dir).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn broker_files_keep_a_leading_dot_legacy_vm_directory_name() {
         let name = ".hidden cluster";
-        let raw_dir = credential_store_root().join(name);
-        let encoded_dir = credential_store_root().join(encode_identifier(name));
+        let root = credential_store_root(name);
+        let raw_dir = root.join(name);
+        let encoded_dir = root.join(encode_identifier(name));
         assert_ne!(raw_dir, encoded_dir);
-        let _ = std::fs::remove_dir_all(&raw_dir);
-        let _ = std::fs::remove_dir_all(&encoded_dir);
+        std::fs::create_dir_all(&raw_dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&root).unwrap();
+        crate::fs_acl::restrict_to_current_user(&raw_dir).unwrap();
         let cfg = integrity_test_config();
 
         save_config(name, &cfg).unwrap();
@@ -1064,7 +1077,7 @@ mod tests {
         assert!(!encoded_dir.exists());
         assert_eq!(load_config(name).rules.len(), 1);
 
-        std::fs::remove_dir_all(raw_dir).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[cfg(unix)]
