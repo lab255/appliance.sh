@@ -2547,6 +2547,8 @@ async fn local_preflight() -> Vec<PreflightCheck> {
 /// even-offset-NUL sniff; this any-NUL form is adequate for wsl.exe
 /// diagnostics, which are pure ASCII UTF-16LE.
 #[cfg(windows)]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wsl_text(bytes: &[u8]) -> String {
     if bytes.iter().take(64).any(|&b| b == 0) {
         let units: Vec<u16> = bytes
@@ -2591,6 +2593,8 @@ fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
 }
 
 #[cfg(any(windows, test))]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wslconfig(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xff, 0xfe]) {
         let units: Vec<u16> = bytes

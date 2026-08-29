@@ -41,6 +41,8 @@ pub fn uses_mirrored_networking(text: &str) -> bool {
 
 /// Decode Windows tool/editor output at the byte-reading boundary. WSL's own
 /// output may be BOM-less UTF-16LE; Notepad and PowerShell 5.1 use `FF FE`.
+// Keep `chunks_exact` until the workspace MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 pub(crate) fn decode_wsl(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xff, 0xfe]) || bytes.iter().take(64).any(|&b| b == 0) {
         let units: Vec<u16> = bytes
