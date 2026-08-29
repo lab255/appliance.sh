@@ -672,7 +672,7 @@ egress
 
 egress
   .command('policy')
-  .description("print the VM's effective egress policy as JSON (the boundary actually enforced)")
+  .description("print the VM's effective egress policy and enforced/cooperative boundary as JSON")
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
   .action((opts: { name: string }) => {
     process.exit(runVm(['egress', 'policy', opts.name]));
@@ -680,7 +680,7 @@ egress
 
 egress
   .command('list')
-  .description('show the effective egress policy (Netstack VMs: default-deny + baked allowlist + your rules)')
+  .description('show the effective egress policy and its enforced/cooperative boundary')
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
   .action((opts: { name: string }) => {
     process.exit(runVm(['egress', 'list', opts.name]));

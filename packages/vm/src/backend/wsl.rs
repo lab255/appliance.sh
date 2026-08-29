@@ -99,6 +99,7 @@ impl VmBackend for WslBackend {
     }
 
     fn run_foreground(&self, spec: &VmSpec) -> Result<()> {
+        crate::backend::ensure_runtime_supported(self.name(), spec.runtime)?;
         self.availability()?;
         let paths = VmPaths::for_name(&spec.name);
         let distro = distro_name(&spec.name);
@@ -147,7 +148,7 @@ impl VmBackend for WslBackend {
             egress_ca.as_deref(),
             apiserver.as_ref(),
             &bootstrap_token,
-        );
+        )?;
         push_bootstrap(&distro, &script)?;
 
         // Fresh boot state: truncate the console log (the primary
@@ -635,7 +636,9 @@ fn build_bootstrap(
     // `None` for agent-only VMs or when nothing was staged.
     apiserver: Option<&crate::guest::ApiServerAssets>,
     bootstrap_token: &str,
-) -> String {
+) -> Result<String> {
+    crate::backend::ensure_runtime_supported("wsl", spec.runtime)?;
+    let runtime_provision = "";
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -684,7 +687,7 @@ fn build_bootstrap(
         })
         .unwrap_or_default();
 
-    WSL_BOOTSTRAP
+    Ok(WSL_BOOTSTRAP
         // Blocks first (they carry nested markers), then the markers.
         .replace("__K3S_PROVISION__", &k3s_block)
         .replace("__APISERVER_PROVISION__", &apiserver_block)
@@ -720,10 +723,9 @@ fn build_bootstrap(
             "__DOCKER_PROVISION__",
             if spec.docker { crate::guest::DOCKER_PROVISION } else { "" },
         )
-        // WSL has no VirtioFS runtime-share implementation. Keep the
-        // marker explicit and fail closed in the backend follow-up
-        // rather than booting a partial supervisor profile.
-        .replace("__RUNTIME_PROVISION__", "")
+        // Runtime specs have already failed through the AP-190 guard;
+        // non-Runtime WSL bootstraps must still consume the shared marker.
+        .replace("__RUNTIME_PROVISION__", runtime_provision)
         // BuildKit rides every k3s VM, exactly as on the vz backend —
         // injected before the port markers below so its nested
         // __REGISTRY_*__/__BUILDKITD_GUEST_PORT__ markers expand too.
@@ -747,7 +749,7 @@ fn build_bootstrap(
         // No prebuilt agent squashfs on WSL — nothing to put PATH-first.
         .replace("__AGENT_BIN_PATH__", "")
         .replace("__PROJECT_ID__", &project_id)
-        .replace("__ALPINE_BRANCH__", ALPINE_BRANCH)
+        .replace("__ALPINE_BRANCH__", ALPINE_BRANCH))
 }
 
 /// Guest-facing host services — the WSL sibling of `guest::host_services`'
@@ -1018,7 +1020,8 @@ mod tests {
             Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"),
             Some(&assets),
             "tok3n",
-        );
+        )
+        .unwrap();
         for marker in [
             "__K3S_PROVISION__",
             "__K3S_WIN_PATH__",
@@ -1106,7 +1109,7 @@ mod tests {
     #[test]
     fn plain_vm_omits_dev_docker_and_mount_blocks() {
         let s = spec("x");
-        let script = build_bootstrap(&s, Some((Path::new(r"C:\k3s"), "sha")), None, None, "");
+        let script = build_bootstrap(&s, Some((Path::new(r"C:\k3s"), "sha")), None, None, "").unwrap();
         assert!(!script.contains("appliance-dev: provisioning"));
         assert!(!script.contains("appliance-docker: provisioning"));
         assert!(!script.contains("mount --bind"));
@@ -1119,11 +1122,22 @@ mod tests {
     }
 
     #[test]
+    fn runtime_bootstrap_fails_before_substitution() {
+        let mut s = spec("runtime");
+        s.runtime = true;
+        let error = build_bootstrap(&s, None, None, None, "").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "the Appliance Runtime is not supported on the WSL backend yet"
+        );
+    }
+
+    #[test]
     fn agent_only_swaps_k3s_for_the_agent_handoff() {
         let mut s = spec("sbx");
         s.agent_only = true;
         s.dev = true;
-        let script = build_bootstrap(&s, None, None, None, "");
+        let script = build_bootstrap(&s, None, None, None, "").unwrap();
         assert!(!script.contains("k3s server"), "agent-only provisions NO k3s");
         assert!(!script.contains("buildkitd"), "agent-only provisions no buildkit either");
         assert!(script.contains("while [ ! -f /persist/.dev-ready ]"));
@@ -1135,7 +1149,7 @@ mod tests {
         s.agent_only = true;
         s.dev = true;
         s.docker = true;
-        let script = build_bootstrap(&s, None, None, None, "");
+        let script = build_bootstrap(&s, None, None, None, "").unwrap();
         assert!(!script.contains("docker is not provisioned in this agent sandbox."));
         assert!(script.contains("apk add --no-progress docker docker-cli-compose"));
     }
@@ -1146,14 +1160,14 @@ mod tests {
         s.dev = true;
         s.agent_only = true;
         s.dev_mount = Some(r"C:\Users\dev\proj".to_string());
-        let script = build_bootstrap(&s, None, None, None, "");
+        let script = build_bootstrap(&s, None, None, None, "").unwrap();
         assert!(script.contains("rm -rf /persist/npm-global"));
         assert!(!script.contains("APPLIANCE_PROJECT=''"), "a mount must stamp a project id");
         // No mount ⇒ empty identity ⇒ the guard is inert.
         let mut s = spec("x");
         s.dev = true;
         s.agent_only = true;
-        let script = build_bootstrap(&s, None, None, None, "");
+        let script = build_bootstrap(&s, None, None, None, "").unwrap();
         assert!(script.contains("APPLIANCE_PROJECT=''"));
     }
 
@@ -1171,12 +1185,12 @@ mod tests {
         s.dev_mount = Some(r"C:\proj".to_string());
         for script in [
             build_bootstrap(&s, Some((Path::new(r"C:\k3s"), "sha"))
-                , Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"), None, ""),
+                , Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"), None, "").unwrap(),
             {
                 let mut a = spec("sbx");
                 a.agent_only = true;
                 a.dev = true;
-                build_bootstrap(&a, None, None, None, "")
+                build_bootstrap(&a, None, None, None, "").unwrap()
             },
         ] {
             let lines: Vec<&str> = script.lines().collect();

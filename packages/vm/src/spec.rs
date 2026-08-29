@@ -124,8 +124,9 @@ pub struct VmSpec {
     /// How the guest NIC attaches to the host. Defaults to `Nat`
     /// (behaviour unchanged); `Netstack` swaps in the host-side smoltcp
     /// terminator. Legacy specs lack the field and parse to `Nat`. A
-    /// global `APPLIANCE_NETSTACK=1` env override forces `Netstack`
-    /// regardless of the persisted value (see [`VmSpec::net_link`]).
+    /// global `APPLIANCE_NETSTACK=1` env override forces `Netstack` on
+    /// backends that implement it (see [`VmSpec::net_link`]). WSL always
+    /// resolves and persists this as `Nat`.
     #[serde(default)]
     pub net_link: NetLink,
 }
@@ -285,7 +286,11 @@ pub const MIN_MEMORY_MIB: u64 = 512;
 
 impl VmSpec {
     pub fn defaults(name: &str) -> Self {
-        Self {
+        Self::defaults_for_backend(name, crate::backend::platform_backend_name())
+    }
+
+    fn defaults_for_backend(name: &str, backend: &str) -> Self {
+        let mut spec = Self {
             name: name.to_string(),
             cpus: DEFAULT_CPUS,
             memory_mib: DEFAULT_MEMORY_MIB,
@@ -310,13 +315,19 @@ impl VmSpec {
             published: Vec::new(),
             runtime_mounts: Vec::new(),
             net_link: NetLink::Nat,
-        }
+        };
+        spec.normalise_net_link_for_backend(backend);
+        spec
     }
 
     /// The runtime design doc's fixed pooled profile: core supervisor readiness only,
     /// no k3s, Docker, or development toolchain.
     pub fn runtime_defaults(name: &str) -> Self {
-        let mut spec = Self::defaults(name);
+        Self::runtime_defaults_for_backend(name, crate::backend::platform_backend_name())
+    }
+
+    fn runtime_defaults_for_backend(name: &str, backend: &str) -> Self {
+        let mut spec = Self::defaults_for_backend(name, backend);
         spec.agent_only = true;
         spec.runtime = true;
         spec.dev = false;
@@ -325,16 +336,35 @@ impl VmSpec {
         spec.net_link = NetLink::Netstack;
         spec.image = crate::images::RUNTIME_IMAGE.to_string();
         spec.cmdline = crate::guest::runtime_guest_cmdline();
+        spec.normalise_net_link_for_backend(backend);
         spec
     }
 
     /// The link this VM should actually use, honouring the global
     /// `APPLIANCE_NETSTACK=1` override (CI/testing) over the persisted
-    /// per-VM value. The override only ever forces the netstack *on* — a
-    /// VM persisted as `Netstack` is never silently downgraded.
+    /// per-VM value on supported backends. WSL always resolves to NAT.
     pub fn net_link(&self) -> NetLink {
         let forced = std::env::var("APPLIANCE_NETSTACK").map(|v| v == "1").unwrap_or(false);
-        resolve_net_link(self.net_link, forced)
+        resolve_net_link(
+            self.net_link,
+            forced,
+            crate::backend::platform_backend_name(),
+        )
+    }
+
+    /// Resolve and persist the honest link for a backend. WSL has no
+    /// host netstack attachment, so even a legacy/forced Netstack value
+    /// becomes NAT and its egress boundary remains the cooperative proxy.
+    pub fn normalise_net_link_for_backend(&mut self, backend: &str) -> bool {
+        if backend == "wsl" {
+            warn_wsl_cooperative_boundary_once();
+        }
+        let resolved = resolve_net_link(self.net_link, false, backend);
+        if resolved == self.net_link {
+            return false;
+        }
+        self.net_link = resolved;
+        true
     }
 
     /// Resolve the five host ports for `name` so multiple VMs can run
@@ -429,15 +459,24 @@ impl VmSpec {
     }
 }
 
-/// Resolve the effective link: the `APPLIANCE_NETSTACK=1` override only
-/// forces the netstack *on*, never downgrades a VM persisted as
-/// `Netstack`. Pure so the precedence is unit-tested without touching
-/// the process environment.
-fn resolve_net_link(persisted: NetLink, forced: bool) -> NetLink {
+/// Resolve the effective link. WSL wins over both persisted state and the
+/// force-on override; supported backends otherwise preserve the historical
+/// override precedence. Pure so tests do not touch the process environment.
+fn resolve_net_link(persisted: NetLink, forced: bool, backend: &str) -> NetLink {
+    if backend == "wsl" {
+        return NetLink::Nat;
+    }
     match (persisted, forced) {
         (_, true) => NetLink::Netstack,
         (link, false) => link,
     }
+}
+
+fn warn_wsl_cooperative_boundary_once() {
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| {
+        eprintln!("warn: WSL backend: egress is a cooperative proxy, not host-enforced");
+    });
 }
 
 /// Locally administered, unicast MAC (x2:…): bit 1 of the first octet
@@ -750,10 +789,29 @@ mod tests {
     fn netstack_env_override_only_forces_on() {
         // The global override forces Netstack regardless of the persisted
         // value, but never downgrades a VM persisted as Netstack.
-        assert_eq!(resolve_net_link(NetLink::Nat, false), NetLink::Nat);
-        assert_eq!(resolve_net_link(NetLink::Nat, true), NetLink::Netstack);
-        assert_eq!(resolve_net_link(NetLink::Netstack, false), NetLink::Netstack);
-        assert_eq!(resolve_net_link(NetLink::Netstack, true), NetLink::Netstack);
+        assert_eq!(resolve_net_link(NetLink::Nat, false, "vz"), NetLink::Nat);
+        assert_eq!(resolve_net_link(NetLink::Nat, true, "vz"), NetLink::Netstack);
+        assert_eq!(resolve_net_link(NetLink::Netstack, false, "vz"), NetLink::Netstack);
+        assert_eq!(resolve_net_link(NetLink::Netstack, true, "vz"), NetLink::Netstack);
+    }
+
+    #[test]
+    fn wsl_specs_create_and_load_as_nat_while_vz_is_unchanged() {
+        let fresh = VmSpec::runtime_defaults_for_backend("runtime", "wsl");
+        assert_eq!(fresh.net_link, NetLink::Nat);
+
+        let mut persisted = VmSpec::defaults_for_backend("legacy", "vz");
+        persisted.net_link = NetLink::Netstack;
+        let raw = serde_json::to_string(&persisted).unwrap();
+        let mut loaded: VmSpec = serde_json::from_str(&raw).unwrap();
+        assert!(loaded.normalise_net_link_for_backend("wsl"));
+        assert_eq!(loaded.net_link, NetLink::Nat);
+
+        assert_eq!(
+            VmSpec::runtime_defaults_for_backend("runtime", "vz").net_link,
+            NetLink::Netstack
+        );
+        assert_eq!(resolve_net_link(NetLink::Netstack, true, "wsl"), NetLink::Nat);
     }
 
     #[test]
@@ -793,7 +851,7 @@ mod tests {
 
     #[test]
     fn runtime_profile_is_core_only_and_netstack_enforced() {
-        let spec = VmSpec::runtime_defaults("appliance-runtime");
+        let spec = VmSpec::runtime_defaults_for_backend("appliance-runtime", "vz");
         assert_eq!(spec.name, "appliance-runtime");
         assert_eq!(spec.cpus, 2);
         assert_eq!(spec.memory_mib, 4096);

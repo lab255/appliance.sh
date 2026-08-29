@@ -4750,6 +4750,9 @@ struct EgressPolicy {
     deny: Vec<String>,
     #[serde(default)]
     mitm: bool,
+    /// Engine-owned boundary contract: `"enforced"` or `"cooperative"`.
+    #[serde(default)]
+    boundary: String,
     /// CA cert path, populated for the UI when interception is on and
     /// the cert exists — the user injects this into clients to trust
     /// the interceptor.
@@ -4759,8 +4762,7 @@ struct EgressPolicy {
     /// (`net_link=Netstack`): default-DENY plus the baked allowlist, and
     /// `microvm_egress_get` returns the *effective* merged policy. False
     /// for the cooperative NAT proxy (`net_link=Nat`, default-Allow).
-    /// Host-populated from the VM's persisted spec (the engine's JSON does
-    /// not carry it), like `ca_path` above — never round-tripped back.
+    /// Derived from the engine's boundary contract for legacy UI callers.
     #[serde(default)]
     enforced: bool,
     /// `"netstack"` | `"nat"` — the VM's resolved network link, so the
@@ -4768,43 +4770,6 @@ struct EgressPolicy {
     /// effective default.
     #[serde(default)]
     net_link: String,
-}
-
-/// Resolve a VM's effective network link by reading the engine's
-/// persisted spec (`~/.appliance/vm/<name>/vm.json`, `netLink` field) and
-/// applying the same `APPLIANCE_NETSTACK=1` force-on override the engine's
-/// `VmSpec::net_link()` uses (packages/vm/src/spec.rs). Returns true when
-/// the host netstack is the enforced egress boundary (`net_link=Netstack`),
-/// false for the cooperative NAT proxy. A missing / unreadable spec ⇒ Nat
-/// unless the override is set, mirroring the engine. Read-only: this never
-/// writes the spec.
-fn microvm_netstack_enforced(name: &str) -> bool {
-    if std::env::var("APPLIANCE_NETSTACK")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-    {
-        return true;
-    }
-    let Some(path) = home_dir().map(|h| {
-        h.join(SHARED_PROFILES_DIR)
-            .join("vm")
-            .join(name)
-            .join("vm.json")
-    }) else {
-        return false;
-    };
-    let Ok(raw) = fs::read_to_string(&path) else {
-        return false;
-    };
-    serde_json::from_str::<serde_json::Value>(&raw)
-        .ok()
-        .and_then(|spec| {
-            spec.get("netLink")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_ascii_lowercase())
-        })
-        .map(|link| link == "netstack")
-        .unwrap_or(false)
 }
 
 fn microvm_ca_path(name: &str) -> Option<PathBuf> {
@@ -4827,12 +4792,11 @@ async fn microvm_egress_get(name: Option<String>) -> Result<EgressPolicy, String
     }
     // The engine prints the EFFECTIVE policy for a Netstack VM (default-Deny
     // + the baked allowlist merged over the operator's rules) — see
-    // `egress::effective_policy`. We display that as-is, and tag it with the
-    // VM's resolved link so the UI can label the boundary as enforced vs
-    // cooperative. Read-only: nothing here is ever written back.
+    // `egress::effective_policy`. We display that as-is and use its explicit
+    // boundary contract, without re-reading or inferring from the VM spec.
     let mut policy: EgressPolicy = serde_json::from_str(&stdout).map_err(|e| e.to_string())?;
     policy.ca_path = microvm_ca_path(&name).map(|p| p.to_string_lossy().into_owned());
-    policy.enforced = microvm_netstack_enforced(&name);
+    policy.enforced = policy.boundary == "enforced";
     policy.net_link = if policy.enforced {
         "netstack".into()
     } else {

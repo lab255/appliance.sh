@@ -669,6 +669,7 @@ fn run() -> Result<()> {
             agent_only,
             runtime,
         } => {
+            backend::ensure_runtime_supported(backend.name(), runtime)?;
             // A shared host folder only makes sense in a dev environment,
             // so --mount implies --dev. Agent-only implies --dev too: its
             // readiness handoff waits on the dev toolchain's .dev-ready.
@@ -751,6 +752,7 @@ fn run() -> Result<()> {
             time_budget,
         } => {
             let up_started = std::time::Instant::now();
+            backend::ensure_runtime_supported(backend.name(), runtime)?;
             backend.availability()?;
             let mut spec = ensure_spec_for_up(&name, runtime)?;
             // Persist resource overrides into the spec *before* spawning
@@ -1017,7 +1019,7 @@ fn run() -> Result<()> {
             Ok(())
         }
 
-        Cmd::Runtime { action } => run_runtime_command(action),
+        Cmd::Runtime { action } => run_runtime_command(action, backend.name()),
 
         Cmd::Timings { name } => {
             let paths = VmPaths::for_name(&name);
@@ -1274,9 +1276,10 @@ fn run() -> Result<()> {
     }
 }
 
-fn run_runtime_command(action: RuntimeCmd) -> Result<()> {
+fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
     match action {
         RuntimeCmd::Prepare { name, plan } => {
+            backend::ensure_runtime_supported(backend_name, true)?;
             let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime plan")?;
             validate_runtime_plan(&plan)?;
             if !plan.share.read_only {
@@ -2067,7 +2070,7 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             // the persisted serde-default Allow), so the JSON the desktop
             // and CLI read matches what's actually enforced. NAT is
             // unchanged (its persisted, cooperative policy).
-            let policy = egress::effective_policy(&name);
+            let policy = egress::effective_policy_output(&name);
             println!("{}", serde_json::to_string_pretty(&policy)?);
             Ok(())
         }

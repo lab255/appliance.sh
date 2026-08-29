@@ -1,10 +1,11 @@
 # Egress controls
 
-Appliance routes managed-VM outbound traffic through a host-enforced network
-boundary. Netstack VMs use default-deny policy: a connection is forwarded only
+Appliance routes Netstack-VM outbound traffic through a host-enforced network
+boundary. These VMs use default-deny policy: a connection is forwarded only
 when its destination host and port are allowed. DNS answers for private,
 link-local, loopback, and host-LAN addresses are rejected, and unclassified or
-unsupported traffic is dropped.
+unsupported traffic is dropped. The WSL boundary on Windows is cooperative,
+as described below.
 
 Packaged apps use separate per-app policies. See the [runtime guide](runtime.md)
 for running and managing packaged apps.
@@ -28,6 +29,15 @@ appliance vm egress reset
 operator rules. Host rules match the named host and its subdomains; a deny rule
 wins over an allow rule. `remove` deletes one exact operator rule, while `reset`
 clears all operator rules.
+
+## Windows (WSL backend)
+
+WSL VMs use `netLink: "nat"`, and `appliance vm egress policy` reports
+`boundary: "cooperative"`. Their rules are enforced by the WSL proxy, not by a
+host-owned network route, so software in the guest can bypass the proxy. The F4
+default-deny flip means the cooperative proxy defaults to deny on Windows; it
+does not turn that proxy into the Netstack hard egress boundary used by the VZ
+backend.
 
 For a blocked request, inspect recent denials and allow only the required host:
 

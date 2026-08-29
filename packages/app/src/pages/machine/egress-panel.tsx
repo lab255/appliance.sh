@@ -83,14 +83,15 @@ export function EgressPanel({
     return () => window.clearTimeout(timer);
   }, [events]);
 
-  const enforced = !!policy?.enforced;
+  const enforced = policy?.boundary ? policy.boundary === 'enforced' : !!policy?.enforced;
+  const boundaryLabel = enforced ? 'enforced (netstack)' : 'cooperative (WSL proxy)';
   // For a Netstack VM the effective `allow` merges the baked allowlist with
   // the operator's rules; partition it back so the UI shows what's inherited
   // (always-on) vs what the operator added — mirrors render_effective_policy.
   const operatorAllow = React.useMemo(() => {
     if (!policy) return [] as string[];
-    return policy.enforced ? policy.allow.filter((h) => !isBaked(h)) : policy.allow;
-  }, [policy]);
+    return enforced ? policy.allow.filter((h) => !isBaked(h)) : policy.allow;
+  }, [enforced, policy]);
 
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -178,9 +179,9 @@ export function EgressPanel({
               </summary>
               <div className="mt-2 space-y-2 text-xs leading-4 text-[var(--color-muted-foreground)]">
                 <p>
-                  Network mode: <code className="font-mono">{policy.netLink ?? (enforced ? 'netstack' : 'nat')}</code>.
-                  Default: <code className="font-mono">{policy.default}</code>. Secure inspection:{' '}
-                  {policy.mitm ? 'on' : 'off'}.
+                  Boundary: <code className="font-mono">{boundaryLabel}</code>. Network mode:{' '}
+                  <code className="font-mono">{policy.netLink ?? (enforced ? 'netstack' : 'nat')}</code>. Default:{' '}
+                  <code className="font-mono">{policy.default}</code>. Secure inspection: {policy.mitm ? 'on' : 'off'}.
                 </p>
                 {policy.mitm && policy.caPath ? (
                   <Banner tone="info">
