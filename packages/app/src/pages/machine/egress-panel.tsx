@@ -12,7 +12,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { NETSTACK_BAKED_ALLOWLIST } from '@/lib/host';
 import { relativeAge } from '@/lib/time';
-import type { EgressEvent, EgressPolicy, MicroVmInstanceHost } from '@/lib/host';
+import type { EgressEvent, EgressPolicy, HostPlatform, MicroVmInstanceHost } from '@/lib/host';
 
 // Guest egress firewall surface (egress-firewall F4): show whether the
 // VM's egress is the host-enforced boundary (net_link=Netstack →
@@ -35,11 +35,13 @@ export function EgressPanel({
   name,
   policy,
   policyError,
+  platform,
 }: {
   vm: MicroVmInstanceHost;
   name: string;
   policy: EgressPolicy | undefined;
   policyError: unknown;
+  platform: HostPlatform;
 }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
@@ -83,10 +85,16 @@ export function EgressPanel({
     return () => window.clearTimeout(timer);
   }, [events]);
 
-  const enforced = policy?.boundary ? policy.boundary === 'enforced' : !!policy?.enforced;
-  const wsl = policy?.enforcement?.backend === 'wsl';
+  const reportedEnforced = policy?.boundary ? policy.boundary === 'enforced' : !!policy?.enforced;
+  const staleWindowsEngine = platform === 'windows' && policy?.enforcement?.backend !== 'wsl';
+  const enforced = staleWindowsEngine ? false : reportedEnforced;
+  const wsl = platform === 'windows' || policy?.enforcement?.backend === 'wsl';
   const wslMode = policy?.wslMode ?? 'strict';
-  const boundaryLabel = enforced ? 'enforced (netstack)' : 'cooperative (in-guest proxy)';
+  const boundaryLabel = staleWindowsEngine
+    ? 'unknown (stale engine; treat as cooperative)'
+    : enforced
+      ? 'enforced (netstack)'
+      : 'cooperative (in-guest proxy)';
   // For a Netstack VM the effective `allow` merges the baked allowlist with
   // the operator's rules; partition it back so the UI shows what's inherited
   // (always-on) vs what the operator added — mirrors render_effective_policy.
@@ -172,12 +180,21 @@ export function EgressPanel({
           >
             {wsl ? (
               <Banner
+                role="status"
                 tone={wslMode === 'strict' ? 'info' : 'warning'}
-                title={wslMode === 'strict' ? 'WSL strict mode' : 'Cooperative proxy — bypassable'}
+                title={
+                  staleWindowsEngine
+                    ? 'WSL enforcement unknown — update appliance-vm'
+                    : wslMode === 'strict'
+                      ? 'WSL strict mode'
+                      : 'Cooperative proxy — bypassable'
+                }
               >
-                {wslMode === 'strict'
-                  ? 'Runtime apps that request egress grants are refused. Apps without egress grants may run, and their outbound traffic is dropped.'
-                  : 'Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are unioned across apps in this VM.'}
+                {staleWindowsEngine
+                  ? 'This engine did not report its WSL enforcement capability. Treat egress as cooperative and bypassable until appliance-vm is updated.'
+                  : wslMode === 'strict'
+                    ? 'Runtime apps that request egress grants are refused. Apps without egress grants may run, and their outbound traffic is dropped.'
+                    : 'Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through proxy CONNECT by hostname; direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across apps, dropping per-grant ports.'}
               </Banner>
             ) : (
               <Banner tone={enforced ? 'info' : 'warning'} title={enforced ? 'Protection enforced' : 'Monitoring only'}>
@@ -186,7 +203,7 @@ export function EgressPanel({
                   : 'Rules are applied through a proxy, but software inside the Sandbox may bypass them.'}
               </Banner>
             )}
-            {wsl ? (
+            {wsl && !staleWindowsEngine ? (
               <div className="mt-3" role="radiogroup" aria-label="WSL Runtime egress mode">
                 <div className="mb-2 text-xs font-medium">Runtime egress mode</div>
                 <div className="flex flex-wrap gap-2">
@@ -196,6 +213,7 @@ export function EgressPanel({
                       type="button"
                       size="sm"
                       variant={wslMode === mode ? 'default' : 'outline'}
+                      className={cn(wslMode === mode && 'ring-2 ring-[var(--color-ring)] ring-offset-2')}
                       role="radio"
                       aria-checked={wslMode === mode}
                       disabled={busy}

@@ -937,17 +937,20 @@ pub fn render_effective_policy_for_backend(
     if backend == "wsl" {
         out.push_str(match wsl_mode {
             WslMode::Cooperative => {
-                "WSL NAT — cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
+                "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
             }
-            WslMode::Strict => "WSL NAT — strict: apps with egress grants are refused\n",
+            WslMode::Strict => "WSL NAT - strict: apps with egress grants are refused\n",
         });
         let default = match persisted.default {
             Action::Allow => "ALLOW",
             Action::Deny => "DENY",
         };
         out.push_str(&format!(
-            "egress policy for '{name}'  (boundary: {})\n",
-            EgressBoundary::Cooperative.label()
+            "EFFECTIVE egress policy for '{name}'  (boundary: {})\n",
+            match wsl_mode {
+                WslMode::Strict => "strict",
+                WslMode::Cooperative => EgressBoundary::Cooperative.label(),
+            }
         ));
         out.push_str(&format!("  default: {default}\n"));
     } else if enforced {
@@ -1984,12 +1987,16 @@ mod tests {
     fn wsl_rendering_uses_truthful_mode_headers_and_never_host_enforced() {
         let policy = EgressPolicy { default: Action::Deny, allow: vec![], deny: vec![], mitm: false };
         let strict = render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Strict);
-        assert!(strict.starts_with("WSL NAT — strict: apps with egress grants are refused\n"));
+        assert!(strict.starts_with("WSL NAT - strict: apps with egress grants are refused\n"));
+        assert!(strict.contains("EFFECTIVE egress policy for 'runtime'  (boundary: strict)"));
         assert!(!strict.contains("host-enforced"));
         let cooperative =
             render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Cooperative);
         assert!(cooperative.starts_with(
-            "WSL NAT — cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
+            "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
+        ));
+        assert!(cooperative.contains(
+            "EFFECTIVE egress policy for 'runtime'  (boundary: cooperative (in-guest proxy))"
         ));
         assert!(!cooperative.contains("host-enforced"));
     }

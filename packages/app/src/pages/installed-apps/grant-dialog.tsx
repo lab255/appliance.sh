@@ -78,7 +78,7 @@ export function GrantDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="grant-dialog-title"
-        aria-describedby="grant-dialog-description"
+        aria-describedby={`grant-dialog-description${wslEgressWarning ? ' grant-wsl-egress-warning' : ''}`}
         className="w-full max-w-xl rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-5 shadow-xl"
         onKeyDown={handleKeyDown}
       >
@@ -99,9 +99,10 @@ export function GrantDialog({
 
         <div className="mt-4 space-y-4">
           {wslEgressWarning ? (
-            <Banner tone="warning" title="WSL cooperative mode is bypassable">
-              Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are
-              unioned across apps in this VM.
+            <Banner id="grant-wsl-egress-warning" tone="warning" title="WSL cooperative mode is bypassable">
+              Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through
+              proxy CONNECT by hostname; direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across
+              apps, dropping per-grant ports.
             </Banner>
           ) : null}
           {requiredGrants.length ? (
