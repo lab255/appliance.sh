@@ -1,6 +1,8 @@
 use crate::spec::VmSpec;
 use anyhow::{bail, Result};
 
+pub mod runtime_guest;
+
 #[cfg(target_os = "linux")]
 pub mod kvm;
 #[cfg(target_os = "macos")]

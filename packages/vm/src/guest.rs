@@ -1309,7 +1309,7 @@ set -g destroy-unattached off
 /// lived processes stay here: containerd owns the task and this script
 /// persists desired/observed state and captured output under
 /// /persist/runtime/apps/<app>.
-const RUNTIME_SUPERVISOR: &str = r#"#!/bin/sh
+pub(crate) const RUNTIME_SUPERVISOR: &str = r#"#!/bin/sh
 set -eu
 REQ=${1:-'{}'}
 ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
@@ -1356,8 +1356,7 @@ cleanup_resources() {
   ip link del "$ROOT_IF" 2>/dev/null || true
   if [ -f "$STATE/request.json" ]; then
     OLD_TAG=$(jq -r '.plan.share.tag // empty' "$STATE/request.json")
-    OLD_SHARE=/run/appliance/shares/$OLD_TAG
-    grep -qs " $OLD_SHARE " /proc/mounts && umount "$OLD_SHARE" || true
+    /usr/local/bin/runtime-share-unmount "$OLD_TAG" || true
   fi
   rm -rf "$STATE/rootfs"
   rm -f "$STATE/relay.pids" "$STATE/logcap.pid"
@@ -1431,6 +1430,7 @@ rm -f "$STATE/exit-code" "$STATE/current.log" "$STATE/pid"
 echo 0 > "$STATE/log-base"
 printf '%s\n' "$REQ" > "$STATE/request.json"
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
+HOST_PATH=$(printf '%s' "$REQ" | jq -r '.plan.share.hostPath // empty')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
 UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
 KIND=$(printf '%s' "$REQ" | jq -r '.plan.kind // empty')
@@ -1481,8 +1481,7 @@ printf '%s' "$REQ" | jq -e --arg ip "$IP" '
   .plan.ports | all(.target == $ip and (.relay | type == "number") and (.guest | type == "number"))
 ' >/dev/null || { echo '{"state":"failed","message":"invalid published port target"}'; exit 2; }
 SHARE=/run/appliance/shares/$TAG
-mkdir -p "$SHARE"
-grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+/usr/local/bin/runtime-share-mount "$TAG" "$HOST_PATH"
 
 if [ "$KIND" = binary ]; then
   SOURCE=$SHARE/$BINARY_PATH
@@ -1571,6 +1570,7 @@ if ! nft list chain inet appliance_runtime principal_spoof >/dev/null 2>&1; then
   nft 'add chain inet appliance_runtime principal_spoof { type filter hook forward priority -11; policy accept; }'
 fi
 nft add rule inet appliance_runtime principal_spoof iifname "$ROOT_IF" ip saddr != "$IP" drop
+/usr/local/bin/runtime-principal-snat
 
 ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print address[1]; exit }')
 [ -n "$ETH0_IP" ] || { echo '{"state":"failed","message":"guest eth0 has no IPv4 address"}'; exit 2; }
@@ -1622,8 +1622,8 @@ if [ "$KIND" = binary ]; then
 else
   : > "$STATE/args.txt"
 fi
-# The lifecycle RPC is a one-shot vsock shell. Ignore its closing SIGHUP so
-# the pooled workload outlives that control connection, and let containerd
+# The lifecycle RPC uses a one-shot shell transport. Ignore its closing SIGHUP
+# so the pooled workload outlives that control connection, and let containerd
 # place the actual task (rather than this short-lived launcher) in the app's
 # cgroup. Runtime status is task-based, and the child records its own PID
 # after setsid so teardown never races a short-lived wrapper.
@@ -1685,7 +1685,7 @@ nohup setsid sh -c '
   [ -f "$STATE/logcap.pid" ] && kill "$(cat "$STATE/logcap.pid")" 2>/dev/null || true
   ip netns del "$NS" 2>/dev/null || true
   ip link del "$ROOT_IF" 2>/dev/null || true
-  grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+  /usr/local/bin/runtime-share-unmount "${SHARE##*/}" || true
   [ "$KIND" = binary ] && rm -rf "$STAGED"
   rm -f "$STATE/pid" "$STATE/relay.pids" "$STATE/logcap.pid"
   exit "$CODE"
@@ -1724,7 +1724,7 @@ echo '{"state":"running"}'
 /// network namespace, and read-only payload share while giving each leaf
 /// its own containerd task, cgroup, logs, health state, and restart worker.
 /// The v1 single-workload script above remains unchanged after dispatch.
-const RUNTIME_COMPOUND_SUPERVISOR: &str = r#"#!/bin/sh
+pub(crate) const RUNTIME_COMPOUND_SUPERVISOR: &str = r#"#!/bin/sh
 set -eu
 REQ=${1:-'{}'}
 ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
@@ -1775,8 +1775,7 @@ cleanup_app_resources() {
   ip link del "$ROOT_IF" 2>/dev/null || true
   if [ -f "$STATE/request.json" ]; then
     TAG=$(jq -r '.plan.share.tag // empty' "$STATE/request.json")
-    SHARE=/run/appliance/shares/$TAG
-    grep -qs " $SHARE " /proc/mounts && umount "$SHARE" || true
+    /usr/local/bin/runtime-share-unmount "$TAG" || true
   fi
   rm -f "$STATE/relay.pids" "$STATE/monitor.pid"
 }
@@ -1917,6 +1916,7 @@ rm -f "$STATE/culprit" "$STATE/exit-code" "$STATE/start-failed" "$STATE/failed-s
   "$STATE/clean-required" "$STATE/degraded"
 
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
+HOST_PATH=$(printf '%s' "$REQ" | jq -r '.plan.share.hostPath // empty')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
 UID_NUM=$(printf '%s' "$REQ" | jq -r '.plan.uid')
 case "$TAG" in ap-[0-9a-f]*) ;; *) echo '{"state":"failed","message":"invalid share tag"}'; exit 2;; esac
@@ -1929,8 +1929,7 @@ case "$IP_LEAF" in ''|*[!0-9]*) echo '{"state":"failed","message":"invalid princ
   echo '{"state":"failed","message":"invalid principal ip"}'; exit 2;
 }
 SHARE=/run/appliance/shares/$TAG
-mkdir -p "$SHARE"
-grep -qs " $SHARE " /proc/mounts || mount -t virtiofs -o ro "$TAG" "$SHARE"
+/usr/local/bin/runtime-share-mount "$TAG" "$HOST_PATH"
 
 USER_NAME=u$UID_NUM
 getent group "$USER_NAME" >/dev/null 2>&1 || addgroup -g "$UID_NUM" "$USER_NAME"
@@ -1979,6 +1978,7 @@ if ! nft list chain inet appliance_runtime principal_spoof >/dev/null 2>&1; then
   nft 'add chain inet appliance_runtime principal_spoof { type filter hook forward priority -11; policy accept; }'
 fi
 nft add rule inet appliance_runtime principal_spoof iifname "$ROOT_IF" ip saddr != "$IP" drop
+/usr/local/bin/runtime-principal-snat
 
 ETH0_IP=$(ip -4 -o addr show dev eth0 | awk '{ split($4, address, "/"); print address[1]; exit }')
 [ -n "$ETH0_IP" ] || { echo '{"state":"failed","message":"guest eth0 has no IPv4 address"}'; exit 2; }
@@ -2273,7 +2273,7 @@ nohup setsid sh -c '
 status
 "#;
 
-const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
+pub(crate) const RUNTIME_PROVISION: &str = r#"# Runtime pool: containerd is the only workload engine. No dockerd,
 # k3s, registry, BuildKit, Node, or development toolchain is installed.
 if ! SOCAT_SELF_CHECK=$(socat -V 2>&1); then
   echo "appliance-runtime: socat self-check failed; offline Runtime APK set is ABI-inconsistent"
@@ -2509,6 +2509,27 @@ fn build_apkovl_for_readiness(
         "usr/local/bin/appliance-runtime-compound-supervisor",
         0o755,
         RUNTIME_COMPOUND_SUPERVISOR.as_bytes(),
+    )?;
+    file(
+        "usr/local/bin/runtime-share-mount",
+        0o755,
+        crate::backend::runtime_guest::runtime_share_mount_script(
+            crate::backend::runtime_guest::RuntimeGuestBackend::VirtioFs,
+        )
+        .as_bytes(),
+    )?;
+    file(
+        "usr/local/bin/runtime-share-unmount",
+        0o755,
+        crate::backend::runtime_guest::runtime_share_unmount_script().as_bytes(),
+    )?;
+    file(
+        "usr/local/bin/runtime-principal-snat",
+        0o755,
+        crate::backend::runtime_guest::runtime_principal_snat_script(
+            crate::backend::runtime_guest::RuntimeGuestBackend::VirtioFs,
+        )
+        .as_bytes(),
     )?;
     // Transparent tmux config for the agent's reattachable sessions.
     file("etc/appliance/tmux.conf", 0o644, TMUX_CONF.as_bytes())?;
