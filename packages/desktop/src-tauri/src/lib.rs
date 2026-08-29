@@ -1152,11 +1152,16 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     }
     #[cfg(windows)]
     {
-        if let Ok(user) = std::env::var("USERNAME") {
+        if let Ok(sid) = current_user_sid_string() {
             use std::os::windows::process::CommandExt;
+            let principal = format!("*{sid}");
             let _ = std::process::Command::new("icacls")
                 .arg(&path)
-                .args(["/inheritance:r", "/grant:r", &format!("{user}:F")])
+                .args([
+                    "/inheritance:r",
+                    "/grant:r",
+                    &format!("{principal}:F"),
+                ])
                 .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
                 .output();
         }
@@ -2542,6 +2547,8 @@ async fn local_preflight() -> Vec<PreflightCheck> {
 /// even-offset-NUL sniff; this any-NUL form is adequate for wsl.exe
 /// diagnostics, which are pure ASCII UTF-16LE.
 #[cfg(windows)]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wsl_text(bytes: &[u8]) -> String {
     if bytes.iter().take(64).any(|&b| b == 0) {
         let units: Vec<u16> = bytes
@@ -2554,11 +2561,73 @@ fn decode_wsl_text(bytes: &[u8]) -> String {
     }
 }
 
+#[cfg(windows)]
+const WSL_MIRRORED_REMEDIATION: &str =
+    "Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
+     (or remove the setting), run `wsl --shutdown`, then retry.";
+
+#[cfg(any(windows, test))]
+fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
+    let mut in_wsl2 = false;
+    let mut mode: Option<&str> = None;
+    for raw in text.lines() {
+        let line = raw.trim().trim_start_matches('\u{feff}');
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_wsl2 = line[1..line.len() - 1].trim().eq_ignore_ascii_case("wsl2");
+            continue;
+        }
+        if !in_wsl2 {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim().eq_ignore_ascii_case("networkingMode") {
+            mode = Some(value.split(['#', ';']).next().unwrap_or_default().trim());
+        }
+    }
+    mode.is_some_and(|value| value.eq_ignore_ascii_case("mirrored"))
+}
+
+#[cfg(any(windows, test))]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
+fn decode_wslconfig(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xff, 0xfe]) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 /// Probe WSL2 readiness for the doctor view. Reports "installed but
 /// broken" with wsl.exe's own first diagnostic line (virtualization
 /// disabled, kernel outdated, …) rather than a bare boolean.
 #[cfg(windows)]
 async fn wsl_preflight_check() -> PreflightCheck {
+    let mirrored = std::env::var_os("USERPROFILE")
+        .and_then(|home| std::fs::read(std::path::PathBuf::from(home).join(".wslconfig")).ok())
+        .is_some_and(|bytes| wslconfig_uses_mirrored_networking(&decode_wslconfig(&bytes)));
+    if mirrored {
+        return PreflightCheck {
+            tool: "wsl".to_string(),
+            installed: false,
+            version: None,
+            purpose: "Windows Subsystem for Linux 2 — mirrored networking is unsupported by the Dev Machine.".to_string(),
+            install_hint: WSL_MIRRORED_REMEDIATION.to_string(),
+            auto_installable: false,
+            error: Some("WSL mirrored networking is enabled.".to_string()),
+            daemon_running: None,
+            daemon_startable: None,
+        };
+    }
     let probe = quiet_command("wsl.exe").arg("--status").output().await;
     let (installed, version, error) = match probe {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
@@ -5878,6 +5947,123 @@ fn legacy_anthropic_key_file() -> Option<PathBuf> {
     )
 }
 
+// Copy of the appliance-vm ACL helper: the desktop drives appliance-vm as a
+// sidecar binary rather than linking its crate, so this small security boundary
+// stays duplicated here (like decode_wsl_text above).
+#[cfg(windows)]
+fn current_user_sid_string() -> Result<String, String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, IsValidSid, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct OwnedHandle(HANDLE);
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    let mut token = std::ptr::null_mut();
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(format!(
+            "could not open the current process token: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let token = OwnedHandle(token);
+    let mut needed = 0;
+    unsafe {
+        GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+    }
+    if needed == 0 {
+        return Err(format!(
+            "could not size the current process token user: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let words = (needed as usize + std::mem::size_of::<usize>() - 1)
+        / std::mem::size_of::<usize>();
+    let mut buffer = vec![0usize; words];
+    if unsafe {
+        GetTokenInformation(
+            token.0,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not read the current process token user: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let sid = unsafe { (*(buffer.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+        return Err("the current process token has an invalid user SID".to_string());
+    }
+
+    let mut raw = std::ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(sid, &mut raw) } == 0 {
+        return Err(format!(
+            "could not convert the current user SID to text: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let result = (|| {
+        let mut len = 0;
+        while unsafe { *raw.add(len) } != 0 {
+            len += 1;
+        }
+        String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) })
+            .map_err(|error| format!("the current user SID is not valid UTF-16: {error}"))
+    })();
+    unsafe {
+        let _ = LocalFree(raw.cast());
+    }
+    result
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|error| format!("could not chmod {}: {error}", path.display()))
+}
+
+#[cfg(windows)]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    let principal = format!("*{}", current_user_sid_string()?);
+    let permission = if path.is_dir() { "(OI)(CI)F" } else { "F" };
+    let output = std::process::Command::new("icacls")
+        .arg(path)
+        .args([
+            "/inheritance:r",
+            "/grant:r",
+            &format!("{principal}:{permission}"),
+        ])
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .output()
+        .map_err(|error| format!("could not run icacls for {}: {error}", path.display()))?;
+    if !output.status.success() {
+        return Err(format!(
+            "could not restrict {} to {principal}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
 /// Whether a host credential is stored, and (best-effort) its kind. Never
 /// carries the secret value. Serialized to the frontend's `AgentAuthStatus`.
 #[derive(Serialize)]
@@ -5928,11 +6114,9 @@ fn store_agent_cred_envelope(provider: &str, envelope: &str) -> Result<(), Strin
             .map_err(|e| format!("could not create the agent store dir: {e}"))?;
     }
     std::fs::write(&file, envelope).map_err(|e| format!("could not write the agent store: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("could not chmod the agent store: {e}"))?;
+    if let Err(error) = restrict_to_current_user(&file) {
+        let _ = std::fs::remove_file(&file);
+        return Err(error);
     }
     Ok(())
 }
@@ -6912,6 +7096,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wslconfig_reader_detects_shared_utf8_and_utf16le_fixtures() {
+        for fixture in [
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored.ini").as_slice(),
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored-utf16le.ini").as_slice(),
+        ] {
+            assert!(wslconfig_uses_mirrored_networking(&decode_wslconfig(
+                fixture
+            )));
+        }
+    }
 
     #[test]
     fn credential_helper_argv_stays_an_array_across_desktop_vm_boundary() {

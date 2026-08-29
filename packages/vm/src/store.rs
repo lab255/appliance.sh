@@ -54,6 +54,7 @@ pub fn save_spec(spec: &VmSpec) -> Result<()> {
     spec.normalise_net_link_for_backend(crate::backend::platform_backend_name());
     let paths = VmPaths::for_name(&spec.name);
     fs::create_dir_all(&paths.dir).with_context(|| format!("create {}", paths.dir.display()))?;
+    crate::fs_acl::restrict_to_current_user(&paths.dir)?;
     let json = serde_json::to_string_pretty(&spec)?;
     fs::write(paths.spec(), json).with_context(|| format!("write {}", paths.spec().display()))?;
     Ok(())

@@ -2,6 +2,8 @@ use crate::spec::VmSpec;
 use anyhow::Result;
 
 pub mod runtime_guest;
+#[cfg(any(windows, test))]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(target_os = "linux")]
 pub mod kvm;
@@ -9,6 +11,13 @@ pub mod kvm;
 pub mod vz;
 #[cfg(target_os = "windows")]
 pub mod wsl;
+
+/// Platform-neutral gate for the WSL clock-sync worker, kept here so the
+/// no-revival invariant is tested on every host.
+#[cfg(any(windows, test))]
+pub(super) fn clock_sync_should_tick(stop: &AtomicBool) -> bool {
+    !stop.load(Ordering::Acquire)
+}
 
 /// The seam between everything platform-neutral (CLI, state store,
 /// image cache, guest provisioning) and the hypervisor underneath.
@@ -70,5 +79,23 @@ pub fn platform_backend() -> Box<dyn VmBackend> {
     #[cfg(target_os = "windows")]
     {
         Box::new(wsl::WslBackend)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clock_sync_never_invokes_after_stop_is_set() {
+        let stop = AtomicBool::new(false);
+        let mut invocations = 0;
+        if clock_sync_should_tick(&stop) {
+            invocations += 1;
+        }
+        stop.store(true, Ordering::Release);
+        if clock_sync_should_tick(&stop) {
+            invocations += 1;
+        }
+        assert_eq!(invocations, 1);
     }
 }
