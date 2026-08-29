@@ -32,6 +32,7 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 //   daemon-down  docker installed but VM stopped, auto-startable (colima)
 //   daemon-manual docker installed, VM stopped, NOT auto-startable
 //   missing        kubectl not installed, docker guidance-only
+//   wsl-mirrored   WSL installed with unsupported mirrored networking
 //   first-run     no stored app mode; show the audience choice
 //   user-mode     persisted User mode with local + cloud workspaces
 //   user-mode-no-vm persisted User mode before the local sandbox exists
@@ -61,6 +62,7 @@ type Scenario =
   | 'daemon-down'
   | 'daemon-manual'
   | 'missing'
+  | 'wsl-mirrored'
   | 'first-run'
   | 'user-mode'
   | 'developer-mode'
@@ -133,6 +135,7 @@ function scenario(): Scenario {
     s === 'daemon-down' ||
     s === 'daemon-manual' ||
     s === 'missing' ||
+    s === 'wsl-mirrored' ||
     s === 'first-run' ||
     s === 'user-mode' ||
     s === 'developer-mode' ||
@@ -426,7 +429,7 @@ function preflight(): LocalPreflightCheck[] {
             : undefined,
   };
   const installed = s !== 'missing';
-  return [
+  const checks: LocalPreflightCheck[] = [
     docker,
     {
       tool: 'kubectl',
@@ -438,6 +441,24 @@ function preflight(): LocalPreflightCheck[] {
       error: installed ? undefined : 'not on PATH',
     },
   ];
+  if (mockPlatform() === 'windows') {
+    checks.unshift({
+      tool: 'wsl',
+      installed: s !== 'wsl-mirrored',
+      version: s !== 'wsl-mirrored' ? 'WSL2 ready' : undefined,
+      purpose:
+        s === 'wsl-mirrored'
+          ? 'Windows Subsystem for Linux 2 — mirrored networking is unsupported by the Dev Machine.'
+          : 'Windows Subsystem for Linux 2 — runs the Dev Machine (the managed VM).',
+      installHint:
+        s === 'wsl-mirrored'
+          ? 'Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` (or remove the setting), run `wsl --shutdown`, then retry.'
+          : 'Open PowerShell as Administrator, run `wsl --install`, then reboot.',
+      autoInstallable: false,
+      error: s === 'wsl-mirrored' ? 'WSL mirrored networking is enabled.' : undefined,
+    });
+  }
+  return checks;
 }
 
 function mockInstalledApp(

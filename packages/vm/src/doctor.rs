@@ -148,6 +148,13 @@ pub fn run_vm_checks(name: &str) -> Report {
         )),
     }
 
+    // WSL reaches the host-bound egress proxy through vEthernet (WSL).
+    // Windows Defender Firewall can block that inbound hop even though
+    // the proxy is correctly listening on 0.0.0.0, so probe from the
+    // distro and name the firewall boundary explicitly.
+    #[cfg(windows)]
+    report.findings.push(wsl_host_proxy_finding(name, spec.as_ref().unwrap().egress_port));
+
     // --- guest api-server reachability ------------------------------
     let agent_only = spec.as_ref().is_some_and(|s| s.agent_only);
     if agent_only {
@@ -258,6 +265,53 @@ fn skew_finding(skew: i64) -> Finding {
     }
 }
 
+#[cfg(windows)]
+fn wsl_host_proxy_finding(name: &str, port: u16) -> Finding {
+    let gateway = std::fs::read_to_string(crate::spec::VmPaths::for_name(name).gateway_ip())
+        .ok()
+        .and_then(|raw| raw.trim().parse::<std::net::Ipv4Addr>().ok());
+    let Some(gateway) = gateway else {
+        return proxy_reachability_finding(
+            port,
+            "the WSL gateway has not been recorded yet".to_string(),
+            false,
+        );
+    };
+    let command = format!("nc -z -w 3 {gateway} {port}");
+    match run_wrapped(name, &command) {
+        Ok(_) => proxy_reachability_finding(port, format!("{gateway}:{port} answered from WSL"), true),
+        Err(error) => proxy_reachability_finding(
+            port,
+            format!("could not reach {gateway}:{port} from WSL: {error}"),
+            false,
+        ),
+    }
+}
+
+/// Pure rendering seam for the Windows-only dial, kept host-independent so
+/// the actionable Defender Firewall text is covered on every CI platform.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn proxy_reachability_finding(port: u16, detail: String, reachable: bool) -> Finding {
+    if reachable {
+        Finding::new(
+            "engine:wsl-host-proxy",
+            "WSL access to host egress proxy",
+            Severity::Ok,
+            detail,
+        )
+    } else {
+        Finding::new(
+            "engine:wsl-host-proxy",
+            "WSL access to host egress proxy",
+            Severity::Fail,
+            detail,
+        )
+        .remedy(format!(
+            "allow inbound TCP port {port} for appliance-vm.exe on `vEthernet (WSL)` in Windows Defender Firewall, then retry"
+        ))
+    }
+}
+
 // --- support-bundle log tail -------------------------------------------
 
 /// Tail the guest api-server log for a support bundle, scrubbed of
@@ -355,6 +409,20 @@ mod tests {
             assert_eq!(f.severity, Severity::Fail, "skew {skew}");
             assert!(f.detail.as_deref().unwrap_or("").contains("401"));
         }
+    }
+
+    #[test]
+    fn wsl_proxy_failure_names_the_defender_firewall_boundary() {
+        let finding = proxy_reachability_finding(
+            5053,
+            "could not reach 172.25.64.1:5053 from WSL".to_string(),
+            false,
+        );
+        assert_eq!(finding.severity, Severity::Fail);
+        let remediation = finding.remediation.unwrap();
+        assert!(remediation.contains("Windows Defender Firewall"));
+        assert!(remediation.contains("vEthernet (WSL)"));
+        assert!(remediation.contains("5053"));
     }
 
     #[test]

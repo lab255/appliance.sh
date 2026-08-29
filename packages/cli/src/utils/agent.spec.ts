@@ -393,11 +393,25 @@ describe('agent credential file permissions', () => {
       expect(fs.existsSync(file)).toBe(true);
 
       if (process.platform === 'win32') {
+        execFileSync('icacls', [file, '/grant', '*S-1-1-0:(W)'], { windowsHide: true });
+        restrictWindowsAcl(file);
         const listing = execFileSync('icacls', [file], { encoding: 'utf8', windowsHide: true });
-        const aclLines = listing.split(/\r?\n/).filter((line) => line.includes(':('));
         const principal = execFileSync('whoami', [], { encoding: 'utf8', windowsHide: true }).trim();
-        expect(aclLines, listing).toHaveLength(1);
-        expect(aclLines[0]!.toLocaleLowerCase()).toContain(principal.toLocaleLowerCase());
+        const filePrefix = file.toLocaleLowerCase();
+        const actual = new Set(
+          listing.split(/\r?\n/).flatMap((line) => {
+            const marker = line.lastIndexOf(':(');
+            if (marker < 0) return [];
+            let aclPrincipal = line.slice(0, marker).trimStart();
+            if (aclPrincipal.toLocaleLowerCase().startsWith(filePrefix)) {
+              aclPrincipal = aclPrincipal.slice(file.length).trim();
+            }
+            return aclPrincipal ? [aclPrincipal.toLocaleLowerCase()] : [];
+          })
+        );
+        expect(actual, listing).toEqual(
+          new Set([principal.toLocaleLowerCase(), 'nt authority\\system', 'builtin\\administrators'])
+        );
       } else {
         expect(fs.statSync(file).mode & 0o777).toBe(0o600);
       }

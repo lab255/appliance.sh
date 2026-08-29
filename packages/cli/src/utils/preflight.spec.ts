@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
 import {
   REQUIRED_PORTS,
   checkDiskSpace,
@@ -7,7 +8,10 @@ import {
   checkWsl,
   classifyWslFailure,
   decodeWindowsToolOutput,
+  decodeWslConfig,
   runFixes,
+  wslConfigUsesMirroredNetworking,
+  WSL_MIRRORED_REMEDIATION,
 } from './preflight.js';
 import type { PreflightReport } from './preflight.js';
 
@@ -107,6 +111,22 @@ describe('classifyWslFailure', () => {
   it('falls back to pointing at wsl --status for unrecognized failures', () => {
     const { remediation } = classifyWslFailure('some novel breakage');
     expect(remediation).toMatch(/wsl --status/);
+  });
+});
+
+describe('wslConfigUsesMirroredNetworking', () => {
+  it('detects mirrored mode from the shared UTF-8 and UTF-16LE fixtures', () => {
+    for (const name of ['wslconfig-mirrored.ini', 'wslconfig-mirrored-utf16le.ini']) {
+      const bytes = fs.readFileSync(new URL(`../../../vm/tests/fixtures/${name}`, import.meta.url));
+      expect(wslConfigUsesMirroredNetworking(decodeWslConfig(bytes))).toBe(true);
+    }
+    expect(WSL_MIRRORED_REMEDIATION).toContain('networkingMode=NAT');
+    expect(WSL_MIRRORED_REMEDIATION).toContain('wsl --shutdown');
+  });
+
+  it('ignores comments and lets the final [wsl2] value win', () => {
+    expect(wslConfigUsesMirroredNetworking('[wsl2]\n# networkingMode=mirrored\nnetworkingMode=NAT')).toBe(false);
+    expect(wslConfigUsesMirroredNetworking('[wsl2]\nnetworkingMode=mirrored\nnetworkingMode = NAT')).toBe(false);
   });
 });
 
