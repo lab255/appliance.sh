@@ -20,7 +20,7 @@ import {
   writeEntitlementAnchor,
   type DeviceKeyOptions,
   type EntitlementAnchor,
-} from './keychain.js';
+} from './credential-store.js';
 import { runtimeRoot } from './runtime-registry.js';
 
 export const ENTITLEMENTS_SCHEMA = 'appliance.entitlements/v1' as const;

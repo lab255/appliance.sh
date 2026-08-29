@@ -21,7 +21,7 @@ import {
   stampEntitlementUsage,
   suggestedRevocations,
 } from './entitlements';
-import { entitlementAnchorFile } from './keychain';
+import { entitlementAnchorFile } from './credential-store';
 
 const roots: string[] = [];
 

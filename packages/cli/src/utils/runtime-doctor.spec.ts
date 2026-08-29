@@ -422,48 +422,61 @@ describe('classifyKeychainCoherence', () => {
   const profile = (keyId: string, secret: string) => ({ keyId, secret });
 
   it('returns null when the check does not apply', () => {
-    expect(classifyKeychainCoherence('prod', profile('k1', 's'), { kind: 'not-applicable' })).toBeNull();
+    expect(classifyKeychainCoherence('prod', profile('k1', 's'), { state: 'not-applicable' })).toBeNull();
   });
 
   it('passes a matching Keychain entry with an empty file secret (the macOS policy)', () => {
-    const f = classifyKeychainCoherence('c1', profile('k1', ''), { kind: 'found', keyId: 'k1' });
+    const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'migrated', keyId: 'k1' });
     expect(f?.severity).toBe('ok');
   });
 
   it('flags a desktop-managed profile with a cleartext secret on disk as a policy violation', () => {
-    const f = classifyKeychainCoherence('c1', profile('k1', 's3cret'), { kind: 'found', keyId: 'k1' });
+    const f = classifyKeychainCoherence('c1', profile('k1', 's3cret'), { state: 'migrated', keyId: 'k1' });
     expect(f?.severity).toBe('warn');
     expect(f?.detail).toContain('cleartext');
   });
 
   it('offers the Keychain write-back when the FILE is fresher (rotate that missed the Keychain)', () => {
-    const f = classifyKeychainCoherence('c1', profile('k2', 's3cret'), { kind: 'found', keyId: 'k1' });
+    const f = classifyKeychainCoherence('c1', profile('k2', 's3cret'), { state: 'migrated', keyId: 'k1' });
     expect(f?.severity).toBe('warn');
     expect(f?.fix).toEqual({ kind: 'keychain-writeback' });
   });
 
   it('treats stale file metadata (Keychain fresher, no file secret) as self-healing', () => {
-    const f = classifyKeychainCoherence('c1', profile('k1', ''), { kind: 'found', keyId: 'k2' });
+    const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'migrated', keyId: 'k2' });
     expect(f?.severity).toBe('warn');
     expect(f?.fix).toBeUndefined();
   });
 
   it('fails hard when neither the Keychain nor the file holds a secret', () => {
-    const f = classifyKeychainCoherence('c1', profile('k1', ''), { kind: 'missing' });
+    const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'missing' });
     expect(f?.severity).toBe('fail');
     expect(f?.detail).toContain('no usable secret');
   });
 
   it('offers write-back when the Keychain entry is missing but the file has the secret', () => {
-    const f = classifyKeychainCoherence('c1', profile('k1', 's3cret'), { kind: 'missing' });
+    const f = classifyKeychainCoherence('c1', profile('k1', 's3cret'), { state: 'missing' });
     expect(f?.severity).toBe('warn');
     expect(f?.fix).toEqual({ kind: 'keychain-writeback' });
   });
 
   it('degrades to informational when macOS denies the Keychain read', () => {
-    const f = classifyKeychainCoherence('c1', profile('k1', ''), { kind: 'unreadable' });
+    const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'denied' });
     expect(f?.severity).toBe('info');
     expect(f?.detail).toContain('denied');
+  });
+
+  it('fails closed on malformed and conflict states with re-login guidance', () => {
+    const malformed = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'malformed' });
+    expect(malformed?.severity).toBe('fail');
+    expect(malformed?.detail).toContain('malformed');
+    const conflict = classifyKeychainCoherence('c1', profile('file-key', 'file-secret'), {
+      state: 'conflict',
+      keyId: 'store-key',
+    });
+    expect(conflict?.severity).toBe('fail');
+    expect(conflict?.detail).toContain('conflict');
+    expect(conflict?.remediation).toContain('Re-login');
   });
 });
 

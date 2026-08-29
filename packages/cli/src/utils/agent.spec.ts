@@ -377,18 +377,11 @@ describe('agent credential file permissions', () => {
   it('restricts writeAgentKey output to the current user and leaves POSIX chmod semantics unchanged', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-agent-key-acl-'));
     try {
-      if (process.platform === 'darwin') {
-        // writeAgentKey uses Keychain on macOS. Exercise the shared helper's
-        // POSIX no-op directly so this cross-platform test is never skipped.
-        const file = path.join(home, 'mode-check');
-        fs.writeFileSync(file, 'not-a-secret', { mode: 0o640 });
-        restrictWindowsAcl(file);
-        expect(fs.statSync(file).mode & 0o777).toBe(0o640);
-        return;
-      }
-
       homeState.home = home;
-      writeAgentKey('acl-test', 'test-secret', 'api-key');
+      writeAgentKey('acl-test', 'test-secret', 'api-key', {
+        home: path.join(home, '.appliance'),
+        forceFile: true,
+      });
       const file = path.join(home, '.appliance', 'agent', 'acl-test-cred');
       expect(fs.existsSync(file)).toBe(true);
 

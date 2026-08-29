@@ -12,7 +12,7 @@ import {
   resolveProfile,
   upsertProfile,
 } from './profile-store.js';
-import { resolveProfileSecret } from './keychain.js';
+import { resolveProfileSecret } from './credential-store.js';
 
 export interface Credentials {
   apiUrl: string;
@@ -43,10 +43,9 @@ export function getActiveProfileOverride(): string | undefined {
  * APPLIANCE_API_URL still overrides apiUrl on the resolved profile so
  * pre-existing scripts that pin the URL via env keep working.
  *
- * The SECRET is resolved Keychain-first on macOS for desktop-managed
- * clusters (the canonical store there), falling back to the profiles.json
- * copy; on every other platform it comes from profiles.json. See
- * ./keychain.ts and docs/control-plane.md §5.
+ * The secret comes from the central typed store: Credential Manager for every
+ * Windows profile, Keychain for macOS desktop-managed profiles, and the
+ * owner-only profile file elsewhere.
  */
 export function loadCredentials(): Credentials | null {
   const file = readProfiles();

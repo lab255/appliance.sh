@@ -2,6 +2,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
+import {
+  CREDENTIAL_STORE_SCHEMA,
+  deleteProfileCredential,
+  migrateWindowsCredentialFiles,
+  persistProfileCredential,
+} from './credential-store.js';
 
 export { restrictWindowsAcl } from './fs-acl.js';
 
@@ -50,6 +56,11 @@ export interface ProfilesFile {
   version: 1;
   activeProfile: string | null;
   profiles: Record<string, Profile>;
+  /** Non-secret migration hint only. Store/file reconciliation never trusts it. */
+  credentialStore?: {
+    schema: typeof CREDENTIAL_STORE_SCHEMA;
+    profiles?: Record<string, 'migrated' | 'conflict' | 'missing'>;
+  };
 }
 
 interface LegacyCredentials {
@@ -171,7 +182,14 @@ function migrateFromLegacy(legacy: LegacyCredentials): ProfilesFile {
  * otherwise falls back to the legacy credentials.json (folded in as the
  * "default" profile). Returns an empty store when neither file exists.
  */
-export function readProfiles(): ProfilesFile {
+export function readProfiles(options: { migrateCredentials?: boolean } = {}): ProfilesFile {
+  if (options.migrateCredentials !== false) {
+    migrateWindowsCredentialFiles({
+      home: APPLIANCE_DIR,
+      profilesFile: PROFILES_PATH,
+      legacyCredentialsFile: LEGACY_PATH,
+    });
+  }
   const parsed = readJson<ProfilesFile>(PROFILES_PATH);
   if (parsed && parsed.profiles) {
     return parsed;
@@ -250,19 +268,26 @@ export function resolveProfile(file: ProfilesFile, opts: ResolveOptions = {}): R
  * Upsert a profile and (optionally) make it active. The legacy credentials.json
  * is updated if the saved profile is now active.
  */
-export function upsertProfile(name: string, profile: Profile, opts: { makeActive?: boolean } = {}): void {
-  withProfilesLock(() => {
+export function upsertProfile(
+  name: string,
+  profile: Profile,
+  opts: { makeActive?: boolean } = {}
+): { credentialWriteFailed: boolean } {
+  return withProfilesLock(() => {
     const file = readProfiles();
     const existing = file.profiles[name];
-    file.profiles[name] = {
+    const merged: Profile = {
       ...existing,
       ...profile,
       createdAt: existing?.createdAt ?? profile.createdAt ?? new Date().toISOString(),
     };
+    const persisted = persistProfileCredential(name, merged);
+    file.profiles[name] = persisted.profile;
     if (opts.makeActive || file.activeProfile === null) {
       file.activeProfile = name;
     }
     writeProfiles(file);
+    return { credentialWriteFailed: persisted.credentialWriteFailed };
   });
 }
 
@@ -273,7 +298,9 @@ export function upsertProfile(name: string, profile: Profile, opts: { makeActive
 export function removeProfile(name: string): boolean {
   return withProfilesLock(() => {
     const file = readProfiles();
-    if (!file.profiles[name]) return false;
+    const profile = file.profiles[name];
+    if (!profile) return false;
+    deleteProfileCredential(name, profile);
     delete file.profiles[name];
     if (file.activeProfile === name) {
       const next = Object.keys(file.profiles)[0] ?? null;

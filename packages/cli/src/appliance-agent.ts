@@ -270,7 +270,7 @@ program
 program
   .command('login')
   .description(
-    'store an agent credential host-side, per provider (Keychain on macOS; 0600 file elsewhere). ' +
+    'store an agent credential host-side, per provider (Keychain on macOS, Credential Manager on Windows, owner-only file on Linux). ' +
       'claude-code: API key OR "Sign in with Claude" (OAuth); copilot: fine-grained GitHub PAT; ' +
       'codex: OpenAI API key. Never enters the VM.'
   )
