@@ -19,7 +19,7 @@ import {
   unknownPublisherWarningDue,
   uninstallInstalledApp,
 } from './appliance-runtime-install';
-import { EntitlementGrantRequiredError } from './appliance-runtime-entitlements';
+import { EntitlementGrantRequiredError, wslCooperativeGrantWarning } from './appliance-runtime-entitlements';
 import { describeRuntimeApp } from './appliance-runtime-open';
 import { readDevSigningKey } from './utils/bundle-sign';
 import { latestEntitlement, readEntitlementStore } from './utils/entitlements';
@@ -33,6 +33,27 @@ import { tinyOciTar } from './utils/bundle-oci-fixture';
 import { writeBundle } from './utils/bundle-write';
 
 const roots: string[] = [];
+
+it('shows the WSL bypass warning only for cooperative egress grants', () => {
+  const details = {
+    appId: 'journal',
+    version: '1.0.0',
+    license: 'MIT',
+    upgrade: false,
+    grants: [
+      {
+        id: 'egress:api.example.test',
+        control: 'egress-host' as const,
+        value: { host: 'api.example.test', ports: [443] },
+        approvedAt: '2026-08-29T00:00:00.000Z',
+      },
+    ],
+    requiredGrantIds: ['egress:api.example.test'],
+  };
+  expect(wslCooperativeGrantWarning(details, 'win32', 'cooperative')).toContain('WSL cooperative mode is bypassable');
+  expect(wslCooperativeGrantWarning(details, 'win32', 'strict')).toBeNull();
+  expect(wslCooperativeGrantWarning(details, 'darwin', 'cooperative')).toBeNull();
+});
 
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });

@@ -16,6 +16,7 @@ import {
 } from './utils/runtime-reconcile.js';
 import { resolveVmBinary } from './utils/microvm-up.js';
 import { openExternalUrl } from './utils/open-external-url.js';
+import { decideRuntimeWslEgress, runtimeEgressCapability } from './utils/runtime-wsl-egress.js';
 
 export interface RuntimeOpenDescriptor {
   appId: string;
@@ -190,6 +191,13 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
       `'${descriptor.name}' has no web UI. View its logs with: appliance runtime logs ${descriptor.appId}`
     );
   }
+  const wslDecision = decideRuntimeWslEgress(
+    descriptor.appId,
+    runtimeEgressCapability(),
+    descriptor.egressHostCount > 0
+  );
+  if (wslDecision.action === 'refuse') throw new Error(wslDecision.message);
+  if (wslDecision.warning) console.error(chalk.yellow(wslDecision.warning));
   const prepared = await reconcileAndStartRuntimeOpen(
     selector,
     target,

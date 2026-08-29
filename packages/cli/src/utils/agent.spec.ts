@@ -24,6 +24,7 @@ import {
   OPENAI_PLACEHOLDER_KEY,
   adapterForType,
   agentResultPaths,
+  assertAgentBrokerBackendSupported,
   classifyAutonomousResult,
   claudeCodeAdapter,
   codexAdapter,
@@ -321,6 +322,18 @@ describe('printKeyHelperCommand', () => {
 });
 
 describe('resolveAuthMode (per stored kind)', () => {
+  it('disables brokered credential injection on WSL v1 before writing a rule', () => {
+    expect(() => assertAgentBrokerBackendSupported('wsl')).toThrow(
+      'Brokered credential injection is disabled on WSL v1: exact-lease re-attribution cannot survive SNAT.'
+    );
+    expect(() => assertAgentBrokerBackendSupported('vz')).not.toThrow();
+    runVmMock.mockReset();
+    expect(() => configureBroker('wsl-test', claudeCodeAdapter, apiKeyMode, 'wsl')).toThrow(
+      'exact-lease re-attribution cannot survive SNAT'
+    );
+    expect(runVmMock).not.toHaveBeenCalled();
+  });
+
   it('selects the api-key mode for an api-key credential', () => {
     const m = resolveAuthMode(claudeCodeAdapter, 'api-key');
     expect(m.header).toBe('x-api-key');
