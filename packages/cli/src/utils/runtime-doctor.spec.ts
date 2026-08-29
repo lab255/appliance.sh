@@ -467,6 +467,13 @@ describe('classifyKeychainCoherence', () => {
     expect(f?.detail).toContain('denied');
   });
 
+  it('reports a legacy Keychain account name without migrating it from doctor', () => {
+    const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'legacy-name', keyId: 'k1' });
+    expect(f?.severity).toBe('warn');
+    expect(f?.detail).toContain('legacy-name');
+    expect(f?.remediation).toContain('authenticated command');
+  });
+
   it('fails with reinstall guidance when the packaged Windows helper is missing', () => {
     const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'helper-missing' });
     expect(f?.severity).toBe('fail');

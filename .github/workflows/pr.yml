@@ -38,8 +38,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Test credential store Rust (Linux file backend)
+        run: cargo test --manifest-path packages/credential-store/Cargo.toml
       # The TypeScript half of the `pnpm verify` green bar. The Rust half
       # runs on macOS in verify-rust below, where packages/vm is developed
       # and the Virtualization.framework backend compiles.

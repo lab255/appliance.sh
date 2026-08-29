@@ -544,6 +544,15 @@ export function classifyKeychainCoherence(
         'Re-login to choose the canonical credential; both copies were preserved and neither was overwritten.',
     };
   }
+  if (probe.state === 'legacy-name') {
+    return {
+      id,
+      title,
+      severity: 'warn',
+      detail: `legacy-name: the Keychain credential for key ${probe.keyId} still uses the unencoded profile name`,
+      remediation: 'Run an authenticated command to migrate it to the canonical encoded Keychain account.',
+    };
+  }
   if (probe.state === 'missing') {
     if (fileSecret) {
       return {

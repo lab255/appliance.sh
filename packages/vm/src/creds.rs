@@ -1047,6 +1047,26 @@ mod tests {
         std::fs::remove_dir_all(raw_dir).unwrap();
     }
 
+    #[test]
+    fn broker_files_keep_a_leading_dot_legacy_vm_directory_name() {
+        let name = ".hidden cluster";
+        let raw_dir = credential_store_root().join(name);
+        let encoded_dir = credential_store_root().join(encode_identifier(name));
+        assert_ne!(raw_dir, encoded_dir);
+        let _ = std::fs::remove_dir_all(&raw_dir);
+        let _ = std::fs::remove_dir_all(&encoded_dir);
+        let cfg = integrity_test_config();
+
+        save_config(name, &cfg).unwrap();
+        assert!(raw_dir
+            .join(VmBrokerFile::Credentials.file_name())
+            .is_file());
+        assert!(!encoded_dir.exists());
+        assert_eq!(load_config(name).rules.len(), 1);
+
+        std::fs::remove_dir_all(raw_dir).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn helper_overrides_stored_secret() {

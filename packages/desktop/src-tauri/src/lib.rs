@@ -1255,6 +1255,10 @@ fn vm_profile_uses_os_store(managed: Option<&str>) -> bool {
     cfg!(windows) || (cfg!(target_os = "macos") && managed == Some("desktop"))
 }
 
+fn effective_vm_profile_managed(managed: Option<String>) -> String {
+    managed.unwrap_or_else(|| "desktop".to_string())
+}
+
 /// Reflect the current desktop-side state into the shared file. Reads
 /// each cluster's secret out of the OS store (for key_id metadata, and the
 /// secret itself on Linux); clusters without an OS-store
@@ -4648,7 +4652,8 @@ fn persist_vm_profile_entry(
     };
     for id in ids {
         let prev = file.profiles.get(id).cloned().unwrap_or_default();
-        let uses_os_store = vm_profile_uses_os_store(prev.managed.as_deref());
+        let managed = effective_vm_profile_managed(prev.managed.clone());
+        let uses_os_store = vm_profile_uses_os_store(Some(&managed));
         if uses_os_store {
             write_api_key(&cluster_keychain_account(id), key)?;
         }
@@ -4665,7 +4670,7 @@ fn persist_vm_profile_entry(
                 cloud_formation_stack_name: prev.cloud_formation_stack_name,
                 aws_account_id: prev.aws_account_id,
                 aws_region: prev.aws_region,
-                managed: prev.managed.or_else(|| Some("desktop".to_string())),
+                managed: Some(managed),
                 name: prev.name,
             },
         );
@@ -7857,7 +7862,7 @@ mod tests {
     }
 
     #[test]
-    fn vm_profiles_only_use_the_platform_store_when_the_cli_can_read_it() {
+    fn credential_vm_profiles_only_use_the_platform_store_when_the_cli_can_read_it() {
         assert_eq!(
             vm_profile_uses_os_store(Some("cli")),
             cfg!(windows),
@@ -7867,6 +7872,30 @@ mod tests {
             vm_profile_uses_os_store(Some("desktop")),
             cfg!(any(windows, target_os = "macos"))
         );
+    }
+
+    #[test]
+    fn credential_profile_store_uses_the_effective_managed_value_for_first_mint() {
+        let fresh_managed = effective_vm_profile_managed(None);
+        assert_eq!(fresh_managed, "desktop");
+        let fresh_uses_os_store = vm_profile_uses_os_store(Some(&fresh_managed));
+        assert_eq!(
+            fresh_uses_os_store,
+            cfg!(any(windows, target_os = "macos")),
+            "a fresh desktop-stamped profile uses the platform store where the CLI can read it"
+        );
+        assert_eq!(
+            shared_secret_for_platform("s3cr3t".to_string(), fresh_uses_os_store),
+            if cfg!(any(windows, target_os = "macos")) {
+                ""
+            } else {
+                "s3cr3t"
+            }
+        );
+
+        let cli_managed = effective_vm_profile_managed(Some("cli".to_string()));
+        assert_eq!(cli_managed, "cli");
+        assert_eq!(vm_profile_uses_os_store(Some(&cli_managed)), cfg!(windows));
     }
 
     #[test]

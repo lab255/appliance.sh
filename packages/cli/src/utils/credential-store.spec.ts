@@ -336,6 +336,29 @@ describe('macOS legacy account compatibility', () => {
     expect(backend.values.has('cluster:dev profile+')).toBe(false);
   });
 
+  it('keeps a leading-dot legacy account distinct and migrates it only during a credential read', () => {
+    const backend = new MemoryBackend();
+    const name = '.hidden cluster';
+    const value = Buffer.from('{"id":"key-hidden","secret":"secret-hidden"}');
+    backend.values.set('cluster:.hidden cluster', value);
+
+    expect(
+      __testing.probeProfileCredentialWithBackend(
+        name,
+        { managed: 'desktop', keyId: 'key-hidden', secret: '' },
+        'darwin',
+        backend
+      )
+    ).toEqual({ state: 'legacy-name', keyId: 'key-hidden' });
+    expect(backend.writes).toHaveLength(0);
+    expect(backend.values.get('cluster:.hidden cluster')).toEqual(value);
+    expect(backend.values.has('cluster:%2Ehidden%20cluster')).toBe(false);
+
+    expect(__testing.readClusterCredential(name, 'darwin', backend)).toEqual(value);
+    expect(backend.values.get('cluster:%2Ehidden%20cluster')).toEqual(value);
+    expect(backend.values.has('cluster:.hidden cluster')).toBe(false);
+  });
+
   it('does not overwrite an existing canonical account during legacy cleanup', () => {
     const backend = new MemoryBackend();
     const legacy = Buffer.from('{"id":"old","secret":"old-secret"}');

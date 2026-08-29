@@ -486,6 +486,7 @@ export type ProfileCredentialProbe =
   | { state: 'denied' }
   | { state: 'helper-missing' }
   | { state: 'malformed' }
+  | { state: 'legacy-name'; keyId: string }
   | { state: 'migrated'; keyId: string }
   | { state: 'conflict'; keyId: string };
 
@@ -512,10 +513,15 @@ function probeProfileCredentialWithBackend(
   backend: CredentialBackend
 ): ProfileCredentialProbe {
   try {
-    const raw = readClusterCredential(name, platform, backend);
+    const identifier = encodeCredentialIdentifier(name);
+    const canonical = backend.get({ kind: 'cluster', identifier });
+    const legacy =
+      platform === 'darwin' && identifier !== name ? backend.get({ kind: 'cluster', identifier: name }) : null;
+    const raw = canonical ?? legacy;
     if (!raw) return { state: 'missing' };
     const key = parseKeychainPayload(raw);
     if (!key) return { state: 'malformed' };
+    if (!canonical && legacy) return { state: 'legacy-name', keyId: key.keyId };
     if (platform === 'win32' && profile.secret) {
       const legacy = encodeClusterCredential({ keyId: profile.keyId, secret: profile.secret });
       if (!legacy.equals(raw)) return { state: 'conflict', keyId: key.keyId };
