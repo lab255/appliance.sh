@@ -61,7 +61,9 @@ describe('WSL egress panel', () => {
     const cooperative = renderWsl('cooperative');
     expect(cooperative).toContain('Cooperative proxy — bypassable');
     expect(cooperative).toContain('Runtime apps can ignore HTTP(S)_PROXY');
-    expect(cooperative).toContain('Grants are unioned into a host-only allowlist across apps');
+    expect(cooperative).toContain('Proxy-aware Runtime traffic keeps each app');
+    expect(cooperative).toContain('granted hosts and TCP ports separate');
+    expect(cooperative).not.toContain('Grants are unioned');
     expect(cooperative).toContain('direct UDP 53 is dropped');
     expect(cooperative).not.toContain('host-enforced');
   });
@@ -84,5 +86,25 @@ describe('WSL egress panel', () => {
     });
     expect(wsl).toContain('cooperative (in-guest proxy)');
     expect(wsl).not.toContain('enforced (netstack)');
+  });
+
+  it('renders credential-selected app host and port rows', () => {
+    const html = renderWsl('cooperative', {
+      policy: {
+        enforcement: { backend: 'wsl', bypassable: true, scope: ['http', 'https', 'per-app'] },
+        apps: [
+          {
+            app: 'journal',
+            principal: 'journal',
+            hosts: [{ host: 'api.example.com', ports: [443, 8443] }],
+            mitm: true,
+          },
+        ],
+      },
+    });
+    expect(html).toContain('Per-app Runtime access');
+    expect(html).toContain('journal');
+    expect(html).toContain('api.example.com · tcp/443,8443');
+    expect(html).toContain('Secure inspection on');
   });
 });

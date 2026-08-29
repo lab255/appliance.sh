@@ -636,6 +636,14 @@ export interface EgressPolicy {
   };
   /** Persisted Runtime posture on WSL. */
   wslMode?: 'strict' | 'cooperative';
+  /** Credential-selected policies reported for a WSL Runtime pool. */
+  apps?: Array<{
+    app: string;
+    principal: string;
+    service?: string;
+    hosts: Array<{ host: string; ports: number[] }>;
+    mitm: boolean;
+  }>;
   /** Path to the VM's egress CA cert, when interception is on. */
   caPath?: string;
   /** True when the host netstack is the ENFORCED egress boundary

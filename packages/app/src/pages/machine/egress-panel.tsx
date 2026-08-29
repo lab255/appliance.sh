@@ -194,7 +194,7 @@ export function EgressPanel({
                   ? 'This engine did not report its WSL enforcement capability. Treat egress as cooperative and bypassable until appliance-vm is updated.'
                   : wslMode === 'strict'
                     ? 'Runtime apps that request egress grants are refused. Apps without egress grants may run, and their outbound traffic is dropped.'
-                    : 'Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through proxy CONNECT by hostname; direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across apps, dropping per-grant ports.'}
+                    : "Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through proxy CONNECT by hostname; direct UDP 53 is dropped. Proxy-aware Runtime traffic keeps each app's granted hosts and TCP ports separate."}
               </Banner>
             ) : (
               <Banner tone={enforced ? 'info' : 'warning'} title={enforced ? 'Protection enforced' : 'Monitoring only'}>
@@ -243,6 +243,36 @@ export function EgressPanel({
               </div>
             </details>
           </SectionCard>
+
+          {wsl && policy.apps ? (
+            <SectionCard title="Per-app Runtime access">
+              {policy.apps.length === 0 ? (
+                <p className="text-xs text-[var(--color-muted-foreground)]">No active app proxy policies.</p>
+              ) : (
+                <div className="space-y-3">
+                  {policy.apps.map((app) => (
+                    <div key={app.principal} className="rounded-md border border-[var(--color-border)] p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium">
+                        <span>{app.app}</span>
+                        <StatusPill tone="neutral" label={`Secure inspection ${app.mitm ? 'on' : 'off'}`} />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {app.hosts.length === 0 ? (
+                          <span className="text-xs text-[var(--color-muted-foreground)]">No granted hosts</span>
+                        ) : (
+                          app.hosts.map((host) => (
+                            <Tag key={`${app.principal}:${host.host}`}>
+                              {host.host} · tcp/{host.ports.join(',')}
+                            </Tag>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          ) : null}
 
           <SectionCard title="Rules">
             <div className="space-y-3">
