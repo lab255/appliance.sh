@@ -43,6 +43,9 @@ packages/vm/Cargo.toml` have completed.
   20000–29999 range may prompt for Windows Defender Firewall access; allow the
   private-network bind, record the prompt, and exclude prompt handling from
   Runtime startup timing.
+- The timed imports below expect the Appliance guest image to be cached. If
+  this owner observes its first-ever image download, note its seconds
+  separately and exclude them from R24/R31.
 
 Open Git Bash before starting the checks and keep this timer in that session:
 
@@ -170,7 +173,8 @@ $GlobalPnpmRoot = (& pnpm root --global).Trim()
 $StandaloneDir = Join-Path $GlobalPnpmRoot '@appliance.sh\cli\bin'
 $StandaloneCli = Join-Path $StandaloneDir 'appliance-bin.exe'
 $StandaloneHelper = Join-Path $StandaloneDir 'appliance-credhelper.exe'
-$freshVersion = & powershell.exe -NoProfile -Command "& '$DesktopCli' --version"
+$freshVersion = & powershell.exe -NoProfile -Command "appliance --version"
+if ($LASTEXITCODE -ne 0 -or -not $freshVersion) { throw 'fresh shell did not resolve appliance from PATH' }
 "install_seconds=$($install.TotalSeconds) fresh_version=$freshVersion" # R09
 "standalone_cli=$StandaloneCli standalone_helper=$StandaloneHelper"
 "desktop_cli=$DesktopCli desktop_helper=$DesktopHelper"
@@ -368,7 +372,7 @@ Record the registry value (0/1) and behavior beyond 260 characters; do not
 infer that the residual is fixed. Attach redacted transcripts, hashes, doctor
 outputs, ACL principals, installed-file list, and broker files to the evidence.
 Any failed credential/Desktop step is a release blocker: do not weaken the
-workflow digest guard or publish gate to work around it. R71 is complete only
+workflow digest guard or publish gate to work around it. R72 is complete only
 when both this evidence and the Runtime evidence are retained.
 
 ## Dev machine path
@@ -383,24 +387,24 @@ wsl.exe --unregister appliance-vm-appliance 2>/dev/null || true
 time "$AP" vm dev up 2> >(tee "$OUT/dev-vm-up.txt" >&2) # R24
 wsl.exe -d appliance-vm-appliance -u root -- sh -c 'cat /etc/wsl.conf; test ! -e /mnt/c && ! grep -qE "[[:space:]]/mnt/[a-z][[:space:]]" /proc/mounts'
 DEV_DRIVE_RC=$?; echo "dev_drive_exposure_rc=$DEV_DRIVE_RC" # R25
-if [ "$DEV_DRIVE_RC" -ne 0 ]; then exit 1; fi
+if [ "$DEV_DRIVE_RC" -ne 0 ]; then { echo "HARD STOP: R25 — stop the run, see 'If a slot fails'"; false; }; fi
 
+time "$AP" vm up --cluster 2> >(tee "$OUT/dev-cluster-up.txt" >&2) # R26
 (cd examples/demo-node-container && time "$AP" up) 2>&1 | tee "$OUT/dev-appliance-up.txt"
-time "$AP" vm up --cluster
-(cd examples/demo-node-framework && time "$AP" deploy demo-node-framework dev --profile local) 2>&1 | tee "$OUT/dev-deploy.txt" # R26
+(cd examples/demo-node-framework && time "$AP" deploy demo-node-framework dev --profile local) 2>&1 | tee "$OUT/dev-deploy.txt" # R27
 DEV_URL=http://demo-node-framework-dev.appliance.localhost:8081
-curl -fsS -o "$OUT/dev.body" -w '%{http_code} %{time_total}\n' "$DEV_URL" | tee "$OUT/dev-http.txt" # R27
-"$AP" vm dev shell -- 'test -d /persist/workspace && printf "dev-shell-ok\\n"' | tee "$OUT/dev-shell.txt" # R28
+curl -fsS -o "$OUT/dev.body" -w '%{http_code} %{time_total}\n' "$DEV_URL" | tee "$OUT/dev-http.txt" # R28
+"$AP" vm dev shell -- 'test -d /persist/workspace && printf "dev-shell-ok\n"' | tee "$OUT/dev-shell.txt" # R29
 (cd examples/demo-node-container && time "$AP" down) 2>/dev/null || true
 time "$AP" vm stop
 "$AP" vm delete
-echo "dev_stop_destroy_rc=$?" # R29
+echo "dev_stop_destroy_rc=$?" # R30
 ```
 
-R25 is a hard stop unless it is 0. R26 requires both `appliance up` and the
-sample deployment to succeed; R27 requires HTTP 200 through
-`*.appliance.localhost:8081`; R28 prints `dev-shell-ok`; R29 records stop time
-and successful destruction.
+R25 is a hard stop unless it is 0. R26 records the k3s boot time. R27 requires
+both `appliance up` and the sample deployment to succeed and records deploy
+seconds; R28 requires HTTP 200 through `*.appliance.localhost:8081`; R29 prints
+`dev-shell-ok`; R30 records stop time and successful destruction.
 
 ## App Runtime ordered run
 
@@ -425,7 +429,7 @@ The first `vm up` must run on a host without an Appliance Runtime distro. Keep
 its full first-import timing separately from later warm starts.
 
 ```sh
-time "$AP" vm up --name appliance-runtime 2> >(tee "$OUT/runtime-first-import.txt" >&2) # R30
+time "$AP" vm up --name appliance-runtime 2> >(tee "$OUT/runtime-first-import.txt" >&2) # R31
 ```
 
 #### 0. Runtime drive-exposure gate
@@ -434,17 +438,17 @@ Run immediately after that first import and before any Runtime payload:
 
 ```sh
 wsl.exe -d appliance-vm-appliance-runtime -u root -- sh -c 'cat /etc/wsl.conf; test ! -e /mnt/c && ! grep -qE "[[:space:]]/mnt/[a-z][[:space:]]" /proc/mounts'
-RUNTIME_DRIVE_RC=$?; echo "runtime_drive_exposure_rc=$RUNTIME_DRIVE_RC" # R31
-if [ "$RUNTIME_DRIVE_RC" -ne 0 ]; then exit 1; fi
+RUNTIME_DRIVE_RC=$?; echo "runtime_drive_exposure_rc=$RUNTIME_DRIVE_RC" # R32
+if [ "$RUNTIME_DRIVE_RC" -ne 0 ]; then { echo "HARD STOP: R32 — stop the run, see 'If a slot fails'"; false; }; fi
 ```
 
-R31 must be 0; stop the run if it is non-zero.
+R32 must be 0; stop the run if it is non-zero.
 
 ```sh
 "$AP" vm egress wsl-mode strict
 "$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-strict.json"
 "$AP" vm egress list --name appliance-runtime | tee "$OUT/list-strict.txt"
-jq '[.allow[]] | length' "$OUT/policy-strict.json" | tee "$OUT/strict-allow-count.txt" # R32
+jq '[.allow[]] | length' "$OUT/policy-strict.json" | tee "$OUT/strict-allow-count.txt" # R33
 ```
 
 Pass criterion: policy JSON says `boundary: "cooperative"`,
@@ -452,7 +456,7 @@ Pass criterion: policy JSON says `boundary: "cooperative"`,
 `wslMode: "strict"`. The list begins exactly `WSL NAT - strict: apps with
 egress grants are refused` and never contains `host-enforced`.
 
-Record R32; the strict policy `allow` count must be 0.
+Record R33; the strict policy `allow` count must be 0.
 
 #### Cold and warm container and binary samples
 
@@ -494,8 +498,8 @@ Pass criterion: each app reaches `running`, has a loopback URL, returns HTTP
 200, logs output, and stops while the pool remains running. The first
 strict/networkless install prints its outbound-traffic notice exactly once.
 
-Record Journal results in R33–R38, Dashboard results in R39–R44, and the
-strict first-run notice count in R45.
+Record Journal results in R34–R39, Dashboard results in R40–R45, and the
+strict first-run notice count in R46.
 
 ### 3. Notes Suite compound lifecycle
 
@@ -519,8 +523,8 @@ the web dependency starts after the API; both service logs are non-empty; and
 `timings.txt` contains phase and total timings comparable with
 `docs/live-test-runbook.md`.
 
-Record cold start R46, stop R47, `vm up` R48, warm start R49, and the healthy
-service count R50.
+Record cold start R47, stop R48, `vm up` R49, warm start R50, and the healthy
+service count R51.
 
 ### 4. Browser and Desktop app window
 
@@ -546,8 +550,8 @@ returns 200, the first open renders in the default browser, and the second open
 creates the dedicated Desktop app window at exactly the same URL. Capture one
 browser and one Desktop-window screenshot.
 
-Record the URL in R51, browser result in R52, Desktop-open result in R53, and
-Desktop URL comparison in R54.
+Record the URL in R52, browser result in R53, Desktop-open result in R54, and
+Desktop URL comparison in R55.
 
 ### 5. Strict refusal
 
@@ -561,11 +565,11 @@ STRICT_OUTPUT=$("$AP" runtime run "$OUT/egress-probe.appliance.zip" --detach 2>&
 STRICT_RC=$?
 printf '%s\n' "$STRICT_OUTPUT" | tee "$OUT/strict-refusal.txt"
 echo "strict_rc=$STRICT_RC"
-if [ "$STRICT_RC" -ne 2 ]; then exit 1; fi
+if [ "$STRICT_RC" -ne 2 ]; then { echo "HARD STOP: R56 — stop the run, see 'If a slot fails'"; false; }; fi
 ```
 
 Pass criterion: strict exits 2 with the exact setting name and
-`appliance vm egress wsl-mode cooperative` remediation. Record R55 and stop
+`appliance vm egress wsl-mode cooperative` remediation. Record R56 and stop
 the run explicitly if it is not 2.
 
 ### 6. Cooperative opt-in
@@ -579,13 +583,12 @@ network namespaces so both requests traverse the WSL proxy path.
 "$AP" runtime run "$OUT/egress-probe.appliance.zip" --detach \
   2> >(tee "$OUT/cooperative-warning.txt" >&2)
 "$AP" runtime run "$OUT/egress-probe-b.appliance.zip" --detach
-grep -c 'WSL cooperative mode is bypassable' "$OUT/cooperative-warning.txt"
-COOPERATIVE_NOTICE_RC=$?
-echo "cooperative_notice_grep_rc=$COOPERATIVE_NOTICE_RC"
+COOP_NOTICE_COUNT=$(grep -c 'WSL cooperative mode is bypassable' "$OUT/cooperative-warning.txt")
+echo "cooperative_notice_count=$COOP_NOTICE_COUNT"
 ```
 
 Pass criterion: cooperative mode is an explicit opt-in and the `runtime run`
-command prints the prominent bypass warning exactly once. Record R56.
+command prints the prominent bypass warning exactly once. Record R57.
 
 ### 7. Per-app allow, deny, and revocation
 
@@ -615,7 +618,7 @@ grep -E 'HTTP/[0-9.]+ 200' "$OUT/proxy-allow.txt"
 ALLOW_GREP_RC=$?; echo "allow_200_grep_rc=$ALLOW_GREP_RC"
 grep -E 'HTTP/[0-9.]+ 403' "$OUT/proxy-cross-app-deny.txt"
 CROSS_APP_GREP_RC=$?; echo "cross_app_403_grep_rc=$CROSS_APP_GREP_RC"
-if [ "$CROSS_APP_GREP_RC" -ne 0 ]; then exit 1; fi
+if [ "$CROSS_APP_GREP_RC" -ne 0 ]; then { echo "HARD STOP: R59 — stop the run, see 'If a slot fails'"; false; }; fi
 
 "$APPLIANCE_VM" shell appliance-runtime --root -- \
   "nsenter -t $TASK_A_PID -n env https_proxy='http://${PROXY_A#*@}' wget -S --spider https://example.com 2>&1 | grep -E 'HTTP/1\.[01] 407'" \
@@ -640,7 +643,7 @@ REVOKED_PROXY="$PROXY_A"
 REVOKED_RC=$?
 grep -E 'HTTP/[0-9.]+ 407' "$OUT/proxy-revoked.txt"
 REVOKED_GREP_RC=$?; echo "revoked_407_grep_rc=$REVOKED_GREP_RC"
-if [ "$REVOKED_GREP_RC" -ne 0 ]; then exit 1; fi
+if [ "$REVOKED_GREP_RC" -ne 0 ]; then { echo "HARD STOP: R61 — stop the run, see 'If a slot fails'"; false; }; fi
 unset PROXY_A PROXY_B REVOKED_PROXY
 printf 'strict_rc=%s cross_app_rc=%s credentialless_rc=%s revoked_rc=%s\n' \
   "$STRICT_RC" "$CROSS_APP_RC" "$CREDENTIALLESS_RC" "$REVOKED_RC"
@@ -653,7 +656,7 @@ and app A's captured credential returns 407 after `runtime stop` revokes it.
 The JSON and human list attribute the exact host+port grant to app A without
 printing either credential. Cooperative DNS must use proxy CONNECT by hostname;
 direct UDP 53 remains dropped. No direct egress success is interpreted as
-policy enforcement. Record R57–R60. R58 and R60 are hard stops: exit the run
+policy enforcement. Record R58–R61. R59 and R61 are hard stops: stop the run
 if their recorded HTTP status is not 403 and 407 respectively.
 
 ```sh
@@ -665,7 +668,7 @@ jq '[.[] | select(.reason == "proxy-auth" and .principal == null)] | length' \
   "$OUT/traffic.json"
 ```
 
-Record the traffic counts in R61–R63.
+Record the traffic counts in R62–R64.
 
 ```sh
 "$AP" runtime stop egress-probe-b
@@ -694,13 +697,13 @@ printf 'list_rows=%s json_apps=%s grep_rc=%s rows_equal_rc=%s\n' \
   "$LIST_ROWS" "$JSON_APPS" "$LIST_ROWS_RC" "$ROWS_EQUAL_RC"
 ```
 
-Record R64. The list must literally show `egress-probe-b … (no hosts)`; only
+Record R65. The list must literally show `egress-probe-b … (no hosts)`; only
 app A may have `example.com:443`, and the human row count must equal JSON
 `.apps | length`.
 
 ### 9. Pool restart and same-URL reopen
 
-Keep Notes Suite installed and use its URL from R51.
+Keep Notes Suite installed and use its URL from R52.
 
 ```sh
 BEFORE=$(cat "$OUT/notes-url.txt")
@@ -719,7 +722,7 @@ Pass criterion: after pool restart `runtime ps` reconciles Notes Suite to
 stopped, no app/listener auto-starts, `runtime open` revalidates and starts it,
 and the exact loopback URL is reused.
 
-Record R65–R66. Reopen targets under 15 seconds; compare with R49.
+Record R66–R67. Reopen targets under 15 seconds; compare with R50.
 
 ### 10. Mirrored networking fails fast, then NAT recovers
 
@@ -760,7 +763,7 @@ mirrored networking, tells the user to set `networkingMode=NAT` (or remove the
 setting), and tells them to run `wsl --shutdown`. It must not approach the old
 600-second timeout. After restoring `.wslconfig`, `wsl --shutdown` and
 `wsl.exe --status` confirm NAT/WSL2, and `"$AP" runtime open notes-suite
---print` returns R51's URL. Record R67–R68.
+--print` returns R52's URL. Record R68–R69.
 
 ### 11. Final teardown
 
@@ -772,7 +775,7 @@ setting), and tells them to run `wsl --shutdown`. It must not approach the old
 "$AP" runtime uninstall egress-probe 2>/dev/null || true
 "$AP" runtime uninstall egress-probe-b 2>/dev/null || true
 "$AP" vm egress wsl-mode strict
-FINAL_MODE=$("$AP" vm egress wsl-mode); test "$FINAL_MODE" = strict
+"$AP" vm egress wsl-mode --name appliance-runtime | tee "$OUT/final-mode.txt" | grep -q ': strict$'
 FINAL_STRICT_RC=$?; echo "final_strict_rc=$FINAL_STRICT_RC"
 grep -Eiq '(://[^/ ]*:[^/ ]*@|proxy-authorization: *basic)' "$OUT"/proxy-*.txt
 SECRET_MATCH_RC=$?; test "$SECRET_MATCH_RC" -eq 1; echo "secret_scan_rc=$?"
@@ -784,14 +787,14 @@ printf 'total_minutes=%s\n' "$CERT_TOTAL_MINUTES"
 Do not leave the certification host in cooperative mode. Confirm the final
 read prints `strict`, `.wslconfig` is restored to NAT (or its original absent
 state), and all evidence files under `$OUT` have been retained. Put the printed
-total in R06 and record R69–R71.
+total in R06 and record R70–R72.
 
 ## If a slot fails
 
 File the failure on the epic card with its slot ID. Attach the redacted `$OUT`
-directory only after R70's scan, plus `wsl.exe --version` and the R01/R02
-engine/commit identity. Do not continue past the hard-stop gates R25, R31,
-R55, R58, or R60; other failures remain `FAIL: <reason>` rows so the single
+directory only after R71's scan, plus `wsl.exe --version` and the R01/R02
+engine/commit identity. Do not continue past the hard-stop gates R25, R32,
+R56, R59, or R61; other failures remain `FAIL: <reason>` rows so the single
 owner run still produces a complete diagnostic record.
 
 ## Results record
@@ -810,7 +813,7 @@ check. Paste this entire table back into the certification ticket.
 | R06  | Total certification time              | Elapsed minutes; expected 90–120 excluding builds and firewall prompts                 |        |
 | R07  | Release tag                           | Candidate Desktop and CLI tag; both packages match                                     |        |
 | R08  | Engine version                        | Non-empty `$APPLIANCE_VM --version` output                                             |        |
-| R09  | NSIS install and fresh-shell CLI      | Install seconds plus matching non-empty `appliance --version`                          |        |
+| R09  | NSIS install and fresh-shell CLI      | Install seconds; bare PATH resolves matching non-empty `appliance --version`           |        |
 | R10  | Standalone helper SHA-256             | 64 lowercase hex characters                                                            |        |
 | R11  | Desktop helper SHA-256                | 64 lowercase hex characters                                                            |        |
 | R12  | Helper digest comparison              | R10 = R11 = release checksum entry                                                     |        |
@@ -825,51 +828,52 @@ check. Paste this entire table back into the certification ticket.
 | R21  | Setup-token visible-terminal launch   | `1`; terminal is visible and token is neither captured nor entered                     |        |
 | R22  | Credentials-panel helper argv         | Exactly the argv recorded in R18                                                       |        |
 | R23  | Long-path posture and install         | `LongPathsEnabled` is 0/1; >260-character path behavior and seconds recorded           |        |
-| R24  | Dev VM cold first import              | Seconds recorded on a host with no Appliance dev distro                                |        |
+| R24  | Dev VM cold first import              | Seconds recorded; image cached, no dev distro; excludes first download                 |        |
 | R25  | Dev drive-exposure gate               | `0`; otherwise stop immediately                                                        |        |
-| R26  | Dev `up` and sample deploy            | Both commands succeed; deployment reaches ready                                        |        |
-| R27  | Dev hostname ingress                  | `200` and first-byte seconds at `*.appliance.localhost:8081`                           |        |
-| R28  | Dev one-shot shell                    | `dev-shell-ok`                                                                         |        |
-| R29  | Dev stop and destroy                  | Stop seconds recorded; destroy exit `0`                                                |        |
-| R30  | Runtime first-ever import             | Seconds recorded on a host with no Appliance Runtime distro                            |        |
-| R31  | Runtime drive-exposure gate           | `0`; otherwise stop immediately                                                        |        |
-| R32  | Strict policy allow count             | `0`                                                                                    |        |
-| R33  | Journal cold start                    | Seconds recorded                                                                       |        |
-| R34  | Journal cold HTTP                     | `200` and first-byte seconds                                                           |        |
-| R35  | Journal stop                          | Seconds recorded                                                                       |        |
-| R36  | Journal `vm up`                       | Seconds recorded                                                                       |        |
-| R37  | Journal warm start                    | Seconds recorded                                                                       |        |
-| R38  | Journal warm HTTP                     | `200` and first-byte seconds                                                           |        |
-| R39  | Dashboard cold start                  | Seconds recorded                                                                       |        |
-| R40  | Dashboard cold HTTP                   | `200` and first-byte seconds                                                           |        |
-| R41  | Dashboard stop                        | Seconds recorded                                                                       |        |
-| R42  | Dashboard `vm up`                     | Seconds recorded                                                                       |        |
-| R43  | Dashboard warm start                  | Seconds recorded                                                                       |        |
-| R44  | Dashboard warm HTTP                   | `200` and first-byte seconds                                                           |        |
-| R45  | Strict first-run notice count         | `1`                                                                                    |        |
-| R46  | Notes Suite cold start                | Seconds recorded                                                                       |        |
-| R47  | Notes Suite stop                      | Seconds recorded                                                                       |        |
-| R48  | Notes Suite `vm up`                   | Seconds recorded                                                                       |        |
-| R49  | Notes Suite warm start                | Seconds recorded                                                                       |        |
-| R50  | Notes Suite healthy services          | `2`                                                                                    |        |
-| R51  | Notes Suite printed URL               | Loopback URL with port 20000–29999                                                     |        |
-| R52  | Browser HTTP                          | `200` and first-byte seconds                                                           |        |
-| R53  | Desktop window opened                 | `1`                                                                                    |        |
-| R54  | Desktop window URL                    | Exactly R51                                                                            |        |
-| R55  | Strict refusal exit                   | `2`, with exact setting and cooperative remediation                                    |        |
-| R56  | Cooperative bypass-warning count      | `1`                                                                                    |        |
-| R57  | App A allowed HTTPS                   | `200`                                                                                  |        |
-| R58  | Same host under app B                 | `403`                                                                                  |        |
-| R59  | Credential-less 407 grep exit         | `0`                                                                                    |        |
-| R60  | App A credential after stop           | `407`                                                                                  |        |
-| R61  | Per-app policy-deny traffic count     | At least `1`                                                                           |        |
-| R62  | Proxy-auth-failure traffic count      | At least `2` (credential-less and revoked)                                             |        |
-| R63  | Credential-less traffic count         | At least `1`, with `principal == null`                                                 |        |
-| R64  | Cooperative per-app rows              | Human row count equals JSON app count; B has no hosts; only A has `example.com:443`    |        |
-| R65  | Reopen time                           | Seconds recorded; target under 15, compare with R49                                    |        |
-| R66  | URL stable after pool restart         | `0` test exit; reopened URL exactly R51                                                |        |
-| R67  | Mirrored fail-fast time               | Seconds; fails before provisioning/readiness and far below 600                         |        |
-| R68  | NAT recovery                          | `1`; WSL2/NAT restored and URL exactly R51                                             |        |
-| R69  | Final strict-mode restore             | `0` test exit; final read is `strict`                                                  |        |
-| R70  | Proxy evidence secret scan            | `secret_scan_rc=0`; no credential URL or Basic authorization match                     |        |
-| R71  | Teardown and retained evidence        | Samples uninstalled, Runtime VM stopped, config restored, evidence retained            |        |
+| R26  | Dev cluster boot                      | `vm up --cluster` seconds recorded                                                     |        |
+| R27  | Dev `up` and sample deploy            | Both commands succeed; deployment reaches ready and deploy seconds are recorded        |        |
+| R28  | Dev hostname ingress                  | `200` and first-byte seconds at `*.appliance.localhost:8081`                           |        |
+| R29  | Dev one-shot shell                    | `dev-shell-ok`                                                                         |        |
+| R30  | Dev stop and destroy                  | Stop seconds recorded; destroy exit `0`                                                |        |
+| R31  | Runtime first-ever import             | Seconds recorded; image cached, no Runtime distro; excludes first download             |        |
+| R32  | Runtime drive-exposure gate           | `0`; otherwise stop immediately                                                        |        |
+| R33  | Strict policy allow count             | `0`                                                                                    |        |
+| R34  | Journal cold start                    | Seconds recorded                                                                       |        |
+| R35  | Journal cold HTTP                     | `200` and first-byte seconds                                                           |        |
+| R36  | Journal stop                          | Seconds recorded                                                                       |        |
+| R37  | Journal `vm up`                       | Seconds recorded                                                                       |        |
+| R38  | Journal warm start                    | Seconds recorded                                                                       |        |
+| R39  | Journal warm HTTP                     | `200` and first-byte seconds                                                           |        |
+| R40  | Dashboard cold start                  | Seconds recorded                                                                       |        |
+| R41  | Dashboard cold HTTP                   | `200` and first-byte seconds                                                           |        |
+| R42  | Dashboard stop                        | Seconds recorded                                                                       |        |
+| R43  | Dashboard `vm up`                     | Seconds recorded                                                                       |        |
+| R44  | Dashboard warm start                  | Seconds recorded                                                                       |        |
+| R45  | Dashboard warm HTTP                   | `200` and first-byte seconds                                                           |        |
+| R46  | Strict first-run notice count         | `1`                                                                                    |        |
+| R47  | Notes Suite cold start                | Seconds recorded                                                                       |        |
+| R48  | Notes Suite stop                      | Seconds recorded                                                                       |        |
+| R49  | Notes Suite `vm up`                   | Seconds recorded                                                                       |        |
+| R50  | Notes Suite warm start                | Seconds recorded                                                                       |        |
+| R51  | Notes Suite healthy services          | `2`                                                                                    |        |
+| R52  | Notes Suite printed URL               | Loopback URL with port 20000–29999                                                     |        |
+| R53  | Browser HTTP                          | `200` and first-byte seconds                                                           |        |
+| R54  | Desktop window opened                 | `1`                                                                                    |        |
+| R55  | Desktop window URL                    | Exactly R52                                                                            |        |
+| R56  | Strict refusal exit                   | `2`, with exact setting and cooperative remediation                                    |        |
+| R57  | Cooperative bypass-warning count      | `cooperative_notice_count=1`                                                           |        |
+| R58  | App A allowed HTTPS                   | `200`                                                                                  |        |
+| R59  | Same host under app B                 | `403`                                                                                  |        |
+| R60  | Credential-less 407 grep exit         | `0`                                                                                    |        |
+| R61  | App A credential after stop           | `407`                                                                                  |        |
+| R62  | Per-app policy-deny traffic count     | At least `1`                                                                           |        |
+| R63  | Proxy-auth-failure traffic count      | At least `2` (credential-less and revoked)                                             |        |
+| R64  | Credential-less traffic count         | At least `1`, with `principal == null`                                                 |        |
+| R65  | Cooperative per-app rows              | Human row count equals JSON app count; B has no hosts; only A has `example.com:443`    |        |
+| R66  | Reopen time                           | Seconds recorded; target under 15, compare with R50                                    |        |
+| R67  | URL stable after pool restart         | `0` test exit; reopened URL exactly R52                                                |        |
+| R68  | Mirrored fail-fast time               | Seconds; fails before provisioning/readiness and far below 600                         |        |
+| R69  | NAT recovery                          | `1`; WSL2/NAT restored and URL exactly R52                                             |        |
+| R70  | Final strict-mode restore             | `final_strict_rc=0`                                                                    |        |
+| R71  | Proxy evidence secret scan            | `secret_scan_rc=0`; no credential URL or Basic authorization match                     |        |
+| R72  | Teardown and retained evidence        | Samples uninstalled, Runtime VM stopped, config restored, evidence retained            |        |
