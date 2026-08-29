@@ -484,6 +484,9 @@ async function runtimeRun(args: string[]): Promise<void> {
   console.log(chalk.cyan(`» validating and unpacking ${path.basename(bundlePath)}`));
   let installChanged: boolean;
   try {
+    // This is the verify-on-open integrity gate. On WSL, Windows can still
+    // mutate drvfs bytes after verification and before/during guest reads; the
+    // read-only bind narrows guest writes but cannot eliminate that TOCTOU.
     installChanged = installRuntimeBundle(bundlePath, installDir, loaded);
   } finally {
     removeImmutableFile(bundlePath);
@@ -535,7 +538,12 @@ async function runtimeRun(args: string[]): Promise<void> {
     loaded.manifest.name,
     effectiveGrants.filter((grant) => grant.control === 'egress-host').map((grant) => grant.id)
   );
-  const restartRequired = runtimePoolRestartRequired(plan.kind, installChanged, Boolean(prepared.restartRequired));
+  const restartRequired = runtimePoolRestartRequired(
+    plan.kind,
+    installChanged,
+    Boolean(prepared.restartRequired),
+    prepared.shareTransport === 'drvfs'
+  );
   if (restartRequired) {
     updateRuntimeRecord(plan.appId, { poolRestartPending: true });
     console.log(
@@ -888,13 +896,14 @@ function installRuntimeBundle(bundlePath: string, destination: string, verified:
 export function runtimePoolRestartRequired(
   kind: RuntimePlan['kind'],
   installChanged: boolean,
-  prepareRequiresRestart: boolean
+  prepareRequiresRestart: boolean,
+  payloadHotPluggable = false
 ): boolean {
   // Replacing an installed directory preserves its path but changes its inode.
   // A running VZ VirtioFS device still holds the old directory and must reboot
-  // before compound leaves can import the replacement payloads. Keep legacy
-  // single-workload reconciliation unchanged in this stacked increment.
-  return prepareRequiresRestart || (kind === 'compound' && installChanged);
+  // before compound leaves can import the replacement payloads. WSL's drvfs
+  // helper resolves the path for each start, so it does not need that reboot.
+  return prepareRequiresRestart || (!payloadHotPluggable && kind === 'compound' && installChanged);
 }
 
 function runtimeInstallMatches(destination: string, digest: string): boolean {

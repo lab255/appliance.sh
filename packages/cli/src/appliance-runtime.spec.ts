@@ -370,6 +370,8 @@ describe('runtime pool share reconciliation', () => {
     expect(runtimePoolRestartRequired('container', true, false)).toBe(false);
     expect(runtimePoolRestartRequired('binary', true, false)).toBe(false);
     expect(runtimePoolRestartRequired('container', false, true)).toBe(true);
+    expect(runtimePoolRestartRequired('compound', true, false, true)).toBe(false);
+    expect(runtimePoolRestartRequired('compound', true, true, true)).toBe(true);
   });
 });
 
