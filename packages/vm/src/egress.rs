@@ -912,17 +912,6 @@ pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
 /// allow entry a deny rule overrides. For a NAT VM it shows the persisted
 /// cooperative policy as-is. Pure (takes the persisted policy + the link
 /// kind) so the rendering is unit-tested without a VM.
-#[cfg(test)]
-fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: bool) -> String {
-    render_effective_policy_for_backend(
-        name,
-        persisted,
-        netstack,
-        crate::backend::platform_backend_name(),
-        wsl_mode(name),
-    )
-}
-
 pub fn render_effective_policy_for_backend(
     name: &str,
     persisted: &EgressPolicy,
@@ -1920,7 +1909,13 @@ mod tests {
             deny: vec!["gist.github.com".into()],
             mitm: false,
         };
-        let out = render_effective_policy("agent", &persisted, true);
+        let out = render_effective_policy_for_backend(
+            "agent",
+            &persisted,
+            true,
+            "vz",
+            WslMode::Strict,
+        );
 
         // The EFFECTIVE boundary is shown as Deny, not the persisted Allow.
         assert!(out.contains("boundary: enforced (netstack)"));
@@ -1952,7 +1947,13 @@ mod tests {
             deny: vec![],
             mitm: true,
         };
-        let out = render_effective_policy("dev", &persisted, false);
+        let out = render_effective_policy_for_backend(
+            "dev",
+            &persisted,
+            false,
+            "vz",
+            WslMode::Strict,
+        );
         assert!(out.contains("boundary: cooperative (in-guest proxy)"));
         assert!(out.contains("default: ALLOW"));
         assert!(!out.contains("baked allowlist"));
@@ -2012,7 +2013,13 @@ mod tests {
             deny: vec!["github.com".into()],
             mitm: false,
         };
-        let out = render_effective_policy("agent", &persisted, true);
+        let out = render_effective_policy_for_backend(
+            "agent",
+            &persisted,
+            true,
+            "vz",
+            WslMode::Strict,
+        );
         assert!(out.contains("✗ github.com  (overridden by an operator deny rule)"));
     }
 
