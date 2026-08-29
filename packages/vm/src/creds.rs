@@ -16,6 +16,7 @@
 //! same-user guest write through WSL drvfs (tracked by the automount card).
 
 use std::collections::HashMap;
+#[cfg(test)]
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -29,6 +30,7 @@ use appliance_credential_store::{
 use serde::{Deserialize, Serialize};
 
 use crate::egress::host_matches;
+#[cfg(test)]
 use crate::spec::VmPaths;
 
 fn default_header() -> String {
@@ -166,6 +168,7 @@ pub fn load_config(name: &str) -> CredentialConfig {
     parse_config(&path, &raw)
 }
 
+#[cfg(test)]
 fn load_config_path(path: &Path) -> CredentialConfig {
     let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
