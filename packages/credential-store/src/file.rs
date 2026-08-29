@@ -5,12 +5,17 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+use windows_sys::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HANDLE};
 #[cfg(windows)]
-use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+use windows_sys::Win32::Security::Authorization::{
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, SetNamedSecurityInfoW, SDDL_REVISION_1,
+    SE_FILE_OBJECT,
+};
 #[cfg(windows)]
 use windows_sys::Win32::Security::{
-    GetTokenInformation, IsValidSid, TokenUser, PSID, TOKEN_QUERY, TOKEN_USER,
+    GetSecurityDescriptorDacl, GetTokenInformation, IsValidSid, TokenUser,
+    DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
+    PSECURITY_DESCRIPTOR, PSID, TOKEN_QUERY, TOKEN_USER,
 };
 #[cfg(windows)]
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -29,34 +34,23 @@ impl Drop for OwnedHandle {
     }
 }
 
+#[cfg(windows)]
+struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
+
+#[cfg(windows)]
+impl Drop for LocalSecurityDescriptor {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows_sys::Win32::Foundation::LocalFree(self.0);
+        }
+    }
+}
+
 /// The aligned token buffer owns the memory referenced by `sid`.
 #[cfg(windows)]
 struct CurrentUserSid {
     _buffer: Vec<usize>,
     sid: PSID,
-}
-
-#[cfg(windows)]
-impl CurrentUserSid {
-    fn to_string(&self) -> Result<String, StoreError> {
-        let mut raw = std::ptr::null_mut();
-        if unsafe { ConvertSidToStringSidW(self.sid, &mut raw) } == 0 {
-            return Err(map_io_error(std::io::Error::last_os_error()));
-        }
-        let result = (|| {
-            let mut len = 0;
-            while unsafe { *raw.add(len) } != 0 {
-                len += 1;
-            }
-            String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) }).map_err(|error| {
-                StoreError::Internal(format!("current user SID is not valid UTF-16: {error}"))
-            })
-        })();
-        unsafe {
-            let _ = LocalFree(raw.cast());
-        }
-        result
-    }
 }
 
 #[cfg(windows)]
@@ -74,7 +68,7 @@ fn current_user_sid() -> Result<CurrentUserSid, StoreError> {
         return Err(map_io_error(std::io::Error::last_os_error()));
     }
     // usize storage gives TOKEN_USER its required pointer alignment.
-    let words = (needed as usize + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
+    let words = (needed as usize).div_ceil(std::mem::size_of::<usize>());
     let mut buffer = vec![0_usize; words];
     if unsafe {
         GetTokenInformation(
@@ -262,41 +256,128 @@ fn map_io_error(error: std::io::Error) -> StoreError {
 }
 
 #[cfg(unix)]
-fn restrict_to_current_user(path: &Path) -> Result<(), StoreError> {
+pub fn restrict_to_current_user(path: &Path) -> Result<(), StoreError> {
     use std::os::unix::fs::PermissionsExt;
 
     let mode = if path.is_dir() { 0o700 } else { 0o600 };
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(map_io_error)
 }
 
-/// Minimal duplication of `packages/vm/src/fs_acl.rs` from
-/// `fix/ap-195-windows-secret-acls`. Card 2 can replace this copy when the VM
-/// starts consuming this crate; keeping it here avoids reversing the neutral
-/// crate's dependency direction.
+/// Apply a protected DACL containing exactly the current user, SYSTEM, and
+/// Administrators, and make the current user the object's owner.
 #[cfg(windows)]
-fn restrict_to_current_user(path: &Path) -> Result<(), StoreError> {
-    use std::os::windows::process::CommandExt;
+pub fn restrict_to_current_user(path: &Path) -> Result<(), StoreError> {
+    use std::os::windows::ffi::OsStrExt;
 
-    let principal = format!("*{}", current_user_sid()?.to_string()?);
-    let permission = if path.is_dir() { "(OI)(CI)F" } else { "F" };
-    let output = std::process::Command::new("icacls")
-        .arg(path)
-        .args([
-            "/inheritance:r",
-            "/grant:r",
-            &format!("{principal}:{permission}"),
-        ])
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-        .output()
-        .map_err(map_io_error)?;
-    if output.status.success() {
-        Ok(())
+    let current_user = current_user_sid()?;
+    let inheritance = if path.is_dir() { "OICI" } else { "" };
+    // These are the same three principals accepted by the VM credential
+    // integrity verifier. SYSTEM and Administrators retain access because
+    // either can take ownership regardless of an object's DACL.
+    let sddl = format!(
+        "D:P(A;{inheritance};FA;;;{})(A;{inheritance};FA;;;SY)(A;{inheritance};FA;;;BA)",
+        sid_to_string(current_user.sid)?
+    );
+    let wide_sddl: Vec<u16> = std::ffi::OsStr::new(&sddl)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            wide_sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut descriptor,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(path_error(
+            "build protected DACL for",
+            path,
+            std::io::Error::last_os_error(),
+        ));
+    }
+    let _descriptor = LocalSecurityDescriptor(descriptor);
+    let mut dacl_present = 0;
+    let mut dacl_defaulted = 0;
+    let mut dacl = std::ptr::null_mut();
+    if unsafe {
+        GetSecurityDescriptorDacl(
+            descriptor,
+            &mut dacl_present,
+            &mut dacl,
+            &mut dacl_defaulted,
+        )
+    } == 0
+        || dacl_present == 0
+        || dacl.is_null()
+    {
+        return Err(path_error(
+            "read protected DACL for",
+            path,
+            std::io::Error::last_os_error(),
+        ));
+    }
+
+    let wide_path: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let status = unsafe {
+        SetNamedSecurityInfoW(
+            wide_path.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION
+                | DACL_SECURITY_INFORMATION
+                | PROTECTED_DACL_SECURITY_INFORMATION,
+            current_user.sid,
+            std::ptr::null_mut(),
+            dacl,
+            std::ptr::null_mut(),
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return Err(path_error(
+            "restrict",
+            path,
+            std::io::Error::from_raw_os_error(status as i32),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn sid_to_string(sid: PSID) -> Result<String, StoreError> {
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+
+    let mut raw = std::ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(sid, &mut raw) } == 0 {
+        return Err(map_io_error(std::io::Error::last_os_error()));
+    }
+    let result = {
+        let mut len = 0;
+        while unsafe { *raw.add(len) } != 0 {
+            len += 1;
+        }
+        String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) }).map_err(|error| {
+            StoreError::Internal(format!("current user SID is not valid UTF-16: {error}"))
+        })
+    };
+    unsafe {
+        let _ = windows_sys::Win32::Foundation::LocalFree(raw.cast());
+    }
+    result
+}
+
+#[cfg(windows)]
+fn path_error(action: &str, path: &Path, error: std::io::Error) -> StoreError {
+    let message = format!("{action} {}: {error}", path.display());
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        StoreError::Denied(message)
     } else {
-        Err(StoreError::Denied(format!(
-            "could not restrict {} to {principal}: {}",
-            path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )))
+        StoreError::Internal(message)
     }
 }
 
