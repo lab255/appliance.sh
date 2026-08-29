@@ -12,13 +12,9 @@ appliance-credential-store = { path = "../credential-store", default-features = 
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 dirs = "5"
-fs2 = "0.4"
 getrandom = "0.3"
 serde_json = "1"
 zeroize = "1"
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

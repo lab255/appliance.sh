@@ -1,8 +1,10 @@
 use appliance_credential_store::{CredentialStore, Presence, StoreError, StoreKey};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
 const MAX_VALUE_BYTES: u64 = 1024 * 1024;
@@ -28,6 +30,7 @@ pub enum Request {
     EntitlementKeyGetOrCreate,
     EntitlementKeyImport,
     EntitlementAnchorGet,
+    EntitlementAnchorImport,
     EntitlementAnchorPut,
 }
 
@@ -132,11 +135,29 @@ pub fn execute<S: CredentialStore, R: Read, W: Write>(
             output.flush()?;
             Ok(())
         }
+        Request::EntitlementAnchorImport => {
+            let lock = UserGlobalLock::acquire()?;
+            let key = StoreKey::entitlement_anchor();
+            let candidate = read_secret(input)?;
+            validate_entitlement_anchor(&candidate)?;
+            let value = import_entitlement_anchor(store, &key, &candidate)?;
+            output.write_all(&value)?;
+            output.flush()?;
+            drop(lock);
+            Ok(())
+        }
         Request::EntitlementAnchorPut => {
             let _lock = UserGlobalLock::acquire()?;
             let value = read_secret(input)?;
             validate_entitlement_anchor(&value)?;
-            store.put(&StoreKey::entitlement_anchor(), &value)?;
+            let key = StoreKey::entitlement_anchor();
+            store.put(&key, &value)?;
+            let canonical = Zeroizing::new(store.get(&key)?.ok_or_else(|| {
+                StoreError::Internal("entitlement anchor disappeared after its write".to_owned())
+            })?);
+            validate_entitlement_anchor(&canonical)?;
+            output.write_all(&canonical)?;
+            output.flush()?;
             Ok(())
         }
     }
@@ -225,6 +246,29 @@ fn import_entitlement_key<S: CredentialStore>(
     Ok(canonical)
 }
 
+fn import_entitlement_anchor<S: CredentialStore>(
+    store: &S,
+    key: &StoreKey,
+    candidate: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, CommandError> {
+    if let Some(existing) = store.get(key)? {
+        let existing = Zeroizing::new(existing);
+        validate_entitlement_anchor(&existing)?;
+        return Ok(existing);
+    }
+    if let Some(existing) = store.get(key)? {
+        let existing = Zeroizing::new(existing);
+        validate_entitlement_anchor(&existing)?;
+        return Ok(existing);
+    }
+    store.put(key, candidate)?;
+    let canonical = Zeroizing::new(store.get(key)?.ok_or_else(|| {
+        StoreError::Internal("entitlement anchor disappeared after import".to_owned())
+    })?);
+    validate_entitlement_anchor(&canonical)?;
+    Ok(canonical)
+}
+
 fn validate_entitlement_key(value: &[u8]) -> Result<(), StoreError> {
     let wire = std::str::from_utf8(value)
         .map_err(|_| StoreError::Malformed("entitlement key is not UTF-8".to_owned()))?;
@@ -272,7 +316,7 @@ fn validate_entitlement_anchor(value: &[u8]) -> Result<(), StoreError> {
 }
 
 struct UserGlobalLock {
-    file: File,
+    path: PathBuf,
 }
 
 impl UserGlobalLock {
@@ -289,46 +333,54 @@ impl UserGlobalLock {
             .join(std::process::id().to_string());
         fs::create_dir_all(&directory)?;
         let path = directory.join("credential-store.lock");
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match fs::create_dir(&path) {
+                Ok(()) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let stale = fs::metadata(&path)
+                        .and_then(|metadata| metadata.modified())
+                        .ok()
+                        .and_then(|modified| modified.elapsed().ok())
+                        .is_some_and(|age| age > Duration::from_secs(30));
+                    if stale && fs::remove_dir(&path).is_ok() {
+                        continue;
+                    }
+                    if Instant::now() >= deadline {
+                        return Err(StoreError::Denied(
+                            "timed out acquiring the credential-store lock".to_owned(),
+                        )
+                        .into());
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(error) => return Err(error.into()),
+            }
         }
-        let file = options.open(path)?;
-        restrict_lock_to_current_user(&file)?;
-        fs2::FileExt::lock_exclusive(&file)?;
-        Ok(Self { file })
+        if let Err(error) = restrict_lock_to_current_user(&path) {
+            let _ = fs::remove_dir(&path);
+            return Err(error);
+        }
+        Ok(Self { path })
     }
 }
 
 #[cfg(not(windows))]
-fn restrict_lock_to_current_user(_file: &File) -> Result<(), CommandError> {
+fn restrict_lock_to_current_user(path: &Path) -> Result<(), CommandError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    }
     Ok(())
 }
 
 #[cfg(windows)]
-fn restrict_lock_to_current_user(file: &File) -> Result<(), CommandError> {
-    use std::os::windows::io::AsRawHandle;
+fn restrict_lock_to_current_user(path: &Path) -> Result<(), CommandError> {
     use std::os::windows::process::CommandExt;
 
-    // Resolve the final path from the already-open handle, then bind its DACL
-    // to the current process SID. `*SID` avoids localized account names.
-    let mut path = vec![0_u16; 32_768];
-    let length = unsafe {
-        windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW(
-            file.as_raw_handle(),
-            path.as_mut_ptr(),
-            path.len() as u32,
-            0,
-        )
-    };
-    if length == 0 || length as usize >= path.len() {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    let path = String::from_utf16(&path[..length as usize])
-        .map_err(|error| StoreError::Internal(format!("lock path is not valid UTF-16: {error}")))?;
+    // Bind the migration-lock directory's DACL to the current process SID.
+    // `*SID` avoids localized account names and matches the TS lock protocol.
     let whoami = std::process::Command::new("whoami")
         .args(["/user", "/fo", "csv", "/nh"])
         .creation_flags(0x0800_0000)
@@ -364,7 +416,7 @@ fn restrict_lock_to_current_user(file: &File) -> Result<(), CommandError> {
 
 impl Drop for UserGlobalLock {
     fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.file);
+        let _ = fs::remove_dir(&self.path);
     }
 }
 
@@ -585,6 +637,27 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.exit_code(), EXIT_MALFORMED);
+        assert_eq!(store.put_count.get(), 0);
+    }
+
+    #[test]
+    fn entitlement_anchor_import_preserves_an_existing_canonical_value() {
+        let store = MemoryStore::default();
+        let existing = format!(r#"{{"sequence":2,"headHash":"sha256:{}"}}"#, "b".repeat(64));
+        store.values.borrow_mut().insert(
+            StoreKey::entitlement_anchor().canonical_name(),
+            existing.as_bytes().to_vec(),
+        );
+        let candidate = format!(r#"{{"sequence":1,"headHash":"sha256:{}"}}"#, "a".repeat(64));
+        let mut output = Vec::new();
+        execute(
+            &store,
+            &Request::EntitlementAnchorImport,
+            &mut candidate.as_bytes(),
+            &mut output,
+        )
+        .unwrap();
+        assert_eq!(output, existing.as_bytes());
         assert_eq!(store.put_count.get(), 0);
     }
 

@@ -63,7 +63,7 @@ It exposes typed operations, not arbitrary service/account access:
 appliance-credhelper cluster get|put|delete|probe --profile <name>
 appliance-credhelper agent get|put|delete|probe --provider <provider>
 appliance-credhelper entitlement-key get-or-create
-appliance-credhelper entitlement-anchor get|put
+appliance-credhelper entitlement-anchor get|put|import
 ```
 
 Writes consume the value on stdin; reads return only the requested value on

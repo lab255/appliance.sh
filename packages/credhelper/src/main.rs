@@ -74,6 +74,7 @@ enum EntitlementKeyCommand {
 #[derive(Debug, Subcommand)]
 enum EntitlementAnchorCommand {
     Get,
+    Import,
     Put,
 }
 
@@ -156,6 +157,7 @@ fn request_from_cli(cli: Cli) -> Result<Request, CommandError> {
         } => Ok(Request::EntitlementKeyImport),
         TopLevelCommand::EntitlementAnchor { command } => Ok(match command {
             EntitlementAnchorCommand::Get => Request::EntitlementAnchorGet,
+            EntitlementAnchorCommand::Import => Request::EntitlementAnchorImport,
             EntitlementAnchorCommand::Put => Request::EntitlementAnchorPut,
         }),
     }
@@ -199,6 +201,7 @@ mod tests {
             vec!["helper", "entitlement-key", "get-or-create"],
             vec!["helper", "entitlement-key", "import"],
             vec!["helper", "entitlement-anchor", "get"],
+            vec!["helper", "entitlement-anchor", "import"],
         ] {
             assert!(Cli::try_parse_from(argv).is_ok());
         }
