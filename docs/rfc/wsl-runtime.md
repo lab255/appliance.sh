@@ -170,10 +170,12 @@ per-app MITM/log attribution and revocation to `handle_conn`, and admits the WSL
 The credential transport is standard proxy URL userinfo:
 `HTTP(S)_PROXY=http://<app>:<base64url-credential>@<gateway>:<port>`. The Rust
 host mints 32 random bytes only after the start plan matches persisted pool
-state. Guest request, plan, and environment files are mode `0600`, and
-`ctr run --env-file` keeps the credential out of the root launcher's command line, so it
-is absent from CLI arguments, `/proc/<launcher>/cmdline`, and ordinary app
-launch logs. CONNECT and absolute-form HTTP clients turn the userinfo into
+state. Guest request, plan, and environment files are created under `umask 077`.
+`ctr run --env-file` is reserved for proxy variables so the credential stays
+out of the root launcher's command line; every non-proxy environment value uses
+the newline-safe `--env KEY=VALUE` argument form. The credential is therefore
+absent from CLI arguments, `/proc/<launcher>/cmdline`, and ordinary app launch
+logs. CONNECT and absolute-form HTTP clients turn the userinfo into
 `Proxy-Authorization: Basic`; the proxy parses it on both forms, strips the
 header before forwarding plain HTTP, and never serializes credentials in
 policy output, traffic events, or decision logs. Effective state remains the
@@ -184,6 +186,11 @@ remains in the workload environment, visible to the workload itself and to
 guest root (and therefore to a same-UID `appliance` process where guest `/proc`
 permissions allow environment reads). The control protects app-to-app policy
 selection, not a compromised guest root or same-UID process.
+
+**RESIDUAL:** attribution on authentication-failure (`407`) events is claimed,
+not verified: an attacker can choose the Basic username of a known revoked app,
+so the event may carry that principal even though no valid credential proved
+the request came from it. The request remains denied and gains no app policy.
 
 Brokered credential injection is disabled on WSL v1: its exact-lease
 re-attribution cannot survive SNAT. Only Runtime app policies apply.

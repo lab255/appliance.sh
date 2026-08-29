@@ -284,11 +284,11 @@ grep -E 'HTTP/[0-9.]+ 403' "$OUT/proxy-cross-app-deny.txt"
 
 set +e
 "$APPLIANCE_VM" shell appliance-runtime --root -- \
-  "nsenter -t $TASK_A_PID -n env HTTPS_PROXY= HTTP_PROXY= curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' -x 'http://${PROXY_A#*@}' https://example.com" \
+  "nsenter -t $TASK_A_PID -n env https_proxy='http://${PROXY_A#*@}' wget -S --spider https://example.com 2>&1 | grep -E 'HTTP/1\.[01] 407'" \
   >"$OUT/proxy-credentialless.txt" 2>&1
 CREDENTIALLESS_RC=$?
 set -e
-grep -E '^407$' "$OUT/proxy-credentialless.txt"
+test "$CREDENTIALLESS_RC" -eq 0
 
 "$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-cooperative.json"
 "$AP" vm egress list --name appliance-runtime | tee "$OUT/list-cooperative.txt"
@@ -325,6 +325,8 @@ policy enforcement.
 13. Allowed HTTPS status: `__________` (must be 200)
 14. Same host under app B status: `__________` (must be 403)
 15. App A credential after stop status: `__________` (must be 407)
+
+Credential-less 407 grep exit: `__________` (must be 0)
 
 ```sh
 "$AP" vm egress traffic --name appliance-runtime | tee "$OUT/traffic.json"
@@ -440,7 +442,7 @@ Post-mirrored NAT recovery (1/0): `__________`
 "$AP" runtime uninstall egress-probe-b 2>/dev/null || true
 "$AP" vm egress wsl-mode strict
 "$AP" vm egress wsl-mode
-! grep -Eq '://[^/ ]*:[^/ ]*@' "$OUT"/proxy-*.txt
+! grep -Eiq '(://[^/ ]*:[^/ ]*@|proxy-authorization: *basic)' "$OUT"/proxy-*.txt
 ```
 
 Final strict-mode restore confirmed (1/0): `__________`
