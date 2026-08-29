@@ -1,0 +1,46 @@
+{
+  "classifications": [
+    {
+      "key": "virtualization-disabled",
+      "signatures": ["0x80370102", "0x80370114", "virtual machine platform", "hypervisor", "virtualization", "hcs"],
+      "remediation": "Enable virtualization in your BIOS/UEFI (often called \"Intel VT-x\", \"AMD-V\", or \"SVM\"), then enable the Windows feature: open PowerShell as Administrator, run `Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform`, and reboot."
+    },
+    {
+      "key": "kernel-outdated",
+      "signatures": ["wsl --update", "kernel", "0x800701bc"],
+      "remediation": "Update WSL: open PowerShell and run `wsl --update`, then retry."
+    },
+    {
+      "key": "not-installed",
+      "signatures": ["wsl --install", "not installed", "no installed distributions"],
+      "remediation": "Open PowerShell as Administrator, run `wsl --install`, reboot, then re-run `appliance init`."
+    },
+    {
+      "key": "mirrored-networking",
+      "signatures": ["mirrored networking", "networkingmode=mirrored"],
+      "remediation": "Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` (or remove the setting), run `wsl --shutdown`, then retry."
+    }
+  ],
+  "fixtures": [
+    {
+      "file": "utf16le-bom.bin",
+      "decoded": "Windows Subsystem for Linux has no installed distributions. Use wsl --install.\r\n",
+      "classification": "not-installed"
+    },
+    {
+      "file": "utf16le-no-bom.bin",
+      "decoded": "WslRegisterDistribution failed with error: 0x80370102\r\nPlease enable the Virtual Machine Platform Windows feature.\r\n",
+      "classification": "virtualization-disabled"
+    },
+    {
+      "file": "utf8.bin",
+      "decoded": "The WSL 2 kernel file is not found. Please run wsl --update. ✓\n",
+      "classification": "kernel-outdated"
+    },
+    {
+      "file": "mixed-utf16le-utf8.bin",
+      "decoded": "WSL mirrored networking is unsupported.\r\n畧獥⁴歯਍",
+      "classification": "mirrored-networking"
+    }
+  ]
+}
