@@ -5,6 +5,7 @@ import {
   classifyIngressClaims,
   classifyKeychainCoherence,
   classifyProfileBinding,
+  classifyWindowsCaptureRules,
   compareVersionStamp,
   decideRemintPlan,
   doctorVmForProfile,
@@ -21,6 +22,35 @@ import {
   type RuntimeFinding,
   type RuntimeFixOutcome,
 } from './runtime-doctor.js';
+
+describe('classifyWindowsCaptureRules', () => {
+  const fixture = [
+    {
+      vm: 'appliance',
+      config: {
+        rules: [
+          { host: 'api.safe.example', capture: false, inject: true },
+          { host: 'api.capture.example', capture: true, inject: false },
+        ],
+      },
+    },
+    { vm: 'build-pool', config: { rules: [{ host: 'registry.capture.example', capture: true }] } },
+  ];
+
+  it('warns on Windows for each enabled capture rule and names its VM, host, and residual', () => {
+    const findings = classifyWindowsCaptureRules('win32', fixture);
+    expect(findings).toHaveLength(2);
+    expect(findings.every((finding) => finding.severity === 'warn')).toBe(true);
+    expect(findings[0].detail).toContain("VM 'appliance'");
+    expect(findings[0].detail).toContain("host 'api.capture.example'");
+    expect(findings[0].detail).toContain('residual');
+    expect(findings[1].detail).toContain("VM 'build-pool'");
+  });
+
+  it('is silent off Windows', () => {
+    expect(classifyWindowsCaptureRules('darwin', fixture)).toEqual([]);
+  });
+});
 
 describe('doctorVmForProfile', () => {
   it('maps the canonical local profile AND the legacy microvm profile to the default VM', () => {
