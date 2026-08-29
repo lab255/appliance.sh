@@ -100,8 +100,8 @@ devices and keep it running".
   unavailable with a clear message. There is no k3d fallback — Linux
   has no local runtime in the interim (use a BYO
   `appliance-base-kubernetes` cluster).
-- **Windows 11 — WSL2** _(implemented and [owner-run
-  validated](live-test-runbook-windows.md))_. The backend drives `wsl.exe` to
+- **Windows 11 — WSL2** _(implemented for the supported scope, pending [owner-run
+  certification R01–R71](live-test-runbook-windows.md#results-record))_. The backend drives `wsl.exe` to
   import the hash-pinned Alpine minirootfs as a per-VM distro; its VHDX is the
   persistence layer. The managed distro disables drive automount and Windows
   interop, and host artifacts are streamed over `wsl.exe` stdin into
@@ -255,7 +255,8 @@ verbatim. The vsock channel above already gives it a clean way in.
 1. **Crate + macOS boot** _(done)_: backend trait, CLI, state
    store, VZ backend booting the pinned guest kernel with console
    logging, NAT networking, persistent data disk. The KVM backend remains
-   unavailable; the [WSL backend is owner-run validated separately](live-test-runbook-windows.md).
+   unavailable; the WSL backend's supported scope is pending the [owner-run
+   certification R01–R71](live-test-runbook-windows.md#results-record).
 2. **Guest image + k3s** _(done)_: rather than a fully custom
    initramfs, the boot media is a host-built FAT volume (pure Rust:
    fatfs + tar) carrying the Alpine modloop, an apkovl overlay, and
@@ -297,8 +298,9 @@ verbatim. The vsock channel above already gives it a clean way in.
    server-generated Dockerfile; `container` apps ship their own
    Dockerfile + context in the source zip. No Docker anywhere on the
    host.
-4. **KVM backend** _(not implemented)_ and **WSL backend** _(implemented and
-   [Windows owner-run validated](live-test-runbook-windows.md))_. The desktop
+4. **KVM backend** _(not implemented)_ and **WSL backend** _(implemented for
+   the supported scope, pending [Windows owner-run certification
+   R01–R71](live-test-runbook-windows.md#results-record))_. The desktop
    presents local execution as one **Local runtime** with a "sandbox with a
    virtual machine" toggle rather than an engine selector; WSL uses its
    `wsl.exe` channel while VZ uses the guest exec channel.

@@ -90,13 +90,13 @@ network principal.
 Payload integrity is verified on every open by the [immutable pre-open copy
 test](../packages/cli/src/appliance-runtime.spec.ts). WSL drvfs retains a
 verify-on-open TOCTOU residual because Windows can mutate payload bytes after
-verification; the owner run records that residual rather than treating drvfs
-as immutable ([Windows certification](live-test-runbook-windows.md#results-record)).
+verification; the pending owner run will record that residual rather than
+treating drvfs as immutable ([Windows certification](live-test-runbook-windows.md#results-record)).
 
 ### Windows 11 / WSL2 Runtime
 
-App Runtime is supported on the validated Windows 11 with WSL2 NAT path
-([owner-run certification](live-test-runbook-windows.md#app-runtime-owner-run-certification-ap-205ap-206)).
+App Runtime is in the supported Windows 11 with WSL2 NAT scope, pending the
+[owner-run certification R01–R71](live-test-runbook-windows.md#results-record).
 The per-VM `wslMode` defaults to `strict`: Runtime refuses manifests with
 egress grants while networkless apps may run
 ([strict-mode tests](../packages/cli/src/appliance-runtime.spec.ts)).
@@ -108,6 +108,11 @@ credential ([per-app selection and revocation tests](../packages/vm/src/egress.r
 [live steps 5–7](live-test-runbook-windows.md#5-strict-refusal)). These controls
 do not create a hard Windows egress boundary; see the [Windows egress
 contract](egress-firewall.md#windows-wsl-backend).
+
+Windows runtime install and unpack still require paths under MAX_PATH (260
+characters) unless `LongPathsEnabled` is enabled. The pending owner run records
+the registry posture and a greater-than-260-character install in
+[R23](live-test-runbook-windows.md#results-record).
 
 ## Desktop screens
 

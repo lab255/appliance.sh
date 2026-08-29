@@ -8,11 +8,12 @@ over HTTP (`packages/api-server/src/main.ts`, `routes/workloads/index.ts`).
 
 > **Prerequisites.** The managed VM needs a hypervisor: macOS uses
 > Virtualization.framework (nothing to install). The supported Windows scope is
-> **Windows 11 with WSL2 — dev machine + App Runtime**, validated by the
-> [Windows live-test certification](live-test-runbook-windows.md); its egress
-> boundary is a cooperative, bypassable proxy, as documented in the [Windows
-> egress contract](egress-firewall.md#windows-wsl-backend). Install WSL2 with
-> `wsl --install`, then reboot. **Linux support is coming soon** (KVM backend). First boot
+> **Windows 11 with WSL2 — dev machine + App Runtime** is the supported scope,
+> pending the [owner-run certification R01–R71](live-test-runbook-windows.md#results-record);
+> its egress boundary is a cooperative, bypassable proxy, as documented in the
+> [Windows egress contract](egress-firewall.md#windows-wsl-backend). Agent
+> sandboxes are macOS-only today. Install WSL2 with `wsl --install`, then
+> reboot. **Linux support is coming soon** (KVM backend). First boot
 > downloads a few components and can take a few minutes; subsequent boots are
 > fast.
 

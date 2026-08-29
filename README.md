@@ -5,10 +5,11 @@
 Everything local runs inside **one managed microVM**: a Kubernetes runtime, an image builder, the Appliance control plane (the same api-server that powers cloud installations, running as a plain binary in the guest), and the dev/agent sandbox. Your machine needs the `appliance` CLI and nothing else.
 
 **Supported platforms:** macOS (Virtualization.framework); **Windows 11 with
-WSL2 — dev machine + App Runtime**, validated by the [Windows live-test
-certification](docs/live-test-runbook-windows.md). Windows egress is a
-cooperative, bypassable proxy boundary, not a hard boundary; see the [Windows
-egress contract](docs/egress-firewall.md#windows-wsl-backend).
+WSL2 — dev machine + App Runtime** is the supported scope, pending the
+[owner-run certification R01–R71](docs/live-test-runbook-windows.md#results-record).
+Run `wsl --install` once and reboot if needed. Agent sandboxes are macOS-only
+today. Windows egress is a cooperative, bypassable proxy boundary, not a hard
+boundary; see the [Windows egress contract](docs/egress-firewall.md#windows-wsl-backend).
 
 ![The Appliance desktop app — Apps page](docs/images/desktop-apps.png)
 
@@ -142,8 +143,8 @@ Local deploys use the `local` profile, saved automatically when the VM first boo
 ## The managed VM
 
 `appliance vm up` (run implicitly by `init`, `dev`, `up`, and `agent`) boots an
-isolated microVM — Virtualization.framework on macOS and [WSL2 on validated
-Windows 11 dev-machine and App Runtime paths](docs/live-test-runbook-windows.md)
+isolated microVM — Virtualization.framework on macOS and [WSL2 for the supported
+Windows 11 dev-machine and App Runtime scope, pending owner-run certification](docs/live-test-runbook-windows.md#results-record)
 — containing:
 
 - **k3s** (Kubernetes) with hostname-routed ingress: `http://<app>-<env>.appliance.localhost:8081`

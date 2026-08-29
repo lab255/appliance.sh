@@ -45,7 +45,7 @@ and an `apps` block containing each Runtime app's exact host and TCP-port
 grants.
 Never interpret this as a host-enforced boundary
 ([policy rendering tests](../packages/vm/src/egress.rs), [owner-run step
-1](live-test-runbook-windows.md#1-clean-pool-and-strict-default)).
+2](live-test-runbook-windows.md#2-first-import-drive-gate-strict-default-and-samples)).
 
 Runtime defaults to strict mode:
 
@@ -101,7 +101,7 @@ WSL file-access residuals. [`creds.rs`](../packages/vm/src/creds.rs) covers the
 argv, ACL, capture, and no-capture paths. The managed distro disables drive
 automount and Windows interop in [`wsl.rs`](../packages/vm/src/backend/wsl.rs),
 but that does not constrain other distros or same-user Windows execution; the
-[drive-exposure gate](live-test-runbook-windows.md#0-drive-exposure-gate--before-any-runtime-payload-runs)
+[drive-exposure gate](live-test-runbook-windows.md#0-runtime-drive-exposure-gate)
 records the managed distro's posture.
 
 ## TLS inspection
