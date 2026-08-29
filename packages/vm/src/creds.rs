@@ -23,6 +23,9 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context};
+use appliance_credential_store::{
+    encode_identifier, AclFileStore, CredentialStore, StoreKey, VmBrokerFile,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::egress::host_matches;
@@ -53,7 +56,8 @@ impl CredentialHelper {
     /// compatibility on Unix.
     pub fn from_cli_arg(raw: String) -> anyhow::Result<Self> {
         if raw.trim_start().starts_with('[') {
-            let argv: Vec<String> = serde_json::from_str(&raw).context("parse --helper argv JSON")?;
+            let argv: Vec<String> =
+                serde_json::from_str(&raw).context("parse --helper argv JSON")?;
             if argv.is_empty() || argv.iter().any(String::is_empty) {
                 bail!("credential helper argv must contain a non-empty executable and arguments");
             }
@@ -93,23 +97,86 @@ pub struct CredentialConfig {
 }
 
 fn config_path(name: &str) -> PathBuf {
-    VmPaths::for_name(name).dir.join("egress-credentials.json")
+    credential_path(name, VmBrokerFile::Credentials)
 }
 
-fn secrets_path(name: &str) -> PathBuf {
-    VmPaths::for_name(name).dir.join("egress-secrets.json")
+#[cfg(not(test))]
+fn credential_store_root() -> PathBuf {
+    crate::store::vm_root()
+}
+
+#[cfg(test)]
+fn credential_store_root() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "appliance-vm-credential-tests-{}",
+        std::process::id()
+    ))
+}
+
+fn credential_store() -> AclFileStore {
+    AclFileStore::new(credential_store_root())
+}
+
+fn credential_key(name: &str, file: VmBrokerFile) -> anyhow::Result<StoreKey> {
+    StoreKey::vm_broker(encode_identifier(name), file).map_err(Into::into)
+}
+
+fn credential_path(name: &str, file: VmBrokerFile) -> PathBuf {
+    credential_store_root()
+        .join(encode_identifier(name))
+        .join(file.file_name())
 }
 
 pub fn load_config(name: &str) -> CredentialConfig {
-    load_config_path(&config_path(name))
+    let path = config_path(name);
+    let key = match credential_key(name, VmBrokerFile::Credentials) {
+        Ok(key) => key,
+        Err(error) => {
+            eprintln!("egress creds: ignoring invalid VM credential key: {error}");
+            return CredentialConfig::default();
+        }
+    };
+    let raw = match credential_store().get(&key) {
+        Ok(Some(raw)) => raw,
+        Ok(None) => return CredentialConfig::default(),
+        Err(error) => {
+            eprintln!(
+                "egress creds: ignoring unreadable {}: {error}",
+                path.display()
+            );
+            return CredentialConfig::default();
+        }
+    };
+    let file = match std::fs::File::open(&path) {
+        Ok(file) => file,
+        Err(error) => {
+            eprintln!(
+                "egress creds: ignoring unreadable {}: {error}",
+                path.display()
+            );
+            return CredentialConfig::default();
+        }
+    };
+    if verify_config_integrity(&path, &file).is_err() {
+        // Deliberately omit the principal, ACL, and file contents. This log
+        // can be surfaced to untrusted workloads and must remain secret-free.
+        eprintln!("egress creds: refusing credential config with unsafe ownership or permissions");
+        return CredentialConfig::default();
+    }
+    parse_config(&path, &raw)
 }
 
 fn load_config_path(path: &Path) -> CredentialConfig {
     let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CredentialConfig::default(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return CredentialConfig::default()
+        }
         Err(error) => {
-            eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+            eprintln!(
+                "egress creds: ignoring unreadable {}: {error}",
+                path.display()
+            );
             return CredentialConfig::default();
         }
     };
@@ -121,13 +188,23 @@ fn load_config_path(path: &Path) -> CredentialConfig {
     }
     let mut raw = String::new();
     if let Err(error) = file.read_to_string(&mut raw) {
-        eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+        eprintln!(
+            "egress creds: ignoring unreadable {}: {error}",
+            path.display()
+        );
         return CredentialConfig::default();
     }
-    match serde_json::from_str(&raw) {
+    parse_config(path, raw.as_bytes())
+}
+
+fn parse_config(path: &Path, raw: &[u8]) -> CredentialConfig {
+    match serde_json::from_slice(raw) {
         Ok(config) => config,
         Err(error) => {
-            eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+            eprintln!(
+                "egress creds: ignoring unreadable {}: {error}",
+                path.display()
+            );
             CredentialConfig::default()
         }
     }
@@ -135,13 +212,14 @@ fn load_config_path(path: &Path) -> CredentialConfig {
 
 pub fn save_config(name: &str, cfg: &CredentialConfig) -> anyhow::Result<()> {
     let path = config_path(name);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-        crate::fs_acl::restrict_to_current_user(parent)?;
-    }
-    std::fs::write(&path, serde_json::to_string_pretty(cfg)?)?;
-    if let Err(error) = crate::fs_acl::restrict_to_current_user(&path) {
-        let _ = std::fs::remove_file(&path);
+    let store = credential_store();
+    let key = credential_key(name, VmBrokerFile::Credentials)?;
+    store.put(&key, serde_json::to_string_pretty(cfg)?.as_bytes())?;
+    let integrity = std::fs::File::open(&path)
+        .map_err(Into::into)
+        .and_then(|file| verify_config_integrity(&path, &file));
+    if let Err(error) = integrity {
+        let _ = store.delete(&key);
         return Err(error);
     }
     Ok(())
@@ -154,7 +232,9 @@ fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<
     let uid = unsafe { libc::geteuid() };
     let file_metadata = file.metadata()?;
     let path_metadata = std::fs::symlink_metadata(path)?;
-    let parent = path.parent().context("credential config has no parent directory")?;
+    let parent = path
+        .parent()
+        .context("credential config has no parent directory")?;
     let parent_metadata = std::fs::symlink_metadata(parent)?;
     if path_metadata.file_type().is_symlink()
         || parent_metadata.file_type().is_symlink()
@@ -175,7 +255,9 @@ fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<
     use std::os::windows::fs::OpenOptionsExt;
     use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
 
-    let parent = path.parent().context("credential config has no parent directory")?;
+    let parent = path
+        .parent()
+        .context("credential config has no parent directory")?;
     let parent_file = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
@@ -201,10 +283,10 @@ mod windows_config_integrity {
     };
     use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
     use windows_sys::Win32::Security::{
-        CreateWellKnownSid, EqualSid, GetAce, GetLengthSid, IsValidAcl, IsValidSid, ACL,
-        ACE_INHERITED_OBJECT_TYPE_PRESENT, ACE_OBJECT_TYPE_PRESENT, DACL_SECURITY_INFORMATION,
-        OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE,
-        WinBuiltinAdministratorsSid, WinLocalSystemSid,
+        CreateWellKnownSid, EqualSid, GetAce, GetLengthSid, IsValidAcl, IsValidSid,
+        WinBuiltinAdministratorsSid, WinLocalSystemSid, ACE_INHERITED_OBJECT_TYPE_PRESENT,
+        ACE_OBJECT_TYPE_PRESENT, ACL, DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
+        PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         DELETE, FILE_APPEND_DATA, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, WRITE_DAC,
@@ -232,15 +314,23 @@ mod windows_config_integrity {
     fn well_known_sid(kind: i32) -> anyhow::Result<Vec<u8>> {
         let mut buffer = vec![0u8; SECURITY_MAX_SID_SIZE as usize];
         let mut size = buffer.len() as u32;
-        if unsafe { CreateWellKnownSid(kind, null_mut(), buffer.as_mut_ptr().cast(), &mut size) } == 0 {
+        if unsafe { CreateWellKnownSid(kind, null_mut(), buffer.as_mut_ptr().cast(), &mut size) }
+            == 0
+        {
             return Err(last_os_error("create well-known SID"));
         }
         Ok(buffer)
     }
 
-    unsafe fn allowed_ace_sid(ace: *const u8, ace_size: usize, ace_type: u32) -> anyhow::Result<PSID> {
+    unsafe fn allowed_ace_sid(
+        ace: *const u8,
+        ace_size: usize,
+        ace_type: u32,
+    ) -> anyhow::Result<PSID> {
         let mut offset = 8usize; // ACE_HEADER + ACCESS_MASK
-        if ace_type == ACCESS_ALLOWED_OBJECT_ACE_TYPE || ace_type == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE {
+        if ace_type == ACCESS_ALLOWED_OBJECT_ACE_TYPE
+            || ace_type == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE
+        {
             if ace_size < 12 {
                 bail!("truncated object ACE");
             }
@@ -379,8 +469,14 @@ pub fn remove_rule(name: &str, host: &str) -> anyhow::Result<bool> {
     Ok(removed)
 }
 
-fn first_matching<'a>(cfg: &'a CredentialConfig, host: &str, want: impl Fn(&CredentialRule) -> bool) -> Option<&'a CredentialRule> {
-    cfg.rules.iter().find(|r| want(r) && host_matches(host, &r.host))
+fn first_matching<'a>(
+    cfg: &'a CredentialConfig,
+    host: &str,
+    want: impl Fn(&CredentialRule) -> bool,
+) -> Option<&'a CredentialRule> {
+    cfg.rules
+        .iter()
+        .find(|r| want(r) && host_matches(host, &r.host))
 }
 
 // --- secret store (host-side, 0600) ---------------------------------
@@ -388,38 +484,25 @@ fn first_matching<'a>(cfg: &'a CredentialConfig, host: &str, want: impl Fn(&Cred
 type SecretMap = std::collections::BTreeMap<String, String>;
 
 fn secret_key(host: &str, header: &str) -> String {
-    format!("{}\t{}", host.to_ascii_lowercase(), header.to_ascii_lowercase())
+    format!(
+        "{}\t{}",
+        host.to_ascii_lowercase(),
+        header.to_ascii_lowercase()
+    )
 }
 
 fn load_secrets(name: &str) -> SecretMap {
-    std::fs::read_to_string(secrets_path(name))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+    let key = credential_key(name, VmBrokerFile::Secrets).ok();
+    key.and_then(|key| credential_store().get(&key).ok().flatten())
+        .and_then(|raw| serde_json::from_slice(&raw).ok())
         .unwrap_or_default()
 }
 
 fn save_secrets(name: &str, map: &SecretMap) -> anyhow::Result<()> {
-    let path = secrets_path(name);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-        crate::fs_acl::restrict_to_current_user(parent)?;
-    }
-    let tmp = path.with_file_name(format!(
-        "{}.tmp",
-        path.file_name()
-            .context("egress secrets path has no file name")?
-            .to_string_lossy()
-    ));
-    std::fs::write(&tmp, serde_json::to_string_pretty(map)?)?;
-    if let Err(error) = crate::fs_acl::restrict_to_current_user(&tmp) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(error);
-    }
-    if let Err(error) = std::fs::rename(&tmp, &path) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(error.into());
-    }
-    Ok(())
+    let key = credential_key(name, VmBrokerFile::Secrets)?;
+    credential_store()
+        .put(&key, serde_json::to_string_pretty(map)?.as_bytes())
+        .map_err(Into::into)
 }
 
 pub fn store_secret(name: &str, host: &str, header: &str, value: &str) -> anyhow::Result<()> {
@@ -433,7 +516,9 @@ fn get_secret(name: &str, host: &str, header: &str) -> Option<String> {
 }
 
 pub fn forget_secrets(name: &str) {
-    let _ = std::fs::remove_file(secrets_path(name));
+    if let Ok(key) = credential_key(name, VmBrokerFile::Secrets) {
+        let _ = credential_store().delete(&key);
+    }
 }
 
 /// Mask a secret for display: keep a short tail, redact the rest.
@@ -484,7 +569,12 @@ fn header_value(head: &str, name: &str) -> Option<String> {
 /// request into the secret store. Best-effort; returns the header name
 /// captured (for logging) when it stored something. Takes an
 /// already-loaded config so the interceptor reads it once per request.
-pub fn capture_from_head(cfg: &CredentialConfig, name: &str, host: &str, head: &str) -> Option<String> {
+pub fn capture_from_head(
+    cfg: &CredentialConfig,
+    name: &str,
+    host: &str,
+    head: &str,
+) -> Option<String> {
     let rule = first_matching(cfg, host, |r| r.capture)?;
     let value = header_value(head, &rule.header)?;
     if value.is_empty() {
@@ -539,7 +629,9 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
         None => get_secret(name, host, &rule.header),
     };
     match value {
-        Some(v) if !v.trim().is_empty() => Injection::Resolved(rule.header.clone(), v.trim().to_string()),
+        Some(v) if !v.trim().is_empty() => {
+            Injection::Resolved(rule.header.clone(), v.trim().to_string())
+        }
         _ => Injection::RuleButUnresolved,
     }
 }
@@ -605,21 +697,34 @@ fn validate_helper_program(path: &Path) -> anyhow::Result<PathBuf> {
     if !path.is_absolute() {
         bail!("credential helper executable must resolve to an absolute path");
     }
-    let metadata = std::fs::metadata(path)
-        .with_context(|| format!("credential helper executable does not exist: {}", path.display()))?;
+    let metadata = std::fs::metadata(path).with_context(|| {
+        format!(
+            "credential helper executable does not exist: {}",
+            path.display()
+        )
+    })?;
     if !metadata.is_file() {
-        bail!("credential helper executable is not a file: {}", path.display());
+        bail!(
+            "credential helper executable is not a file: {}",
+            path.display()
+        );
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         if metadata.permissions().mode() & 0o111 == 0 {
-            bail!("credential helper file is not executable: {}", path.display());
+            bail!(
+                "credential helper file is not executable: {}",
+                path.display()
+            );
         }
     }
     #[cfg(windows)]
     {
-        let extension = path.extension().and_then(|x| x.to_str()).unwrap_or_default();
+        let extension = path
+            .extension()
+            .and_then(|x| x.to_str())
+            .unwrap_or_default();
         if !extension.eq_ignore_ascii_case("exe") && !extension.eq_ignore_ascii_case("com") {
             bail!("credential helper executable must be an .exe or .com file on Windows");
         }
@@ -655,7 +760,9 @@ fn run_helper(helper: &CredentialHelper) -> anyhow::Result<String> {
             let (program, args) = argv
                 .split_first()
                 .filter(|(program, _)| !program.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("credential helper argv must start with an executable"))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!("credential helper argv must start with an executable")
+                })?;
             let mut command = Command::new(resolve_helper_program(program)?);
             command.args(args);
             command.stdin(std::process::Stdio::null());
@@ -706,7 +813,10 @@ pub fn set_header(head: &str, header: &str, value: &str) -> String {
         if line.is_empty() {
             break;
         }
-        let is_target = line.split_once(':').map(|(k, _)| k.trim().eq_ignore_ascii_case(header)).unwrap_or(false);
+        let is_target = line
+            .split_once(':')
+            .map(|(k, _)| k.trim().eq_ignore_ascii_case(header))
+            .unwrap_or(false);
         if is_target {
             continue; // drop; we re-add canonically below
         }
@@ -874,7 +984,10 @@ mod tests {
     #[test]
     fn header_value_is_case_insensitive() {
         let head = "POST / HTTP/1.1\r\nHost: x\r\nAuthorization:  Bearer abc \r\n\r\n";
-        assert_eq!(header_value(head, "authorization").as_deref(), Some("Bearer abc"));
+        assert_eq!(
+            header_value(head, "authorization").as_deref(),
+            Some("Bearer abc")
+        );
         assert_eq!(header_value(head, "missing"), None);
     }
 
@@ -901,13 +1014,17 @@ mod tests {
             Some("authorization")
         );
         let cfg = load_config(name);
-        let Injection::Resolved(header, value) = resolve_injection(&cfg, name, "api.example.com") else {
+        let Injection::Resolved(header, value) = resolve_injection(&cfg, name, "api.example.com")
+        else {
             panic!("expected a resolved injection");
         };
         assert_eq!(header, "authorization");
         assert_eq!(value, "Bearer secret-xyz");
         // A host with no matching rule resolves to NoRule.
-        assert!(matches!(resolve_injection(&cfg, name, "other.test"), Injection::NoRule));
+        assert!(matches!(
+            resolve_injection(&cfg, name, "other.test"),
+            Injection::NoRule
+        ));
         // Masking keeps only a short tail.
         let listed = list_secrets(name);
         assert_eq!(listed.len(), 1);
@@ -946,7 +1063,10 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("appliance-cred-helper-{}-{unique}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-cred-helper-{}-{unique}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let source = dir.join("helper.rs");
         std::fs::write(
@@ -960,7 +1080,11 @@ mod tests {
             }"###,
         )
         .unwrap();
-        let executable = dir.join(if cfg!(windows) { "helper.exe" } else { "helper" });
+        let executable = dir.join(if cfg!(windows) {
+            "helper.exe"
+        } else {
+            "helper"
+        });
         #[cfg(not(windows))]
         let rustc = resolve_helper_program("rustc").expect("rustc is on PATH during cargo test");
         #[cfg(windows)]
@@ -969,7 +1093,11 @@ mod tests {
             .find(|candidate| candidate.is_file())
             .expect("rustc is on PATH during cargo test");
         let status = Command::new(rustc)
-            .args([source.as_os_str(), std::ffi::OsStr::new("-o"), executable.as_os_str()])
+            .args([
+                source.as_os_str(),
+                std::ffi::OsStr::new("-o"),
+                executable.as_os_str(),
+            ])
             .status()
             .expect("compile argv credential helper");
         assert!(status.success());
@@ -981,16 +1109,26 @@ mod tests {
         let (dir, executable) = build_test_helper();
         let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned()]);
         let value = run_helper(&helper).expect("run argv credential helper");
-        let envelope: serde_json::Value = serde_json::from_str(&value).expect("helper envelope JSON");
-        assert_eq!(envelope, serde_json::json!({ "kind": "api-key", "value": "from-argv" }));
+        let envelope: serde_json::Value =
+            serde_json::from_str(&value).expect("helper envelope JSON");
+        assert_eq!(
+            envelope,
+            serde_json::json!({ "kind": "api-key", "value": "from-argv" })
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn helper_rejects_multiline_output() {
         let (dir, executable) = build_test_helper();
-        let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned(), "--multiline".into()]);
-        assert_eq!(run_helper(&helper).unwrap_err().to_string(), "credential helper output must be a single line");
+        let helper = CredentialHelper::Argv(vec![
+            executable.to_string_lossy().into_owned(),
+            "--multiline".into(),
+        ]);
+        assert_eq!(
+            run_helper(&helper).unwrap_err().to_string(),
+            "credential helper output must be a single line"
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1018,7 +1156,10 @@ mod tests {
         ]);
         let encoded = serde_json::to_string(&argv).unwrap();
         assert!(encoded.starts_with('['));
-        assert_eq!(serde_json::from_str::<CredentialHelper>(&encoded).unwrap(), argv);
+        assert_eq!(
+            serde_json::from_str::<CredentialHelper>(&encoded).unwrap(),
+            argv
+        );
         assert_eq!(
             serde_json::from_str::<CredentialHelper>(r#""printf legacy""#).unwrap(),
             CredentialHelper::legacy("printf legacy")
@@ -1072,7 +1213,10 @@ mod tests {
         // ...and it also has *a* cred rule (so MITM is scoped to it)...
         assert!(has_cred_rule(name, "api.anthropic.com"));
         // A host with no rule is neither intercepted nor inject-gated.
-        assert!(matches!(resolve_injection(&cfg, name, "example.com"), Injection::NoRule));
+        assert!(matches!(
+            resolve_injection(&cfg, name, "example.com"),
+            Injection::NoRule
+        ));
         assert!(!has_cred_rule(name, "example.com"));
         let _ = remove_rule(name, "api.anthropic.com");
     }
