@@ -51,8 +51,6 @@ appliance runtime uninstall my-app
 Installation records the app in the current workspace target. Use `--profile` for another target. The CLI shows publisher and requested
 control prompts before accepting grants when confirmation is required.
 
-On Windows, runtime install and unpack still require paths under MAX_PATH (260 characters) unless LongPathsEnabled is enabled.
-
 ## Inspect and control running apps
 
 ```sh
@@ -89,8 +87,27 @@ and TLS inspection is on. Each app has its own runtime principal, payload,
 process controls, policy, state, and logs; compound services share the app's
 network principal.
 
-Payload integrity is verified on every open; WSL drvfs retains a TOCTOU
-residual because Windows can mutate payload bytes after verification.
+Payload integrity is verified on every open by the [immutable pre-open copy
+test](../packages/cli/src/appliance-runtime.spec.ts). WSL drvfs retains a
+verify-on-open TOCTOU residual because Windows can mutate payload bytes after
+verification; the owner run records that residual rather than treating drvfs
+as immutable ([Windows certification](live-test-runbook-windows.md#results-record)).
+
+### Windows 11 / WSL2 Runtime
+
+App Runtime is supported on the validated Windows 11 with WSL2 NAT path
+([owner-run certification](live-test-runbook-windows.md#app-runtime-owner-run-certification-ap-205ap-206)).
+The per-VM `wslMode` defaults to `strict`: Runtime refuses manifests with
+egress grants while networkless apps may run
+([strict-mode tests](../packages/cli/src/appliance-runtime.spec.ts)).
+
+`cooperative` is an explicit, bypassable proxy mode. Each app start receives
+its own proxy credential, policy selection never unions grants across apps,
+credential-less requests receive 407, and stop/uninstall/delete revokes that
+credential ([per-app selection and revocation tests](../packages/vm/src/egress.rs),
+[live steps 5–7](live-test-runbook-windows.md#5-strict-refusal)). These controls
+do not create a hard Windows egress boundary; see the [Windows egress
+contract](egress-firewall.md#windows-wsl-backend).
 
 ## Desktop screens
 

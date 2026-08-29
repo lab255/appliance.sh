@@ -43,7 +43,9 @@ WSL VMs use `netLink: "nat"`, and `appliance vm egress policy` reports
 {"backend":"wsl","bypassable":true,"scope":["http","https","per-app"]}`
 and an `apps` block containing each Runtime app's exact host and TCP-port
 grants.
-Never interpret this as a host-enforced boundary.
+Never interpret this as a host-enforced boundary
+([policy rendering tests](../packages/vm/src/egress.rs), [owner-run step
+1](live-test-runbook-windows.md#1-clean-pool-and-strict-default)).
 
 Runtime defaults to strict mode:
 
@@ -64,6 +66,10 @@ use direct TCP, UDP other than DNS, or raw IP. DNS must go through the proxy
 using CONNECT by hostname; direct UDP 53 is dropped. `egress list` states the
 bypass limitation in its header and shows per-app rows without exposing
 credentials.
+These strict/cooperative and per-app assertions are covered by the [CLI mode
+tests](../packages/cli/src/appliance-runtime.spec.ts), [authenticated selector
+tests](../packages/vm/src/egress.rs), and [owner-run steps
+5–7](live-test-runbook-windows.md#5-strict-refusal).
 
 The per-VM value is persisted as `wslMode` in `vm.json`. New VMs capture the
 optional global default from `~/.appliance/settings.json`:
@@ -73,7 +79,8 @@ optional global default from `~/.appliance/settings.json`:
 ```
 
 Missing or invalid values resolve to strict. Changing the global value never
-silently widens an existing VM.
+silently widens an existing VM
+([VM-spec default tests](../packages/vm/src/spec.rs)).
 
 For a blocked request, inspect recent denials and allow only the required host:
 
@@ -93,7 +100,9 @@ ACL-reset files. Explicit capture writes a cleartext header to
 WSL file-access residuals. [`creds.rs`](../packages/vm/src/creds.rs) covers the
 argv, ACL, capture, and no-capture paths. The managed distro disables drive
 automount and Windows interop in [`wsl.rs`](../packages/vm/src/backend/wsl.rs),
-but that does not constrain other distros or same-user Windows execution.
+but that does not constrain other distros or same-user Windows execution; the
+[drive-exposure gate](live-test-runbook-windows.md#0-drive-exposure-gate--before-any-runtime-payload-runs)
+records the managed distro's posture.
 
 ## TLS inspection
 
@@ -111,7 +120,7 @@ appliance vm egress gateway
 `HTTPS_PROXY` and CA values used by guest workloads. Credential capture and
 injection rules are separate from packaged-app inspection. Brokered credential
 injection is disabled on WSL v1 because exact-lease attribution cannot survive
-Runtime SNAT.
+Runtime SNAT ([peer-attribution tests](../packages/vm/src/egress.rs)).
 
 ## Development-VM traffic log
 

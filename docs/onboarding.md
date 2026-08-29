@@ -7,9 +7,12 @@ running as a guest binary inside the VM and reads for workloads/logs served
 over HTTP (`packages/api-server/src/main.ts`, `routes/workloads/index.ts`).
 
 > **Prerequisites.** The managed VM needs a hypervisor: macOS uses
-> Virtualization.framework (nothing to install); Windows needs **WSL2**
-> (`wsl --install`, then reboot). **Linux support is coming soon** (KVM
-> backend). First boot
+> Virtualization.framework (nothing to install). The supported Windows scope is
+> **Windows 11 with WSL2 — dev machine + App Runtime**, validated by the
+> [Windows live-test certification](live-test-runbook-windows.md); its egress
+> boundary is a cooperative, bypassable proxy, as documented in the [Windows
+> egress contract](egress-firewall.md#windows-wsl-backend). Install WSL2 with
+> `wsl --install`, then reboot. **Linux support is coming soon** (KVM backend). First boot
 > downloads a few components and can take a few minutes; subsequent boots are
 > fast.
 
