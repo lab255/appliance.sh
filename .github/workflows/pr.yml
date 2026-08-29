@@ -95,7 +95,7 @@ jobs:
           retention-days: 7
 
   verify-rust:
-    name: Verify (Rust microVM crate)
+    name: Verify (Rust crates)
     runs-on: macos-latest
     permissions:
       contents: read
@@ -109,7 +109,15 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: packages/vm
+          workspaces: |
+            packages/credential-store
+            packages/vm
+      - name: cargo build / test / clippy (credential store)
+        working-directory: packages/credential-store
+        run: |
+          cargo build --all-features
+          cargo test --all-features
+          cargo clippy --all-features --all-targets -- -D warnings
       - name: cargo build / test / clippy
         working-directory: packages/vm
         run: |
@@ -145,6 +153,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: |
+            packages/credential-store
             packages/desktop/src-tauri
             packages/vm
       - name: Install dependencies
@@ -176,5 +185,9 @@ jobs:
           New-Item -ItemType File -Force packages/desktop/src-tauri/vm-bin/appliance-vm.exe | Out-Null
       - name: Check desktop Rust
         run: cargo check --manifest-path packages/desktop/src-tauri/Cargo.toml
+      - name: Test credential store Rust
+        run: >-
+          cargo test --manifest-path packages/credential-store/Cargo.toml
+          --all-features
       - name: Check microVM Rust
         run: cargo check --manifest-path packages/vm/Cargo.toml
