@@ -757,8 +757,8 @@ function nodeAgentEntry(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'appliance-agent.js');
 }
 
-/** Resolve the ABSOLUTE host command the proxy runs (via `sh -c`) to
- *  fetch the key, pinning the entry path (never PATH-relative).
+/** Resolve the host argv the proxy spawns directly to fetch the key, pinning
+ *  the executable and development entry paths (never PATH-relative).
  *
  *  Shipping path: the CLI runs as the Bun-compiled single binary
  *  (`bin/appliance.js` exec's `appliance-bin` / `dist/appliance`), so
@@ -768,18 +768,24 @@ function nodeAgentEntry(): string {
  *  so we run the agent subcommand entry DIRECTLY from a module-relative
  *  path — independent of the dispatcher-clobbered `process.argv[1]`.
  *
- *  `--type <agent>` is pinned in so the helper reads THAT agent's stored cred
- *  from THAT provider's store and emits its scheme (docs/multi-agent-adapters
- *  §2). The type is a fixed registry key (no metachars) but shQuoted anyway. */
-export function printKeyHelperCommand(type: string): string {
+ *  `--type <agent>` is one literal argv element, so no shell quoting or
+ *  interpolation is involved. */
+export function printKeyHelperCommand(type: string): string[] {
   const exe = process.execPath;
+  if (!path.isAbsolute(exe)) {
+    throw new Error(`credential helper executable must be absolute (got '${exe}')`);
+  }
   const base = path.basename(exe).toLowerCase();
   if (base.startsWith('appliance')) {
-    return `${shQuote(exe)} agent print-key --type ${shQuote(type)}`;
+    return [exe, 'agent', 'print-key', '--type', type];
   }
   // `<interpreter> <appliance-agent.js> print-key --type <agent>` — the entry's
   // own program (`appliance agent`) dispatches `print-key`.
-  return `${shQuote(exe)} ${shQuote(nodeAgentEntry())} print-key --type ${shQuote(type)}`;
+  const entry = nodeAgentEntry();
+  if (!path.isAbsolute(entry)) {
+    throw new Error(`credential helper entry must be absolute (got '${entry}')`);
+  }
+  return [exe, entry, 'print-key', '--type', type];
 }
 
 /** The proxy/CA/placeholder env, rendered as `K=V` assignments for an
@@ -983,7 +989,12 @@ function resolveProxyUrl(vm: string): string {
  *  `first_matching(inject)` stays unambiguous — docs/agent-login.md §2). The
  *  placeholder never enters egress-secrets.json (capture:false). */
 export function configureBroker(vm: string, adapter: AgentAdapter, mode: AuthMode): void {
-  const helper = printKeyHelperCommand(adapter.type);
+  // `--helper` crosses one process argv boundary, so encode the helper array as
+  // JSON. appliance-vm parses it back into CredentialHelper::Argv and persists
+  // the array itself (not this transport string) in egress-credentials.json.
+  // Upserting the host also migrates a persisted legacy helper on next login or
+  // agent start.
+  const helper = JSON.stringify(printKeyHelperCommand(adapter.type));
   const args = ['creds', 'add', adapter.apiHost, '--name', vm, '--header', mode.header, '--inject', '--helper', helper];
   const code = runVm(args);
   if (code !== 0) throw new Error(`failed to write the credential rule for ${adapter.apiHost} (exit ${code})`);

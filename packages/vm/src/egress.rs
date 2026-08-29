@@ -68,6 +68,49 @@ pub struct EgressPolicy {
     pub mitm: bool,
 }
 
+/// Whether policy is a hard host boundary or a bypassable guest proxy.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EgressBoundary {
+    Enforced,
+    Cooperative,
+}
+
+impl EgressBoundary {
+    pub fn for_link(netstack: bool) -> Self {
+        if netstack {
+            Self::Enforced
+        } else {
+            Self::Cooperative
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Enforced => "enforced (netstack)",
+            Self::Cooperative => "cooperative (in-guest proxy)",
+        }
+    }
+}
+
+/// Machine-readable effective policy returned by `egress policy`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EgressPolicyOutput {
+    #[serde(flatten)]
+    pub policy: EgressPolicy,
+    pub boundary: EgressBoundary,
+}
+
+impl EgressPolicyOutput {
+    pub fn new(policy: EgressPolicy, netstack: bool) -> Self {
+        Self {
+            policy,
+            boundary: EgressBoundary::for_link(netstack),
+        }
+    }
+}
+
 /// Host-enforced policy for one runnable app/service leaf. The runtime
 /// controller writes this resolved record to
 /// `~/.appliance/runtime/<app>/effective.json`; it is deliberately free of
@@ -692,6 +735,11 @@ pub fn effective_policy(name: &str) -> EgressPolicy {
     }
 }
 
+pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
+    let netstack = is_netstack(name);
+    EgressPolicyOutput::new(effective_policy(name), netstack)
+}
+
 /// Render the **effective** egress policy as a human-readable report.
 ///
 /// For a Netstack VM this reconciles the persisted file (which keeps the
@@ -709,19 +757,23 @@ pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: b
     let mut out = String::new();
 
     if netstack {
+        let boundary = EgressBoundary::for_link(true);
         out.push_str(&format!(
-            "EFFECTIVE egress policy for '{name}'  (net_link=Netstack — host-enforced boundary)\n"
+            "EFFECTIVE egress policy for '{name}'  (boundary: {})\n",
+            boundary.label()
         ));
         out.push_str(
             "  default: DENY  (host-enforced; the persisted file keeps the serde-default allow, the netstack forces deny)\n",
         );
     } else {
+        let boundary = EgressBoundary::for_link(false);
         let default = match persisted.default {
             Action::Allow => "ALLOW",
             Action::Deny => "DENY",
         };
         out.push_str(&format!(
-            "egress policy for '{name}'  (net_link=Nat — cooperative proxy)\n"
+            "egress policy for '{name}'  (boundary: {})\n",
+            boundary.label()
         ));
         out.push_str(&format!("  default: {default}\n"));
     }
@@ -1447,7 +1499,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("printf real-key".into()),
+                helper: Some(crate::creds::CredentialHelper::legacy("printf real-key")),
             },
         )
         .unwrap();
@@ -1631,7 +1683,7 @@ mod tests {
         let out = render_effective_policy("agent", &persisted, true);
 
         // The EFFECTIVE boundary is shown as Deny, not the persisted Allow.
-        assert!(out.contains("net_link=Netstack"));
+        assert!(out.contains("boundary: enforced (netstack)"));
         assert!(out.contains("default: DENY"));
         assert!(!out.contains("default: ALLOW"));
 
@@ -1661,11 +1713,31 @@ mod tests {
             mitm: true,
         };
         let out = render_effective_policy("dev", &persisted, false);
-        assert!(out.contains("net_link=Nat"));
+        assert!(out.contains("boundary: cooperative (in-guest proxy)"));
         assert!(out.contains("default: ALLOW"));
         assert!(!out.contains("baked allowlist"));
         assert!(out.contains("✓ example.com"));
         assert!(out.contains("TLS interception (mitm): on"));
+    }
+
+    #[test]
+    fn policy_output_labels_both_boundary_kinds() {
+        let policy = EgressPolicy::default();
+        let enforced = EgressPolicyOutput::new(policy.clone(), true);
+        let cooperative = EgressPolicyOutput::new(policy, false);
+
+        assert_eq!(enforced.boundary, EgressBoundary::Enforced);
+        assert_eq!(enforced.boundary.label(), "enforced (netstack)");
+        assert_eq!(cooperative.boundary, EgressBoundary::Cooperative);
+        assert_eq!(cooperative.boundary.label(), "cooperative (in-guest proxy)");
+        assert_eq!(
+            serde_json::to_value(enforced).unwrap()["boundary"],
+            "enforced"
+        );
+        assert_eq!(
+            serde_json::to_value(cooperative).unwrap()["boundary"],
+            "cooperative"
+        );
     }
 
     #[test]

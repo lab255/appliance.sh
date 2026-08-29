@@ -1151,7 +1151,8 @@ export function createMockHost(): ConsoleHost {
             async get() {
               await sleep(100);
               const netLink = vm.egress.netLink ?? 'nat';
-              return { ...vm.egress, netLink, enforced: netLink === 'netstack' };
+              const boundary = netLink === 'netstack' ? 'enforced' : 'cooperative';
+              return { ...vm.egress, boundary, netLink, enforced: boundary === 'enforced' };
             },
             async setDefault(action: 'allow' | 'deny') {
               await sleep(150);
@@ -1177,7 +1178,14 @@ export function createMockHost(): ConsoleHost {
               // Clears the operator's persisted rules; the net link (and so
               // the enforced default-DENY boundary for a Netstack VM) is
               // unchanged.
-              vm.egress = { default: 'allow', allow: [], deny: [], mitm: false, netLink: vm.egress.netLink };
+              vm.egress = {
+                default: 'allow',
+                allow: [],
+                deny: [],
+                mitm: false,
+                boundary: vm.egress.boundary,
+                netLink: vm.egress.netLink,
+              };
             },
             async log(tail?: number) {
               await sleep(100);
@@ -1237,7 +1245,13 @@ export function createMockHost(): ConsoleHost {
                 secrets: vm.creds.secrets.map((s) => ({ ...s })),
               };
             },
-            async add(rule: { host: string; capture: boolean; inject: boolean; header?: string; helper?: string }) {
+            async add(rule: {
+              host: string;
+              capture: boolean;
+              inject: boolean;
+              header?: string;
+              helper?: string | string[];
+            }) {
               await sleep(120);
               const next = {
                 host: rule.host,
@@ -1344,11 +1358,12 @@ interface MockVm {
     deny: string[];
     mitm: boolean;
     caPath?: string;
+    boundary?: 'enforced' | 'cooperative';
     /** Mirrors the VM's resolved net link; drives the enforced-boundary UI. */
     netLink?: 'netstack' | 'nat';
   };
   creds: {
-    rules: Array<{ host: string; capture: boolean; inject: boolean; header: string; helper?: string }>;
+    rules: Array<{ host: string; capture: boolean; inject: boolean; header: string; helper?: string | string[] }>;
     secrets: Array<{ host: string; header: string; masked: string }>;
   };
   /** Coding agents launched into this VM (Phase 5, A5). */
@@ -1394,6 +1409,7 @@ const microVms: Record<string, MockVm> = {
       allow: ['api.anthropic.com', 'github.com', 'internal.example.test'],
       deny: ['telemetry.evil.test'],
       mitm: true,
+      boundary: 'enforced',
       caPath: '~/.appliance/vm/traffic/egress-ca.pem',
       netLink: 'netstack',
     },
