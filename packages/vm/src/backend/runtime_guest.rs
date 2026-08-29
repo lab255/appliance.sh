@@ -30,6 +30,7 @@ const WSL_DRVFS_SHARE_MOUNT: &str = r#"#!/bin/sh
 set -eu
 TAG=${1:-}
 HOST_PATH=${2:-}
+STATE_DIR_WIN='__STATE_DIR_WIN__'
 case "$TAG" in ap-[0-9a-f]*) ;; *) echo "invalid runtime share tag" >&2; exit 2;; esac
 TAG_HEX=${TAG#ap-}
 case "$TAG_HEX" in ''|*[!0-9a-f]*) echo "invalid runtime share tag" >&2; exit 2;; esac
@@ -38,9 +39,14 @@ HOST_PATH=${HOST_PATH#\\\\?\\}
 case "$HOST_PATH" in ''|\\\\*|//* ) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 case "$HOST_PATH" in [A-Za-z]:[\\/]* ) ;; *) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 case "$HOST_PATH" in *'\'..'\'*|*'\'..'/'*|*/..'\'*|*/../*|*'\'..|*/..) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
+case "$HOST_PATH" in [A-Za-z]:[\\/] ) echo "WSL runtime share path must not be a drive root" >&2; exit 2;; esac
+case "$HOST_PATH" in "$STATE_DIR_WIN"|"$STATE_DIR_WIN"[\\/]*) echo "WSL runtime share path must not include appliance state" >&2; exit 2;; esac
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 if ! grep -qs " $SHARE " /proc/mounts; then
+  # Guest root can still issue its own drvfs mounts; accepted pending the
+  # Runtime owner model. drvfs metadata also leaves 0777 cross-principal
+  # reads as a follow-up even though this appliance-managed mount is read-only.
   mount -t drvfs "$HOST_PATH" "$SHARE" -o ro,uid=1000,gid=1000,metadata
 fi
 "#;
@@ -64,6 +70,16 @@ pub const fn runtime_share_mount_script(backend: RuntimeGuestBackend) -> &'stati
         RuntimeGuestBackend::VirtioFs => VIRTIOFS_SHARE_MOUNT,
         RuntimeGuestBackend::WslDrvFs => WSL_DRVFS_SHARE_MOUNT,
     }
+}
+
+/// Render the WSL helper with the canonical Windows appliance state directory
+/// embedded so the guest independently rejects a forged/stale Runtime plan.
+#[cfg(any(target_os = "windows", test))]
+pub fn wsl_runtime_share_mount_script(state_dir: &str) -> String {
+    WSL_DRVFS_SHARE_MOUNT.replace(
+        "__STATE_DIR_WIN__",
+        &shell_squote(strip_verbatim(state_dir)),
+    )
 }
 
 pub const fn runtime_share_unmount_script() -> &'static str {
@@ -145,7 +161,18 @@ pub fn validate_wsl_runtime_host_path(path: &str) -> Result<()> {
     if path.split(['\\', '/']).any(|component| component == "..") {
         bail!("WSL Runtime payload share path must not contain traversal");
     }
+    if is_wsl_drive_root(path) {
+        bail!("WSL Runtime payload share path must not be a drive root");
+    }
     Ok(())
+}
+
+pub fn is_wsl_drive_root(path: &str) -> bool {
+    let path = strip_verbatim(path);
+    path.len() >= 3
+        && path.as_bytes()[0].is_ascii_alphabetic()
+        && path.as_bytes()[1] == b':'
+        && path[2..].trim_matches(|c| c == '\\' || c == '/').is_empty()
 }
 
 /// Reject a mount that overlaps the appliance state directory in either
@@ -271,7 +298,7 @@ mod tests {
 
     #[test]
     fn drvfs_helper_targets_only_the_granted_read_only_share() {
-        let script = runtime_share_mount_script(RuntimeGuestBackend::WslDrvFs);
+        let script = wsl_runtime_share_mount_script(r"C:\Users\Avery\.appliance\vm");
         assert!(script
             .contains("mount -t drvfs \"$HOST_PATH\" \"$SHARE\" -o ro,uid=1000,gid=1000,metadata"));
         assert!(script.contains("SHARE=/run/appliance/shares/$TAG"));
@@ -316,7 +343,7 @@ mod tests {
         let helper = root.join("runtime-share-mount");
         std::fs::write(
             &helper,
-            runtime_share_mount_script(RuntimeGuestBackend::WslDrvFs),
+            wsl_runtime_share_mount_script(r"C:\Users\Avery\.appliance\vm"),
         )
         .unwrap();
         let mount_log = root.join("mount.log");
@@ -343,6 +370,9 @@ mod tests {
         assert!(!run(r"C:\payload\..\escape").status.success());
         assert!(!run("/mnt/c/payload").status.success());
         assert!(!run(r"\\server\share").status.success());
+        assert!(!run(r"D:\").status.success());
+        assert!(!run(r"C:\Users\Avery\.appliance\vm").status.success());
+        assert!(!run(r"C:\Users\Avery\.appliance\vm\pool").status.success());
         assert!(run(r"D:\payload").status.success());
         assert_confined();
         assert!(run(r"\\?\D:\payload").status.success());
@@ -372,6 +402,7 @@ mod tests {
             r"relative\payload",
             r"\\?\Volume{abc}\payload",
             r"C:\payload\..\state",
+            r"D:\",
             "/mnt/c/payload",
         ] {
             assert!(

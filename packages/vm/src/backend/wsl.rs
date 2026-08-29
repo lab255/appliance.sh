@@ -1038,6 +1038,11 @@ fn build_bootstrap(
     let project_id = mount
         .map(|p| crate::images::content_sha256_hex(p.as_bytes())[..16].to_string())
         .unwrap_or_default();
+    let state_dir = std::fs::canonicalize(crate::store::vm_root())
+        .context("canonicalize appliance VM state directory")?;
+    let state_dir = strip_verbatim(&state_dir.to_string_lossy()).to_string();
+    let runtime_share_mount =
+        crate::backend::runtime_guest::wsl_runtime_share_mount_script(&state_dir);
 
     let k3s_block = if spec.runtime {
         String::new()
@@ -1158,9 +1163,7 @@ fn build_bootstrap(
         )
         .replace(
             "__RUNTIME_SHARE_MOUNT__",
-            crate::backend::runtime_guest::runtime_share_mount_script(
-                crate::backend::runtime_guest::RuntimeGuestBackend::WslDrvFs,
-            ),
+            &runtime_share_mount,
         )
         .replace(
             "__RUNTIME_SHARE_UNMOUNT__",
