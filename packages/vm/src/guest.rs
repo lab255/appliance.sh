@@ -1619,6 +1619,11 @@ fi
 printf '%s' "$REQ" | jq -r '(.plan.target.env // .plan.env) | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
 if [ "$KIND" = binary ]; then
   printf '%s' "$REQ" | jq -r '.plan.target.args[] | @base64' > "$STATE/args.txt"
+  if grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv"; then
+    cp /usr/local/share/ca-certificates/appliance-egress.crt "$STAGED/appliance-egress-ca.pem"
+    chown "$UID_NUM:$UID_NUM" "$STAGED/appliance-egress-ca.pem"
+    chmod 0444 "$STAGED/appliance-egress-ca.pem"
+  fi
 else
   : > "$STATE/args.txt"
 fi
@@ -1666,6 +1671,9 @@ nohup setsid sh -c '
     DECODED=$(printf '%s' "$VALUE" | base64 -d)
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
+  if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv"; then
+    set -- "$@" --mount type=bind,src=/usr/local/share/ca-certificates/appliance-egress.crt,dst=/appliance-egress-ca.pem,options=rbind:ro
+  fi
   set +e
   if [ "$KIND" = container ]; then
     ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" "$IMAGE" "$CID" >> "$STATE/current.log" 2>&1
@@ -2056,6 +2064,12 @@ start_service() {
     jq -r '.target.args[] | @base64' "$SERVICE/plan.json" > "$SERVICE/args.txt"
   else echo failed > "$SERVICE/state"; return 1; fi
 
+  if [ "$KIND" = binary ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$SERVICE/env.tsv"; then
+    cp /usr/local/share/ca-certificates/appliance-egress.crt "$STAGED/appliance-egress-ca.pem"
+    chown "$UID_NUM:$UID_NUM" "$STAGED/appliance-egress-ca.pem"
+    chmod 0444 "$STAGED/appliance-egress-ca.pem"
+  fi
+
   jq -r '
     .plan.services[] |
     .name as $service |
@@ -2088,6 +2102,9 @@ start_service() {
         DECODED=$(printf "%s" "$VALUE" | base64 -d)
         set -- "$@" --env "$KEY=$DECODED"
       done < "$SERVICE/env.tsv"
+      if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf "\t")" "$SERVICE/env.tsv"; then
+        set -- "$@" --mount type=bind,src=/usr/local/share/ca-certificates/appliance-egress.crt,dst=/appliance-egress-ca.pem,options=rbind:ro
+      fi
       set +e
       if [ "$KIND" = container ]; then
         IMAGE=$(cat "$SERVICE/image")
@@ -3954,6 +3971,8 @@ mod tests {
         assert!(supervisor.contains("TCP-LISTEN:$RELAY,bind=$ETH0_IP"));
         assert!(supervisor.contains("MAX_LOG_BYTES=8388608"));
         assert!(supervisor.contains("$STATE/log-base"));
+        assert!(supervisor.contains("APPLIANCE_EGRESS_CA"));
+        assert!(supervisor.contains("dst=/appliance-egress-ca.pem"));
 
         for line in supervisor.lines().filter(|line| line.trim_start().starts_with("nft ")) {
             assert!(!line.contains("|| true"), "nft rule must fail closed: {line}");
@@ -4065,5 +4084,7 @@ mod tests {
         assert!(supervisor.contains("echo \"$ATTEMPT\" > \"$SERVICE/restart-count\""));
         assert!(supervisor.contains("[ \"$DELAY\" -le 30 ] || DELAY=30"));
         assert!(supervisor.contains("$SERVICES/$SVC/current.log"));
+        assert!(supervisor.contains("APPLIANCE_EGRESS_CA"));
+        assert!(supervisor.contains("dst=/appliance-egress-ca.pem"));
         assert!(RUNTIME_SUPERVISOR.contains("appliance-runtime-compound-supervisor"));
     }

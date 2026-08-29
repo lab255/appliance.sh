@@ -32,7 +32,7 @@ mod wsl_config;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use spec::{runtime_mount_tag, NetLink, PublishedPort, RuntimeMount, VmPaths, VmSpec, VmStatus};
+use spec::{runtime_mount_tag, NetLink, PublishedPort, RuntimeMount, VmPaths, VmSpec, VmStatus, WslMode};
 use std::io::Read;
 use std::net::SocketAddr;
 use std::process::Command;
@@ -48,6 +48,7 @@ struct Cli {
 }
 
 const DEFAULT_VM: &str = "appliance";
+const DEFAULT_RUNTIME_VM: &str = "appliance-runtime";
 
 #[derive(Subcommand)]
 enum Cmd {
@@ -416,6 +417,8 @@ enum RuntimePolicyCmd {
     Set { vm: String, principal: String },
     /// Print the installed effective policy for a principal.
     Get { vm: String, principal: String },
+    /// Remove an app's installed policy from the WSL VM-wide union.
+    Remove { vm: String, principal: String },
 }
 
 #[derive(Subcommand)]
@@ -518,6 +521,12 @@ enum EgressCmd {
     /// even though the persisted file keeps the serde-default allow.
     List {
         #[arg(default_value = DEFAULT_VM)]
+        name: String,
+    },
+    /// Read or set the WSL Runtime egress posture (strict | cooperative).
+    WslMode {
+        mode: Option<String>,
+        #[arg(long, default_value = DEFAULT_RUNTIME_VM)]
         name: String,
     },
     /// Show blocked egress attempts (host + count + last-seen) and the
@@ -1810,6 +1819,36 @@ fn validate_runtime_env(env: &std::collections::BTreeMap<String, String>, compou
     Ok(())
 }
 
+fn inject_runtime_proxy_environment(plan: &mut RuntimePlan, proxy: &str) {
+    let values = [
+        ("HTTP_PROXY", proxy),
+        ("HTTPS_PROXY", proxy),
+        ("http_proxy", proxy),
+        ("https_proxy", proxy),
+        ("NO_PROXY", egress::runtime_no_proxy()),
+        ("no_proxy", egress::runtime_no_proxy()),
+        ("APPLIANCE_EGRESS_CA", "/appliance-egress-ca.pem"),
+        ("NODE_EXTRA_CA_CERTS", "/appliance-egress-ca.pem"),
+    ];
+    let inject = |env: &mut std::collections::BTreeMap<String, String>| {
+        for (name, value) in values {
+            env.insert(name.to_string(), value.to_string());
+        }
+    };
+    match &mut plan.workload {
+        RuntimePlanWorkload::Container { env, .. } => inject(env),
+        RuntimePlanWorkload::Binary { target } => inject(&mut target.env),
+        RuntimePlanWorkload::Compound { services } => {
+            for service in services {
+                match &mut service.workload {
+                    RuntimeServiceWorkload::Container { env, .. } => inject(env),
+                    RuntimeServiceWorkload::Binary { target } => inject(&mut target.env),
+                }
+            }
+        }
+    }
+}
+
 fn validate_runtime_plan_against_spec(
     name: &str,
     plan: &mut RuntimePlan,
@@ -1857,6 +1896,10 @@ fn validate_runtime_plan_against_spec(
         if !matches {
             bail!("runtime start port '{}' does not match the persisted pool spec", port.name);
         }
+    }
+    if backend_name == "wsl" && spec.wsl_mode == WslMode::Cooperative {
+        let proxy = egress::guest_proxy_url(name, spec.egress_port);
+        inject_runtime_proxy_environment(plan, &proxy);
     }
     Ok(())
 }
@@ -1989,6 +2032,7 @@ fn runtime_unbind_app_forwards(name: &str, app: &str) -> Result<()> {
 fn runtime_stop_request(name: &str, app: &str) -> Result<()> {
     let response = runtime_lifecycle_request(name, app, "stop")?;
     runtime_unbind_app_forwards(name, app)?;
+    let _ = egress::remove_runtime_policy(name, app)?;
     println!("{response}");
     Ok(())
 }
@@ -2001,6 +2045,7 @@ fn runtime_status_request(name: &str, app: &str) -> Result<()> {
         .is_some_and(|state| matches!(state.as_str(), "starting" | "running" | "degraded"));
     if !active {
         runtime_unbind_app_forwards(name, app)?;
+        let _ = egress::remove_runtime_policy(name, app)?;
     }
     println!("{response}");
     Ok(())
@@ -2040,6 +2085,11 @@ fn run_runtime_policy(action: RuntimePolicyCmd) -> Result<()> {
             let runtime = egress::runtime_policy_for_principal(&vm, &principal)
                 .ok_or_else(|| anyhow::anyhow!("no runtime policy for {vm}/{principal}"))?;
             println!("{}", serde_json::to_string_pretty(&runtime)?);
+            Ok(())
+        }
+        RuntimePolicyCmd::Remove { vm, principal } => {
+            let removed = egress::remove_runtime_policy(&vm, &principal)?;
+            println!("{}", serde_json::json!({ "removed": removed, "vm": vm, "principal": principal }));
             Ok(())
         }
     }
@@ -2143,9 +2193,52 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             // Human-readable effective view: distinguishes baked-allow vs
             // operator-allow vs operator-deny and reconciles the persisted
             // default with the netstack-enforced one.
-            let persisted = egress::load_policy(&name);
+            let backend = backend::platform_backend_name();
+            let persisted = if backend == "wsl" {
+                egress::effective_policy(&name)
+            } else {
+                egress::load_policy(&name)
+            };
             let netstack = egress::is_netstack(&name);
-            print!("{}", egress::render_effective_policy(&name, &persisted, netstack));
+            print!(
+                "{}",
+                egress::render_effective_policy_for_backend(
+                    &name,
+                    &persisted,
+                    netstack,
+                    backend,
+                    egress::wsl_mode(&name),
+                )
+            );
+            Ok(())
+        }
+        EgressCmd::WslMode { mode, name } => {
+            let mut spec = match store::load_spec(&name)? {
+                Some(spec) => spec,
+                None if name == DEFAULT_RUNTIME_VM => ensure_spec_for_up(&name, true)?,
+                None => bail!("VM '{name}' does not exist; create it before setting wsl-mode"),
+            };
+            if let Some(mode) = mode {
+                spec.wsl_mode = match mode.to_ascii_lowercase().as_str() {
+                    "strict" => WslMode::Strict,
+                    "cooperative" => WslMode::Cooperative,
+                    other => bail!("wsl-mode must be 'strict' or 'cooperative', got '{other}'"),
+                };
+                store::save_spec(&spec)?;
+            }
+            println!(
+                "wsl-mode for '{}': {}",
+                name,
+                match spec.wsl_mode {
+                    WslMode::Strict => "strict",
+                    WslMode::Cooperative => "cooperative",
+                }
+            );
+            if spec.wsl_mode == WslMode::Cooperative {
+                eprintln!(
+                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are unioned across apps in this VM."
+                );
+            }
             Ok(())
         }
         EgressCmd::Denied { name, tail } => {
@@ -2541,6 +2634,24 @@ mod tests {
             }],
             resources: RuntimePlanResources { cpus: 1, memory_mib: 512, disk_gib: 2, pids: 256 },
         }
+    }
+
+    #[test]
+    fn cooperative_runtime_proxy_environment_overrides_every_transport_value() {
+        let mut plan = valid_runtime_plan();
+        let RuntimePlanWorkload::Container { env, .. } = &mut plan.workload else {
+            unreachable!();
+        };
+        env.insert("HTTPS_PROXY".into(), "http://manifest.invalid:1".into());
+        inject_runtime_proxy_environment(&mut plan, "http://172.25.64.1:5053");
+        let RuntimePlanWorkload::Container { env, .. } = &plan.workload else {
+            unreachable!();
+        };
+        assert_eq!(env["HTTP_PROXY"], "http://172.25.64.1:5053");
+        assert_eq!(env["HTTPS_PROXY"], "http://172.25.64.1:5053");
+        assert_eq!(env["NO_PROXY"], "localhost,127.0.0.1,::1");
+        assert_eq!(env["APPLIANCE_EGRESS_CA"], "/appliance-egress-ca.pem");
+        assert_eq!(env["NODE_EXTRA_CA_CERTS"], "/appliance-egress-ca.pem");
     }
 
     #[test]

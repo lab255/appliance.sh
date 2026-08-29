@@ -22,6 +22,20 @@ pub enum NetLink {
     Netstack,
 }
 
+/// Runtime egress posture on the WSL backend.
+///
+/// WSL cannot provide the host-owned netstack boundary used by VZ. Strict is
+/// therefore the safe default: Runtime apps that request network grants are
+/// refused. Cooperative is an explicit opt-in to the bypassable HTTP(S)
+/// proxy path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WslMode {
+    #[default]
+    Strict,
+    Cooperative,
+}
+
 /// Persisted definition of one microVM. Lives at
 /// `~/.appliance/vm/<name>/vm.json`; everything else in that
 /// directory (disk image, console log, pidfile) is derived state.
@@ -130,6 +144,12 @@ pub struct VmSpec {
     /// resolves and persists this as `Nat`.
     #[serde(default)]
     pub net_link: NetLink,
+    /// WSL Runtime egress posture. Legacy specs default to strict. Fresh specs
+    /// inherit the optional global `wslMode` value in
+    /// `~/.appliance/settings.json`, then persist the resolved value here so a
+    /// later global edit cannot silently widen an existing VM.
+    #[serde(default)]
+    pub wsl_mode: WslMode,
 }
 
 /// One published container port: the in-guest container port and the
@@ -325,6 +345,7 @@ impl VmSpec {
             published: Vec::new(),
             runtime_mounts: Vec::new(),
             net_link: NetLink::Nat,
+            wsl_mode: global_wsl_mode(),
         };
         spec.normalise_net_link_for_backend(backend);
         spec
@@ -467,6 +488,29 @@ impl VmSpec {
         }
         Ok(changed)
     }
+}
+
+fn global_wsl_mode() -> WslMode {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    wsl_mode_from_settings_path(&home.join(".appliance").join("settings.json"))
+}
+
+fn wsl_mode_from_settings_path(path: &std::path::Path) -> WslMode {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return WslMode::Strict;
+    };
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|value| value.get("wslMode").and_then(serde_json::Value::as_str).map(str::to_owned))
+        .and_then(|mode| match mode.to_ascii_lowercase().as_str() {
+            "strict" => Some(WslMode::Strict),
+            "cooperative" => Some(WslMode::Cooperative),
+            _ => None,
+        })
+        .unwrap_or(WslMode::Strict)
 }
 
 /// Resolve the effective link. WSL wins over both persisted state and the
@@ -699,6 +743,35 @@ mod tests {
         assert!(!spec.dev);
         // Old specs predate the docker flag too — default off.
         assert!(!spec.docker);
+        // AP-205 is fail-safe for every legacy WSL Runtime spec.
+        assert_eq!(spec.wsl_mode, WslMode::Strict);
+    }
+
+    #[test]
+    fn wsl_mode_round_trips_and_global_config_defaults_fail_closed() {
+        let mut spec = VmSpec::defaults("runtime");
+        spec.wsl_mode = WslMode::Cooperative;
+        let json = serde_json::to_string(&spec).unwrap();
+        assert!(json.contains("\"wslMode\":\"cooperative\""));
+        let back: VmSpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.wsl_mode, WslMode::Cooperative);
+
+        let root = std::env::temp_dir().join(format!(
+            "appliance-wsl-mode-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let settings = root.join("settings.json");
+        assert_eq!(wsl_mode_from_settings_path(&settings), WslMode::Strict);
+        std::fs::write(&settings, r#"{"wslMode":"cooperative"}"#).unwrap();
+        assert_eq!(wsl_mode_from_settings_path(&settings), WslMode::Cooperative);
+        std::fs::write(&settings, r#"{"wslMode":"unsafe"}"#).unwrap();
+        assert_eq!(wsl_mode_from_settings_path(&settings), WslMode::Strict);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
