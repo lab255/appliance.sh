@@ -308,7 +308,7 @@ describe('printKeyHelperCommand', () => {
 
   it('round-trips the argv array through configureBroker JSON without shell quoting', () => {
     runVmMock.mockReset().mockReturnValue(0);
-    configureBroker('ap-194-test', claudeCodeAdapter, apiKeyMode);
+    configureBroker('ap-194-test', claudeCodeAdapter, apiKeyMode, 'vz');
 
     expect(runVmMock).toHaveBeenCalledTimes(2);
     const credsArgs = runVmMock.mock.calls[0][0];
