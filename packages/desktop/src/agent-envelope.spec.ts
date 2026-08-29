@@ -164,8 +164,11 @@ describe('agent-credential envelope round-trip', () => {
 
 describe('Rust producer parity (packages/desktop/src-tauri/src/lib.rs)', () => {
   it('uses the neutral store that declares the canonical service', () => {
-    expect(RUST_SRC).toContain('use appliance_credential_store::{');
-    expect(RUST_SRC).toContain('KeyringStore, StoreError, StoreKey');
+    expect(RUST_SRC).toMatch(
+      /desktop_credential_store\(\)\s*\.put\(&agent_store_key\(provider\)\?, envelope\.as_bytes\(\)\)/
+    );
+    expect(RUST_SRC).toMatch(/fn agent_store_key\([^)]*\)[^{]*\{\s*StoreKey::agent\(encode_identifier\(provider\)\)/);
+    expect(KEYRING_STORE_SRC).toMatch(/StoreKey::Agent\(provider\)\s*=>\s*\(AGENT_SERVICE,/);
     expect(KEYRING_STORE_SRC).toContain(`const AGENT_SERVICE: &str = "${CONTRACT.keychainService}";`);
   });
 
