@@ -627,6 +627,15 @@ export interface EgressPolicy {
   mitm: boolean;
   /** Whether the network boundary is host-enforced or a cooperative proxy. */
   boundary?: 'enforced' | 'cooperative';
+  /** Backend capability metadata. Present for both enforced and cooperative
+   *  links on AP-205+ engines. */
+  enforcement?: {
+    backend: string;
+    bypassable: boolean;
+    scope: string[];
+  };
+  /** Persisted Runtime posture on WSL. */
+  wslMode?: 'strict' | 'cooperative';
   /** Path to the VM's egress CA cert, when interception is on. */
   caPath?: string;
   /** True when the host netstack is the ENFORCED egress boundary
@@ -677,6 +686,7 @@ export interface EgressEvent {
 
 export interface MicroVmEgressHost {
   get(): Promise<EgressPolicy>;
+  setWslMode(mode: 'strict' | 'cooperative'): Promise<void>;
   setDefault(action: 'allow' | 'deny'): Promise<void>;
   addRule(action: 'allow' | 'deny', host: string): Promise<void>;
   /** Remove a single operator allow/deny rule for an exact host — the

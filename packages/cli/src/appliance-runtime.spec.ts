@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertRuntimeRunEntitled,
+  decideRuntimeWslEgress,
   manifestToRuntimePlan,
   manifestToRuntimePolicy,
   prefixServiceLog,
@@ -13,6 +14,7 @@ import {
   rewriteEffectivePolicyAfterRevocation,
   sanitizeRuntimeLog,
   stageAndVerifyRuntimeOpenCopy,
+  WSL_COOPERATIVE_WARNING,
   type EffectiveRuntimePolicy,
 } from './appliance-runtime.js';
 import { tinyOciTar } from './utils/bundle-oci-fixture.js';
@@ -24,6 +26,7 @@ import {
   requestedGrantsForManifest,
   revokeEntitlementGrant,
 } from './utils/entitlements.js';
+import { wslModeCommandArgs } from './utils/runtime-wsl-egress.js';
 
 const roots: string[] = [];
 
@@ -248,6 +251,53 @@ describe('manifest to pooled runtime plan', () => {
 });
 
 describe('manifest to effective Runtime policy', () => {
+  it('routes wsl-mode reads and writes through the per-VM engine command', () => {
+    expect(wslModeCommandArgs(undefined)).toEqual(['egress', 'wsl-mode', '--name', 'appliance-runtime']);
+    expect(wslModeCommandArgs('cooperative', 'runtime-two')).toEqual([
+      'egress',
+      'wsl-mode',
+      'cooperative',
+      '--name',
+      'runtime-two',
+    ]);
+  });
+
+  it('refuses WSL egress grants in strict mode and permits cooperative mode with the bypass warning', () => {
+    const strict = decideRuntimeWslEgress('journal', { enforcement: { backend: 'wsl' }, wslMode: 'strict' }, true);
+    expect(strict).toEqual({
+      action: 'refuse',
+      message:
+        "Runtime start refused on WSL: 'journal' requests egress grants, but wsl-mode is strict. " +
+        'Opt in to bypassable proxy enforcement with `appliance vm egress wsl-mode cooperative`.',
+    });
+    expect(
+      decideRuntimeWslEgress('journal', { enforcement: { backend: 'wsl' }, wslMode: 'cooperative' }, true)
+    ).toEqual({ action: 'allow', warning: WSL_COOPERATIVE_WARNING });
+  });
+
+  it('allows a networkless WSL app in strict mode and leaves non-WSL backends unchanged', () => {
+    expect(decideRuntimeWslEgress('journal', { enforcement: { backend: 'wsl' }, wslMode: 'strict' }, false)).toEqual({
+      action: 'allow',
+      firstRunNotice:
+        'WSL strict mode: this app requests no egress grants, so it may run; its outbound traffic is dropped.',
+    });
+    expect(decideRuntimeWslEgress('journal', { enforcement: { backend: 'vz' }, wslMode: 'strict' }, true)).toEqual({
+      action: 'allow',
+    });
+  });
+
+  it('fails closed on Windows when an old engine omits or malforms the enforcement backend', () => {
+    const expected = {
+      action: 'refuse',
+      message:
+        "Runtime start refused on WSL: 'journal' cannot verify wsl-mode because the engine is too old for wsl-mode; " +
+        'update appliance-vm.',
+    };
+    expect(decideRuntimeWslEgress('journal', {}, true, 'win32')).toEqual(expected);
+    expect(decideRuntimeWslEgress('journal', { enforcement: { backend: undefined } }, true, 'win32')).toEqual(expected);
+    expect(decideRuntimeWslEgress('journal', {}, true, 'darwin')).toEqual({ action: 'allow' });
+  });
+
   it('installs a default-deny principal policy with normalized host/port grants', () => {
     const value = manifest();
     value.network = {

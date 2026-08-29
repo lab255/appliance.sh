@@ -13,6 +13,7 @@ import {
   suggestedRevocations,
   type EntitlementOptions,
 } from './utils/entitlements.js';
+import { configuredWslMode, WSL_COOPERATIVE_WARNING } from './utils/settings.js';
 
 export interface EntitlementGrantPromptDetails {
   appId: string;
@@ -64,6 +65,8 @@ export async function promptForEntitlementGrants(details: EntitlementGrantPrompt
   for (const grant of details.grants) {
     console.error(`  ${grant.control === 'mount' ? 'optional' : 'required'} · ${grant.id} · ${describeGrant(grant)}`);
   }
+  const cooperativeWarning = wslCooperativeGrantWarning(details);
+  if (cooperativeWarning) console.error(chalk.yellow(cooperativeWarning));
   const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     const answer = await prompt.question(
@@ -73,6 +76,18 @@ export async function promptForEntitlementGrants(details: EntitlementGrantPrompt
   } finally {
     prompt.close();
   }
+}
+
+export function wslCooperativeGrantWarning(
+  details: EntitlementGrantPromptDetails,
+  platform: NodeJS.Platform = process.platform,
+  mode: 'strict' | 'cooperative' = configuredWslMode()
+): string | null {
+  return platform === 'win32' &&
+    mode === 'cooperative' &&
+    details.grants.some((grant) => grant.control === 'egress-host')
+    ? WSL_COOPERATIVE_WARNING
+    : null;
 }
 
 export async function runRuntimeEntitlementsCommand(

@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 
 use crate::mitm;
-use crate::spec::{NetLink, VmPaths};
+use crate::spec::{NetLink, VmPaths, WslMode};
 
 /// What the proxy does with a connection no explicit rule covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +76,16 @@ pub enum EgressBoundary {
     Cooperative,
 }
 
+/// Effective enforcement capability, kept separate from the flattened policy
+/// fields and stable `boundary` scalar.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EgressEnforcement {
+    pub backend: String,
+    pub bypassable: bool,
+    pub scope: Vec<String>,
+}
+
 impl EgressBoundary {
     pub fn for_link(netstack: bool) -> Self {
         if netstack {
@@ -100,13 +110,27 @@ pub struct EgressPolicyOutput {
     #[serde(flatten)]
     pub policy: EgressPolicy,
     pub boundary: EgressBoundary,
+    pub enforcement: EgressEnforcement,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wsl_mode: Option<WslMode>,
 }
 
 impl EgressPolicyOutput {
-    pub fn new(policy: EgressPolicy, netstack: bool) -> Self {
+    pub fn for_backend(policy: EgressPolicy, netstack: bool, backend: &str, wsl_mode: WslMode) -> Self {
+        let enforced = netstack && backend != "wsl";
         Self {
             policy,
-            boundary: EgressBoundary::for_link(netstack),
+            boundary: EgressBoundary::for_link(enforced),
+            enforcement: EgressEnforcement {
+                backend: backend.to_string(),
+                bypassable: !enforced,
+                scope: if enforced {
+                    vec!["tcp".into(), "udp".into(), "dns".into()]
+                } else {
+                    vec!["http".into(), "https".into()]
+                },
+            },
+            wsl_mode: (backend == "wsl").then_some(wsl_mode),
         }
     }
 }
@@ -506,6 +530,35 @@ pub fn save_runtime_policy(runtime: &RuntimePolicy) -> Result<()> {
     Ok(())
 }
 
+pub fn remove_runtime_policy(vm: &str, principal: &str) -> Result<bool> {
+    let path = runtime_policy_path(principal)?;
+    if !path.exists() {
+        return Ok(false);
+    }
+    let mut principals = load_runtime_file(&path)
+        .with_context(|| format!("refuse to edit invalid {}", path.display()))?;
+    let before = principals.len();
+    principals.retain(|runtime| runtime.vm != vm || runtime.principal != principal);
+    if principals.len() == before {
+        return Ok(false);
+    }
+    if principals.is_empty() {
+        std::fs::remove_file(&path).with_context(|| format!("remove {}", path.display()))?;
+    } else {
+        let parent = path.parent().context("runtime policy parent")?;
+        let stored = RuntimePolicyFile {
+            version: 1,
+            app: principal.to_string(),
+            principals,
+        };
+        let tmp = parent.join(".effective.json.tmp");
+        write_private(&tmp, &serde_json::to_vec_pretty(&stored)?)?;
+        std::fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
+    }
+    invalidate_runtime_policy_cache(&path);
+    Ok(true)
+}
+
 fn load_runtime_file(path: &Path) -> Result<Vec<RuntimePolicy>> {
     let raw = std::fs::read_to_string(path)?;
     if let Ok(single) = parse_runtime_policy(&raw) {
@@ -677,6 +730,26 @@ fn all_runtime_policies() -> Vec<RuntimePolicy> {
     policies
 }
 
+/// Best-effort removal of every Runtime principal owned by a deleted VM.
+/// Results stay per-principal so VM deletion can report store failures without
+/// resurrecting or failing an otherwise-complete backend deletion.
+pub fn prune_runtime_policies_for_vm(vm: &str) -> Vec<(String, Result<bool>)> {
+    let mut principals = all_runtime_policies()
+        .into_iter()
+        .filter(|runtime| runtime.vm == vm)
+        .map(|runtime| runtime.principal)
+        .collect::<Vec<_>>();
+    principals.sort();
+    principals.dedup();
+    principals
+        .into_iter()
+        .map(|principal| {
+            let result = remove_runtime_policy(vm, &principal);
+            (principal, result)
+        })
+        .collect()
+}
+
 pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<RuntimePolicy> {
     let mut matches = all_runtime_policies()
         .into_iter()
@@ -728,6 +801,76 @@ pub fn is_netstack(name: &str) -> bool {
     }
 }
 
+/// Persisted WSL posture, or the global default captured by a fresh spec when
+/// this VM has not been created yet. Missing/corrupt state always fails safe.
+pub fn wsl_mode(name: &str) -> WslMode {
+    crate::store::load_spec(name)
+        .ok()
+        .flatten()
+        .map(|spec| spec.wsl_mode)
+        .unwrap_or_else(|| crate::spec::VmSpec::defaults(name).wsl_mode)
+}
+
+fn is_wsl_runtime(name: &str, backend: &str) -> bool {
+    backend == "wsl"
+        && crate::store::load_spec(name)
+            .ok()
+            .flatten()
+            .is_some_and(|spec| spec.runtime)
+}
+
+/// AP-205 step 3a: WSL's legacy proxy remains VM-wide. Its effective allowlist
+/// is the union of installed Runtime policies; operator deny rules still win.
+/// Port-aware, authenticated per-app selection replaces this in 3b.
+fn wsl_runtime_proxy_policy(name: &str, mode: WslMode) -> EgressPolicy {
+    let persisted = load_policy(name);
+    union_wsl_runtime_policy(
+        &persisted,
+        &all_runtime_policies()
+            .into_iter()
+            .filter(|runtime| runtime.vm == name)
+            .collect::<Vec<_>>(),
+        mode,
+    )
+}
+
+fn union_wsl_runtime_policy(
+    persisted: &EgressPolicy,
+    runtimes: &[RuntimePolicy],
+    mode: WslMode,
+) -> EgressPolicy {
+    if mode == WslMode::Strict {
+        return EgressPolicy {
+            default: Action::Deny,
+            allow: Vec::new(),
+            deny: persisted.deny.clone(),
+            mitm: false,
+        };
+    }
+    let mut allow = runtimes
+        .iter()
+        .flat_map(|runtime| runtime.policy.allow.iter().cloned())
+        .collect::<Vec<_>>();
+    allow.sort();
+    allow.dedup();
+    EgressPolicy {
+        default: Action::Deny,
+        allow,
+        deny: persisted.deny.clone(),
+        mitm: persisted.mitm,
+    }
+}
+
+fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_netstack(name) && backend != "wsl" {
+        netstack_policy(name)
+    } else if is_wsl_runtime(name, backend) {
+        wsl_runtime_proxy_policy(name, wsl_mode(name))
+    } else {
+        load_policy(name)
+    }
+}
+
 /// The policy actually enforced at the boundary for this VM — the single
 /// source of truth for display, so `egress policy`/`list` never lie about
 /// what's enforced (Quinn's F2 observability nit). A Netstack VM's
@@ -736,16 +879,25 @@ pub fn is_netstack(name: &str) -> bool {
 /// policy ([`load_policy`], default-Allow). Keeping NAT on `load_policy`
 /// is what leaves NAT-VM behaviour unchanged.
 pub fn effective_policy(name: &str) -> EgressPolicy {
-    if is_netstack(name) {
-        netstack_policy(name)
+    effective_policy_for_backend(name, crate::backend::platform_backend_name())
+}
+
+fn proxy_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_wsl_runtime(name, backend) {
+        effective_policy_for_backend(name, backend)
     } else {
         load_policy(name)
     }
 }
 
+fn proxy_policy(name: &str) -> EgressPolicy {
+    proxy_policy_for_backend(name, crate::backend::platform_backend_name())
+}
+
 pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
+    let backend = crate::backend::platform_backend_name();
     let netstack = is_netstack(name);
-    EgressPolicyOutput::new(effective_policy(name), netstack)
+    EgressPolicyOutput::for_backend(effective_policy_for_backend(name, backend), netstack, backend, wsl_mode(name))
 }
 
 /// Render the **effective** egress policy as a human-readable report.
@@ -760,11 +912,37 @@ pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
 /// allow entry a deny rule overrides. For a NAT VM it shows the persisted
 /// cooperative policy as-is. Pure (takes the persisted policy + the link
 /// kind) so the rendering is unit-tested without a VM.
-pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: bool) -> String {
+pub fn render_effective_policy_for_backend(
+    name: &str,
+    persisted: &EgressPolicy,
+    netstack: bool,
+    backend: &str,
+    wsl_mode: WslMode,
+) -> String {
     let denied = |h: &str| persisted.deny.iter().any(|d| host_matches(h, d));
     let mut out = String::new();
+    let enforced = netstack && backend != "wsl";
 
-    if netstack {
+    if backend == "wsl" {
+        out.push_str(match wsl_mode {
+            WslMode::Cooperative => {
+                "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
+            }
+            WslMode::Strict => "WSL NAT - strict: apps with egress grants are refused\n",
+        });
+        let default = match persisted.default {
+            Action::Allow => "ALLOW",
+            Action::Deny => "DENY",
+        };
+        out.push_str(&format!(
+            "EFFECTIVE egress policy for '{name}'  (boundary: {})\n",
+            match wsl_mode {
+                WslMode::Strict => "strict",
+                WslMode::Cooperative => EgressBoundary::Cooperative.label(),
+            }
+        ));
+        out.push_str(&format!("  default: {default}\n"));
+    } else if enforced {
         let boundary = EgressBoundary::for_link(true);
         out.push_str(&format!(
             "EFFECTIVE egress policy for '{name}'  (boundary: {})\n",
@@ -796,7 +974,7 @@ pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: b
         }
     }
 
-    if netstack {
+    if enforced {
         out.push_str("\n  baked allowlist (always-on for Netstack VMs):\n");
         for h in NETSTACK_ALLOWLIST {
             if denied(h) {
@@ -816,7 +994,7 @@ pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: b
     let operator_allow: Vec<&String> = persisted
         .allow
         .iter()
-        .filter(|h| !(netstack && is_baked(h)))
+        .filter(|h| !(enforced && is_baked(h)))
         .collect();
     out.push_str("\n  operator allow rules:\n");
     if operator_allow.is_empty() {
@@ -864,7 +1042,7 @@ pub fn save_policy(name: &str, policy: &EgressPolicy) -> Result<()> {
 /// connection so the desktop's edits take effect without a restart.
 pub fn run_proxy(name: &str, addr: SocketAddr, log: bool) -> Result<()> {
     let (listener, ctx) = build(name, addr, log)?;
-    let policy = load_policy(name);
+    let policy = proxy_policy(name);
     println!(
         "egress proxy for VM '{name}' listening on {}",
         listener.local_addr().unwrap_or(addr)
@@ -979,7 +1157,7 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
-    let policy = load_policy(&ctx.name);
+    let policy = proxy_policy(&ctx.name);
 
     if method.eq_ignore_ascii_case("CONNECT") {
         // target is `host:port`.
@@ -1302,6 +1480,12 @@ const CLUSTER_NAMESPACE: &str = "appliance";
 /// service CIDRs) so only real outbound traffic is policed.
 fn default_no_proxy() -> &'static str {
     "localhost,127.0.0.1,::1,.svc,.svc.cluster.local,.cluster.local,10.42.0.0/16,10.43.0.0/16,kubernetes.default"
+}
+
+pub fn runtime_no_proxy() -> &'static str {
+    // Runtime principals share loopback only with their compound siblings;
+    // every external host must remain on the cooperative proxy path.
+    "localhost,127.0.0.1,::1"
 }
 
 fn which_kubectl() -> Option<PathBuf> {
@@ -1725,7 +1909,13 @@ mod tests {
             deny: vec!["gist.github.com".into()],
             mitm: false,
         };
-        let out = render_effective_policy("agent", &persisted, true);
+        let out = render_effective_policy_for_backend(
+            "agent",
+            &persisted,
+            true,
+            "vz",
+            WslMode::Strict,
+        );
 
         // The EFFECTIVE boundary is shown as Deny, not the persisted Allow.
         assert!(out.contains("boundary: enforced (netstack)"));
@@ -1757,7 +1947,13 @@ mod tests {
             deny: vec![],
             mitm: true,
         };
-        let out = render_effective_policy("dev", &persisted, false);
+        let out = render_effective_policy_for_backend(
+            "dev",
+            &persisted,
+            false,
+            "vz",
+            WslMode::Strict,
+        );
         assert!(out.contains("boundary: cooperative (in-guest proxy)"));
         assert!(out.contains("default: ALLOW"));
         assert!(!out.contains("baked allowlist"));
@@ -1768,21 +1964,42 @@ mod tests {
     #[test]
     fn policy_output_labels_both_boundary_kinds() {
         let policy = EgressPolicy::default();
-        let enforced = EgressPolicyOutput::new(policy.clone(), true);
-        let cooperative = EgressPolicyOutput::new(policy, false);
+        let enforced = EgressPolicyOutput::for_backend(policy.clone(), true, "vz", WslMode::Strict);
+        let cooperative =
+            EgressPolicyOutput::for_backend(policy, false, "wsl", WslMode::Cooperative);
 
         assert_eq!(enforced.boundary, EgressBoundary::Enforced);
         assert_eq!(enforced.boundary.label(), "enforced (netstack)");
         assert_eq!(cooperative.boundary, EgressBoundary::Cooperative);
         assert_eq!(cooperative.boundary.label(), "cooperative (in-guest proxy)");
-        assert_eq!(
-            serde_json::to_value(enforced).unwrap()["boundary"],
-            "enforced"
-        );
-        assert_eq!(
-            serde_json::to_value(cooperative).unwrap()["boundary"],
-            "cooperative"
-        );
+        let enforced_json = serde_json::to_value(enforced).unwrap();
+        let cooperative_json = serde_json::to_value(cooperative).unwrap();
+        assert_eq!(enforced_json["boundary"], "enforced");
+        assert_eq!(enforced_json["enforcement"]["backend"], "vz");
+        assert_eq!(enforced_json["enforcement"]["bypassable"], false);
+        assert_eq!(cooperative_json["boundary"], "cooperative");
+        assert_eq!(cooperative_json["enforcement"]["backend"], "wsl");
+        assert_eq!(cooperative_json["enforcement"]["bypassable"], true);
+        assert_eq!(cooperative_json["enforcement"]["scope"], serde_json::json!(["http", "https"]));
+        assert_eq!(cooperative_json["wslMode"], "cooperative");
+    }
+
+    #[test]
+    fn wsl_rendering_uses_truthful_mode_headers_and_never_host_enforced() {
+        let policy = EgressPolicy { default: Action::Deny, allow: vec![], deny: vec![], mitm: false };
+        let strict = render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Strict);
+        assert!(strict.starts_with("WSL NAT - strict: apps with egress grants are refused\n"));
+        assert!(strict.contains("EFFECTIVE egress policy for 'runtime'  (boundary: strict)"));
+        assert!(!strict.contains("host-enforced"));
+        let cooperative =
+            render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Cooperative);
+        assert!(cooperative.starts_with(
+            "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
+        ));
+        assert!(cooperative.contains(
+            "EFFECTIVE egress policy for 'runtime'  (boundary: cooperative (in-guest proxy))"
+        ));
+        assert!(!cooperative.contains("host-enforced"));
     }
 
     #[test]
@@ -1796,7 +2013,13 @@ mod tests {
             deny: vec!["github.com".into()],
             mitm: false,
         };
-        let out = render_effective_policy("agent", &persisted, true);
+        let out = render_effective_policy_for_backend(
+            "agent",
+            &persisted,
+            true,
+            "vz",
+            WslMode::Strict,
+        );
         assert!(out.contains("✗ github.com  (overridden by an operator deny rule)"));
     }
 
@@ -1833,6 +2056,75 @@ mod tests {
             },
             allow_ports: BTreeMap::from([("example.com".to_string(), vec![port])]),
         }
+    }
+
+    #[test]
+    fn wsl_cooperative_policy_unions_runtime_hosts_while_strict_denies_all() {
+        let persisted = EgressPolicy {
+            default: Action::Allow,
+            allow: vec!["legacy.example".into()],
+            deny: vec!["blocked.example.com".into()],
+            mitm: true,
+        };
+        let mut journal = runtime_policy("journal", "192.168.127.10".parse().unwrap(), 443);
+        journal.policy.allow = vec!["api.example.com".into()];
+        let mut notes = runtime_policy("notes", "192.168.127.11".parse().unwrap(), 443);
+        notes.policy.allow = vec!["sync.example.com".into(), "api.example.com".into()];
+        let cooperative =
+            union_wsl_runtime_policy(&persisted, &[journal, notes], WslMode::Cooperative);
+        assert_eq!(cooperative.default, Action::Deny);
+        assert_eq!(cooperative.allow, vec!["api.example.com", "sync.example.com"]);
+        assert_eq!(cooperative.deny, vec!["blocked.example.com"]);
+        assert!(cooperative.mitm);
+
+        let strict = union_wsl_runtime_policy(&persisted, &[], WslMode::Strict);
+        assert_eq!(strict.default, Action::Deny);
+        assert!(strict.allow.is_empty());
+        assert!(!strict.mitm);
+    }
+
+    #[test]
+    fn pruning_a_vm_removes_all_of_its_runtime_principals_only() {
+        with_runtime_test_root("delete-prune", |_root| {
+            let mut journal = runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443);
+            let mut notes = runtime_policy("notes", Ipv4Addr::new(192, 168, 127, 11), 443);
+            let mut other = runtime_policy("other", Ipv4Addr::new(192, 168, 127, 12), 443);
+            journal.vm = "deleted-runtime".into();
+            notes.vm = "deleted-runtime".into();
+            other.vm = "surviving-runtime".into();
+            save_runtime_policy(&journal).unwrap();
+            save_runtime_policy(&notes).unwrap();
+            save_runtime_policy(&other).unwrap();
+
+            let removed = prune_runtime_policies_for_vm("deleted-runtime");
+            assert_eq!(removed.len(), 2);
+            assert!(removed.into_iter().all(|(_, result)| result.unwrap()));
+            assert!(runtime_policy_for_principal("deleted-runtime", "journal").is_none());
+            assert!(runtime_policy_for_principal("deleted-runtime", "notes").is_none());
+            assert_eq!(runtime_policy_for_principal("surviving-runtime", "other"), Some(other));
+        });
+    }
+
+    #[test]
+    fn proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist() {
+        let name = format!("egress-vz-proxy-selection-{}", std::process::id());
+        let mut spec = crate::spec::VmSpec::defaults(&name);
+        spec.runtime = true;
+        spec.net_link = NetLink::Netstack;
+        crate::store::save_spec(&spec).unwrap();
+        let persisted = EgressPolicy {
+            default: Action::Deny,
+            allow: vec!["operator.example".into()],
+            deny: vec![],
+            mitm: false,
+        };
+        save_policy(&name, &persisted).unwrap();
+
+        let selected = proxy_policy_for_backend(&name, "vz");
+        assert_eq!(selected, persisted);
+        assert!(!selected.allows("api.openai.com:443"));
+
+        crate::store::delete_vm_dir(&name).unwrap();
     }
 
     #[test]

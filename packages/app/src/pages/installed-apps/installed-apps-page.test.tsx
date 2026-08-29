@@ -179,6 +179,8 @@ describe('Installed Apps mock scenarios', () => {
   it('renders an accessible grant dialog with grouped required controls and selectable mounts', () => {
     const html = renderToStaticMarkup(
       <GrantDialog
+        platform="windows"
+        wslMode="cooperative"
         prompt={{
           appId: 'notes-sync',
           version: '2.4.0',
@@ -213,7 +215,8 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('role="alertdialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('aria-labelledby="grant-dialog-title"');
-    expect(html).toContain('aria-describedby="grant-dialog-description"');
+    expect(html).toContain('aria-describedby="grant-dialog-description grant-wsl-egress-warning"');
+    expect(html).toContain('id="grant-wsl-egress-warning"');
     expect(html).toContain('notes-sync 2.4.0 (AGPL-3.0) asks for the controls below');
     expect(html).toContain('Required');
     expect(html).toContain('Mounts');
@@ -224,5 +227,6 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('id="grant-mount:data"');
     expect(html).not.toContain('disabled=""');
     expect(html).toContain('Grant and install');
+    expect(html).toContain('WSL cooperative mode is bypassable');
   });
 });

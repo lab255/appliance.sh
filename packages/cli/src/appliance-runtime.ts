@@ -48,9 +48,18 @@ import {
   assertManifestEntitled,
   latestEntitlement,
   readEntitlementStore,
+  requestedGrantsForManifest,
   stampEntitlementUsage,
 } from './utils/entitlements.js';
 import { engineRuntimeStatusBackend, runtimePsRows } from './utils/runtime-reconcile.js';
+import {
+  decideRuntimeWslEgress,
+  runtimeEgressCapability,
+  type RuntimeWslEgressDecision,
+} from './utils/runtime-wsl-egress.js';
+
+export { WSL_COOPERATIVE_WARNING } from './utils/settings.js';
+export { decideRuntimeWslEgress } from './utils/runtime-wsl-egress.js';
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
@@ -468,6 +477,24 @@ async function runtimeRun(args: string[]): Promise<void> {
     removeImmutableFile(bundlePath);
     fail(`installed bundle integrity check failed for '${installed.name}'`, 2);
   }
+  const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
+  let wslDecision: RuntimeWslEgressDecision;
+  try {
+    wslDecision = decideRuntimeWslEgress(
+      loaded.manifest.name,
+      runtimeEgressCapability(),
+      requestedGrantsForManifest(loaded.manifest).some((grant) => grant.control === 'egress-host')
+    );
+  } catch (error) {
+    removeImmutableFile(bundlePath);
+    fail(error instanceof Error ? error.message : String(error), 2);
+  }
+  if (wslDecision.action === 'refuse') {
+    removeImmutableFile(bundlePath);
+    fail(wslDecision.message, 2);
+  }
+  if (wslDecision.warning) console.error(chalk.yellow(wslDecision.warning));
+  if (!existing && wslDecision.firstRunNotice) console.error(chalk.yellow(wslDecision.firstRunNotice));
   let effectiveGrants: EntitlementGrant[];
   try {
     effectiveGrants = assertRuntimeRunEntitled(loaded.manifest);
@@ -475,7 +502,6 @@ async function runtimeRun(args: string[]): Promise<void> {
     removeImmutableFile(bundlePath);
     fail(error instanceof Error ? error.message : String(error), 2);
   }
-  const existing = readRuntimeRegistry().find((entry) => entry.appId === loaded.manifest.name);
   if (existing && (existing.state === 'starting' || existing.state === 'running')) {
     removeImmutableFile(bundlePath);
     fail(`runtime instance '${existing.appId}' is already running in ${existing.poolVm}`, 2);

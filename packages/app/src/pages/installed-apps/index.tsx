@@ -230,6 +230,24 @@ export function InstalledAppsPage() {
   const [pending, setPending] = React.useState<PendingWarning | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [busyAction, setBusyAction] = React.useState<'opening' | 'stopping' | null>(null);
+  const [runtimeWslMode, setRuntimeWslMode] = React.useState<'strict' | 'cooperative'>('strict');
+
+  React.useEffect(() => {
+    if (host.platform !== 'windows' || !host.vm) return;
+    let current = true;
+    void host.vm
+      .instance('appliance-runtime')
+      .egress.get()
+      .then((policy) => {
+        if (current) setRuntimeWslMode(policy.wslMode === 'cooperative' ? 'cooperative' : 'strict');
+      })
+      .catch(() => {
+        // Missing/corrupt state is strict by contract.
+      });
+    return () => {
+      current = false;
+    };
+  }, [host.platform, host.vm]);
 
   const refresh = React.useCallback(
     async (quiet = false) => {
@@ -463,6 +481,8 @@ export function InstalledAppsPage() {
         <GrantDialog
           prompt={pending.prompt}
           busy={busy !== null}
+          platform={host.platform}
+          wslMode={runtimeWslMode}
           onCancel={() => setPending(null)}
           onGrant={(grantIds) => void installSource(pending.source, pending.acceptedUnknownPublisher, grantIds)}
         />

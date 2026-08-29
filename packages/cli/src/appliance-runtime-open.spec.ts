@@ -5,6 +5,7 @@ import {
   routeRuntimeOpen,
   runtimeOpenJson,
   runtimeOpenUrl,
+  runtimeManifestRequestsEgress,
   runtimeUiPortName,
   type RuntimeOpenBackend,
   type RuntimeOpenDependencies,
@@ -157,6 +158,24 @@ describe('runtime open reconciliation', () => {
 });
 
 describe('runtime open URL selection', () => {
+  it('gates WSL strict mode on manifest requests rather than the effective grant display count', () => {
+    const manifest = {
+      manifest: 'v2',
+      kind: 'runnable',
+      type: 'container',
+      name: 'journal',
+      version: '1.2.0',
+      license: 'MIT',
+      publisher: { name: 'Lab 255' },
+      payload: { images: { 'linux/amd64': { path: 'payload/journal.oci.tar' } } },
+      network: { egress: [{ host: 'api.example.com', ports: [443] }] },
+    } as ApplianceV2;
+
+    expect(descriptor.egressHostCount).toBe(2);
+    expect(runtimeManifestRequestsEgress(manifest)).toBe(true);
+    expect(runtimeManifestRequestsEgress({ ...manifest, network: undefined })).toBe(false);
+  });
+
   it('selects a compound service.port through the same published-port key path', () => {
     const manifest = {
       ui: { type: 'web', service: 'dashboard', port: 'http', path: '/ui' },
