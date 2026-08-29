@@ -26,6 +26,8 @@
 //! as the guest wrote it (UTF-8). `decode_wsl` sniffs per call.
 
 use super::runtime_guest::{shell_squote, strip_verbatim};
+mod runtime;
+
 use super::VmBackend;
 use crate::spec::{VmPaths, VmSpec};
 use anyhow::{bail, Context, Result};
@@ -1051,6 +1053,13 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
         None => eprintln!("guest gateway: not found (egress proxy URL falls back to the /24 gateway)"),
     }
     crate::bringup::set(vm_dir, crate::bringup::Phase::Network, Some(guest_ip.to_string()));
+
+    if spec.runtime {
+        let IpAddr::V4(guest_ip) = guest_ip else {
+            bail!("WSL Runtime requires an IPv4 NAT lease");
+        };
+        runtime::spawn_forward_control(spec.name.clone(), guest_ip)?;
+    }
 
     let bind_hint = |port: u16, what: &str| {
         format!(

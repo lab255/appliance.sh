@@ -22,6 +22,7 @@ mod net;
 #[cfg_attr(windows, allow(dead_code))]
 mod netstack;
 mod profiles;
+mod runtime_forward;
 mod shell;
 mod spec;
 mod store;
@@ -1881,40 +1882,31 @@ fn runtime_forward_request(
     target: std::net::Ipv4Addr,
     guest: u16,
 ) -> Result<()> {
-    use std::io::{Read, Write};
-    use std::net::Shutdown;
     use std::os::unix::net::UnixStream;
 
     let paths = VmPaths::for_name(name);
     let mut stream = UnixStream::connect(paths.runtime_forward_sock())
         .with_context(|| format!("connect Runtime forward control for '{name}'"))?;
-    let request = serde_json::json!({ "action": action, "host": host, "target": target, "guest": guest });
-    stream.write_all(request.to_string().as_bytes())?;
-    stream.shutdown(Shutdown::Write)?;
-    let mut response = String::new();
-    stream.read_to_string(&mut response)?;
-    let response: serde_json::Value = serde_json::from_str(&response).context("parse Runtime forward response")?;
-    if response.get("ok").and_then(serde_json::Value::as_bool) != Some(true) {
-        bail!(
-            "Runtime forward {host}->{guest} failed: {}",
-            response
-                .get("message")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("unknown error")
-        );
-    }
-    Ok(())
+    let request = runtime_forward::ForwardRequest::new(action, host, target, guest)?;
+    runtime_forward::send_control_request(&mut stream, request)
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 fn runtime_forward_request(
-    _name: &str,
-    _action: &str,
-    _host: u16,
-    _target: std::net::Ipv4Addr,
-    _guest: u16,
+    name: &str,
+    action: &str,
+    host: u16,
+    target: std::net::Ipv4Addr,
+    guest: u16,
 ) -> Result<()> {
-    bail!("dynamic Runtime forwards are not implemented on this host backend")
+    let pipe_name = runtime_forward::windows_pipe_name(name);
+    let mut pipe = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&pipe_name)
+        .with_context(|| format!("connect Runtime forward control for '{name}'"))?;
+    let request = runtime_forward::ForwardRequest::new(action, host, target, guest)?;
+    runtime_forward::send_control_request(&mut pipe, request)
 }
 
 fn runtime_lifecycle_request(name: &str, app: &str, action: &str) -> Result<String> {

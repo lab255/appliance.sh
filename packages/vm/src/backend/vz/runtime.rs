@@ -1,128 +1,78 @@
-//! Owner-only Runtime host control: dynamically bind published loopback
-//! forwards against the resident VM's in-process netstack.
+//! Owner-only Runtime control over a 0600 Unix socket on macOS.
 
 use crate::netstack::Netstack;
-use anyhow::{bail, Context, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::io::{Read, Write};
-use std::net::{Ipv4Addr, TcpListener};
+use crate::runtime_forward::{
+    serve_control_stream, ForwardTable, ForwardTarget, ListenerHandle, TargetMode,
+};
+use anyhow::{Context, Result};
+use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ForwardRequest {
-    action: ForwardAction,
-    host: u16,
-    target: Ipv4Addr,
-    guest: u16,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum ForwardAction {
-    Bind,
-    Unbind,
-}
-
-struct ForwardHandle {
-    target: Ipv4Addr,
-    guest: u16,
-    running: Arc<AtomicBool>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ForwardResponse {
-    ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
-}
-
-/// Accept bind/unbind requests for the resident VM. Persisted mappings
-/// authorize Runtime plans, but listeners exist only while the matching
-/// app is running so a recycled principal can never inherit an old socket.
-pub fn spawn_forward_control(netstack: Netstack, sock_path: PathBuf) -> Result<()> {
+/// Accept bind/unbind requests for the resident VM. The table reloads the
+/// persisted spec for every request, so reconciliation is authoritative even
+/// when it adds an app after the pooled VM booted.
+pub fn spawn_forward_control(
+    vm_name: String,
+    netstack: Netstack,
+    sock_path: PathBuf,
+) -> Result<()> {
     let _ = std::fs::remove_file(&sock_path);
     let listener = UnixListener::bind(&sock_path)
         .with_context(|| format!("bind Runtime forward control {}", sock_path.display()))?;
     std::fs::set_permissions(&sock_path, std::fs::Permissions::from_mode(0o600))?;
     std::thread::spawn(move || {
-        let mut bound = BTreeMap::new();
+        let mut table = ForwardTable::default();
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
-            let response = handle_request(&netstack, &mut bound, &mut stream);
-            let body = match response {
-                Ok(()) => ForwardResponse { ok: true, message: None },
-                Err(error) => ForwardResponse { ok: false, message: Some(format!("{error:#}")) },
-            };
-            if let Ok(json) = serde_json::to_vec(&body) {
-                let _ = stream.write_all(&json);
-                let _ = stream.write_all(b"\n");
+            let result = serve_control_stream(&mut stream, |request| {
+                let spec = crate::store::load_spec(&vm_name)?
+                    .with_context(|| format!("runtime pool '{vm_name}' does not exist"))?;
+                table.apply(
+                    &spec,
+                    request,
+                    TargetMode::Fixed {
+                        target: crate::netstack::GUEST_IP,
+                    },
+                    |target| spawn_netstack_listener(request.host, target, netstack.clone()),
+                )
+            });
+            if let Err(error) = result {
+                eprintln!("Runtime forward control: {error:#}");
             }
         }
     });
     Ok(())
 }
 
-fn handle_request(
-    netstack: &Netstack,
-    bound: &mut BTreeMap<u16, ForwardHandle>,
-    stream: &mut UnixStream,
-) -> Result<()> {
-    let mut input = Vec::new();
-    stream.take(16 * 1024).read_to_end(&mut input)?;
-    let request: ForwardRequest = serde_json::from_slice(&input).context("parse Runtime forward request")?;
-    match request.action {
-        ForwardAction::Bind => bind_forward(netstack, bound, request.host, request.target, request.guest),
-        ForwardAction::Unbind => unbind_forward(bound, request.host, request.target, request.guest),
-    }
-}
-
-fn bind_forward(
-    netstack: &Netstack,
-    bound: &mut BTreeMap<u16, ForwardHandle>,
+fn spawn_netstack_listener(
     host: u16,
-    target: Ipv4Addr,
-    guest: u16,
-) -> Result<()> {
-    let octets = target.octets();
-    let runtime_target = octets[..3] == [192, 168, 127] && (10..=239).contains(&octets[3]);
-    if !(20_000..=29_999).contains(&host)
-        || guest == 0
-        || (target != crate::netstack::GUEST_IP && !runtime_target)
-    {
-        bail!("invalid Runtime forward {host}->{target}:{guest}");
-    }
-    if let Some(existing) = bound.get(&host) {
-        if existing.target == target && existing.guest == guest {
-            return Ok(());
-        }
-        bail!(
-            "Runtime host port {host} is already mapped to {}:{}",
-            existing.target,
-            existing.guest
-        );
-    }
-    let listener = TcpListener::bind(("127.0.0.1", host))
-        .with_context(|| format!("bind Runtime forward 127.0.0.1:{host}->{guest}"))?;
+    target: ForwardTarget,
+    netstack: Netstack,
+) -> Result<ListenerHandle> {
+    let listener = TcpListener::bind(("127.0.0.1", host)).with_context(|| {
+        format!(
+            "bind Runtime forward 127.0.0.1:{host}->{}:{}",
+            target.address, target.port
+        )
+    })?;
     listener.set_nonblocking(true)?;
     let running = Arc::new(AtomicBool::new(true));
     let thread_running = running.clone();
-    let thread_netstack = netstack.clone();
     std::thread::spawn(move || {
         while thread_running.load(Ordering::Acquire) {
             match listener.accept() {
                 Ok((stream, _)) => {
-                    let connection_netstack = thread_netstack.clone();
-                    std::thread::spawn(move || match connection_netstack.connect_to(target, guest) {
-                        Ok(bridge) => crate::netstack::bridge_pump(bridge, stream),
-                        Err(_) => drop(stream),
+                    let netstack = netstack.clone();
+                    std::thread::spawn(move || {
+                        match netstack.connect_to(target.address, target.port) {
+                            Ok(bridge) => crate::netstack::bridge_pump(bridge, stream),
+                            Err(_) => drop(stream),
+                        }
                     });
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -132,39 +82,13 @@ fn bind_forward(
             }
         }
     });
-    bound.insert(host, ForwardHandle { target, guest, running });
-    Ok(())
-}
-
-fn unbind_forward(
-    bound: &mut BTreeMap<u16, ForwardHandle>,
-    host: u16,
-    target: Ipv4Addr,
-    guest: u16,
-) -> Result<()> {
-    let Some(existing) = bound.get(&host) else { return Ok(()) };
-    if existing.target != target || existing.guest != guest {
-        bail!(
-            "Runtime host port {host} is mapped to {}:{}, not {target}:{guest}",
-            existing.target,
-            existing.guest
-        );
-    }
-    let existing = bound.remove(&host).expect("checked Runtime forward");
-    existing.running.store(false, Ordering::Release);
-    Ok(())
+    Ok(ListenerHandle::new(move || {
+        running.store(false, Ordering::Release)
+    }))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn response_omits_message_on_success() {
-        let json = serde_json::to_string(&ForwardResponse { ok: true, message: None }).unwrap();
-        assert_eq!(json, r#"{"ok":true}"#);
-    }
-
     #[test]
     fn runtime_control_socket_is_inside_the_vm_directory() {
         let paths = crate::spec::VmPaths::for_name("appliance-runtime");
@@ -172,21 +96,5 @@ mod tests {
             paths.runtime_forward_sock(),
             paths.dir.join(std::path::Path::new("runtime-forward.sock"))
         );
-    }
-
-    #[test]
-    fn unbind_revokes_the_listener_handle() {
-        let running = Arc::new(AtomicBool::new(true));
-        let mut bound = BTreeMap::from([(
-            20_000,
-            ForwardHandle {
-                target: Ipv4Addr::new(192, 168, 127, 10),
-                guest: 22_000,
-                running: running.clone(),
-            },
-        )]);
-        unbind_forward(&mut bound, 20_000, Ipv4Addr::new(192, 168, 127, 10), 22_000).unwrap();
-        assert!(bound.is_empty());
-        assert!(!running.load(Ordering::Acquire));
     }
 }
