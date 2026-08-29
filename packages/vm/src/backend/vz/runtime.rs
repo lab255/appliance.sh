@@ -63,7 +63,7 @@ fn spawn_netstack_listener(
     listener.set_nonblocking(true)?;
     let running = Arc::new(AtomicBool::new(true));
     let thread_running = running.clone();
-    std::thread::spawn(move || {
+    let thread = std::thread::spawn(move || {
         while thread_running.load(Ordering::Acquire) {
             match listener.accept() {
                 Ok((stream, _)) => {
@@ -83,7 +83,8 @@ fn spawn_netstack_listener(
         }
     });
     Ok(ListenerHandle::new(move || {
-        running.store(false, Ordering::Release)
+        running.store(false, Ordering::Release);
+        let _ = thread.join();
     }))
 }
 

@@ -77,7 +77,7 @@ fn spawn_tcp_listener(host: u16, target: ForwardTarget) -> Result<ListenerHandle
     listener.set_nonblocking(true)?;
     let running = Arc::new(AtomicBool::new(true));
     let thread_running = running.clone();
-    std::thread::spawn(move || {
+    let thread = std::thread::spawn(move || {
         let upstream = SocketAddr::from((target.address, target.port));
         while thread_running.load(Ordering::Acquire) {
             match listener.accept() {
@@ -97,7 +97,8 @@ fn spawn_tcp_listener(host: u16, target: ForwardTarget) -> Result<ListenerHandle
         }
     });
     Ok(ListenerHandle::new(move || {
-        running.store(false, Ordering::Release)
+        running.store(false, Ordering::Release);
+        let _ = thread.join();
     }))
 }
 
@@ -217,7 +218,7 @@ fn current_user_sid() -> Result<String> {
     {
         return Err(std::io::Error::last_os_error()).context("read current-user SID");
     }
-    let user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
+    let user = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast::<TOKEN_USER>()) };
     let mut string_sid = null_mut();
     if unsafe { ConvertSidToStringSidW(user.User.Sid, &mut string_sid) } == 0 {
         return Err(std::io::Error::last_os_error()).context("format current-user SID");

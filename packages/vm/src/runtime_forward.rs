@@ -36,8 +36,10 @@ pub enum ForwardAction {
 pub enum TargetMode {
     /// The host-mediated netstack dials the fixed guest relay address supplied
     /// by the caller; the persisted principal /32 is the relay's last hop.
+    #[cfg_attr(windows, allow(dead_code))]
     Fixed { target: Ipv4Addr },
     /// WSL ignores the advisory request target and dials the current NAT lease.
+    #[cfg_attr(not(windows), allow(dead_code))]
     Wsl { guest_ip: Ipv4Addr },
 }
 
