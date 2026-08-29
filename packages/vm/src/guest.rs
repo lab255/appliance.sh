@@ -4078,6 +4078,8 @@ mod tests {
         assert!(supervisor.contains("proxy environment values must not contain newlines"));
     }
 
+    // These launcher probes execute /bin/sh and therefore only run on Unix hosts.
+    #[cfg(unix)]
     fn assert_generated_launcher_argv_is_secret_safe(
         supervisor: &str,
         launcher_marker: &str,
@@ -4225,6 +4227,7 @@ done >> "$CTR_ARGV"
         let _ = fs::remove_dir_all(&dir);
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_single_app_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv() {
         assert_generated_launcher_argv_is_secret_safe(
@@ -4236,6 +4239,7 @@ done >> "$CTR_ARGV"
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_compound_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv() {
         assert_generated_launcher_argv_is_secret_safe(
