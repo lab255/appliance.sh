@@ -1140,8 +1140,8 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     fs::write(&tmp, raw)?;
     fs::rename(&tmp, &path)?;
     // 0600 on unix so the secrets aren't world-readable. On Windows the
-    // equivalent is an ACL reset: strip inherited ACEs and grant only
-    // the current user (the OpenSSH key-file posture) — mirrors
+    // equivalent is a protected ACL containing the current user, SYSTEM, and
+    // Administrators (the latter two can take ownership regardless) — mirrors
     // restrictWindowsAcl in the CLI's profile-store.ts, which manages
     // the same file. Both best-effort: a failed tightening never breaks
     // the write.
@@ -1152,19 +1152,7 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     }
     #[cfg(windows)]
     {
-        if let Ok(sid) = current_user_sid_string() {
-            use std::os::windows::process::CommandExt;
-            let principal = format!("*{sid}");
-            let _ = std::process::Command::new("icacls")
-                .arg(&path)
-                .args([
-                    "/inheritance:r",
-                    "/grant:r",
-                    &format!("{principal}:F"),
-                ])
-                .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-                .output();
-        }
+        let _ = restrict_to_current_user(&path);
     }
     Ok(())
 }
@@ -6040,25 +6028,107 @@ fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
 
 #[cfg(windows)]
 fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SetNamedSecurityInfoW,
+        SDDL_REVISION_1, SE_FILE_OBJECT,
+    };
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorDacl, GetSecurityDescriptorOwner, DACL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    };
 
-    let principal = format!("*{}", current_user_sid_string()?);
-    let permission = if path.is_dir() { "(OI)(CI)F" } else { "F" };
-    let output = std::process::Command::new("icacls")
-        .arg(path)
-        .args([
-            "/inheritance:r",
-            "/grant:r",
-            &format!("{principal}:{permission}"),
-        ])
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-        .output()
-        .map_err(|error| format!("could not run icacls for {}: {error}", path.display()))?;
-    if !output.status.success() {
+    struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
+    impl Drop for LocalSecurityDescriptor {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = LocalFree(self.0);
+            }
+        }
+    }
+
+    let current_user = current_user_sid_string()?;
+    let inheritance = if path.is_dir() { "OICI" } else { "" };
+    let sddl = format!(
+        "O:{current_user}D:P(A;{inheritance};FA;;;{current_user})(A;{inheritance};FA;;;SY)(A;{inheritance};FA;;;BA)"
+    );
+    let wide_sddl: Vec<u16> = std::ffi::OsStr::new(&sddl)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            wide_sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut descriptor,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
         return Err(format!(
-            "could not restrict {} to {principal}: {}",
+            "could not build protected DACL for {}: {}",
             path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            std::io::Error::last_os_error()
+        ));
+    }
+    let _descriptor = LocalSecurityDescriptor(descriptor);
+    let mut owner = std::ptr::null_mut();
+    let mut owner_defaulted = 0;
+    if unsafe { GetSecurityDescriptorOwner(descriptor, &mut owner, &mut owner_defaulted) } == 0
+        || owner.is_null()
+    {
+        return Err(format!(
+            "could not read protected ACL owner for {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+    let mut dacl_present = 0;
+    let mut dacl_defaulted = 0;
+    let mut dacl = std::ptr::null_mut();
+    if unsafe {
+        GetSecurityDescriptorDacl(
+            descriptor,
+            &mut dacl_present,
+            &mut dacl,
+            &mut dacl_defaulted,
+        )
+    } == 0
+        || dacl_present == 0
+        || dacl.is_null()
+    {
+        return Err(format!(
+            "could not read protected DACL for {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+
+    let wide_path: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let status = unsafe {
+        SetNamedSecurityInfoW(
+            wide_path.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION
+                | DACL_SECURITY_INFORMATION
+                | PROTECTED_DACL_SECURITY_INFORMATION,
+            owner,
+            std::ptr::null_mut(),
+            dacl,
+            std::ptr::null_mut(),
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return Err(format!(
+            "could not restrict {} to trusted Windows principals: {}",
+            path.display(),
+            std::io::Error::from_raw_os_error(status as i32)
         ));
     }
     Ok(())

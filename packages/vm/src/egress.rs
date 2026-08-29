@@ -1544,7 +1544,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some(crate::creds::CredentialHelper::legacy("printf real-key")),
+                helper: Some(crate::creds::resolving_test_helper()),
             },
         )
         .unwrap();

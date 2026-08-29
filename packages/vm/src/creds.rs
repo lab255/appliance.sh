@@ -721,6 +721,54 @@ pub fn set_header(head: &str, header: &str, value: &str) -> String {
 }
 
 #[cfg(test)]
+pub(crate) fn resolving_test_helper() -> CredentialHelper {
+    #[cfg(windows)]
+    {
+        let cmd = PathBuf::from(
+            std::env::var_os("SystemRoot")
+                .unwrap_or_else(|| std::ffi::OsString::from(r"C:\Windows")),
+        )
+        .join("System32")
+        .join("cmd.exe");
+        CredentialHelper::Argv(vec![
+            cmd.to_string_lossy().into_owned(),
+            "/D".into(),
+            "/C".into(),
+            "echo".into(),
+            "real-key".into(),
+        ])
+    }
+    #[cfg(not(windows))]
+    {
+        CredentialHelper::legacy("printf real-key")
+    }
+}
+
+#[cfg(test)]
+fn failing_test_helper() -> CredentialHelper {
+    #[cfg(windows)]
+    {
+        let cmd = PathBuf::from(
+            std::env::var_os("SystemRoot")
+                .unwrap_or_else(|| std::ffi::OsString::from(r"C:\Windows")),
+        )
+        .join("System32")
+        .join("cmd.exe");
+        CredentialHelper::Argv(vec![
+            cmd.to_string_lossy().into_owned(),
+            "/D".into(),
+            "/C".into(),
+            "exit".into(),
+            "7".into(),
+        ])
+    }
+    #[cfg(not(windows))]
+    {
+        CredentialHelper::legacy("exit 7")
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1009,7 +1057,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some(CredentialHelper::legacy("exit 7")),
+                helper: Some(failing_test_helper()),
             },
         )
         .unwrap();
@@ -1043,7 +1091,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some(CredentialHelper::legacy("printf real-key")),
+                helper: Some(resolving_test_helper()),
             },
         )
         .unwrap();
