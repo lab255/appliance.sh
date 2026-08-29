@@ -1365,7 +1365,14 @@ mod tests {
         // The verbatim prefix is stripped for wslpath.
         let mount_path = shell_squote(strip_verbatim(mount));
         assert!(script.contains(&format!("wslpath -u '{mount_path}'")));
-        assert!(!script.contains(r"\\?\"));
+        for line in script.lines() {
+            if let Some((_, path)) = line.split_once("wslpath -u '") {
+                assert!(
+                    !path.starts_with(r"\\?\"),
+                    "verbatim Windows path leaked into wslpath argument: {line}"
+                );
+            }
+        }
         // Dev + docker + CA blocks are present; core-ready omits BuildKit.
         assert!(script.contains("appliance-dev: provisioning development environment"));
         assert!(script.contains("appliance-docker: provisioning in-guest Docker engine"));
