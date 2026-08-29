@@ -1,4 +1,115 @@
-# Windows Runtime owner-run certification (AP-205)
+# Windows live-test runbooks
+
+## Credential and desktop release runbook
+
+Use this runbook on a non-admin Windows 11 user before calling the Windows
+credential and installed-desktop path release-ready. It covers the scope that
+[`docs/desktop.md`](desktop.md) and
+[`packages/desktop/README.md`](../packages/desktop/README.md) claim; it does not
+claim parity for features outside these steps.
+
+### 1. Prerequisites
+
+- Use WSL2 NAT, not WSL v1 or mirrored networking.
+- Install the candidate NSIS desktop bundle and the same-tag standalone CLI.
+- Start from a user profile containing legacy non-empty cluster credentials in
+  both `~/.appliance/profiles.json` and `~/.appliance/credentials.json`, plus
+  one legacy agent credential.
+- Record the release tag, Windows build, `wsl.exe --version`, and SHA-256 of
+  both installed `appliance-credhelper.exe` copies.
+
+Pass: the helper hashes are identical and match the
+`x86_64-pc-windows-msvc` entry in
+[`credential-helper-checksums.json`](../packages/cli/scripts/credential-helper-checksums.json).
+
+### 2. Installed layout and helper pipes
+
+From PowerShell, locate the standalone and desktop-bundled CLI/helper pairs.
+For each pair, confirm `appliance-credhelper.exe` is a file sibling of
+`appliance.exe`. Temporarily rename one helper, run an authenticated CLI
+command, restore it, and rerun the command.
+
+Pass: the missing-helper run fails closed with no file fallback; the restored
+run succeeds. Do not place any substitute helper on `PATH` or in the current
+directory during the retry: neither location may be used. The automated
+counterpart is
+[`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts).
+
+Exercise a test Credential Manager item whose value contains a newline,
+non-ASCII text, and trailing whitespace through helper `put`/`get` stdin and
+stdout pipes.
+
+Pass: the bytes round-trip exactly, the value never appears in argv or stderr,
+and missing/denied/malformed cases return their documented distinct statuses.
+The Windows-only automated counterpart is
+[`windows_cli.rs`](../packages/credhelper/tests/windows_cli.rs).
+
+### 3. Lazy migration and downgrade boundary
+
+Run an authenticated CLI command, then inspect the two JSON files and Windows
+Credential Manager.
+
+Pass:
+
+- every migrated cluster value is present in Credential Manager;
+- `profiles.json` retains metadata with an empty secret;
+- `credentials.json` retains metadata with an empty secret;
+- the legacy agent file is removed only after read-back verification; and
+- a second run makes no further changes.
+
+Recreate one legacy file with bytes different from the Credential Manager
+item, then run the command again.
+
+Pass: neither value is overwritten, Credential Manager remains the read
+source, and `appliance doctor` reports `conflict`. After the verified scrub,
+launching an older Windows CLI must require upgrade or re-login rather than
+recovering a cleartext downgrade copy. The fixture counterpart is
+[`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts).
+
+### 4. Doctor states
+
+Create or simulate each state in turn: `missing`, `denied`, `malformed`,
+`migrated`, `conflict`, `helper-missing`, and `legacy-name`. Run `appliance
+doctor` after each change; use `doctor --fix` only for a safe missing/write-back
+case.
+
+Pass: Windows shows a credential-store row for every profile—never
+`not-applicable`—and each state has distinct remediation. Conflict repair does
+not choose or delete either value automatically. The rendering counterpart is
+[`runtime-doctor.spec.ts`](../packages/cli/src/utils/runtime-doctor.spec.ts).
+
+### 5. Broker files and managed WSL distro
+
+Sign in an agent and start it once. Inspect the VM's
+`egress-credentials.json`, `egress-secrets.json`, and Windows ACLs.
+
+Pass: the generated rule contains absolute argv ending in `agent print-key
+--type <agent>`, uses `capture:false`, and leaves no real agent credential in
+either per-VM file. If capture is explicitly enabled for a disposable test
+header, the header appears in cleartext in `egress-secrets.json`; verify that by
+hand. A doctor warning for enabled capture is a follow-up (board card “Doctor:
+warn when a capture-mode credential rule is enabled on Windows”), not
+implemented in AP-209.
+Restore `capture:false` and delete the test secret afterward. The rule/capture counterparts are
+[`agent.spec.ts`](../packages/cli/src/utils/agent.spec.ts) and
+[`creds.rs`](../packages/vm/src/creds.rs).
+
+Inside the managed distro, inspect `/etc/wsl.conf` and `/proc/mounts`.
+
+Pass: `[interop] enabled=false`, `appendWindowsPath=false`, and no Windows drive
+is automatically mounted. These controls do not constrain other distros or
+same-user Windows execution. The configuration counterpart is
+[`wsl.rs`](../packages/vm/src/backend/wsl.rs).
+
+### 6. Record the result
+
+Attach the command transcript with secrets redacted, both helper hashes,
+doctor output for every state, ACL principals, `/etc/wsl.conf`, and the NSIS
+installed-file list to the release evidence. Record any failed step as a
+release blocker; do not weaken the workflow digest guard or publish gating to
+work around it.
+
+## Windows Runtime owner-run certification (AP-205)
 
 This is the single Windows 11 / WSL2 NAT owner run required by
 `docs/rfc/wsl-runtime.md` Decision 5. Run it from Git Bash in a clean checkout.
@@ -11,7 +122,7 @@ gating, loopback publishing, and Desktop handoff. It does not certify Windows
 agent sandboxes, per-app policy enforcement planned for 3b, first-run timing,
 or parity with the packaged installer.
 
-## Prerequisites and worksheet
+### Prerequisites and worksheet
 
 - Windows 11 with virtualization enabled in firmware. In an elevated
   PowerShell, enable WSL2 if needed, then reboot:
@@ -89,7 +200,7 @@ NODE
 rm -rf "$PROBE_SRC"
 ```
 
-## 0. Drive-exposure gate — before any payload runs
+### 0. Drive-exposure gate — before any payload runs
 
 Run this before any `runtime run` command:
 
@@ -99,7 +210,7 @@ wsl.exe -d appliance-vm-appliance -u root -- sh -c 'test ! -e /mnt/c && ! grep -
 
 0. Drive-exposure check exit code: `____` (must be 0; stop the run if non-zero)
 
-## 1. Clean pool and strict default
+### 1. Clean pool and strict default
 
 ```sh
 "$AP" runtime stop journal 2>/dev/null || true
@@ -121,7 +232,7 @@ egress grants are refused` and never contains `host-enforced`.
 
 5. Strict policy `allow` count: `__________` (must be 0 in strict)
 
-## 2. Cold and warm container and binary samples
+### 2. Cold and warm container and binary samples
 
 Journal and Dashboard request no egress grants. A cold sample starts with the
 pool stopped; its warm sample reuses the resident pool. Keep shell `time`
@@ -170,7 +281,7 @@ strict/networkless install prints its outbound-traffic notice exactly once.
 
 Strict first-run notice present (1/0): `____`
 
-## 3. Notes Suite compound lifecycle
+### 3. Notes Suite compound lifecycle
 
 ```sh
 "$AP" vm stop --name appliance-runtime
@@ -193,7 +304,7 @@ the web dependency starts after the API; both service logs are non-empty; and
    `____`; `vm up` seconds: `____`
 9. Healthy service count: `__________` (must be 2)
 
-## 4. Browser and Desktop app window
+### 4. Browser and Desktop app window
 
 Close Appliance Desktop before the first open so it exercises browser
 fallback.
@@ -224,7 +335,7 @@ Desktop window opened (1/0): `____`
 
 Desktop window URL (must equal item 10's URL): `________________________________________`
 
-## 5. Strict refusal, then cooperative allow/deny
+### 5. Strict refusal, then cooperative allow/deny
 
 The temporary fixture copies the Journal container and requests
 `example.com:443`. After it starts, `wget` enters its task network namespace so
@@ -272,7 +383,7 @@ egress success is interpreted as policy enforcement.
 
 Bypass-warning line count: `____` (must be 1)
 
-## 6. Cooperative policy wording
+### 6. Cooperative policy wording
 
 ```sh
 "$AP" vm egress policy --name appliance-runtime | tee "$OUT/policy-cooperative.json"
@@ -288,7 +399,7 @@ VM-wide union is host-only and drops each manifest grant's port restriction.
 
 15. Cooperative union host count: `__________` (must equal the union of granted hosts; 1 for the probe fixture)
 
-## 7. Pool restart and same-URL reopen
+### 7. Pool restart and same-URL reopen
 
 Keep Notes Suite installed and record its URL from item 10.
 
@@ -311,7 +422,7 @@ and the exact loopback URL is reused.
 16. Reopen seconds: `__________` (target under 15s, compare to item 8)
 17. URL-stable result (1 pass / 0 fail): `__________`
 
-## 8. Mirrored networking fails fast, then NAT recovers
+### 8. Mirrored networking fails fast, then NAT recovers
 
 From PowerShell, preserve the current NAT configuration, write the mirrored
 negative-test configuration, and use the `$AP` variable rather than a bare
@@ -356,7 +467,7 @@ Mirrored fail-fast seconds: `__________`
 
 Post-mirrored NAT recovery (1/0): `__________`
 
-## 9. Final teardown
+### 9. Final teardown
 
 ```sh
 "$AP" runtime stop notes-suite 2>/dev/null || true

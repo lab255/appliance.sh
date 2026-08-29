@@ -58,8 +58,10 @@ MITM scope, same peer-pin. The token, like the key, **never enters the VM**.
 > **longer-lived secret than an API key**, so a compromise of the **host**
 > credential store is worth roughly **a year of subscription access** until the
 > token expires or is revoked. This does **not** add a new trust boundary — it
-> is the **same host-compromise threat model** as the API key (host Keychain /
-> `0600` file), just a longer blast-radius window on that one existing surface.
+> is the **same host-compromise threat model** as the API key (macOS Keychain,
+> Windows Credential Manager, or owner-only Linux file), just a longer
+> blast-radius window on that one existing surface. See
+> [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts).
 
 > **Why a one-year token ⇒ no refresh plumbing.** `claude setup-token` returns a
 > **one-year** token. We deliberately do **NOT** use the short-lived (~60 min)
@@ -338,7 +340,7 @@ does, on a different header value.
 **Build contract (one line):** a **"Sign in with Claude"** affordance (plus
 **API-key entry**) on the desktop runs the **same host-side flow** via a Tauri
 command — OAuth surfaces the `setup-token` URL and captures the token; the
-credential is stored **host-side** (Keychain), **never sent to the VM** — closing
+credential is stored **host-side** (the platform credential store), **never sent to the VM** — closing
 the deferred **A5b** ("desktop Store-Anthropic-key login affordance").
 
 - A new Tauri command (e.g. `microvm_agent_login`) mirroring the existing
@@ -365,9 +367,9 @@ the deferred **A5b** ("desktop Store-Anthropic-key login affordance").
 ## 5. Cred storage + placeholders
 
 **One host store, tagged by kind.** The Anthropic credential lives host-side
-**only** — macOS Keychain `sh.appliance.agent` (account `anthropic`), or a
-`0600` file under `~/.appliance/agent/` off-macOS (today's `utils/agent.ts`
-store). The stored secret becomes a small **JSON envelope** so the kind travels
+**only** — macOS Keychain `sh.appliance.agent`, Windows Credential Manager
+through the packaged helper, or an owner-only Linux file under
+`~/.appliance/agent/`. The stored secret becomes a small **JSON envelope** so the kind travels
 with the value atomically in one item:
 
 ```json
@@ -378,7 +380,7 @@ with the value atomically in one item:
   `{ kind, value }`. **Back-compat:** a stored **bare (non-JSON) string** is read
   as `{ kind: 'api-key', value }`, so existing logins keep working without a
   migration step.
-- The same Keychain/0600 protections apply to the OAuth token as to the API key
+- The same platform-store protections apply to the OAuth token as to the API key
   — it is a long-lived opaque secret and is handled identically (host-only,
   never logged, never in any per-VM file, never in the VM).
 - **Placeholders (inert, per mode), never real, only ever in the VM env:**
@@ -405,14 +407,15 @@ trust boundary.
 **What holds (unchanged guarantees).**
 
 - **The credential never enters the VM** — Bearer path included. The OAuth
-  token lives in the host Keychain, is resolved host-side by `print-key`
+  token lives in the platform host store, is resolved host-side by `print-key`
   (`Bearer <token>`), and is written onto the request **only** at the proxy on
   the outbound copy (`mitm.rs:267`, `creds.rs:296`). The VM holds at most an
   inert `sk-ant-oat01-appliance-proxy` placeholder. §3 walks each enforcement
   path (fail-closed / MITM-scope / peer-pin / capture:false) and shows it is
   header-agnostic, so the new mode inherits every guarantee.
-- **Host token storage.** Keychain `sh.appliance.agent` on macOS; `0600` file
-  off-macOS — same posture as the API key. The token is never logged (proxy
+- **Host token storage.** Keychain `sh.appliance.agent` on macOS, Credential
+  Manager on Windows, or an owner-only file on Linux — same posture as the API
+  key. The token is never logged (proxy
   logs the request **line** only, never headers) and never written to any
   per-VM file (`capture:false` → not in `egress-secrets.json`).
 - **Fail-closed on the Bearer path.** If the token is unconfigured / Keychain

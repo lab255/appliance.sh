@@ -7,7 +7,10 @@ cloud installations — all from one window. It ships for **macOS**
 (Virtualization.framework) and **Windows** (WSL2); the same UI is served as a
 web console by every api-server at `http://api.appliance.localhost:8081`,
 with the desktop-only surfaces (VM lifecycle, terminals, agents) gated to the
-desktop shell.
+desktop shell. Windows support is scoped to the WSL2 path defined by the
+[Windows live-test runbook](live-test-runbook-windows.md); that statement does
+not imply parity for unlisted features. The runbook has not yet been run against
+a release candidate; CI proves only the automated counterparts it names.
 
 > **Windows prerequisite:** WSL2. If `wsl --status` reports no WSL, run
 > `wsl --install` once and reboot. macOS needs nothing.
@@ -95,9 +98,9 @@ share.
 - On macOS, VM shells ride a vsock relay socket. On Windows, the guest **is**
   a WSL2 distro and shells ride `wsl.exe` directly — same in-guest tmux
   sessions, same reattach semantics.
-- Credentials: the OS keychain is canonical on macOS; on Windows/Linux the
-  CLI-shared `~/.appliance/profiles.json` (0600) is canonical. The desktop
-  and CLI see the same clusters either way (see
+- Credentials: macOS Keychain and Windows Credential Manager are canonical;
+  Linux keeps an owner-only cleartext file. The desktop and CLI share
+  `profiles.json` metadata and see the same clusters either way (see
   [credentials.md](credentials.md)).
 
 For the build-from-source and release/signing story, see

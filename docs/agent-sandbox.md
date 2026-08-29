@@ -67,27 +67,28 @@ desktop "Run agent" / `appliance agent run`
 Everything below ships today; Phase 5 composes it. Verify these anchors
 before building — line numbers drift.
 
-| Capability                                                                                                                                                | Where                                                                                                                                                                                                                                                                                                            | Notes                                                                                                          |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Boot the managed VM with docker + workspace (agents ride the ONE `appliance` VM, booted dev-capable — the separate `appliance-sbx` sandbox VM is retired) | `packages/cli/src/utils/sandbox.ts:482` `ensureSandboxVm` (used by `appliance-up.ts:14`)                                                                                                                                                                                                                         | `runVm(['up', vm, '--docker', '--mount', dir])` (`sandbox.ts:500`); waits for dockerd                          |
-| VirtioFS workspace                                                                                                                                        | `GUEST_WORKSPACE = '/persist/workspace'` (`sandbox.ts:22`); mount in `guest.rs` `DEV_MOUNT` (`guest.rs:404`)                                                                                                                                                                                                     | host folder ↔ guest, same tree                                                                                |
-| Non-root `appliance` user + npm prefix                                                                                                                    | `guest.rs` user block (`guest.rs:269`); `NPM_CONFIG_PREFIX="$HOME/.local"`, PATH (`guest.rs:316`); `nodejs npm` in dev toolchain (`guest.rs:390`); `addgroup appliance docker` (`guest.rs:477`)                                                                                                                  | HOME = `/persist/workspace`; agents refuse to run as root — this is why E2 exists                              |
-| Reattachable tmux session transport                                                                                                                       | `guest.rs` `SHELL_AGENT` (`guest.rs:535`); verb routing (`guest.rs:562`), `new-session -A -s appliance-$__SID` (`guest.rs:578`), `su -s "$__SH" -l appliance` (`guest.rs:594`)                                                                                                                                   | `tmux -L appliance` socket; survives disconnect                                                                |
-| Shell client `--session`                                                                                                                                  | `packages/vm/src/shell.rs` `run_client` (`shell.rs:38`); `validate_session_id` (`shell.rs:182`); `list_sessions` (`shell.rs:121`) / `kill_session` (`shell.rs:139`)                                                                                                                                              | one-shot vs interactive paths                                                                                  |
-| CLI surface                                                                                                                                               | `appliance-vm.ts`: `shell --session <id>` (`appliance-vm.ts:340`), `up --mount` (`appliance-vm.ts:415`), `creds add` (`appliance-vm.ts:672`)                                                                                                                                                                     |                                                                                                                |
-| Desktop tab dock + rehydrate                                                                                                                              | `packages/app/src/providers/terminal-sessions-provider.tsx` (`openSession`, `mintSessionId` = `${mode}-${uuid}` `:179`, rehydrate effect `:493`); tab bar `components/layout/terminal-tab-bar.tsx`; "Open shell" call `pages/local-runtime/index.tsx:629`                                                        |                                                                                                                |
-| Desktop → vsock argv                                                                                                                                      | `packages/desktop/src-tauri/src/lib.rs` `microvm_host_shell_argv` (`:3421`, appends `--session` `:3443`), `terminal_open` (`:3514`)                                                                                                                                                                              |                                                                                                                |
-| Project ↔ VM link                                                                                                                                        | `packages/cli/src/utils/link.ts` `SandboxLink` (`:46`), `readSandboxLink`/`writeSandboxLink`                                                                                                                                                                                                                     | `.appliance/link.json`                                                                                         |
-| **Egress forward proxy**                                                                                                                                  | `packages/vm/src/egress.rs`: `spawn` (`:161`) / `run_proxy` (`:140`), `handle_conn` (`:225`), `guest_proxy_url` (`:408`), `peer_allowed` (`:379`), `DEFAULT_EGRESS_PORT 5053` (`:431`)                                                                                                                           | spawned by `vm run` binding `0.0.0.0:<egress_port>` (`main.rs:581`); peer-gated to the guest subnet + loopback |
-| **Credential capture / inject**                                                                                                                           | `packages/vm/src/creds.rs`: `CredentialRule` (`:28`), `injection_for` (`:204`, helper preferred over stored secret), `run_helper` (`:215`, spawned directly (argv); legacy strings via `sh -c` on Unix only; rejected on Windows), `set_header` (`:226`, case-insensitive replace), `capture_from_head` (`:190`) | config `egress-credentials.json` (`:54`); secrets `egress-secrets.json` 0600 (`:57`,`:115`)                    |
-| **TLS interception (MITM)**                                                                                                                               | `packages/vm/src/mitm.rs`: `ensure_ca` (`:46`), `ca_cert_path` = `egress-ca.pem` (`:30`), `intercept` (`:193`, calls `capture_from_head` `:228` then `injection_for`+`set_header` `:240`), minting `server_config` (`:154`), webpki `client_config` upstream (`:165`)                                            | per-VM CA, leaf-per-host                                                                                       |
-| **Egress CA trusted guest-wide at boot**                                                                                                                  | `guest.rs` `update-ca-certificates` on `/usr/local/share/ca-certificates/appliance-egress.crt` (`:105`); apkovl placement (`:701`, present even when MITM off); build wiring `ensure_ca`+read PEM (`:755`)                                                                                                       | **already done** — non-Node tools (curl/git/openssl) trust the CA                                              |
-| CLI creds + mitm                                                                                                                                          | `appliance-vm.ts` `creds add --inject --helper` (`:672`); `main.rs` `run_creds` (`:755`), `egress mitm on` (`:869`)                                                                                                                                                                                              |                                                                                                                |
-| **The pod-only gap**                                                                                                                                      | `packages/infra/.../LocalContainerDeploymentService.ts` `egressEnv` (`:965`), `NODE_EXTRA_CA_CERTS` (`:982`), `renderManifest` env merge (`:1010`); `appliance-egress` ConfigMap published by `egress.rs publish_configmap` (`:489`)                                                                             | proxy env reaches **k8s pods only** — never a tmux process                                                     |
+| Capability                                                                                                                                                | Where                                                                                                                                                                                                                                                                 | Notes                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Boot the managed VM with docker + workspace (agents ride the ONE `appliance` VM, booted dev-capable — the separate `appliance-sbx` sandbox VM is retired) | `packages/cli/src/utils/sandbox.ts:482` `ensureSandboxVm` (used by `appliance-up.ts:14`)                                                                                                                                                                              | `runVm(['up', vm, '--docker', '--mount', dir])` (`sandbox.ts:500`); waits for dockerd                          |
+| VirtioFS workspace                                                                                                                                        | `GUEST_WORKSPACE = '/persist/workspace'` (`sandbox.ts:22`); mount in `guest.rs` `DEV_MOUNT` (`guest.rs:404`)                                                                                                                                                          | host folder ↔ guest, same tree                                                                                |
+| Non-root `appliance` user + npm prefix                                                                                                                    | `guest.rs` user block (`guest.rs:269`); `NPM_CONFIG_PREFIX="$HOME/.local"`, PATH (`guest.rs:316`); `nodejs npm` in dev toolchain (`guest.rs:390`); `addgroup appliance docker` (`guest.rs:477`)                                                                       | HOME = `/persist/workspace`; agents refuse to run as root — this is why E2 exists                              |
+| Reattachable tmux session transport                                                                                                                       | `guest.rs` `SHELL_AGENT` (`guest.rs:535`); verb routing (`guest.rs:562`), `new-session -A -s appliance-$__SID` (`guest.rs:578`), `su -s "$__SH" -l appliance` (`guest.rs:594`)                                                                                        | `tmux -L appliance` socket; survives disconnect                                                                |
+| Shell client `--session`                                                                                                                                  | `packages/vm/src/shell.rs` `run_client` (`shell.rs:38`); `validate_session_id` (`shell.rs:182`); `list_sessions` (`shell.rs:121`) / `kill_session` (`shell.rs:139`)                                                                                                   | one-shot vs interactive paths                                                                                  |
+| CLI surface                                                                                                                                               | `appliance-vm.ts`: `shell --session <id>` (`appliance-vm.ts:340`), `up --mount` (`appliance-vm.ts:415`), `creds add` (`appliance-vm.ts:672`)                                                                                                                          |                                                                                                                |
+| Desktop tab dock + rehydrate                                                                                                                              | `packages/app/src/providers/terminal-sessions-provider.tsx` (`openSession`, `mintSessionId` = `${mode}-${uuid}` `:179`, rehydrate effect `:493`); tab bar `components/layout/terminal-tab-bar.tsx`; "Open shell" call `pages/local-runtime/index.tsx:629`             |                                                                                                                |
+| Desktop → vsock argv                                                                                                                                      | `packages/desktop/src-tauri/src/lib.rs` `microvm_host_shell_argv` (`:3421`, appends `--session` `:3443`), `terminal_open` (`:3514`)                                                                                                                                   |                                                                                                                |
+| Project ↔ VM link                                                                                                                                        | `packages/cli/src/utils/link.ts` `SandboxLink` (`:46`), `readSandboxLink`/`writeSandboxLink`                                                                                                                                                                          | `.appliance/link.json`                                                                                         |
+| **Egress forward proxy**                                                                                                                                  | `packages/vm/src/egress.rs`: `spawn` (`:161`) / `run_proxy` (`:140`), `handle_conn` (`:225`), `guest_proxy_url` (`:408`), `peer_allowed` (`:379`), `DEFAULT_EGRESS_PORT 5053` (`:431`)                                                                                | spawned by `vm run` binding `0.0.0.0:<egress_port>` (`main.rs:581`); peer-gated to the guest subnet + loopback |
+| **Credential capture / inject**                                                                                                                           | [`packages/vm/src/creds.rs`](../packages/vm/src/creds.rs): `CredentialRule`, direct argv helper execution, case-insensitive replacement, capture, and Windows ACL tests                                                                                               | ACL-reset config `egress-credentials.json`; opt-in cleartext capture in ACL-reset `egress-secrets.json`        |
+| **TLS interception (MITM)**                                                                                                                               | `packages/vm/src/mitm.rs`: `ensure_ca` (`:46`), `ca_cert_path` = `egress-ca.pem` (`:30`), `intercept` (`:193`, calls `capture_from_head` `:228` then `injection_for`+`set_header` `:240`), minting `server_config` (`:154`), webpki `client_config` upstream (`:165`) | per-VM CA, leaf-per-host                                                                                       |
+| **Egress CA trusted guest-wide at boot**                                                                                                                  | `guest.rs` `update-ca-certificates` on `/usr/local/share/ca-certificates/appliance-egress.crt` (`:105`); apkovl placement (`:701`, present even when MITM off); build wiring `ensure_ca`+read PEM (`:755`)                                                            | **already done** — non-Node tools (curl/git/openssl) trust the CA                                              |
+| CLI creds + mitm                                                                                                                                          | `appliance-vm.ts` `creds add --inject --helper` (`:672`); `main.rs` `run_creds` (`:755`), `egress mitm on` (`:869`)                                                                                                                                                   |                                                                                                                |
+| **The pod-only gap**                                                                                                                                      | `packages/infra/.../LocalContainerDeploymentService.ts` `egressEnv` (`:965`), `NODE_EXTRA_CA_CERTS` (`:982`), `renderManifest` env merge (`:1010`); `appliance-egress` ConfigMap published by `egress.rs publish_configmap` (`:489`)                                  | proxy env reaches **k8s pods only** — never a tmux process                                                     |
 
 Host state for a VM lives under `~/.appliance/vm/<name>/`
 (`VmPaths::for_name`, `spec.rs:256`): `egress-policy.json`,
-`egress-credentials.json`, `egress-secrets.json` (0600), `egress-ca.pem`,
+`egress-credentials.json`, `egress-secrets.json` (owner-only mode on Unix,
+current-user ACL on Windows), `egress-ca.pem`,
 `shell.sock`, `guest-ip`.
 
 ## 2. Agent runner (A1)
@@ -132,13 +133,12 @@ the `claude` command, and the agent-typed registry/tab.
 
 This is the security spine. The key flow, end to end:
 
-1. **Where the host key lives.** A new `appliance agent login` stores the
-   Anthropic key in the **macOS Keychain** (item e.g.
-   `sh.appliance.agent` / `anthropic`), consistent with the E4.4
-   "Keychain-first" credential posture (see [[phase4-microvm-default]]); on
-   non-macOS, a `0600` file under `~/.appliance/agent/` (mirrors
-   `profiles.json` handling, `desktop/src-tauri/src/lib.rs:139`). **The key
-   is never written into any per-VM file and never into the VM.**
+1. **Where the host key lives.** `appliance agent login` stores the Anthropic
+   credential in macOS Keychain, Windows Credential Manager, or an owner-only
+   Linux file. On Windows the CLI reaches Credential Manager through the
+   digest-verified sibling helper. **The key is never written into a per-VM
+   file or the VM by the default rule.** The store and migration paths are
+   covered by [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts).
 
 2. **The credential rule.** `appliance agent run` (or `appliance-vm creds
 add`) writes one rule to the VM's `egress-credentials.json`
@@ -160,7 +160,7 @@ add`) writes one rule to the VM's `egress-credentials.json`
      via `sh -c` on Unix only; rejected on Windows. Its stdout is trimmed, and
      `set_header` (`creds.rs:226`) replaces the header on the **outbound
      copy only**.
-   - `helper` resolves the key fresh from the Keychain each call — so
+   - `helper` resolves the key fresh from the platform host store each call — so
      nothing persists the key, not even `egress-secrets.json`. (Stored
      secrets remain available as a fallback, but the helper is preferred,
      `creds.rs:207`.)
@@ -196,13 +196,14 @@ add`) writes one rule to the VM's `egress-credentials.json`
    the whole point.)_
 
 5. **Fail closed (A2 — implemented).** If the host helper yields nothing
-   for `api.anthropic.com` (Keychain locked, not logged in, helper
+   for `api.anthropic.com` (platform store denied, not logged in, helper
    non-zero), the proxy must **never** forward the in-guest placeholder
    upstream. `mitm::intercept` now resolves `injection_for` **before
    dialing upstream**; when it's empty but the host has an inject rule
    (`creds::has_inject_rule`), the proxy **refuses** with a clear
-   `502 — Anthropic key not configured (run \`appliance agent login\`)`and dials no upstream. The placeholder therefore crosses the host
-boundary **zero times**, even on the error path. The Anthropic rule is`capture:false`, so the placeholder is never lifted into
+   `502 — Anthropic key not configured (run \`appliance agent login\`)`and
+dials no upstream. The placeholder therefore crosses the host boundary
+**zero times**, even on the error path. The Anthropic rule is`capture:false`, so the placeholder is never lifted into
 `egress-secrets.json` either.
 
 6. **Helper TTL cache (A2 — implemented).** `run_helper`
@@ -214,11 +215,40 @@ boundary **zero times**, even on the error path. The Anthropic rule is`capture:f
    a secret and is never logged. The cred rule pins the helper's
    **absolute** binary path (not a PATH-relative `appliance`).
 
-**Net key flow:** Keychain (host) → helper stdout (host, TTL-cached) →
+**Net key flow:** platform host store → `appliance agent print-key --type
+<agent>` → helper stdout (host, TTL-cached) →
 proxy `set_header` on the outbound TLS (host) → Anthropic. The key
 crosses the host↔guest boundary **zero times**. The proxy logs the
 request **line only** (never headers), so a brokered key never reaches a
 log.
+
+The broker rule stores the helper as argv, not a shell string:
+`["<absolute appliance executable>", "agent", "print-key", "--type",
+"<agent>"]`. The TypeScript `print-key` command reads the platform store; on
+Windows that reaches Credential Manager through `appliance-credhelper.exe`.
+The VM engine requires an absolute Windows executable, spawns argv directly,
+and rejects legacy shell strings. This contract is asserted in
+[`agent.spec.ts`](../packages/cli/src/utils/agent.spec.ts),
+[`lib.rs`](../packages/desktop/src-tauri/src/lib.rs), and
+[`creds.rs`](../packages/vm/src/creds.rs).
+
+Capture is a separate, explicit opt-in and keeps the same default as macOS:
+normal generated agent rules set `capture:false`. If a user enables capture,
+the selected header is cleartext in per-VM `egress-secrets.json`; Windows
+resets that file to the current-user ACL, but backups, same-user code,
+Administrator/SYSTEM, and WSL file access remain residuals. The capture and
+`capture:false` cases are tested in [`creds.rs`](../packages/vm/src/creds.rs).
+A Windows doctor warning when capture is enabled is planned (follow-up card),
+not implemented today.
+The managed Appliance WSL2 distro also disables Windows interop and drive
+automount in [`wsl.rs`](../packages/vm/src/backend/wsl.rs).
+
+Brokered injection is intended to be disabled on WSL v1, where exact-lease
+re-attribution cannot survive SNAT. This baseline does not yet contain the
+backend gate attributed to #109, so WSL v1 refusal is not a shipped guarantee
+in this document; [`agent.ts`](../packages/cli/src/utils/agent.ts) is the
+current broker path and the
+[Windows runbook](live-test-runbook-windows.md) requires WSL2.
 
 ## 4. Proxy-into-the-shell — the gap, and how A2 closes it
 
@@ -447,7 +477,7 @@ is a new adapter object — no transport, no broker change.
 
 **What holds.**
 
-- **The Anthropic key never enters the VM.** It lives in the host Keychain,
+- **The Anthropic key never enters the VM.** It lives in the platform host store,
   is fetched host-side by the helper (`run_helper`, `creds.rs:215`), and is
   written onto the request only at the proxy, on the outbound copy
   (`mitm.rs:240`, `creds.rs:226`). The VM holds at most an inert
@@ -455,7 +485,7 @@ is a new adapter object — no transport, no broker change.
 - **MITM scope is the broker, and acceptable.** Trusting the egress CA lets
   the proxy read the agent's TLS to `api.anthropic.com` — that _is_ the
   broker. The CA is per-VM (`mitm.rs:46`) and host-private
-  (`egress-ca.pem`, key 0600).
+  (`egress-ca.pem`, owner-only on Unix and ACL-reset on Windows).
 
 **What does NOT hold — state it plainly.**
 
@@ -478,14 +508,7 @@ is a new adapter object — no transport, no broker change.
 
 **Open questions.**
 
-1. **Where the host Anthropic key is stored.** Recommended: macOS Keychain
-   (`sh.appliance.agent`), `0600` file fallback off-macOS — consistent with
-   E4.4. Decision needed: a dedicated `appliance agent login` store vs
-   reusing an existing profile store; and whether the helper shells
-   `security find-generic-password` directly vs an `appliance agent
-print-key` indirection (the indirection keeps the Keychain access policy
-   in one place).
-2. **Should the egress firewall gate shipping agents?** Today an agent can
+1. **Should the egress firewall gate shipping agents?** Today an agent can
    exfiltrate workspace contents to any host (default-allow). For an agent
    that runs untrusted code, the natural hardening is **default-deny +
    allowlist** (`api.anthropic.com`, the npm registry, the project's git
@@ -493,7 +516,7 @@ print-key` indirection (the indirection keeps the Keychain access policy
    and even default-deny is bypassable while routing stays cooperative.
    Decision: ship MVP default-allow with the broker, and track the firewall
    as the security follow-up? (Recommended.)
-3. **CA-trust scope.** The egress CA is trusted **guest-wide** today
+2. **CA-trust scope.** The egress CA is trusted **guest-wide** today
    (`guest.rs:105`) — every guest process trusts the interceptor, not just
    the agent. Tightening to **agent-process-only** (drop the guest-wide
    `update-ca-certificates`; rely solely on per-process

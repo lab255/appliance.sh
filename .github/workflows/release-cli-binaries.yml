@@ -78,6 +78,15 @@ jobs:
           DIGEST=$(sha256sum "packages/cli/dist/$ASSET" | cut -d ' ' -f 1)
           printf '%s  %s\n' "$DIGEST" "$ASSET" > "packages/cli/dist/$ASSET.sha256"
 
+      # The CLI release cross-build and this native desktop build are separate
+      # until AP-202 signs both. Byte identity is therefore asserted against
+      # the CLI package's baked digest before the desktop artifact can stage.
+      - name: Guard — staged Windows helper matches CLI baked digest
+        run: >-
+          node packages/cli/scripts/verify-credential-helper-digest.mjs
+          x86_64-pc-windows-msvc
+          packages/cli/dist/appliance-credhelper-x86_64-pc-windows-msvc.exe
+
       # Build the CLI and its workspace deps in topological order straight
       # from the nx dependency graph (sdk → infra → bootstrap → helper →
       # cli) so every workspace import resolves to fresh dist at compile

@@ -79,5 +79,15 @@ describe('credential helper npm and release layouts', () => {
     expect(workflow).toContain('appliance-credhelper-x86_64-pc-windows-msvc.exe');
     expect(workflow).toContain('pnpm --filter @appliance.sh/cli credhelper:digest -- --check');
     expect(workflow).toContain('"$OUT/$ASSET.sha256"');
+    expect(workflow).toContain('verify-credential-helper-digest.mjs');
+  });
+
+  it('guards the separately built desktop helper with the CLI baked digest', () => {
+    const workflow = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../../../.github/workflows/release-desktop.yml'),
+      'utf-8'
+    );
+    expect(workflow).toContain('packages/cli/scripts/verify-credential-helper-digest.mjs');
+    expect(workflow).toContain('packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe');
   });
 });

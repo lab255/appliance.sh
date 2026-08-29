@@ -398,6 +398,16 @@ jobs:
             echo "updater_signing=skipped" >> "$GITHUB_OUTPUT"
           fi
 
+      # The CLI release cross-build and this native desktop build are separate
+      # until AP-202 signs both. Byte identity is therefore asserted against
+      # the CLI package's baked digest before the desktop artifact can stage.
+      - name: Guard — bundled Windows helper matches CLI baked digest
+        shell: bash
+        run: >-
+          node packages/cli/scripts/verify-credential-helper-digest.mjs
+          x86_64-pc-windows-msvc
+          packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe
+
       # Fail LOUD when updater signing was configured but produced no .sig —
       # the Windows installer IS the updater artifact, so an unsigned one
       # breaks self-update. Forks without the Tauri key skip this assertion.
@@ -449,12 +459,18 @@ jobs:
           $required = @(
             'appliance-desktop.exe',
             'appliance.exe',
+            'appliance-credhelper.exe',
             'vm-bin\appliance-vm.exe'
           )
           foreach ($relative in $required) {
             $path = Join-Path $env:INSTALL_DIR $relative
             if (-not (Test-Path $path -PathType Leaf)) { throw "Installed bundle is missing $relative" }
           }
+
+          & node packages/cli/scripts/verify-credential-helper-digest.mjs `
+            x86_64-pc-windows-msvc `
+            (Join-Path $env:INSTALL_DIR 'appliance-credhelper.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'Installed desktop credential helper failed the CLI baked-digest guard.' }
 
           $stagedApiServer = 'packages/desktop/src-tauri/apiserver-bin'
           $apiServerFiles = @(Get-ChildItem $stagedApiServer -File -Recurse -ErrorAction SilentlyContinue)

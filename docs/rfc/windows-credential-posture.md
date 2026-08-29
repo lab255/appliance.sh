@@ -258,8 +258,9 @@ does not constrain other distros or the user.
 1. **DECIDED (owner, 2026-08-29): Accept cleartext for opt-in per-VM captured
    secrets — yes, the proposed default.** Retain ACL files because capture is
    explicit and normal agent rules use a global helper with `capture:false`.
-   **DECIDED: capture keeps macOS parity (opt-in, same default); doctor warns
-   when enabled on Windows; AP-195 landed the Rust-side directory+file ACLs.**
+   **DECIDED: capture keeps macOS parity (opt-in, same default); a doctor
+   warning when enabled on Windows is planned (follow-up card), not implemented
+   today; AP-195 landed the Rust-side directory+file ACLs.**
 2. **DECIDED (owner, 2026-08-29): Accept the post-scrub downgrade boundary —
    yes, the proposed default.** Preserve data on failed migration, but after
    verified import remove cleartext and require upgrade/re-login for old

@@ -78,6 +78,16 @@ appliance vm egress allow api.example.com
 `appliance vm egress sync` publishes the current development-VM policy to its
 cluster workloads.
 
+Windows agent credentials remain host-global in Credential Manager and are
+resolved by the absolute argv `appliance agent print-key --type <agent>` path;
+default generated rules use `capture:false`. Per-VM broker rules remain
+ACL-reset files. Explicit capture writes a cleartext header to
+`egress-secrets.json`, retaining backup, same-user, Administrator/SYSTEM, and
+WSL file-access residuals. [`creds.rs`](../packages/vm/src/creds.rs) covers the
+argv, ACL, capture, and no-capture paths. The managed distro disables drive
+automount and Windows interop in [`wsl.rs`](../packages/vm/src/backend/wsl.rs),
+but that does not constrain other distros or same-user Windows execution.
+
 ## TLS inspection
 
 TLS inspection lets the host record request metadata after destination policy
