@@ -8,11 +8,11 @@ and migrates older local stores.
 Cluster and agent credentials are user-global. Their canonical store depends
 on the host; per-VM broker state is covered separately below.
 
-| Platform | Canonical secret store                                                          | `profiles.json` / `credentials.json`                                                                            | Evidence                                                                                                                                                                                                    |
-| -------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS    | Keychain (`sh.appliance.desktop` for clusters, `sh.appliance.agent` for agents) | Cluster metadata and an empty secret after reconciliation                                                       | [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts), [`agent-envelope.spec.ts`](../packages/desktop/src/agent-envelope.spec.ts)                                                |
-| Windows  | Windows Credential Manager through `appliance-credhelper.exe`                   | Cluster metadata and an empty secret after verified migration; the legacy active-profile mirror is scrubbed too | [`credential-store.spec.ts` — verified Windows migration](../packages/cli/src/utils/credential-store.spec.ts), [`keyring_store.rs` — native store tests](../packages/credential-store/src/keyring_store.rs) |
-| Linux    | owner-only ACL/mode files under `~/.appliance`                                  | Cluster secret remains cleartext at rest                                                                        | [`credential-store.spec.ts` — file backend](../packages/cli/src/utils/credential-store.spec.ts), [`file.rs`](../packages/credential-store/src/file.rs)                                                      |
+| Platform | Canonical secret store                                                          | `profiles.json` / `credentials.json`                                                                                                                                             | Evidence                                                                                                                                                                                                    |
+| -------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | Keychain (`sh.appliance.desktop` for clusters, `sh.appliance.agent` for agents) | Cluster metadata and an empty secret after reconciliation                                                                                                                        | [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts), [`agent-envelope.spec.ts`](../packages/desktop/src/agent-envelope.spec.ts)                                                |
+| Windows  | Windows Credential Manager through `appliance-credhelper.exe`                   | Cluster metadata and an empty secret after verified migration; the legacy `credentials.json` mirror keeps metadata with an empty secret; a legacy agent file is deleted outright | [`credential-store.spec.ts` — verified Windows migration](../packages/cli/src/utils/credential-store.spec.ts), [`keyring_store.rs` — native store tests](../packages/credential-store/src/keyring_store.rs) |
+| Linux    | owner-only ACL/mode files under `~/.appliance`                                  | Cluster secret remains cleartext at rest                                                                                                                                         | [`credential-store.spec.ts` — file backend](../packages/cli/src/utils/credential-store.spec.ts), [`file.rs`](../packages/credential-store/src/file.rs)                                                      |
 
 `profiles.json` remains shared discovery and metadata for both desktop and CLI.
 On Windows, neither it nor the legacy `credentials.json` is a canonical cluster
@@ -65,16 +65,20 @@ Manager remaining the read source. Re-running is idempotent.
 covers cluster, agent, entitlement, idempotence, equality, and conflict cases.
 
 The scrub is a downgrade boundary: an older Windows build cannot read the
-Credential Manager value and must be upgraded or the user must sign in again.
-No cleartext downgrade copy is retained. `appliance doctor` exposes this
-boundary through the migration/coherence states documented in
-[control-plane.md](control-plane.md), backed by
+Credential Manager value and must be upgraded, or the user signs in again with
+`appliance login` (agents: `appliance agent login`). Run `appliance doctor` to
+see affected profiles; `appliance doctor --fix` retries only safe write-back
+cases and never resolves a conflict. No cleartext downgrade copy is retained.
+The migration/coherence states are documented in [control-plane.md](control-plane.md),
+backed by
 [`runtime-doctor.spec.ts`](../packages/cli/src/utils/runtime-doctor.spec.ts).
 
 ## Windows residual risk
 
 Credential Manager prevents ordinary cross-user file reads and removes a
-cleartext file from normal home-directory backup/sync and `/mnt/c` exposure.
+cleartext file from normal home-directory backup/sync and `/mnt/c` exposure;
+the [Windows runbook’s section 5](live-test-runbook-windows.md#5-broker-files-and-managed-wsl-distro)
+checks `/proc/mounts` and verifies that automount is off.
 It does not defend against code already running as the same Windows user,
 Administrator, or SYSTEM; those principals can use the same credential APIs.
 A malicious same-user replacement helper is also outside this boundary. The

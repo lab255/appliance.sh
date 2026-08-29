@@ -7,9 +7,10 @@ cloud installations — all from one window. It ships for **macOS**
 (Virtualization.framework) and **Windows** (WSL2); the same UI is served as a
 web console by every api-server at `http://api.appliance.localhost:8081`,
 with the desktop-only surfaces (VM lifecycle, terminals, agents) gated to the
-desktop shell. Windows support is scoped to the WSL2 path certified by the
+desktop shell. Windows support is scoped to the WSL2 path defined by the
 [Windows live-test runbook](live-test-runbook-windows.md); that statement does
-not imply parity for unlisted features.
+not imply parity for unlisted features. The runbook has not yet been run against
+a release candidate; CI proves only the automated counterparts it names.
 
 > **Windows prerequisite:** WSL2. If `wsl --status` reports no WSL, run
 > `wsl --install` once and reboot. macOS needs nothing.

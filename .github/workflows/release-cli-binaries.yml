@@ -78,6 +78,9 @@ jobs:
           DIGEST=$(sha256sum "packages/cli/dist/$ASSET" | cut -d ' ' -f 1)
           printf '%s  %s\n' "$DIGEST" "$ASSET" > "packages/cli/dist/$ASSET.sha256"
 
+      # The CLI release cross-build and this native desktop build are separate
+      # until AP-202 signs both. Byte identity is therefore asserted against
+      # the CLI package's baked digest before the desktop artifact can stage.
       - name: Guard — staged Windows helper matches CLI baked digest
         run: >-
           node packages/cli/scripts/verify-credential-helper-digest.mjs

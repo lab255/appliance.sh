@@ -33,6 +33,9 @@ if (actual !== expected) {
   console.error(
     'Both release paths must carry the helper pinned by packages/cli/scripts/credential-helper-checksums.json.'
   );
+  console.error(
+    'If the helper changed intentionally, regenerate with: pnpm --filter @appliance.sh/cli credhelper:digest'
+  );
   process.exit(1);
 }
 

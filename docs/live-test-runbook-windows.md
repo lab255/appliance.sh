@@ -86,8 +86,10 @@ Sign in an agent and start it once. Inspect the VM's
 Pass: the generated rule contains absolute argv ending in `agent print-key
 --type <agent>`, uses `capture:false`, and leaves no real agent credential in
 either per-VM file. If capture is explicitly enabled for a disposable test
-header, the header appears in cleartext in `egress-secrets.json`; a doctor
-warning for this state is planned (follow-up card), not implemented today.
+header, the header appears in cleartext in `egress-secrets.json`; verify that by
+hand. A doctor warning for enabled capture is a follow-up (board card “Doctor:
+warn when a capture-mode credential rule is enabled on Windows”), not
+implemented in AP-209.
 Restore `capture:false` and delete the test secret afterward. The rule/capture counterparts are
 [`agent.spec.ts`](../packages/cli/src/utils/agent.spec.ts) and
 [`creds.rs`](../packages/vm/src/creds.rs).
