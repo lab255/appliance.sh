@@ -15,6 +15,7 @@ import {
   vmRunScript,
 } from './sandbox.js';
 import { readSandboxVm } from './link.js';
+import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
 
 // Agent runner + the pluggable agent-type adapter seam (Phase 5, A1).
 //
@@ -584,9 +585,17 @@ export function writeAgentKey(provider: string, value: string, kind: AgentAuthKi
     return;
   }
   const file = agentKeyFile(provider);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const applianceDir = path.dirname(path.dirname(file));
+  ensurePrivateDirectory(applianceDir);
+  ensurePrivateDirectory(path.dirname(file));
   fs.writeFileSync(file, envelope, { mode: 0o600 });
   fs.chmodSync(file, 0o600);
+  try {
+    restrictWindowsAcl(file);
+  } catch (cause) {
+    fs.rmSync(file, { force: true });
+    throw cause;
+  }
 }
 
 /** The wire-ready header VALUE the proxy injects: `<scheme> <secret>` when the

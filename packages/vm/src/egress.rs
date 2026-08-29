@@ -539,12 +539,20 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
         .open(path)?;
     file.write_all(bytes)?;
     file.sync_all()?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(error);
+    }
     Ok(())
 }
 
 #[cfg(not(unix))]
 fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     std::fs::write(path, bytes)?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(error);
+    }
     Ok(())
 }
 
@@ -1499,7 +1507,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some(crate::creds::CredentialHelper::legacy("printf real-key")),
+                helper: Some(crate::creds::resolving_test_helper()),
             },
         )
         .unwrap();
