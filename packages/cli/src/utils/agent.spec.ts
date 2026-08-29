@@ -1,9 +1,15 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
 const runVmMock = vi.hoisted(() => vi.fn<(_args: string[]) => number>());
+const homeState = vi.hoisted(() => ({ home: undefined as string | undefined }));
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, homedir: () => homeState.home ?? actual.homedir() };
+});
 vi.mock('./sandbox.js', async () => {
   const actual = await vi.importActual<typeof import('./sandbox.js')>('./sandbox.js');
   return { ...actual, runVm: runVmMock };
@@ -36,13 +42,19 @@ import {
   tailLines,
   validateCopilotPat,
   wireValueForCred,
+  writeAgentKey,
 } from './agent.js';
+import { restrictWindowsAcl } from './fs-acl.js';
 
 const PROXY = 'http://192.168.64.1:5053';
 
 /** The api-key + oauth modes Claude Code declares, looked up by kind. */
 const apiKeyMode: AuthMode = resolveAuthMode(claudeCodeAdapter, 'api-key');
 const oauthMode: AuthMode = resolveAuthMode(claudeCodeAdapter, 'oauth');
+
+afterEach(() => {
+  homeState.home = undefined;
+});
 
 describe('claudeCodeAdapter', () => {
   it('injects on the single Anthropic apiHost and declares BOTH auth modes', () => {
@@ -357,6 +369,40 @@ describe('parseStoredCred (envelope back-compat + fail-closed)', () => {
     expect(parseStoredCred('{"kind":"api-key","value":""}')).toBeNull();
     // Empty / whitespace-only → null.
     expect(parseStoredCred('   ')).toBeNull();
+  });
+});
+
+describe('agent credential file permissions', () => {
+  it('restricts writeAgentKey output to the current user and leaves POSIX chmod semantics unchanged', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-agent-key-acl-'));
+    try {
+      if (process.platform === 'darwin') {
+        // writeAgentKey uses Keychain on macOS. Exercise the shared helper's
+        // POSIX no-op directly so this cross-platform test is never skipped.
+        const file = path.join(home, 'mode-check');
+        fs.writeFileSync(file, 'not-a-secret', { mode: 0o640 });
+        restrictWindowsAcl(file);
+        expect(fs.statSync(file).mode & 0o777).toBe(0o640);
+        return;
+      }
+
+      homeState.home = home;
+      writeAgentKey('acl-test', 'test-secret', 'api-key');
+      const file = path.join(home, '.appliance', 'agent', 'acl-test-cred');
+      expect(fs.existsSync(file)).toBe(true);
+
+      if (process.platform === 'win32') {
+        const listing = execFileSync('icacls', [file], { encoding: 'utf8', windowsHide: true });
+        const aclLines = listing.split(/\r?\n/).filter((line) => line.includes(':('));
+        const principal = execFileSync('whoami', [], { encoding: 'utf8', windowsHide: true }).trim();
+        expect(aclLines, listing).toHaveLength(1);
+        expect(aclLines[0]!.toLocaleLowerCase()).toContain(principal.toLocaleLowerCase());
+      } else {
+        expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
