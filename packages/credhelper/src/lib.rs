@@ -431,11 +431,19 @@ mod tests {
                 EXIT_INTERNAL,
             ),
             (
+                CommandError::Store(StoreError::Unsupported("test".to_owned())),
+                EXIT_INTERNAL,
+            ),
+            (
                 CommandError::Io(std::io::Error::new(
                     std::io::ErrorKind::PermissionDenied,
                     "test",
                 )),
                 EXIT_DENIED,
+            ),
+            (
+                CommandError::Io(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "test")),
+                EXIT_INTERNAL,
             ),
         ];
         for (error, expected) in cases {
