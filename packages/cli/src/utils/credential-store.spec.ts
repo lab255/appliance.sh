@@ -95,6 +95,15 @@ function migrationFixture(): {
   };
 }
 
+interface MigratedProfilesFixture {
+  profiles: Record<string, { secret: string }>;
+  credentialStore: { schema: string };
+}
+
+interface MigratedLegacyFixture {
+  secret: string;
+}
+
 describe('verified Windows cluster scrub migration', () => {
   it('imports every profile plus the active legacy mirror, verifies, then blanks both files idempotently', () => {
     const paths = migrationFixture();
@@ -124,8 +133,8 @@ describe('verified Windows cluster scrub migration', () => {
     // The free-form profile name is encoded at the helper/store boundary.
     expect(backend.values.get('cluster:dev%20profile')).toEqual(Buffer.from('{"id":"dev-key","secret":"dev-secret"}'));
 
-    const profiles = JSON.parse(fs.readFileSync(paths.profilesFile, 'utf8')) as any;
-    const legacy = JSON.parse(fs.readFileSync(paths.legacyCredentialsFile, 'utf8')) as any;
+    const profiles = JSON.parse(fs.readFileSync(paths.profilesFile, 'utf8')) as MigratedProfilesFixture;
+    const legacy = JSON.parse(fs.readFileSync(paths.legacyCredentialsFile, 'utf8')) as MigratedLegacyFixture;
     expect(profiles.profiles.prod.secret).toBe('');
     expect(profiles.profiles['dev profile'].secret).toBe('');
     expect(legacy.secret).toBe('');
@@ -156,7 +165,7 @@ describe('verified Windows cluster scrub migration', () => {
 
     const report = __testing.migrateWindowsCredentialFilesWithBackend(paths, backend);
     expect(report.conflicts).toEqual(['conflict']);
-    const profiles = JSON.parse(fs.readFileSync(paths.profilesFile, 'utf8')) as any;
+    const profiles = JSON.parse(fs.readFileSync(paths.profilesFile, 'utf8')) as MigratedProfilesFixture;
     expect(profiles.profiles.equal.secret).toBe('');
     expect(profiles.profiles.conflict.secret).toBe('file-secret');
     expect(backend.values.get('cluster:conflict')).toEqual(Buffer.from('{"id":"store-key","secret":"store-secret"}'));
