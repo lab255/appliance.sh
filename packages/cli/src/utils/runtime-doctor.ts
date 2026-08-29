@@ -4,7 +4,13 @@ import { spawnSync } from 'node:child_process';
 import { createApplianceClient, VERSION } from '@appliance.sh/sdk';
 import { apiServerUrlForHostPort, IN_CLUSTER_API_SERVER_HOSTNAME, mintApiKey } from '@appliance.sh/helper';
 import { readProfiles, removeProfile, upsertProfile, type Profile } from './profile-store.js';
-import { type ProfileCredentialProbe, resolveProfileSecret, probeProfileCredential } from './credential-store.js';
+import {
+  type CredentialMigrationConflict,
+  type ProfileCredentialProbe,
+  probeProfileCredential,
+  readCredentialMigrationConflicts,
+  resolveProfileSecret,
+} from './credential-store.js';
 import { DEFAULT_VM_NAME, LEGACY_MICROVM_PROFILE, profileForVm, resolveVmBinary, vmDir } from './microvm-up.js';
 import { guestAssetsDir } from './api-server-artifact.js';
 
@@ -509,6 +515,16 @@ export function classifyKeychainCoherence(
       detail: 'denied: the OS credential store could not be read; coherence is unknown',
     };
   }
+  if (probe.state === 'helper-missing') {
+    return {
+      id,
+      title,
+      severity: 'fail',
+      detail: 'helper-missing: the packaged Windows credential helper is not installed beside the CLI',
+      remediation:
+        'Reinstall the packaged Appliance CLI; credential access is supported only in the packaged sibling layout.',
+    };
+  }
   if (probe.state === 'malformed') {
     return {
       id,
@@ -581,6 +597,17 @@ export function classifyKeychainCoherence(
     };
   }
   return { id, title, severity: 'ok', detail: `migrated: OS credential entry matches keyId ${profile.keyId}` };
+}
+
+export function classifyCredentialMigrationConflict(conflict: CredentialMigrationConflict): RuntimeFinding {
+  const fileList = conflict.files.map((file) => `'${file}'`).join(' or ');
+  return {
+    id: `credential-migration:${conflict.key}`,
+    title: `Credential migration conflict (${conflict.key})`,
+    severity: 'fail',
+    detail: `Credential Manager and the legacy owner-only file differ; both copies were preserved at ${fileList}`,
+    remediation: `Choose the authoritative credential. To keep Credential Manager, remove the conflicting legacy file exactly at ${fileList}, then re-run \`appliance doctor\`.`,
+  };
 }
 
 // ---- bootstrap token ---------------------------------------------------------
@@ -765,6 +792,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   // A plain doctor is read-only. Keep legacy fields visible so the coherence
   // probe can report missing/conflict/migrated before any scrub occurs.
   const profilesFile = readProfiles({ migrateCredentials: false });
+  findings.push(...readCredentialMigrationConflicts().map(classifyCredentialMigrationConflict));
   for (const [name, profile] of Object.entries(profilesFile.profiles)) {
     const binding = classifyProfileBinding(name, profile.apiUrl, listing);
     const bindingFinding = await renderBindingFinding(name, profile, binding, {

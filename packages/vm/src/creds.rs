@@ -29,7 +29,6 @@ use appliance_credential_store::{
 use serde::{Deserialize, Serialize};
 
 use crate::egress::host_matches;
-#[cfg(test)]
 use crate::spec::VmPaths;
 
 fn default_header() -> String {
@@ -101,11 +100,6 @@ fn config_path(name: &str) -> PathBuf {
     credential_path(name, VmBrokerFile::Credentials)
 }
 
-#[cfg(not(test))]
-fn credential_store_root() -> PathBuf {
-    crate::store::vm_root()
-}
-
 #[cfg(test)]
 fn credential_store_root() -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -114,8 +108,19 @@ fn credential_store_root() -> PathBuf {
     ))
 }
 
-fn credential_store() -> AclFileStore {
-    AclFileStore::new(credential_store_root())
+fn credential_vm_dir(name: &str) -> PathBuf {
+    #[cfg(not(test))]
+    {
+        VmPaths::for_name(name).dir
+    }
+    #[cfg(test)]
+    {
+        credential_store_root().join(name)
+    }
+}
+
+fn credential_store(name: &str) -> AclFileStore {
+    AclFileStore::for_vm_dir(credential_vm_dir(name))
 }
 
 fn credential_key(name: &str, file: VmBrokerFile) -> anyhow::Result<StoreKey> {
@@ -123,9 +128,7 @@ fn credential_key(name: &str, file: VmBrokerFile) -> anyhow::Result<StoreKey> {
 }
 
 fn credential_path(name: &str, file: VmBrokerFile) -> PathBuf {
-    credential_store_root()
-        .join(encode_identifier(name))
-        .join(file.file_name())
+    credential_vm_dir(name).join(file.file_name())
 }
 
 pub fn load_config(name: &str) -> CredentialConfig {
@@ -151,7 +154,7 @@ fn read_verified_broker_file(path: &Path) -> Option<Vec<u8>> {
             return None;
         }
     };
-    if verify_config_integrity(&path, &file).is_err() {
+    if verify_config_integrity(path, &file).is_err() {
         // Deliberately omit the principal, ACL, and file contents. This log
         // can be surfaced to untrusted workloads and must remain secret-free.
         eprintln!("egress creds: refusing credential config with unsafe ownership or permissions");
@@ -190,7 +193,7 @@ fn parse_config(path: &Path, raw: &[u8]) -> CredentialConfig {
 
 pub fn save_config(name: &str, cfg: &CredentialConfig) -> anyhow::Result<()> {
     let path = config_path(name);
-    let store = credential_store();
+    let store = credential_store(name);
     let key = credential_key(name, VmBrokerFile::Credentials)?;
     store.put(&key, serde_json::to_string_pretty(cfg)?.as_bytes())?;
     let integrity = std::fs::File::open(&path)
@@ -477,7 +480,7 @@ fn load_secrets(name: &str) -> SecretMap {
 
 fn save_secrets(name: &str, map: &SecretMap) -> anyhow::Result<()> {
     let key = credential_key(name, VmBrokerFile::Secrets)?;
-    credential_store()
+    credential_store(name)
         .put(&key, serde_json::to_string_pretty(map)?.as_bytes())
         .map_err(Into::into)
 }
@@ -494,7 +497,7 @@ fn get_secret(name: &str, host: &str, header: &str) -> Option<String> {
 
 pub fn forget_secrets(name: &str) {
     if let Ok(key) = credential_key(name, VmBrokerFile::Secrets) {
-        let _ = credential_store().delete(&key);
+        let _ = credential_store(name).delete(&key);
     }
 }
 
@@ -1024,6 +1027,24 @@ mod tests {
         assert!(listed[0].masked.ends_with("-xyz") || listed[0].masked == "••••");
         forget_secrets(name);
         let _ = remove_rule(name, "api.example.com");
+    }
+
+    #[test]
+    fn broker_files_keep_the_legacy_vm_directory_name() {
+        let name = "creds test+legacy";
+        let raw_dir = credential_store_root().join(name);
+        let encoded_dir = credential_store_root().join(encode_identifier(name));
+        let _ = std::fs::remove_dir_all(&raw_dir);
+        let cfg = integrity_test_config();
+
+        save_config(name, &cfg).unwrap();
+        assert!(raw_dir
+            .join(VmBrokerFile::Credentials.file_name())
+            .is_file());
+        assert!(!encoded_dir.exists());
+        assert_eq!(load_config(name).rules.len(), 1);
+
+        std::fs::remove_dir_all(raw_dir).unwrap();
     }
 
     #[cfg(unix)]

@@ -8,6 +8,8 @@ import {
   CredentialStoreError,
   encodeAgentCredential,
   parseStoredAgentCredential,
+  probeProfileCredential,
+  readCredentialMigrationConflicts,
 } from './credential-store.js';
 
 const temporaryDirectories: string[] = [];
@@ -141,9 +143,12 @@ describe('verified Windows cluster scrub migration', () => {
     expect(profiles.credentialStore.schema).toBe(CREDENTIAL_STORE_SCHEMA);
 
     const writes = backend.writes.length;
+    const oldTime = new Date('2020-01-01T00:00:00Z');
+    fs.utimesSync(paths.profilesFile, oldTime, oldTime);
     const second = __testing.migrateWindowsCredentialFilesWithBackend(paths, backend);
     expect(second.conflicts).toEqual([]);
     expect(backend.writes).toHaveLength(writes);
+    expect(fs.statSync(paths.profilesFile).mtimeMs).toBe(oldTime.getTime());
   });
 
   it('scrubs byte-equal duplicates but preserves both sides of a conflict', () => {
@@ -188,6 +193,25 @@ describe('verified Windows agent and entitlement migration', () => {
     expect(fs.existsSync(file)).toBe(false);
   });
 
+  it('preserves and reports the exact legacy agent file on conflict', () => {
+    const home = temporaryDirectory('agent-conflict');
+    const directory = path.join(home, 'agent');
+    fs.mkdirSync(directory);
+    const file = path.join(directory, 'anthropic-cred');
+    fs.writeFileSync(file, '{"kind":"api-key","value":"legacy"}');
+    const backend = new MemoryBackend();
+    backend.values.set('agent:anthropic', Buffer.from('{"kind":"api-key","value":"canonical"}'));
+
+    expect(__testing.migrateWindowsAgent('anthropic', backend, home)).toEqual(
+      Buffer.from('{"kind":"api-key","value":"canonical"}')
+    );
+    expect(fs.existsSync(file)).toBe(true);
+    expect(readCredentialMigrationConflicts({ home })).toContainEqual({
+      key: 'agent:anthropic',
+      files: [file, path.join(directory, 'anthropic-key')],
+    });
+  });
+
   it('imports a validated entitlement key with existing-key-wins conflict preservation', () => {
     const home = temporaryDirectory('entitlement-key-migration');
     const file = path.join(home, 'device-entitlement-key.json');
@@ -215,6 +239,9 @@ describe('verified Windows agent and entitlement migration', () => {
       })
     ).toThrow(/conflicts/);
     expect(fs.existsSync(conflictFile)).toBe(true);
+    expect(readCredentialMigrationConflicts({ home: conflictHome })).toEqual([
+      { key: 'entitlement-key', files: [conflictFile] },
+    ]);
   });
 
   it('validates and verifies a legacy entitlement anchor before scrubbing it', () => {
@@ -237,6 +264,9 @@ describe('verified Windows agent and entitlement migration', () => {
     expect(() => __testing.migrateWindowsEntitlementAnchor(conflictHome, conflictBackend)).toThrow(/conflicts/);
     expect(fs.existsSync(conflictFile)).toBe(true);
     expect(JSON.parse(conflictBackend.values.get('entitlement-anchor:')!.toString('utf8'))).toEqual(existing);
+    expect(readCredentialMigrationConflicts({ home: conflictHome })).toEqual([
+      { key: 'entitlement-anchor', files: [conflictFile] },
+    ]);
   });
 });
 
@@ -250,5 +280,71 @@ describe('Windows helper fail-closed behavior', () => {
     } catch (error) {
       expect((error as CredentialStoreError).state).toBe('helper-missing');
     }
+  });
+
+  it('surfaces helper-missing as its own profile probe state', () => {
+    const missing = path.join(temporaryDirectory('missing-profile-helper'), 'appliance-credhelper.exe');
+    expect(
+      probeProfileCredential(
+        'prod',
+        { managed: 'cli', keyId: 'key-1', secret: '' },
+        { platform: 'win32', helperPath: missing }
+      )
+    ).toEqual({ state: 'helper-missing' });
+  });
+
+  it('reports malformed and conflicting Windows profile entries distinctly', () => {
+    const backend = new MemoryBackend();
+    backend.values.set('cluster:prod', Buffer.from('not-json'));
+    expect(
+      __testing.probeProfileCredentialWithBackend(
+        'prod',
+        { managed: 'cli', keyId: 'file-key', secret: 'file-secret' },
+        'win32',
+        backend
+      )
+    ).toEqual({ state: 'malformed' });
+
+    backend.values.set('cluster:prod', Buffer.from('{"id":"store-key","secret":"store-secret"}'));
+    expect(
+      __testing.probeProfileCredentialWithBackend(
+        'prod',
+        { managed: 'cli', keyId: 'file-key', secret: 'file-secret' },
+        'win32',
+        backend
+      )
+    ).toEqual({ state: 'conflict', keyId: 'store-key' });
+    expect(() =>
+      __testing.resolveProfileSecretWithBackend(
+        'prod',
+        { managed: 'cli', keyId: 'file-key', secret: 'file-secret' },
+        'win32',
+        backend
+      )
+    ).toThrow(/conflicts with the Credential Manager entry/);
+  });
+});
+
+describe('macOS legacy account compatibility', () => {
+  it('reads the unencoded account first and migrates it to the canonical name', () => {
+    const backend = new MemoryBackend();
+    const value = Buffer.from('{"id":"key-1","secret":"secret-1"}');
+    backend.values.set('cluster:dev profile+', value);
+
+    expect(__testing.readClusterCredential('dev profile+', 'darwin', backend)).toEqual(value);
+    expect(backend.values.get('cluster:dev%20profile%2B')).toEqual(value);
+    expect(backend.values.has('cluster:dev profile+')).toBe(false);
+  });
+
+  it('does not overwrite an existing canonical account during legacy cleanup', () => {
+    const backend = new MemoryBackend();
+    const legacy = Buffer.from('{"id":"old","secret":"old-secret"}');
+    const canonical = Buffer.from('{"id":"new","secret":"new-secret"}');
+    backend.values.set('cluster:dev profile+', legacy);
+    backend.values.set('cluster:dev%20profile%2B', canonical);
+
+    expect(__testing.readClusterCredential('dev profile+', 'darwin', backend)).toEqual(canonical);
+    expect(backend.values.get('cluster:dev profile+')).toEqual(legacy);
+    expect(backend.values.get('cluster:dev%20profile%2B')).toEqual(canonical);
   });
 });

@@ -7,6 +7,7 @@ import { encodeCredentialIdentifier, resolveCredHelperPath } from '@appliance.sh
 import { keyIdForPublicKey, type DevSigningKey } from './bundle-sign.js';
 import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
 import type { Profile } from './profile-store.js';
+import { withProfilesLock } from './profiles-lock.js';
 
 export const KEYCHAIN_SERVICE = 'sh.appliance.desktop';
 export const AGENT_KEYCHAIN_SERVICE = 'sh.appliance.agent';
@@ -370,25 +371,38 @@ function clusterUsesOsStore(profile: Pick<Profile, 'managed'>, platform = proces
   return platform === 'win32' || (platform === 'darwin' && profile.managed === 'desktop');
 }
 
-export function resolveProfileSecret(
+function readClusterCredential(name: string, platform: NodeJS.Platform, backend: CredentialBackend): Buffer | null {
+  const identifier = encodeCredentialIdentifier(name);
+  const canonicalTarget: StoreTarget = { kind: 'cluster', identifier };
+  if (platform === 'darwin' && identifier !== name) {
+    const legacyTarget: StoreTarget = { kind: 'cluster', identifier: name };
+    const legacy = backend.get(legacyTarget);
+    if (legacy) {
+      const existingCanonical = backend.get(canonicalTarget);
+      if (existingCanonical) {
+        if (existingCanonical.equals(legacy)) backend.delete(legacyTarget);
+        return existingCanonical;
+      }
+      backend.put(canonicalTarget, legacy);
+      const migrated = backend.get(canonicalTarget);
+      if (!migrated || !migrated.equals(legacy)) {
+        throw new CredentialStoreError('internal', `Keychain migration failed for profile '${name}'.`);
+      }
+      backend.delete(legacyTarget);
+      return migrated;
+    }
+  }
+  return backend.get(canonicalTarget);
+}
+
+function resolveProfileSecretWithBackend(
   name: string,
   profile: Pick<Profile, 'managed' | 'keyId' | 'secret'>,
-  options: BackendOptions = {}
+  platform: NodeJS.Platform,
+  backend: CredentialBackend
 ): KeychainApiKey {
-  const platform = options.platform ?? process.platform;
-  if (!clusterUsesOsStore(profile, platform)) return { keyId: profile.keyId, secret: profile.secret };
-  const backend = backendFor(options);
-  let raw: Buffer | null;
-  try {
-    raw = backend.get(encodedTarget('cluster', name));
-  } catch (cause) {
-    if (platform === 'darwin') return { keyId: profile.keyId, secret: profile.secret };
-    throw cause;
-  }
+  const raw = readClusterCredential(name, platform, backend);
   if (!raw) {
-    // Windows must never fall back to a cleartext profile secret. Its lazy
-    // migration runs before normal profile reads; a miss here is a hard,
-    // unusable credential state. macOS retains its established fallback.
     return platform === 'win32'
       ? { keyId: profile.keyId, secret: '' }
       : { keyId: profile.keyId, secret: profile.secret };
@@ -398,7 +412,28 @@ export function resolveProfileSecret(
     if (platform === 'darwin') return { keyId: profile.keyId, secret: profile.secret };
     throw new CredentialStoreError('malformed', `Credential Manager entry for profile '${name}' is malformed.`);
   }
+  if (platform === 'win32' && profile.secret && profile.keyId !== canonical.keyId) {
+    throw new CredentialStoreError(
+      'malformed',
+      `Profile '${name}' conflicts with the Credential Manager entry; re-login to resolve.`
+    );
+  }
   return platform === 'darwin' ? chooseCredential(profile, canonical) : canonical;
+}
+
+export function resolveProfileSecret(
+  name: string,
+  profile: Pick<Profile, 'managed' | 'keyId' | 'secret'>,
+  options: BackendOptions = {}
+): KeychainApiKey {
+  const platform = options.platform ?? process.platform;
+  if (!clusterUsesOsStore(profile, platform)) return { keyId: profile.keyId, secret: profile.secret };
+  try {
+    return resolveProfileSecretWithBackend(name, profile, platform, backendFor(options));
+  } catch (cause) {
+    if (platform === 'darwin') return { keyId: profile.keyId, secret: profile.secret };
+    throw cause;
+  }
 }
 
 export interface PersistProfileResult {
@@ -449,6 +484,7 @@ export type ProfileCredentialProbe =
   | { state: 'not-applicable' }
   | { state: 'missing' }
   | { state: 'denied' }
+  | { state: 'helper-missing' }
   | { state: 'malformed' }
   | { state: 'migrated'; keyId: string }
   | { state: 'conflict'; keyId: string };
@@ -461,7 +497,22 @@ export function probeProfileCredential(
   const platform = options.platform ?? process.platform;
   if (!clusterUsesOsStore(profile, platform)) return { state: 'not-applicable' };
   try {
-    const raw = backendFor(options).get(encodedTarget('cluster', name));
+    return probeProfileCredentialWithBackend(name, profile, platform, backendFor(options));
+  } catch (cause) {
+    if (cause instanceof CredentialStoreError && cause.state === 'helper-missing') return { state: 'helper-missing' };
+    if (cause instanceof CredentialStoreError && cause.state === 'malformed') return { state: 'malformed' };
+    return { state: 'denied' };
+  }
+}
+
+function probeProfileCredentialWithBackend(
+  name: string,
+  profile: Pick<Profile, 'managed' | 'keyId' | 'secret'>,
+  platform: NodeJS.Platform,
+  backend: CredentialBackend
+): ProfileCredentialProbe {
+  try {
+    const raw = readClusterCredential(name, platform, backend);
     if (!raw) return { state: 'missing' };
     const key = parseKeychainPayload(raw);
     if (!key) return { state: 'malformed' };
@@ -471,6 +522,7 @@ export function probeProfileCredential(
     }
     return { state: 'migrated', keyId: key.keyId };
   } catch (cause) {
+    if (cause instanceof CredentialStoreError && cause.state === 'helper-missing') return { state: 'helper-missing' };
     if (cause instanceof CredentialStoreError && cause.state === 'malformed') return { state: 'malformed' };
     return { state: 'denied' };
   }
@@ -959,6 +1011,15 @@ function migrateWindowsCredentialFilesWithBackend(
   paths: CredentialMigrationPaths,
   backend: CredentialBackend
 ): CredentialMigrationReport {
+  return withProfilesLock(`${paths.profilesFile}.lock`, () =>
+    migrateWindowsCredentialFilesWithLocksHeld(paths, backend)
+  );
+}
+
+function migrateWindowsCredentialFilesWithLocksHeld(
+  paths: CredentialMigrationPaths,
+  backend: CredentialBackend
+): CredentialMigrationReport {
   return withCredentialStoreLock(paths.home, () => {
     let profiles = readJsonFile<MigratingProfilesFile>(paths.profilesFile);
     const legacy = readJsonFile<LegacyCredentials>(paths.legacyCredentialsFile);
@@ -1044,8 +1105,9 @@ function migrateWindowsCredentialFilesWithBackend(
       }
     }
 
+    const previousMarkerJson = JSON.stringify(profiles.credentialStore);
     profiles.credentialStore = { schema: CREDENTIAL_STORE_SCHEMA, profiles: states };
-    profilesChanged = true;
+    profilesChanged ||= JSON.stringify(profiles.credentialStore) !== previousMarkerJson;
     if (profilesChanged) atomicWriteJson(paths.profilesFile, profiles);
     if (legacyChanged && legacy) atomicWriteJson(paths.legacyCredentialsFile, legacy);
     return { migrated, conflicts, missing };
@@ -1058,6 +1120,38 @@ export function migrateWindowsCredentialFiles(
 ): CredentialMigrationReport {
   if ((options.platform ?? process.platform) !== 'win32') return { migrated: [], conflicts: [], missing: [] };
   return migrateWindowsCredentialFilesWithBackend(paths, backendFor({ ...options, home: paths.home }));
+}
+
+export interface CredentialMigrationConflict {
+  key: string;
+  files: string[];
+}
+
+export function readCredentialMigrationConflicts(
+  options: Pick<CredentialStoreOptions, 'home'> = {}
+): CredentialMigrationConflict[] {
+  const home = options.home ?? applianceHome();
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(home, 'credential-store-state.json'), 'utf8')) as {
+      schema?: unknown;
+      states?: Record<string, unknown>;
+    };
+    if (parsed.schema !== CREDENTIAL_STORE_SCHEMA || !parsed.states) return [];
+    return Object.entries(parsed.states).flatMap(([key, state]) => {
+      if (state !== 'conflict') return [];
+      if (key === 'entitlement-key') return [{ key, files: [path.join(home, 'device-entitlement-key.json')] }];
+      if (key === 'entitlement-anchor') return [{ key, files: [entitlementAnchorFile(home)] }];
+      if (key.startsWith('agent:')) {
+        const identifier = key.slice('agent:'.length);
+        const files = [path.join(home, 'agent', `${identifier}-cred`)];
+        if (identifier === 'anthropic') files.push(path.join(home, 'agent', 'anthropic-key'));
+        return [{ key, files }];
+      }
+      return [];
+    });
+  } catch {
+    return [];
+  }
 }
 
 function writeMigrationHint(home: string, key: string, state: 'migrated' | 'conflict'): void {
@@ -1085,4 +1179,7 @@ export const __testing = {
   migrateWindowsAgent,
   migrateWindowsEntitlementKey,
   migrateWindowsEntitlementAnchor,
+  readClusterCredential,
+  resolveProfileSecretWithBackend,
+  probeProfileCredentialWithBackend,
 };

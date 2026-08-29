@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   bootstrapTokenFinding,
+  classifyCredentialMigrationConflict,
   classifyIngressClaims,
   classifyKeychainCoherence,
   classifyProfileBinding,
@@ -466,6 +467,13 @@ describe('classifyKeychainCoherence', () => {
     expect(f?.detail).toContain('denied');
   });
 
+  it('fails with reinstall guidance when the packaged Windows helper is missing', () => {
+    const f = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'helper-missing' });
+    expect(f?.severity).toBe('fail');
+    expect(f?.detail).toContain('helper-missing');
+    expect(f?.remediation).toContain('Reinstall the packaged Appliance CLI');
+  });
+
   it('fails closed on malformed and conflict states with re-login guidance', () => {
     const malformed = classifyKeychainCoherence('c1', profile('k1', ''), { state: 'malformed' });
     expect(malformed?.severity).toBe('fail');
@@ -477,6 +485,19 @@ describe('classifyKeychainCoherence', () => {
     expect(conflict?.severity).toBe('fail');
     expect(conflict?.detail).toContain('conflict');
     expect(conflict?.remediation).toContain('Re-login');
+  });
+});
+
+describe('credential migration conflicts', () => {
+  it('names the exact entitlement key and anchor files in remediation', () => {
+    for (const [key, file] of [
+      ['entitlement-key', 'C:\\Users\\blake\\.appliance\\device-entitlement-key.json'],
+      ['entitlement-anchor', 'C:\\Users\\blake\\.appliance\\device-entitlement-anchor.json'],
+    ] as const) {
+      const finding = classifyCredentialMigrationConflict({ key, files: [file] });
+      expect(finding.severity).toBe('fail');
+      expect(finding.remediation).toContain(file);
+    }
   });
 });
 

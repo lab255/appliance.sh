@@ -229,15 +229,6 @@ fn import_entitlement_key<S: CredentialStore>(
         return Ok(existing);
     }
 
-    // The user-global lock makes this create-if-absent for cooperating
-    // Appliance surfaces. Re-read immediately before the write as a defensive
-    // guard for an older process that completed a write just before joining
-    // the lock protocol. An existing canonical key always wins.
-    if let Some(existing) = store.get(key)? {
-        let existing = Zeroizing::new(existing);
-        validate_entitlement_key(&existing)?;
-        return Ok(existing);
-    }
     store.put(key, candidate)?;
     let canonical = Zeroizing::new(store.get(key)?.ok_or_else(|| {
         StoreError::Internal("entitlement key disappeared after import".to_owned())
@@ -251,11 +242,6 @@ fn import_entitlement_anchor<S: CredentialStore>(
     key: &StoreKey,
     candidate: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>, CommandError> {
-    if let Some(existing) = store.get(key)? {
-        let existing = Zeroizing::new(existing);
-        validate_entitlement_anchor(&existing)?;
-        return Ok(existing);
-    }
     if let Some(existing) = store.get(key)? {
         let existing = Zeroizing::new(existing);
         validate_entitlement_anchor(&existing)?;

@@ -1262,6 +1262,8 @@ fn vm_profile_uses_os_store(managed: Option<&str>) -> bool {
 /// partial state is more useful than a missing entry). CLI-managed
 /// entries (managed != "desktop") are preserved untouched.
 fn mirror_to_shared_profiles(cfg: &PersistedConfig) -> Result<(), HostError> {
+    #[cfg(windows)]
+    let _migration_lock = CredentialMigrationLock::acquire()?;
     let mut file = read_shared_profiles().unwrap_or_default();
     file.profiles
         .retain(|_, entry| entry.managed.as_deref() != Some("desktop"));

@@ -103,11 +103,24 @@ fn current_user_sid() -> Result<CurrentUserSid, StoreError> {
 #[derive(Debug, Clone)]
 pub struct AclFileStore {
     root: PathBuf,
+    vm_dir: Option<PathBuf>,
 }
 
 impl AclFileStore {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            vm_dir: None,
+        }
+    }
+
+    pub fn for_vm_dir(dir: impl Into<PathBuf>) -> Self {
+        let dir = dir.into();
+        let root = dir.parent().unwrap_or(&dir).to_path_buf();
+        Self {
+            root,
+            vm_dir: Some(dir),
+        }
     }
 
     fn path(&self, key: &StoreKey) -> Result<PathBuf, StoreError> {
@@ -122,9 +135,11 @@ impl AclFileStore {
                 .join(format!("{}-cred", provider.as_str()))),
             StoreKey::EntitlementKey => Ok(self.root.join("device-entitlement-key.json")),
             StoreKey::EntitlementAnchor => Ok(self.root.join("device-entitlement-anchor.json")),
-            StoreKey::VmBroker { name, file } => {
-                Ok(self.root.join(name.as_str()).join(file.file_name()))
-            }
+            StoreKey::VmBroker { name, file } => Ok(self
+                .vm_dir
+                .clone()
+                .unwrap_or_else(|| self.root.join(name.as_str()))
+                .join(file.file_name())),
         }
     }
 

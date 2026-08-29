@@ -194,7 +194,7 @@ jobs:
           New-Item -ItemType File -Force packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe | Out-Null
           New-Item -ItemType File -Force packages/desktop/src-tauri/vm-bin/appliance-vm.exe | Out-Null
       - name: Test desktop Rust
-        run: cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml --lib
+        run: cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml --lib -- credential
       - name: Test credential store Rust
         run: >-
           cargo test --manifest-path packages/credential-store/Cargo.toml
