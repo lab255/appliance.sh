@@ -1287,13 +1287,7 @@ export function createMockHost(): ConsoleHost {
                 secrets: vm.creds.secrets.map((s) => ({ ...s })),
               };
             },
-            async add(rule: {
-              host: string;
-              capture: boolean;
-              inject: boolean;
-              header?: string;
-              helper?: string | string[];
-            }) {
+            async add(rule: { host: string; capture: boolean; inject: boolean; header?: string; helper?: string[] }) {
               await sleep(120);
               const next = {
                 host: rule.host,
@@ -1305,6 +1299,12 @@ export function createMockHost(): ConsoleHost {
               const i = vm.creds.rules.findIndex((r) => r.host === rule.host);
               if (i >= 0) vm.creds.rules[i] = next;
               else vm.creds.rules.push(next);
+            },
+            async pickHelperProgram() {
+              await sleep(50);
+              return mockPlatform() === 'windows'
+                ? 'C:\\Program Files\\Appliance\\credential-helper.exe'
+                : '/usr/local/bin/credential-helper';
             },
             async remove(host: string) {
               await sleep(120);
@@ -1429,7 +1429,22 @@ const microVms: Record<string, MockVm> = {
     egressPort: 5053,
     egress: { default: 'allow', allow: [], deny: [], mitm: false },
     creds: {
-      rules: [{ host: 'api.openai.com', capture: true, inject: true, header: 'authorization' }],
+      rules: [
+        {
+          host: 'api.anthropic.com',
+          capture: false,
+          inject: true,
+          header: 'x-api-key',
+          helper: "'C:\\a b\\x.exe' --type claude-code",
+        },
+        {
+          host: 'api.openai.com',
+          capture: true,
+          inject: true,
+          header: 'authorization',
+          helper: ['C:\\Program Files\\Appliance\\appliance-credhelper.exe', 'agent', 'print-key', '--type', 'codex'],
+        },
+      ],
       secrets: [{ host: 'api.openai.com', header: 'authorization', masked: '••••k7Qx' }],
     },
     agents: [],

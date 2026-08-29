@@ -456,14 +456,16 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
           list() {
             return invoke<CredentialsState>('microvm_creds_list', { name: vm });
           },
-          async add(rule: {
-            host: string;
-            capture: boolean;
-            inject: boolean;
-            header?: string;
-            helper?: string | string[];
-          }) {
+          async add(rule: { host: string; capture: boolean; inject: boolean; header?: string; helper?: string[] }) {
             await invoke('microvm_creds_add', { name: vm, input: rule });
+          },
+          async pickHelperProgram() {
+            const picked = await openDialog({
+              directory: false,
+              multiple: false,
+              title: 'Choose a credential helper program',
+            });
+            return typeof picked === 'string' ? picked : null;
           },
           async remove(host: string) {
             await invoke('microvm_creds_remove', { name: vm, host });
