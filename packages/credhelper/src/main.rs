@@ -68,6 +68,7 @@ struct AgentIdentifier {
 #[derive(Debug, Subcommand)]
 enum EntitlementKeyCommand {
     GetOrCreate,
+    Import,
 }
 
 #[derive(Debug, Subcommand)]
@@ -150,6 +151,9 @@ fn request_from_cli(cli: Cli) -> Result<Request, CommandError> {
         TopLevelCommand::EntitlementKey {
             command: EntitlementKeyCommand::GetOrCreate,
         } => Ok(Request::EntitlementKeyGetOrCreate),
+        TopLevelCommand::EntitlementKey {
+            command: EntitlementKeyCommand::Import,
+        } => Ok(Request::EntitlementKeyImport),
         TopLevelCommand::EntitlementAnchor { command } => Ok(match command {
             EntitlementAnchorCommand::Get => Request::EntitlementAnchorGet,
             EntitlementAnchorCommand::Put => Request::EntitlementAnchorPut,
@@ -193,6 +197,7 @@ mod tests {
             vec!["helper", "cluster", "get", "--profile", "prod"],
             vec!["helper", "agent", "put", "--provider", "openai"],
             vec!["helper", "entitlement-key", "get-or-create"],
+            vec!["helper", "entitlement-key", "import"],
             vec!["helper", "entitlement-anchor", "get"],
         ] {
             assert!(Cli::try_parse_from(argv).is_ok());

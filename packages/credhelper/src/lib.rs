@@ -26,6 +26,7 @@ pub enum Operation {
 pub enum Request {
     Store { operation: Operation, key: StoreKey },
     EntitlementKeyGetOrCreate,
+    EntitlementKeyImport,
     EntitlementAnchorGet,
     EntitlementAnchorPut,
 }
@@ -109,6 +110,17 @@ pub fn execute<S: CredentialStore, R: Read, W: Write>(
             drop(lock);
             Ok(())
         }
+        Request::EntitlementKeyImport => {
+            let lock = UserGlobalLock::acquire()?;
+            let key = StoreKey::entitlement_key();
+            let candidate = read_secret(input)?;
+            validate_entitlement_key(&candidate)?;
+            let value = import_entitlement_key(store, &key, &candidate)?;
+            output.write_all(&value)?;
+            output.flush()?;
+            drop(lock);
+            Ok(())
+        }
         Request::EntitlementAnchorGet => {
             let value = Zeroizing::new(
                 store
@@ -180,6 +192,34 @@ fn get_or_create_entitlement_key<S: CredentialStore>(
     // candidate so an interleaving writer's value wins visibly.
     let canonical = Zeroizing::new(store.get(key)?.ok_or_else(|| {
         StoreError::Internal("entitlement key disappeared after its write".to_owned())
+    })?);
+    validate_entitlement_key(&canonical)?;
+    Ok(canonical)
+}
+
+fn import_entitlement_key<S: CredentialStore>(
+    store: &S,
+    key: &StoreKey,
+    candidate: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, CommandError> {
+    if let Some(existing) = store.get(key)? {
+        let existing = Zeroizing::new(existing);
+        validate_entitlement_key(&existing)?;
+        return Ok(existing);
+    }
+
+    // The user-global lock makes this create-if-absent for cooperating
+    // Appliance surfaces. Re-read immediately before the write as a defensive
+    // guard for an older process that completed a write just before joining
+    // the lock protocol. An existing canonical key always wins.
+    if let Some(existing) = store.get(key)? {
+        let existing = Zeroizing::new(existing);
+        validate_entitlement_key(&existing)?;
+        return Ok(existing);
+    }
+    store.put(key, candidate)?;
+    let canonical = Zeroizing::new(store.get(key)?.ok_or_else(|| {
+        StoreError::Internal("entitlement key disappeared after import".to_owned())
     })?);
     validate_entitlement_key(&canonical)?;
     Ok(canonical)
@@ -455,6 +495,38 @@ mod tests {
         let key = StoreKey::entitlement_key();
         let actual = get_or_create_entitlement_key(&store, &key).unwrap();
         assert_eq!(&*actual, winner.as_bytes());
+        assert_eq!(store.put_count.get(), 1);
+    }
+
+    #[test]
+    fn entitlement_import_is_create_if_absent_and_returns_canonical_bytes() {
+        let store = MemoryStore::default();
+        let candidate = format!("ed25519:{}", URL_SAFE_NO_PAD.encode([8_u8; 32]));
+        let mut output = Vec::new();
+        execute(
+            &store,
+            &Request::EntitlementKeyImport,
+            &mut candidate.as_bytes(),
+            &mut output,
+        )
+        .unwrap();
+        assert_eq!(output, candidate.as_bytes());
+        assert_eq!(store.put_count.get(), 1);
+
+        let existing = format!("ed25519:{}", URL_SAFE_NO_PAD.encode([7_u8; 32]));
+        store.values.borrow_mut().insert(
+            StoreKey::entitlement_key().canonical_name(),
+            existing.as_bytes().to_vec(),
+        );
+        output.clear();
+        execute(
+            &store,
+            &Request::EntitlementKeyImport,
+            &mut candidate.as_bytes(),
+            &mut output,
+        )
+        .unwrap();
+        assert_eq!(output, existing.as_bytes());
         assert_eq!(store.put_count.get(), 1);
     }
 
