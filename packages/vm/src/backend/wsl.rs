@@ -25,6 +25,7 @@
 //! errors) as UTF-16LE, while output of Linux commands passes through
 //! as the guest wrote it (UTF-8). `decode_wsl` sniffs per call.
 
+use super::runtime_guest::{shell_squote, strip_verbatim};
 use super::VmBackend;
 use crate::spec::{VmPaths, VmSpec};
 use anyhow::{bail, Context, Result};
@@ -569,11 +570,13 @@ apk add --no-progress ca-certificates busybox-extras sudo tmux libstdc++ libgcc 
 /// not produce a usable lifecycle endpoint. `host_services` independently
 /// mirrors these checks before publishing the host-side marker.
 const WSL_RUNTIME_BOOTSTRAP_GATE: &str = r#"RUNTIME_READY=0
-for _ in $(seq 1 50); do
+for _ in $(seq 1 900); do
   if [ -x /usr/local/bin/appliance-runtime-supervisor ] && \
      [ -x /usr/local/bin/appliance-runtime-compound-supervisor ] && \
      [ -S /run/containerd/containerd.sock ] && \
-     ctr version >/dev/null 2>&1 && socat -V >/dev/null 2>&1; then
+     ctr version >/dev/null 2>&1 && socat -V >/dev/null 2>&1 && \
+     nft --version >/dev/null 2>&1 && jq --version >/dev/null 2>&1 && \
+     ip -V >/dev/null 2>&1; then
     RUNTIME_READY=1
     break
   fi
@@ -589,7 +592,31 @@ const WSL_RUNTIME_READINESS_PROBE: &str = "test -x /usr/local/bin/appliance-runt
 && test -x /usr/local/bin/appliance-runtime-compound-supervisor \
 && test -S /run/containerd/containerd.sock \
 && ctr version >/dev/null 2>&1 \
-&& socat -V >/dev/null 2>&1";
+&& socat -V >/dev/null 2>&1 \
+&& nft --version >/dev/null 2>&1 \
+&& jq --version >/dev/null 2>&1 \
+&& ip -V >/dev/null 2>&1";
+
+/// WSL imports the Alpine minirootfs without init. OpenRC supports standalone
+/// service invocation once its softlevel marker exists; if that attempt still
+/// leaves no containerd socket, launch the daemon directly like dockerd.
+const WSL_RUNTIME_OPENRC_STANDALONE: &str = r#"# No init runs in an imported WSL minirootfs. This is OpenRC's standalone
+# service-manager state, created before the shared Runtime provision calls
+# rc-service. The shared fragment stays byte-identical with VZ.
+mkdir -p /run/openrc
+touch /run/openrc/softlevel
+"#;
+
+const WSL_RUNTIME_CONTAINERD_FALLBACK: &str = r#"# rc-service may be unavailable or ineffective without an OpenRC init process.
+for _ in $(seq 1 20); do
+  [ -S /run/containerd/containerd.sock ] && break
+  sleep 0.1
+done
+if [ ! -S /run/containerd/containerd.sock ]; then
+  echo "appliance-runtime: launching containerd directly (WSL has no init)"
+  nohup setsid containerd </dev/null >>/var/log/appliance-runtime-containerd.log 2>&1 &
+fi
+"#;
 
 /// WSL replacement for `K3S_MEDIA_COPY`: the pinned binary lives in the
 /// host's asset cache, reached over the drvfs automount; re-verify the
@@ -693,17 +720,6 @@ else
   echo "appliance-dev: WARNING bind mount of the shared host folder failed"
 fi"#;
 
-/// Escape a value for embedding inside a single-quoted shell string.
-fn shell_squote(value: &str) -> String {
-    value.replace('\'', r#"'\''"#)
-}
-
-/// Windows paths come out of `fs::canonicalize` with the `\\?\` verbatim
-/// prefix, which `wslpath` refuses — strip it for the guest.
-fn strip_verbatim(path: &str) -> &str {
-    path.strip_prefix(r"\\?\").unwrap_or(path)
-}
-
 /// Assemble the per-VM bootstrap script. Mirrors `guest::build_apkovl`'s
 /// substitution rules: provisioning blocks are injected BEFORE the port
 /// and path markers, so their nested markers expand too (Quinn gap #1).
@@ -770,7 +786,7 @@ fn build_bootstrap(
     let package_provision = if spec.runtime {
         let owned: Vec<(String, String)> = runtime_repositories
             .iter()
-            .map(|repository| {
+            .map(|repository| -> Result<(String, String)> {
                 let directory = repository
                     .index
                     .parent()
@@ -797,6 +813,14 @@ fn build_bootstrap(
         )?
     } else {
         "#!/bin/sh\nset -eu\n".to_string()
+    };
+    let runtime_provision = if spec.runtime {
+        format!(
+            "{WSL_RUNTIME_OPENRC_STANDALONE}{}{WSL_RUNTIME_CONTAINERD_FALLBACK}",
+            crate::guest::RUNTIME_PROVISION
+        )
+    } else {
+        String::new()
     };
 
     Ok(WSL_BOOTSTRAP
@@ -838,7 +862,7 @@ fn build_bootstrap(
         )
         .replace(
             "__RUNTIME_PROVISION__",
-            if spec.runtime { crate::guest::RUNTIME_PROVISION } else { "" },
+            &runtime_provision,
         )
         .replace(
             "__RUNTIME_BOOTSTRAP_GATE__",
@@ -980,6 +1004,9 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
             break;
         }
         if Instant::now() >= core_deadline {
+            if readiness == WslHostReadiness::Runtime {
+                bail!("WSL Runtime provision did not become ready within 120s");
+            }
             bail!("guest core shell did not answer within 120s");
         }
         std::thread::sleep(Duration::from_millis(250));
@@ -1346,6 +1373,17 @@ mod tests {
         assert!(script.contains("nftables=1.1.1-r0"));
         assert!(script.contains("--no-network"));
         assert!(script.contains(crate::guest::RUNTIME_PROVISION));
+        let openrc = script.find("touch /run/openrc/softlevel").unwrap();
+        let shared = script.find(crate::guest::RUNTIME_PROVISION).unwrap();
+        let fallback = script
+            .find("nohup setsid containerd </dev/null")
+            .unwrap();
+        assert!(openrc < shared && shared < fallback);
+        assert!(script.contains("for _ in $(seq 1 900)"));
+        for tool_probe in ["nft --version", "jq --version", "ip -V"] {
+            assert!(WSL_RUNTIME_BOOTSTRAP_GATE.contains(tool_probe));
+            assert!(WSL_RUNTIME_READINESS_PROBE.contains(tool_probe));
+        }
         assert!(script.contains(crate::guest::RUNTIME_SUPERVISOR));
         assert!(script.contains(crate::guest::RUNTIME_COMPOUND_SUPERVISOR));
         assert!(script.contains("runtime-share-mount"));

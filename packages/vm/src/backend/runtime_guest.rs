@@ -34,9 +34,13 @@ case "$TAG" in ap-[0-9a-f]*) ;; *) echo "invalid runtime share tag" >&2; exit 2;
 TAG_HEX=${TAG#ap-}
 case "$TAG_HEX" in ''|*[!0-9a-f]*) echo "invalid runtime share tag" >&2; exit 2;; esac
 [ "${#TAG_HEX}" -le 32 ] || { echo "invalid runtime share tag" >&2; exit 2; }
+HOST_PATH=${HOST_PATH#\\\\?\\}
 case "$HOST_PATH" in ''|\\\\*|//* ) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
+case "$HOST_PATH" in [A-Za-z]:[\\/]* ) ;; *) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
+case "$HOST_PATH" in *'\'..'\'*|*'\'..'/'*|*/..'\'*|*/../*|*'\'..|*/..) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 SOURCE=$(wslpath -u "$HOST_PATH") || { echo "runtime share path is not translatable by wslpath" >&2; exit 2; }
 [ -n "$SOURCE" ] && [ -d "$SOURCE" ] || { echo "translated runtime share is not a directory" >&2; exit 2; }
+[ ! -L "$SOURCE" ] || { echo "translated runtime share must not be a symlink" >&2; exit 2; }
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 if ! grep -qs " $SHARE " /proc/mounts; then
@@ -204,12 +208,11 @@ pub fn wsl_runtime_apk_install(repositories: &[(&str, &str)], world: &[&str]) ->
 }
 
 #[cfg(any(target_os = "windows", test))]
-fn shell_squote(value: &str) -> String {
+pub(crate) fn shell_squote(value: &str) -> String {
     value.replace('\'', r#"'\''"#)
 }
 
-#[cfg(any(target_os = "windows", test))]
-fn strip_verbatim(path: &str) -> &str {
+pub(crate) fn strip_verbatim(path: &str) -> &str {
     path.strip_prefix(r"\\?\").unwrap_or(path)
 }
 
@@ -226,6 +229,93 @@ mod tests {
         assert!(script.contains("SHARE=/run/appliance/shares/$TAG"));
         assert!(!script.contains("SHARE=$2"));
         assert!(!script.contains("mkdir -p \"$HOST_PATH\""));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn drvfs_helper_executes_with_host_path_edge_cases_confined() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        use std::process::Command;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "appliance-runtime-drvfs-{}-{nonce}",
+            std::process::id()
+        ));
+        let bin = root.join("bin");
+        let safe_source = root.join("source");
+        let linked_source = root.join("source-link");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&safe_source).unwrap();
+        symlink(&safe_source, &linked_source).unwrap();
+
+        let write_executable = |name: &str, body: &str| {
+            let path = bin.join(name);
+            std::fs::write(&path, body).unwrap();
+            let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&path, permissions).unwrap();
+        };
+        write_executable(
+            "wslpath",
+            r#"#!/bin/sh
+case "$2" in
+  'C:\safe'|'D:\payload'|'C:\O'\''Brien') printf '%s\n' "$SAFE_SOURCE" ;;
+  'C:\linked') printf '%s\n' "$LINKED_SOURCE" ;;
+  *) printf '%s\n' "$SAFE_SOURCE" ;;
+esac
+"#,
+        );
+        write_executable("mkdir", "#!/bin/sh\nexit 0\n");
+        write_executable("grep", "#!/bin/sh\nexit 1\n");
+        write_executable(
+            "mount",
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$MOUNT_LOG\"\nexit 0\n",
+        );
+
+        let helper = root.join("runtime-share-mount");
+        std::fs::write(
+            &helper,
+            runtime_share_mount_script(RuntimeGuestBackend::WslDrvFs),
+        )
+        .unwrap();
+        let mount_log = root.join("mount.log");
+        let run = |host_path: &str| {
+            let _ = std::fs::remove_file(&mount_log);
+            Command::new("/bin/sh")
+                .arg(&helper)
+                .arg("ap-0123456789abcdef")
+                .arg(host_path)
+                .env("PATH", &bin)
+                .env("SAFE_SOURCE", &safe_source)
+                .env("LINKED_SOURCE", &linked_source)
+                .env("MOUNT_LOG", &mount_log)
+                .output()
+                .unwrap()
+        };
+        let assert_confined = || {
+            let log = std::fs::read_to_string(&mount_log).unwrap();
+            assert!(!log.is_empty());
+            assert!(log
+                .lines()
+                .all(|line| line.ends_with("/run/appliance/shares/ap-0123456789abcdef")));
+        };
+
+        assert!(!run(r"C:\payload\..\escape").status.success());
+        assert!(!run(r"C:\linked").status.success());
+        assert!(!run(r"\\server\share").status.success());
+        assert!(run(r"D:\payload").status.success());
+        assert_confined();
+        assert!(run(r"\\?\D:\payload").status.success());
+        assert_confined();
+        assert!(run(r"C:\O'Brien").status.success());
+        assert_confined();
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

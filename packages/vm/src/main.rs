@@ -1400,8 +1400,8 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             let mut plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime start plan")?;
             validate_runtime_plan(&plan)?;
             normalize_runtime_service_order(&mut plan)?;
+            validate_runtime_plan_against_spec(&name, &mut plan, backend_name)?;
             ensure_runtime_running(&name)?;
-            validate_runtime_plan_against_spec(&name, &plan)?;
             let mut bound = Vec::new();
             for port in &plan.ports {
                 if let Err(error) = runtime_forward_request(
@@ -1794,7 +1794,11 @@ fn validate_runtime_env(env: &std::collections::BTreeMap<String, String>, compou
     Ok(())
 }
 
-fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<()> {
+fn validate_runtime_plan_against_spec(
+    name: &str,
+    plan: &mut RuntimePlan,
+    backend_name: &str,
+) -> Result<()> {
     let spec = store::load_spec(name)?.with_context(|| format!("runtime pool '{name}' does not exist"))?;
     if !spec.runtime {
         bail!("VM '{name}' is not an Appliance Runtime pool");
@@ -1814,6 +1818,7 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
     {
         bail!("runtime start share does not match the persisted pool spec");
     }
+    plan.share.host_path = runtime_start_host_path(&share.host, backend_name)?;
     let published: Vec<_> = spec
         .published
         .iter()
@@ -1838,6 +1843,14 @@ fn validate_runtime_plan_against_spec(name: &str, plan: &RuntimePlan) -> Result<
         }
     }
     Ok(())
+}
+
+fn runtime_start_host_path(persisted: &str, backend_name: &str) -> Result<String> {
+    if backend_name == "wsl" {
+        backend::runtime_guest::validate_wsl_runtime_host_path(persisted)?;
+        return Ok(backend::runtime_guest::strip_verbatim(persisted).to_string());
+    }
+    Ok(persisted.to_string())
 }
 
 fn ensure_runtime_running(name: &str) -> Result<()> {
@@ -2475,6 +2488,19 @@ mod tests {
             })
             .collect();
         assert!(validate_runtime_plan(&too_many).unwrap_err().to_string().contains("at most 16"));
+    }
+
+    #[test]
+    fn runtime_start_forwards_only_valid_persisted_wsl_paths() {
+        assert_eq!(
+            runtime_start_host_path(r"\\?\D:\runtime\payload", "wsl").unwrap(),
+            r"D:\runtime\payload"
+        );
+        assert!(runtime_start_host_path(r"\\server\share\payload", "wsl").is_err());
+        assert_eq!(
+            runtime_start_host_path("/persisted/vz/payload", "vz").unwrap(),
+            "/persisted/vz/payload"
+        );
     }
 
     #[test]
