@@ -40,6 +40,10 @@ pub enum CredentialHelper {
 }
 
 impl CredentialHelper {
+    pub fn legacy(value: impl Into<String>) -> Self {
+        Self::LegacyShell(value.into())
+    }
+
     /// Parse the single `--helper` CLI value. New callers pass a JSON array;
     /// everything else remains a legacy shell command for persisted/manual
     /// compatibility on Unix.
@@ -51,20 +55,8 @@ impl CredentialHelper {
             }
             Ok(Self::Argv(argv))
         } else {
-            Ok(Self::LegacyShell(raw))
+            Ok(Self::legacy(raw))
         }
-    }
-}
-
-impl From<&str> for CredentialHelper {
-    fn from(value: &str) -> Self {
-        Self::LegacyShell(value.to_string())
-    }
-}
-
-impl From<String> for CredentialHelper {
-    fn from(value: String) -> Self {
-        Self::LegacyShell(value)
     }
 }
 
@@ -107,7 +99,13 @@ fn secrets_path(name: &str) -> PathBuf {
 pub fn load_config(name: &str) -> CredentialConfig {
     std::fs::read_to_string(config_path(name))
         .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .and_then(|raw| match serde_json::from_str(&raw) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                eprintln!("egress creds: ignoring unreadable {}: {e}", config_path(name).display());
+                None
+            }
+        })
         .unwrap_or_default()
 }
 
@@ -279,7 +277,13 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
         return Injection::NoRule;
     };
     let value = match &rule.helper {
-        Some(helper) => run_helper(helper).ok(),
+        Some(helper) => match run_helper(helper) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("egress mitm: credential helper failed: {e:#}");
+                None
+            }
+        },
         None => get_secret(name, host, &rule.header),
     };
     match value {
@@ -309,41 +313,40 @@ fn helper_cache() -> &'static Mutex<HashMap<CredentialHelper, (Instant, String)>
 }
 
 /// Resolve a helper program to an absolute executable. Emitters pin their
-/// running appliance executable; accepting a bare PATH name keeps the generic
-/// credential-rule API useful without ever handing a command line to a shell.
+/// running appliance executable. Unix also accepts a bare PATH name for the
+/// generic credential-rule API; Windows requires an absolute program path.
 fn resolve_helper_program(program: &str) -> anyhow::Result<PathBuf> {
     let path = Path::new(program);
     if path.is_absolute() {
         return validate_helper_program(path);
     }
-    if path.components().count() != 1 {
-        bail!("credential helper executable must be absolute or resolvable on PATH");
+
+    #[cfg(windows)]
+    {
+        bail!("credential helper executable must be an absolute path on Windows");
     }
 
-    let path_var = std::env::var_os("PATH").unwrap_or_default();
-    for dir in std::env::split_paths(&path_var) {
-        for candidate in helper_program_candidates(&dir, program) {
-            if let Ok(valid) = validate_helper_program(&candidate) {
-                return Ok(valid);
+    #[cfg(not(windows))]
+    {
+        if path.components().count() != 1 {
+            bail!("credential helper executable must be absolute or resolvable on PATH");
+        }
+
+        let path_var = std::env::var_os("PATH").unwrap_or_default();
+        for dir in std::env::split_paths(&path_var) {
+            for candidate in helper_program_candidates(&dir, program) {
+                if let Ok(valid) = validate_helper_program(&candidate) {
+                    return Ok(valid);
+                }
             }
         }
+        bail!("credential helper executable '{program}' was not found on PATH")
     }
-    bail!("credential helper executable '{program}' was not found on PATH")
 }
 
 #[cfg(not(windows))]
 fn helper_program_candidates(dir: &Path, program: &str) -> Vec<PathBuf> {
     vec![dir.join(program)]
-}
-
-#[cfg(windows)]
-fn helper_program_candidates(dir: &Path, program: &str) -> Vec<PathBuf> {
-    let path = Path::new(program);
-    if path.extension().is_some() {
-        vec![dir.join(path)]
-    } else {
-        vec![dir.join(format!("{program}.exe")), dir.join(format!("{program}.com"))]
-    }
 }
 
 fn validate_helper_program(path: &Path) -> anyhow::Result<PathBuf> {
@@ -403,6 +406,7 @@ fn run_helper(helper: &CredentialHelper) -> anyhow::Result<String> {
                 .ok_or_else(|| anyhow::anyhow!("credential helper argv must start with an executable"))?;
             let mut command = Command::new(resolve_helper_program(program)?);
             command.args(args);
+            command.stdin(std::process::Stdio::null());
             hide_helper_window(&mut command);
             command
         }
@@ -416,6 +420,7 @@ fn run_helper(helper: &CredentialHelper) -> anyhow::Result<String> {
             {
                 let mut command = Command::new("sh");
                 command.args(["-c", cmd]);
+                command.stdin(std::process::Stdio::null());
                 command
             }
         }
@@ -427,6 +432,9 @@ fn run_helper(helper: &CredentialHelper) -> anyhow::Result<String> {
     let value = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if value.is_empty() {
         bail!("credential helper returned an empty value");
+    }
+    if value.contains(['\r', '\n']) {
+        bail!("credential helper output must be a single line");
     }
     let mut cache = helper_cache().lock().unwrap_or_else(|p| p.into_inner());
     cache.insert(helper.clone(), (Instant::now(), value.clone()));
@@ -540,7 +548,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "authorization".into(),
-                helper: Some("printf 'Bearer from-helper'".into()),
+                helper: Some(CredentialHelper::legacy("printf 'Bearer from-helper'")),
             },
         )
         .unwrap();
@@ -562,11 +570,23 @@ mod tests {
         let source = dir.join("helper.rs");
         std::fs::write(
             &source,
-            r###"fn main() { print!("{}", r#"{"kind":"api-key","value":"from-argv"}"#); }"###,
+            r###"fn main() {
+                if std::env::args().any(|arg| arg == "--multiline") {
+                    print!("first\nsecond");
+                } else {
+                    print!("{}", r#"{"kind":"api-key","value":"from-argv"}"#);
+                }
+            }"###,
         )
         .unwrap();
         let executable = dir.join(if cfg!(windows) { "helper.exe" } else { "helper" });
+        #[cfg(not(windows))]
         let rustc = resolve_helper_program("rustc").expect("rustc is on PATH during cargo test");
+        #[cfg(windows)]
+        let rustc = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .flat_map(|dir| [dir.join("rustc.exe"), dir.join("rustc.com")])
+            .find(|candidate| candidate.is_file())
+            .expect("rustc is on PATH during cargo test");
         let status = Command::new(rustc)
             .args([source.as_os_str(), std::ffi::OsStr::new("-o"), executable.as_os_str()])
             .status()
@@ -583,6 +603,23 @@ mod tests {
         let envelope: serde_json::Value = serde_json::from_str(&value).expect("helper envelope JSON");
         assert_eq!(envelope, serde_json::json!({ "kind": "api-key", "value": "from-argv" }));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn helper_rejects_multiline_output() {
+        let (dir, executable) = build_test_helper();
+        let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned(), "--multiline".into()]);
+        assert_eq!(run_helper(&helper).unwrap_err().to_string(), "credential helper output must be a single line");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_helper_program_must_be_absolute() {
+        assert_eq!(
+            resolve_helper_program("rustc").unwrap_err().to_string(),
+            "credential helper executable must be an absolute path on Windows"
+        );
     }
 
     #[test]
@@ -603,21 +640,21 @@ mod tests {
         assert_eq!(serde_json::from_str::<CredentialHelper>(&encoded).unwrap(), argv);
         assert_eq!(
             serde_json::from_str::<CredentialHelper>(r#""printf legacy""#).unwrap(),
-            CredentialHelper::LegacyShell("printf legacy".into())
+            CredentialHelper::legacy("printf legacy")
         );
     }
 
     #[cfg(unix)]
     #[test]
     fn legacy_shell_helper_still_works_on_unix() {
-        let helper = CredentialHelper::LegacyShell("printf legacy-helper".into());
+        let helper = CredentialHelper::legacy("printf legacy-helper");
         assert_eq!(run_helper(&helper).unwrap(), "legacy-helper");
     }
 
     #[cfg(windows)]
     #[test]
     fn legacy_shell_helper_is_rejected_on_windows_with_migration_error() {
-        let helper = CredentialHelper::LegacyShell("echo legacy-helper".into());
+        let helper = CredentialHelper::legacy("echo legacy-helper");
         assert_eq!(
             run_helper(&helper).unwrap_err().to_string(),
             "legacy shell helper is not supported on Windows; re-run `appliance agent login`"
@@ -639,7 +676,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("exit 7".into()),
+                helper: Some(CredentialHelper::legacy("exit 7")),
             },
         )
         .unwrap();
@@ -673,7 +710,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("printf real-key".into()),
+                helper: Some(CredentialHelper::legacy("printf real-key")),
             },
         )
         .unwrap();

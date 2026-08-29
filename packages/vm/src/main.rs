@@ -2211,7 +2211,32 @@ fn resolve_mount(path: &str) -> Result<String> {
     if !abs.is_dir() {
         bail!("--mount path '{}' is not a directory", abs.display());
     }
+    let root = canonicalize_with_missing_tail(&crate::store::vm_root());
+    if abs == root || root.starts_with(&abs) {
+        bail!("--mount path must not contain the appliance state dir ({})", root.display());
+    }
     Ok(abs.to_string_lossy().into_owned())
+}
+
+fn canonicalize_with_missing_tail(path: &std::path::Path) -> std::path::PathBuf {
+    let mut existing = path;
+    let mut tail = Vec::new();
+    loop {
+        if let Ok(mut canonical) = std::fs::canonicalize(existing) {
+            for component in tail.iter().rev() {
+                canonical.push(component);
+            }
+            return canonical;
+        }
+        let Some(name) = existing.file_name() else {
+            return path.to_path_buf();
+        };
+        tail.push(name.to_os_string());
+        let Some(parent) = existing.parent() else {
+            return path.to_path_buf();
+        };
+        existing = parent;
+    }
 }
 
 fn ensure_spec(name: &str) -> Result<VmSpec> {
@@ -2350,6 +2375,15 @@ fn tail_of(path: &std::path::Path, n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mount_of_home_is_rejected_when_it_contains_vm_root() {
+        let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .expect("test process has a home directory");
+        let error = resolve_mount(&home.to_string_lossy()).unwrap_err();
+        assert!(error.to_string().contains("--mount path must not contain the appliance state dir"));
+    }
 
     #[cfg(unix)]
     #[test]
