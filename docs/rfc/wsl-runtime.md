@@ -289,12 +289,14 @@ pieces:
 6. Egress rendering tests prove WSL never prints `host-enforced`, per-app proxy
    selection never unions grants, and direct-traffic limitations are present.
 
-One owner-run Windows 11/WSL2 NAT session is the release gate. AP-200 must begin
-that live run with the guest-side drive-exposure check below (the dedicated
-`docs/live-test-runbook-windows.md` does not exist yet):
+One owner-run Windows 11/WSL2 NAT session is the release gate. The dedicated
+[Windows live-test runbook](../live-test-runbook-windows.md) runs each
+guest-side drive-exposure gate immediately after importing its dev machine or
+Runtime distro and before starting a payload:
 
-```powershell
+```sh
 wsl.exe -d appliance-vm-appliance -u root -- sh -c 'test ! -e /mnt/c && ! grep -qE "[[:space:]]/mnt/[a-z][[:space:]]" /proc/mounts'
+wsl.exe -d appliance-vm-appliance-runtime -u root -- sh -c 'test ! -e /mnt/c && ! grep -qE "[[:space:]]/mnt/[a-z][[:space:]]" /proc/mounts'
 ```
 
 The command must exit 0 before any payload is started. From a clean pool

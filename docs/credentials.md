@@ -77,7 +77,7 @@ backed by
 
 Credential Manager prevents ordinary cross-user file reads and removes a
 cleartext file from normal home-directory backup/sync and `/mnt/c` exposure;
-the [Windows runbook’s section 5](live-test-runbook-windows.md#5-broker-files-and-managed-wsl-distro)
+the [Windows runbook's broker section](live-test-runbook-windows.md#broker-files-and-managed-wsl-distro)
 checks `/proc/mounts` and verifies that automount is off.
 It does not defend against code already running as the same Windows user,
 Administrator, or SYSTEM; those principals can use the same credential APIs.
