@@ -1006,10 +1006,15 @@ function resolveProxyUrl(vm: string): string {
  *  keyed on host, so switching modes REPLACES the rule (never a dual rule, so
  *  `first_matching(inject)` stays unambiguous — docs/agent-login.md §2). The
  *  placeholder never enters egress-secrets.json (capture:false). */
-export function assertAgentBrokerBackendSupported(backend: string | undefined): void {
+export function assertAgentBrokerBackendSupported(backend: string | undefined, platform = process.platform): void {
   if (backend === 'wsl') {
     throw new Error(
-      'Brokered credential injection is disabled on WSL v1: exact-lease re-attribution cannot survive SNAT.'
+      'Brokered credential injection is disabled on WSL v1: exact-lease re-attribution cannot survive SNAT; use an in-guest API key; brokered injection returns in WSL v2.'
+    );
+  }
+  if (platform === 'win32' && backend === undefined) {
+    throw new Error(
+      'Brokered credential injection is disabled because the VM backend could not be resolved on Windows; use an in-guest API key; brokered injection returns in WSL v2.'
     );
   }
 }
@@ -1025,8 +1030,14 @@ function vmBackend(vm: string): string | undefined {
   }
 }
 
-export function configureBroker(vm: string, adapter: AgentAdapter, mode: AuthMode, backend?: string): void {
-  assertAgentBrokerBackendSupported(backend);
+export function configureBroker(
+  vm: string,
+  adapter: AgentAdapter,
+  mode: AuthMode,
+  backend?: string,
+  platform = process.platform
+): void {
+  assertAgentBrokerBackendSupported(backend, platform);
   // `--helper` crosses one process argv boundary, so encode the helper array as
   // JSON. appliance-vm parses it back into CredentialHelper::Argv and persists
   // the array itself (not this transport string) in egress-credentials.json.
