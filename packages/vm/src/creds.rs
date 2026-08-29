@@ -9,10 +9,12 @@
 //!     host, sourcing the value from the stored secret or from an
 //!     `apiKeyHelper` command (Claude-Code style) the host configures.
 //!
-//! Config + secrets live under the VM state dir on the host — the
-//! guest can't read them. Secrets are written 0600.
+//! Config + secrets live under the VM state dir on the host. Secret and
+//! rule files are restricted to the host user, and rules fail closed when
+//! their host-side ownership or permissions do not satisfy the trust check.
 
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
@@ -97,25 +99,300 @@ fn secrets_path(name: &str) -> PathBuf {
 }
 
 pub fn load_config(name: &str) -> CredentialConfig {
-    std::fs::read_to_string(config_path(name))
-        .ok()
-        .and_then(|raw| match serde_json::from_str(&raw) {
-            Ok(c) => Some(c),
-            Err(e) => {
-                eprintln!("egress creds: ignoring unreadable {}: {e}", config_path(name).display());
-                None
-            }
-        })
-        .unwrap_or_default()
+    load_config_path(&config_path(name))
+}
+
+fn load_config_path(path: &Path) -> CredentialConfig {
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CredentialConfig::default(),
+        Err(error) => {
+            eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+            return CredentialConfig::default();
+        }
+    };
+    if verify_config_integrity(path, &file).is_err() {
+        // Deliberately omit the principal, ACL, and file contents. This log
+        // can be surfaced to untrusted workloads and must remain secret-free.
+        eprintln!("egress creds: refusing credential config with unsafe ownership or permissions");
+        return CredentialConfig::default();
+    }
+    let mut raw = String::new();
+    if let Err(error) = file.read_to_string(&mut raw) {
+        eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+        return CredentialConfig::default();
+    }
+    match serde_json::from_str(&raw) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("egress creds: ignoring unreadable {}: {error}", path.display());
+            CredentialConfig::default()
+        }
+    }
 }
 
 pub fn save_config(name: &str, cfg: &CredentialConfig) -> anyhow::Result<()> {
     let path = config_path(name);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
+        crate::fs_acl::restrict_to_current_user(parent)?;
     }
     std::fs::write(&path, serde_json::to_string_pretty(cfg)?)?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(&path) {
+        let _ = std::fs::remove_file(&path);
+        return Err(error);
+    }
     Ok(())
+}
+
+#[cfg(unix)]
+fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let uid = unsafe { libc::geteuid() };
+    let file_metadata = file.metadata()?;
+    let path_metadata = std::fs::symlink_metadata(path)?;
+    let parent = path.parent().context("credential config has no parent directory")?;
+    let parent_metadata = std::fs::symlink_metadata(parent)?;
+    if path_metadata.file_type().is_symlink()
+        || parent_metadata.file_type().is_symlink()
+        || !file_metadata.is_file()
+        || !parent_metadata.is_dir()
+        || file_metadata.uid() != uid
+        || parent_metadata.uid() != uid
+        || file_metadata.mode() & 0o022 != 0
+        || parent_metadata.mode() & 0o022 != 0
+    {
+        bail!("unsafe credential config ownership or permissions");
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn verify_config_integrity(path: &Path, _file: &std::fs::File) -> anyhow::Result<()> {
+    windows_config_integrity::verify(path)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn verify_config_integrity(_path: &Path, _file: &std::fs::File) -> anyhow::Result<()> {
+    bail!("credential config integrity checks are unsupported on this platform")
+}
+
+#[cfg(windows)]
+mod windows_config_integrity {
+    use super::*;
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::null_mut;
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, LocalFree, ERROR_SUCCESS, GENERIC_ALL, GENERIC_WRITE, HANDLE,
+    };
+    use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
+    use windows_sys::Win32::Security::{
+        CreateWellKnownSid, EqualSid, GetAce, GetLengthSid, GetTokenInformation, IsValidAcl,
+        IsValidSid, ACL,
+        ACE_INHERITED_OBJECT_TYPE_PRESENT, ACE_OBJECT_TYPE_PRESENT, DACL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE, TOKEN_QUERY,
+        TOKEN_USER, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        DELETE, FILE_APPEND_DATA, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, WRITE_DAC,
+        WRITE_OWNER,
+    };
+    use windows_sys::Win32::System::SystemServices::{
+        ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE_TYPE,
+        ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_ALLOWED_COMPOUND_ACE_TYPE,
+        ACCESS_ALLOWED_OBJECT_ACE_TYPE,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct OwnedHandle(HANDLE);
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
+    impl Drop for LocalSecurityDescriptor {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = LocalFree(self.0);
+            }
+        }
+    }
+
+    fn last_os_error(context: &'static str) -> anyhow::Error {
+        anyhow::anyhow!("{context}: {}", std::io::Error::last_os_error())
+    }
+
+    fn current_user_sid() -> anyhow::Result<(Vec<usize>, PSID)> {
+        let mut token = null_mut();
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+            return Err(last_os_error("open current process token"));
+        }
+        let token = OwnedHandle(token);
+        let mut needed = 0;
+        unsafe {
+            GetTokenInformation(token.0, TokenUser, null_mut(), 0, &mut needed);
+        }
+        if needed == 0 {
+            return Err(last_os_error("size current process token user"));
+        }
+        // usize storage gives TOKEN_USER its required pointer alignment.
+        let words = (needed as usize + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
+        let mut buffer = vec![0usize; words];
+        if unsafe {
+            GetTokenInformation(
+                token.0,
+                TokenUser,
+                buffer.as_mut_ptr().cast(),
+                needed,
+                &mut needed,
+            )
+        } == 0
+        {
+            return Err(last_os_error("read current process token user"));
+        }
+        let sid = unsafe { (*(buffer.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+        if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+            bail!("current process token has an invalid user SID");
+        }
+        Ok((buffer, sid))
+    }
+
+    fn well_known_sid(kind: i32) -> anyhow::Result<Vec<u8>> {
+        let mut buffer = vec![0u8; SECURITY_MAX_SID_SIZE as usize];
+        let mut size = buffer.len() as u32;
+        if unsafe { CreateWellKnownSid(kind, null_mut(), buffer.as_mut_ptr().cast(), &mut size) } == 0 {
+            return Err(last_os_error("create well-known SID"));
+        }
+        Ok(buffer)
+    }
+
+    unsafe fn allowed_ace_sid(ace: *const u8, ace_size: usize, ace_type: u32) -> anyhow::Result<PSID> {
+        let mut offset = 8usize; // ACE_HEADER + ACCESS_MASK
+        if ace_type == ACCESS_ALLOWED_OBJECT_ACE_TYPE || ace_type == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE {
+            if ace_size < 12 {
+                bail!("truncated object ACE");
+            }
+            let flags = ace.add(8).cast::<u32>().read_unaligned();
+            offset = 12;
+            if flags & ACE_OBJECT_TYPE_PRESENT != 0 {
+                offset += 16;
+            }
+            if flags & ACE_INHERITED_OBJECT_TYPE_PRESENT != 0 {
+                offset += 16;
+            }
+        }
+        if offset >= ace_size {
+            bail!("truncated allowed ACE SID");
+        }
+        let sid = ace.add(offset) as PSID;
+        if IsValidSid(sid) == 0 {
+            bail!("allowed ACE has an invalid SID");
+        }
+        if offset + GetLengthSid(sid) as usize > ace_size {
+            bail!("allowed ACE SID extends past the ACE");
+        }
+        Ok(sid)
+    }
+
+    /// Inspect the binary security descriptor directly. This deliberately
+    /// avoids `icacls` output parsing, whose account names and prose are
+    /// localized and therefore unsuitable for a fail-closed trust check.
+    pub(super) fn verify(path: &Path) -> anyhow::Result<()> {
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let mut owner: PSID = null_mut();
+        let mut dacl: *mut ACL = null_mut();
+        let mut descriptor: PSECURITY_DESCRIPTOR = null_mut();
+        let status = unsafe {
+            GetNamedSecurityInfoW(
+                wide.as_ptr(),
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                &mut owner,
+                null_mut(),
+                &mut dacl,
+                null_mut(),
+                &mut descriptor,
+            )
+        };
+        if status != ERROR_SUCCESS {
+            return Err(anyhow::anyhow!(
+                "read credential config ACL: {}",
+                std::io::Error::from_raw_os_error(status as i32)
+            ));
+        }
+        let _descriptor = LocalSecurityDescriptor(descriptor);
+        if owner.is_null() || dacl.is_null() || unsafe { IsValidAcl(dacl) } == 0 {
+            bail!("credential config owner or DACL is missing");
+        }
+
+        let (_token_buffer, current_sid) = current_user_sid()?;
+        if unsafe { EqualSid(owner, current_sid) } == 0 {
+            bail!("credential config is not owned by the current user");
+        }
+        let system = well_known_sid(WinLocalSystemSid)?;
+        let administrators = well_known_sid(WinBuiltinAdministratorsSid)?;
+        let system_sid = system.as_ptr() as PSID;
+        let administrators_sid = administrators.as_ptr() as PSID;
+        let write_mask = GENERIC_ALL
+            | GENERIC_WRITE
+            | FILE_WRITE_DATA
+            | FILE_APPEND_DATA
+            | FILE_WRITE_EA
+            | FILE_WRITE_ATTRIBUTES
+            | DELETE
+            | WRITE_DAC
+            | WRITE_OWNER;
+
+        let ace_count = unsafe { (*dacl).AceCount as u32 };
+        for index in 0..ace_count {
+            let mut raw_ace: *mut c_void = null_mut();
+            if unsafe { GetAce(dacl, index, &mut raw_ace) } == 0 {
+                return Err(last_os_error("read credential config ACE"));
+            }
+            let ace = raw_ace.cast::<u8>();
+            let header = unsafe { &*ace.cast::<windows_sys::Win32::Security::ACE_HEADER>() };
+            let ace_type = header.AceType as u32;
+            let allowed = matches!(
+                ace_type,
+                ACCESS_ALLOWED_ACE_TYPE
+                    | ACCESS_ALLOWED_OBJECT_ACE_TYPE
+                    | ACCESS_ALLOWED_CALLBACK_ACE_TYPE
+                    | ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE
+                    | ACCESS_ALLOWED_COMPOUND_ACE_TYPE
+            );
+            if !allowed {
+                continue;
+            }
+            if header.AceSize < 8 {
+                bail!("credential config has a truncated allowed ACE");
+            }
+            let mask = unsafe { ace.add(4).cast::<u32>().read_unaligned() };
+            if mask & write_mask == 0 {
+                continue;
+            }
+            // Compound ACEs are obsolete and encode multiple principals;
+            // fail closed rather than attempting an incomplete SID parse.
+            if ace_type == ACCESS_ALLOWED_COMPOUND_ACE_TYPE {
+                bail!("credential config has an unsupported write-granting ACE");
+            }
+            let sid = unsafe { allowed_ace_sid(ace, header.AceSize as usize, ace_type)? };
+            let trusted = unsafe {
+                EqualSid(sid, owner) != 0
+                    || EqualSid(sid, system_sid) != 0
+                    || EqualSid(sid, administrators_sid) != 0
+            };
+            if !trusted {
+                bail!("credential config is writable by an untrusted principal");
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Add or update (by host) a rule.
@@ -470,6 +747,71 @@ pub fn set_header(head: &str, header: &str, value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn integrity_test_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "appliance-credential-integrity-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    fn integrity_test_config() -> CredentialConfig {
+        CredentialConfig {
+            rules: vec![CredentialRule {
+                host: "safe.example".into(),
+                capture: false,
+                inject: true,
+                header: "authorization".into(),
+                helper: None,
+            }],
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_config_integrity_accepts_private_and_refuses_world_writable_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = integrity_test_path("unix");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-credentials.json");
+        std::fs::write(&file, serde_json::to_vec(&integrity_test_config()).unwrap()).unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&file).unwrap();
+        assert_eq!(load_config_path(&file).rules.len(), 1);
+
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_config_integrity_accepts_private_and_refuses_untrusted_write_ace() {
+        use std::os::windows::process::CommandExt;
+
+        let dir = integrity_test_path("windows");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-credentials.json");
+        std::fs::write(&file, serde_json::to_vec(&integrity_test_config()).unwrap()).unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&file).unwrap();
+        assert_eq!(load_config_path(&file).rules.len(), 1);
+
+        let status = Command::new("icacls")
+            .arg(&file)
+            .args(["/grant", "*S-1-1-0:(W)"])
+            .creation_flags(0x0800_0000)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn set_header_replaces_existing() {
