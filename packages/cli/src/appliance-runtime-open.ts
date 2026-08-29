@@ -7,11 +7,7 @@ import * as path from 'node:path';
 import { applianceV2Input, type ApplianceV2, type InstalledApp } from '@appliance.sh/sdk';
 import { currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
 import { readBundleManifest } from './utils/bundle-read.js';
-import {
-  readRuntimeRegistry,
-  updateRuntimeRecord,
-  type RuntimeRecord,
-} from './utils/runtime-registry.js';
+import { readRuntimeRegistry, updateRuntimeRecord, type RuntimeRecord } from './utils/runtime-registry.js';
 import {
   engineRuntimeStatusBackend,
   isWarmRuntimeState,

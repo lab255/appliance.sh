@@ -819,12 +819,6 @@ interface RuntimeAppStatus extends Record<string, unknown> {
   services?: RuntimeServiceStatus[];
 }
 
-function runtimeState(value: unknown): RuntimeRecord['state'] | undefined {
-  return typeof value === 'string' && ['starting', 'running', 'degraded', 'stopped', 'exited', 'failed'].includes(value)
-    ? (value as RuntimeRecord['state'])
-    : undefined;
-}
-
 function optionValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   if (index < 0) return undefined;
