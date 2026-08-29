@@ -1293,6 +1293,12 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             }
             let host_path = std::fs::canonicalize(&plan.share.host_path)
                 .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
+            if !host_path.is_dir() {
+                bail!("runtime payload share '{}' is not a directory", host_path.display());
+            }
+            let state_root = canonicalize_with_missing_tail(&crate::store::vm_root());
+            backend::runtime_guest::validate_mount_excludes_state_dir(&host_path, &state_root)
+                .context("validate runtime payload share")?;
             if backend_name == "wsl" {
                 backend::runtime_guest::validate_wsl_runtime_host_path(&host_path.to_string_lossy())?;
             }
@@ -2251,9 +2257,13 @@ fn resolve_mount(path: &str) -> Result<String> {
         bail!("--mount path '{}' is not a directory", abs.display());
     }
     let root = canonicalize_with_missing_tail(&crate::store::vm_root());
-    if abs == root || root.starts_with(&abs) {
-        bail!("--mount path must not contain the appliance state dir ({})", root.display());
-    }
+    backend::runtime_guest::validate_mount_excludes_state_dir(&abs, &root)
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "--mount path must not contain the appliance state dir ({})",
+                root.display()
+            )
+        })?;
     Ok(abs.to_string_lossy().into_owned())
 }
 
