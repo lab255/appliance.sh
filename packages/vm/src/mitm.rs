@@ -83,14 +83,26 @@ pub fn ensure_ca(name: &str) -> Result<Ca> {
 
     if let Some(parent) = cert_path.parent() {
         std::fs::create_dir_all(parent)?;
+        crate::fs_acl::restrict_to_current_user(parent)?;
     }
     std::fs::write(&cert_path, &cert_pem)
         .with_context(|| format!("write {}", cert_path.display()))?;
-    std::fs::write(&key_path, key.serialize_pem())
-        .with_context(|| format!("write {}", key_path.display()))?;
-    if let Err(error) = crate::fs_acl::restrict_to_current_user(&key_path) {
-        let _ = std::fs::remove_file(&key_path);
+    let key_tmp = key_path.with_file_name(format!(
+        "{}.tmp",
+        key_path
+            .file_name()
+            .context("CA key path has no file name")?
+            .to_string_lossy()
+    ));
+    std::fs::write(&key_tmp, key.serialize_pem())
+        .with_context(|| format!("write {}", key_tmp.display()))?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(&key_tmp) {
+        let _ = std::fs::remove_file(&key_tmp);
         return Err(error);
+    }
+    if let Err(error) = std::fs::rename(&key_tmp, &key_path) {
+        let _ = std::fs::remove_file(&key_tmp);
+        return Err(error).with_context(|| format!("replace {}", key_path.display()));
     }
 
     Ok(Ca { cert, key })

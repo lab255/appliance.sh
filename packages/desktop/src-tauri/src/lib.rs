@@ -1152,11 +1152,16 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     }
     #[cfg(windows)]
     {
-        if let Ok(user) = std::env::var("USERNAME") {
+        if let Ok(sid) = current_user_sid_string() {
             use std::os::windows::process::CommandExt;
+            let principal = format!("*{sid}");
             let _ = std::process::Command::new("icacls")
                 .arg(&path)
-                .args(["/inheritance:r", "/grant:r", &format!("{user}:F")])
+                .args([
+                    "/inheritance:r",
+                    "/grant:r",
+                    &format!("{principal}:F"),
+                ])
                 .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
                 .output();
         }
@@ -5881,6 +5886,86 @@ fn legacy_anthropic_key_file() -> Option<PathBuf> {
 // Copy of the appliance-vm ACL helper: the desktop drives appliance-vm as a
 // sidecar binary rather than linking its crate, so this small security boundary
 // stays duplicated here (like decode_wsl_text above).
+#[cfg(windows)]
+fn current_user_sid_string() -> Result<String, String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, IsValidSid, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct OwnedHandle(HANDLE);
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    let mut token = std::ptr::null_mut();
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(format!(
+            "could not open the current process token: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let token = OwnedHandle(token);
+    let mut needed = 0;
+    unsafe {
+        GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+    }
+    if needed == 0 {
+        return Err(format!(
+            "could not size the current process token user: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let words = (needed as usize + std::mem::size_of::<usize>() - 1)
+        / std::mem::size_of::<usize>();
+    let mut buffer = vec![0usize; words];
+    if unsafe {
+        GetTokenInformation(
+            token.0,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not read the current process token user: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let sid = unsafe { (*(buffer.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+        return Err("the current process token has an invalid user SID".to_string());
+    }
+
+    let mut raw = std::ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(sid, &mut raw) } == 0 {
+        return Err(format!(
+            "could not convert the current user SID to text: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let result = (|| {
+        let mut len = 0;
+        while unsafe { *raw.add(len) } != 0 {
+            len += 1;
+        }
+        String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) })
+            .map_err(|error| format!("the current user SID is not valid UTF-16: {error}"))
+    })();
+    unsafe {
+        let _ = LocalFree(raw.cast());
+    }
+    result
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
@@ -5893,16 +5978,15 @@ fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
 fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
 
-    let username = std::env::var("USERNAME")
-        .map_err(|_| "could not restrict the agent store: USERNAME is unavailable".to_string())?;
-    let principal = std::env::var("USERDOMAIN")
-        .ok()
-        .filter(|domain| !domain.is_empty() && domain != ".")
-        .map(|domain| format!(r"{domain}\{username}"))
-        .unwrap_or(username);
+    let principal = format!("*{}", current_user_sid_string()?);
+    let permission = if path.is_dir() { "(OI)(CI)F" } else { "F" };
     let output = std::process::Command::new("icacls")
         .arg(path)
-        .args(["/inheritance:r", "/grant:r", &format!("{principal}:F")])
+        .args([
+            "/inheritance:r",
+            "/grant:r",
+            &format!("{principal}:{permission}"),
+        ])
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .output()
         .map_err(|error| format!("could not run icacls for {}: {error}", path.display()))?;

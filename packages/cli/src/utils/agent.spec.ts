@@ -394,9 +394,7 @@ describe('agent credential file permissions', () => {
       if (process.platform === 'win32') {
         const listing = execFileSync('icacls', [file], { encoding: 'utf8', windowsHide: true });
         const aclLines = listing.split(/\r?\n/).filter((line) => line.includes(':('));
-        const username = process.env.USERNAME!;
-        const domain = process.env.USERDOMAIN;
-        const principal = domain && domain !== '.' ? `${domain}\\${username}` : username;
+        const principal = execFileSync('whoami', [], { encoding: 'utf8', windowsHide: true }).trim();
         expect(aclLines, listing).toHaveLength(1);
         expect(aclLines[0]!.toLocaleLowerCase()).toContain(principal.toLocaleLowerCase());
       } else {

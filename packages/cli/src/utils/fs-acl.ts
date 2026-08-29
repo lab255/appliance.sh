@@ -6,6 +6,42 @@ export interface WindowsAclOptions {
   directory?: boolean;
 }
 
+function currentWindowsSid(p: string): string {
+  const result = spawnSync('whoami', ['/user', '/fo', 'csv', '/nh'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error) throw new Error(`cannot restrict ${p}: ${result.error.message}`);
+  if (result.status !== 0) {
+    throw new Error(`cannot restrict ${p}: whoami failed: ${(result.stderr || result.stdout).trim()}`);
+  }
+
+  const row = result.stdout.trim().split(/\r?\n/, 1)[0] ?? '';
+  const fields: string[] = [];
+  let field = '';
+  let quoted = false;
+  for (let index = 0; index < row.length; index += 1) {
+    const char = row[index]!;
+    if (char === '"') {
+      if (quoted && row[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === ',' && !quoted) {
+      fields.push(field);
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+  fields.push(field);
+  const sid = fields.find((value) => /^S-\d+(?:-\d+)+$/i.test(value.trim()))?.trim();
+  if (!sid) throw new Error(`cannot restrict ${p}: whoami returned no valid user SID`);
+  return sid;
+}
+
 /**
  * Windows analogue of chmod 0600/0700: remove inherited ACEs and grant full
  * control only to the account running the CLI. Secret-file callers let errors
@@ -14,10 +50,7 @@ export interface WindowsAclOptions {
  */
 export function restrictWindowsAcl(p: string, options: WindowsAclOptions = {}): void {
   if (process.platform !== 'win32') return;
-  const username = process.env.USERNAME;
-  if (!username) throw new Error(`cannot restrict ${p}: USERNAME is unavailable`);
-  const domain = process.env.USERDOMAIN;
-  const principal = domain && domain !== '.' ? `${domain}\\${username}` : username;
+  const principal = `*${currentWindowsSid(p)}`;
   const permission = options.directory ? '(OI)(CI)F' : 'F';
   const result = spawnSync('icacls', [p, '/inheritance:r', '/grant:r', `${principal}:${permission}`], {
     encoding: 'utf8',

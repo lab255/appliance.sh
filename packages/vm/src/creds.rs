@@ -12,6 +12,8 @@
 //! Config + secrets live under the VM state dir on the host. Secret and
 //! rule files are restricted to the host user, and rules fail closed when
 //! their host-side ownership or permissions do not satisfy the trust check.
+//! This check is effective against OTHER principals only; it does NOT close a
+//! same-user guest write through WSL drvfs (tracked by the automount card).
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -169,8 +171,18 @@ fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<
 }
 
 #[cfg(windows)]
-fn verify_config_integrity(path: &Path, _file: &std::fs::File) -> anyhow::Result<()> {
-    windows_config_integrity::verify(path)
+fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+
+    let parent = path.parent().context("credential config has no parent directory")?;
+    let parent_file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(parent)
+        .with_context(|| format!("open credential config parent {}", parent.display()))?;
+    windows_config_integrity::verify(&parent_file)?;
+    windows_config_integrity::verify(file)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -182,18 +194,17 @@ fn verify_config_integrity(_path: &Path, _file: &std::fs::File) -> anyhow::Resul
 mod windows_config_integrity {
     use super::*;
     use std::ffi::c_void;
-    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::AsRawHandle;
     use std::ptr::null_mut;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, LocalFree, ERROR_SUCCESS, GENERIC_ALL, GENERIC_WRITE, HANDLE,
+        LocalFree, ERROR_SUCCESS, GENERIC_ALL, GENERIC_WRITE, HANDLE,
     };
-    use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
+    use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
     use windows_sys::Win32::Security::{
-        CreateWellKnownSid, EqualSid, GetAce, GetLengthSid, GetTokenInformation, IsValidAcl,
-        IsValidSid, ACL,
+        CreateWellKnownSid, EqualSid, GetAce, GetLengthSid, IsValidAcl, IsValidSid, ACL,
         ACE_INHERITED_OBJECT_TYPE_PRESENT, ACE_OBJECT_TYPE_PRESENT, DACL_SECURITY_INFORMATION,
-        OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE, TOKEN_QUERY,
-        TOKEN_USER, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid,
+        OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_MAX_SID_SIZE,
+        WinBuiltinAdministratorsSid, WinLocalSystemSid,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         DELETE, FILE_APPEND_DATA, FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, FILE_WRITE_EA, WRITE_DAC,
@@ -204,16 +215,6 @@ mod windows_config_integrity {
         ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_ALLOWED_COMPOUND_ACE_TYPE,
         ACCESS_ALLOWED_OBJECT_ACE_TYPE,
     };
-    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-    struct OwnedHandle(HANDLE);
-    impl Drop for OwnedHandle {
-        fn drop(&mut self) {
-            unsafe {
-                CloseHandle(self.0);
-            }
-        }
-    }
 
     struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
     impl Drop for LocalSecurityDescriptor {
@@ -226,41 +227,6 @@ mod windows_config_integrity {
 
     fn last_os_error(context: &'static str) -> anyhow::Error {
         anyhow::anyhow!("{context}: {}", std::io::Error::last_os_error())
-    }
-
-    fn current_user_sid() -> anyhow::Result<(Vec<usize>, PSID)> {
-        let mut token = null_mut();
-        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
-            return Err(last_os_error("open current process token"));
-        }
-        let token = OwnedHandle(token);
-        let mut needed = 0;
-        unsafe {
-            GetTokenInformation(token.0, TokenUser, null_mut(), 0, &mut needed);
-        }
-        if needed == 0 {
-            return Err(last_os_error("size current process token user"));
-        }
-        // usize storage gives TOKEN_USER its required pointer alignment.
-        let words = (needed as usize + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
-        let mut buffer = vec![0usize; words];
-        if unsafe {
-            GetTokenInformation(
-                token.0,
-                TokenUser,
-                buffer.as_mut_ptr().cast(),
-                needed,
-                &mut needed,
-            )
-        } == 0
-        {
-            return Err(last_os_error("read current process token user"));
-        }
-        let sid = unsafe { (*(buffer.as_ptr().cast::<TOKEN_USER>())).User.Sid };
-        if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
-            bail!("current process token has an invalid user SID");
-        }
-        Ok((buffer, sid))
     }
 
     fn well_known_sid(kind: i32) -> anyhow::Result<Vec<u8>> {
@@ -303,14 +269,13 @@ mod windows_config_integrity {
     /// Inspect the binary security descriptor directly. This deliberately
     /// avoids `icacls` output parsing, whose account names and prose are
     /// localized and therefore unsuitable for a fail-closed trust check.
-    pub(super) fn verify(path: &Path) -> anyhow::Result<()> {
-        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    pub(super) fn verify(file: &std::fs::File) -> anyhow::Result<()> {
         let mut owner: PSID = null_mut();
         let mut dacl: *mut ACL = null_mut();
         let mut descriptor: PSECURITY_DESCRIPTOR = null_mut();
         let status = unsafe {
-            GetNamedSecurityInfoW(
-                wide.as_ptr(),
+            GetSecurityInfo(
+                file.as_raw_handle() as HANDLE,
                 SE_FILE_OBJECT,
                 OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
                 &mut owner,
@@ -331,8 +296,8 @@ mod windows_config_integrity {
             bail!("credential config owner or DACL is missing");
         }
 
-        let (_token_buffer, current_sid) = current_user_sid()?;
-        if unsafe { EqualSid(owner, current_sid) } == 0 {
+        let current_sid = crate::fs_acl::current_user_sid()?;
+        if unsafe { EqualSid(owner, current_sid.as_psid()) } == 0 {
             bail!("credential config is not owned by the current user");
         }
         let system = well_known_sid(WinLocalSystemSid)?;
@@ -437,11 +402,22 @@ fn save_secrets(name: &str, map: &SecretMap) -> anyhow::Result<()> {
     let path = secrets_path(name);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
+        crate::fs_acl::restrict_to_current_user(parent)?;
     }
-    std::fs::write(&path, serde_json::to_string_pretty(map)?)?;
-    if let Err(error) = crate::fs_acl::restrict_to_current_user(&path) {
-        let _ = std::fs::remove_file(&path);
+    let tmp = path.with_file_name(format!(
+        "{}.tmp",
+        path.file_name()
+            .context("egress secrets path has no file name")?
+            .to_string_lossy()
+    ));
+    std::fs::write(&tmp, serde_json::to_string_pretty(map)?)?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(&tmp) {
+        let _ = std::fs::remove_file(&tmp);
         return Err(error);
+    }
+    if let Err(error) = std::fs::rename(&tmp, &path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(error.into());
     }
     Ok(())
 }
@@ -785,6 +761,22 @@ mod tests {
         assert_eq!(load_config_path(&file).rules.len(), 1);
 
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(load_config_path(&file).rules.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_config_integrity_refuses_world_writable_parent() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = integrity_test_path("unix-bad-parent");
+        std::fs::create_dir(&dir).unwrap();
+        let file = dir.join("egress-credentials.json");
+        std::fs::write(&file, serde_json::to_vec(&integrity_test_config()).unwrap()).unwrap();
+        crate::fs_acl::restrict_to_current_user(&file).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+
         assert!(load_config_path(&file).rules.is_empty());
         std::fs::remove_dir_all(dir).unwrap();
     }
