@@ -84,6 +84,8 @@ export function EgressPanel({
   }, [events]);
 
   const enforced = policy?.boundary ? policy.boundary === 'enforced' : !!policy?.enforced;
+  const wsl = policy?.enforcement?.backend === 'wsl';
+  const wslMode = policy?.wslMode ?? 'strict';
   const boundaryLabel = enforced ? 'enforced (netstack)' : 'cooperative (in-guest proxy)';
   // For a Netstack VM the effective `allow` merges the baked allowlist with
   // the operator's rules; partition it back so the UI shows what's inherited
@@ -168,11 +170,43 @@ export function EgressPanel({
             title="Internet access"
             description={`${deniedCount} blocked destination${deniedCount === 1 ? '' : 's'} in recent traffic`}
           >
-            <Banner tone={enforced ? 'info' : 'warning'} title={enforced ? 'Protection enforced' : 'Monitoring only'}>
-              {enforced
-                ? 'The Sandbox can reach only approved services. Block rules take priority.'
-                : 'Rules are applied through a proxy, but software inside the Sandbox may bypass them.'}
-            </Banner>
+            {wsl ? (
+              <Banner
+                tone={wslMode === 'strict' ? 'info' : 'warning'}
+                title={wslMode === 'strict' ? 'WSL strict mode' : 'Cooperative proxy — bypassable'}
+              >
+                {wslMode === 'strict'
+                  ? 'Runtime apps that request egress grants are refused. Apps without egress grants may run, and their outbound traffic is dropped.'
+                  : 'Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are unioned across apps in this VM.'}
+              </Banner>
+            ) : (
+              <Banner tone={enforced ? 'info' : 'warning'} title={enforced ? 'Protection enforced' : 'Monitoring only'}>
+                {enforced
+                  ? 'The Sandbox can reach only approved services. Block rules take priority.'
+                  : 'Rules are applied through a proxy, but software inside the Sandbox may bypass them.'}
+              </Banner>
+            )}
+            {wsl ? (
+              <div className="mt-3" role="radiogroup" aria-label="WSL Runtime egress mode">
+                <div className="mb-2 text-xs font-medium">Runtime egress mode</div>
+                <div className="flex flex-wrap gap-2">
+                  {(['strict', 'cooperative'] as const).map((mode) => (
+                    <Button
+                      key={mode}
+                      type="button"
+                      size="sm"
+                      variant={wslMode === mode ? 'default' : 'outline'}
+                      role="radio"
+                      aria-checked={wslMode === mode}
+                      disabled={busy}
+                      onClick={() => wslMode !== mode && void act(() => egress.setWslMode(mode))}
+                    >
+                      {mode === 'strict' ? 'Strict' : 'Cooperative'}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <details className="mt-3">
               <summary className="cursor-pointer text-xs font-medium text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
                 Technical details

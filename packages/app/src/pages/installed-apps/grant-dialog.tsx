@@ -1,22 +1,31 @@
 import * as React from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
 import type { EntitlementGrantPrompt } from '@/lib/host';
 
 export function GrantDialog({
   prompt,
   busy = false,
+  platform,
+  wslMode = 'strict',
   onCancel,
   onGrant,
 }: {
   prompt: EntitlementGrantPrompt;
   busy?: boolean;
+  platform?: 'macos' | 'windows' | 'linux';
+  wslMode?: 'strict' | 'cooperative';
   onCancel: () => void;
   onGrant: (grantIds: string[]) => void;
 }) {
   const required = React.useMemo(() => new Set(prompt.requiredGrantIds), [prompt.requiredGrantIds]);
   const requiredGrants = prompt.grants.filter((grant) => required.has(grant.id));
   const mounts = prompt.grants.filter((grant) => grant.control === 'mount' && !required.has(grant.id));
+  const wslEgressWarning =
+    platform === 'windows' &&
+    wslMode === 'cooperative' &&
+    prompt.grants.some((grant) => grant.control === 'egress-host');
   const [selected, setSelected] = React.useState(() => new Set(prompt.grants.map((grant) => grant.id)));
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const dialogRef = React.useRef<HTMLDivElement>(null);
@@ -89,6 +98,12 @@ export function GrantDialog({
         </div>
 
         <div className="mt-4 space-y-4">
+          {wslEgressWarning ? (
+            <Banner tone="warning" title="WSL cooperative mode is bypassable">
+              Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP, raw IP, or their own DNS. Grants are
+              unioned across apps in this VM.
+            </Banner>
+          ) : null}
           {requiredGrants.length ? (
             <section aria-labelledby="grant-required-heading">
               <h3 id="grant-required-heading" className="mb-2 text-xs font-semibold tracking-wide uppercase">

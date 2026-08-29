@@ -179,6 +179,8 @@ describe('Installed Apps mock scenarios', () => {
   it('renders an accessible grant dialog with grouped required controls and selectable mounts', () => {
     const html = renderToStaticMarkup(
       <GrantDialog
+        platform="windows"
+        wslMode="cooperative"
         prompt={{
           appId: 'notes-sync',
           version: '2.4.0',
@@ -224,5 +226,6 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('id="grant-mount:data"');
     expect(html).not.toContain('disabled=""');
     expect(html).toContain('Grant and install');
+    expect(html).toContain('WSL cooperative mode is bypassable');
   });
 });
