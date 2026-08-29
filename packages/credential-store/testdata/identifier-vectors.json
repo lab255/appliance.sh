@@ -1,0 +1,12 @@
+[
+  { "input": "default", "encoded": "default" },
+  { "input": ".hidden", "encoded": "%2Ehidden" },
+  { "input": "two words", "encoded": "two%20words" },
+  { "input": "snowman-☃", "encoded": "snowman-%E2%98%83" },
+  { "input": "line\nbreak\tend", "encoded": "line%0Abreak%09end" },
+  { "input": "", "encoded": "id-e3b0c44298fc" },
+  {
+    "input": "a profile name that is deliberately much longer than sixty-four bytes and must be hashed",
+    "encoded": "a%20profile%20name%20that%20is%20deliberately%20muc-e9cca39ca8de"
+  }
+]

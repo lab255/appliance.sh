@@ -181,7 +181,7 @@ fn validate_entitlement_anchor(value: &[u8]) -> Result<(), StoreError> {
     let parsed: serde_json::Value = serde_json::from_slice(value)
         .map_err(|_| StoreError::Malformed("entitlement anchor is not valid JSON".to_owned()))?;
     let sequence = parsed.get("sequence").and_then(|value| {
-        value.as_u64().or_else(|| {
+        value.as_u64().filter(|number| *number >= 1).or_else(|| {
             value.as_f64().and_then(|number| {
                 (number.fract() == 0.0 && (1.0..=MAX_SAFE_INTEGER as f64).contains(&number))
                     .then_some(number as u64)

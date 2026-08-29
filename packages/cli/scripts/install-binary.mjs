@@ -120,27 +120,31 @@ function retryOptions() {
 }
 
 async function installCredentialHelper({ triple, version }) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'credential-helper-checksums.json'), 'utf-8'));
-  const expectedDigest = expectedCredentialHelperDigest(manifest, triple);
-  const helperAsset = credentialHelperAssetName(triple);
-  const helperUrl = `https://github.com/lab255/appliance.sh/releases/download/v${version}/${helperAsset}`;
   const destination = credentialHelperInstallPath(pkgDir, process.platform);
   const candidate = `${destination}.verifying.${process.pid}`;
 
   fs.rmSync(candidate, { force: true });
   try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'credential-helper-checksums.json'), 'utf-8'));
+    const expectedDigest = expectedCredentialHelperDigest(manifest, triple);
+    const helperAsset = credentialHelperAssetName(triple);
+    const helperUrl = `https://github.com/lab255/appliance.sh/releases/download/v${version}/${helperAsset}`;
     await downloadWithRetry(helperUrl, candidate, retryOptions());
     verifyDownloadedSha256(candidate, expectedDigest);
     // The candidate is verified before the canonical helper is replaced. On
     // any later failure, remove both paths so install remains fail-closed.
     fs.rmSync(destination, { force: true });
     fs.renameSync(candidate, destination);
+    console.log(`appliance-cli: installed ${helperAsset} (sha256 ${expectedDigest}) at ${destination}`);
   } catch (error) {
     fs.rmSync(candidate, { force: true });
     fs.rmSync(destination, { force: true });
-    throw error;
+    console.warn(
+      `appliance-cli: credential helper is not yet available (${error.message ?? error}); ` +
+        'continuing without it. Credential operations will fail until the helper is installed.'
+    );
+    return;
   }
-  console.log(`appliance-cli: installed ${helperAsset} (sha256 ${expectedDigest}) at ${destination}`);
 }
 
 async function downloadWithRetry(srcUrl, dest, opts) {

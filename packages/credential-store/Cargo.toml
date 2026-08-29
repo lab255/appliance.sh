@@ -15,6 +15,7 @@ keyring = ["dep:base64", "dep:keyring"]
 [dependencies]
 base64 = { version = "0.22", optional = true }
 keyring = { version = "3.6.3", default-features = false, features = ["apple-native", "windows-native"], optional = true }
+sha2 = "0.10"
 thiserror = "2"
 
 [target.'cfg(windows)'.dependencies]

@@ -3,7 +3,21 @@
 //! Store values are opaque bytes. [`StoreKey`] deliberately exposes only the
 //! credential classes Appliance owns, and every caller-supplied identifier is
 //! validated before it can become an OS-store account or filesystem component.
+//!
+//! # Card-2 caller contract
+//!
+//! Callers must pass every free-form profile, provider, or VM name through
+//! [`encode_identifier`] at each credential-store boundary. Desktop-managed
+//! cluster accounts (`managed === "desktop"`) are keyed by cluster UUID;
+//! every other cluster account is keyed by profile name.
+//!
+//! Entitlement values use wire formats defined by this crate contract, rather
+//! than formats discovered from existing storage:
+//!
+//! - key: `ed25519:<b64url-32>` (unpadded base64url for exactly 32 bytes)
+//! - anchor: `{sequence, headHash:"sha256:<64hex>"}`, where `sequence >= 1`
 
+use sha2::{Digest, Sha256};
 use std::fmt;
 
 #[cfg(feature = "file")]
@@ -17,6 +31,47 @@ pub use file::AclFileStore;
 pub use keyring_store::KeyringStore;
 
 pub const MAX_IDENTIFIER_LEN: usize = 64;
+const HASH_SUFFIX_HEX_LEN: usize = 12;
+
+/// Encode a free-form credential identifier into the store allowlist.
+///
+/// UTF-8 bytes outside `[A-Za-z0-9._-]` are percent-encoded. The first byte is
+/// restricted to alphanumeric, so a leading `.`, `_`, or `-` is encoded too.
+/// Values longer than 64 bytes retain complete encoding tokens in their prefix
+/// and append a stable 12-hex SHA-256 suffix. Empty input receives the same
+/// hashed form so the result is always a valid [`StoreIdentifier`].
+pub fn encode_identifier(value: &str) -> String {
+    let mut tokens = Vec::new();
+    for (index, byte) in value.as_bytes().iter().copied().enumerate() {
+        let allowed = byte.is_ascii_alphanumeric()
+            || (index > 0 && matches!(byte, b'.' | b'_' | b'-'));
+        if allowed {
+            tokens.push(char::from(byte).to_string());
+        } else {
+            tokens.push(format!("%{byte:02X}"));
+        }
+    }
+
+    let encoded = tokens.concat();
+    if !encoded.is_empty() && encoded.len() <= MAX_IDENTIFIER_LEN {
+        return encoded;
+    }
+
+    let digest = format!("{:x}", Sha256::digest(value.as_bytes()));
+    let suffix = format!("-{}", &digest[..HASH_SUFFIX_HEX_LEN]);
+    let prefix_budget = MAX_IDENTIFIER_LEN - suffix.len();
+    let mut prefix = String::new();
+    for token in tokens {
+        if prefix.len() + token.len() > prefix_budget {
+            break;
+        }
+        prefix.push_str(&token);
+    }
+    if prefix.is_empty() {
+        prefix.push_str("id");
+    }
+    format!("{prefix}{suffix}")
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StoreIdentifier(String);
@@ -24,14 +79,7 @@ pub struct StoreIdentifier(String);
 impl StoreIdentifier {
     fn new(kind: &'static str, value: impl Into<String>) -> Result<Self, StoreError> {
         let value = value.into();
-        let valid = value
-            .as_bytes()
-            .first()
-            .is_some_and(u8::is_ascii_alphanumeric)
-            && value.len() <= MAX_IDENTIFIER_LEN
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'));
+        let valid = is_valid_identifier(&value);
         if !valid {
             return Err(StoreError::InvalidIdentifier {
                 kind,
@@ -44,6 +92,36 @@ impl StoreIdentifier {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+fn is_valid_identifier(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() || bytes.len() > MAX_IDENTIFIER_LEN {
+        return false;
+    }
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte.is_ascii_alphanumeric() || (index > 0 && matches!(byte, b'.' | b'_' | b'-')) {
+            index += 1;
+            continue;
+        }
+        // `%XX` is the canonical boundary encoding for a byte that cannot be
+        // represented by the raw allowlist, including a leading punctuation
+        // byte. Bare, truncated, or lowercase escapes remain invalid.
+        if byte == b'%'
+            && index + 2 < bytes.len()
+            && bytes[index + 1].is_ascii_hexdigit()
+            && bytes[index + 2].is_ascii_hexdigit()
+            && !bytes[index + 1].is_ascii_lowercase()
+            && !bytes[index + 2].is_ascii_lowercase()
+        {
+            index += 3;
+            continue;
+        }
+        return false;
+    }
+    true
 }
 
 impl fmt::Display for StoreIdentifier {
@@ -140,7 +218,7 @@ pub trait CredentialStore {
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
-    #[error("invalid {kind}; expected 1..={max_len} characters, starting with an ASCII letter or digit and containing only letters, digits, '.', '_' or '-'")]
+    #[error("invalid {kind}; expected a 1..={max_len}-byte encoded identifier using ASCII letters, digits, '.', '_', '-', or canonical '%XX' escapes")]
     InvalidIdentifier { kind: &'static str, max_len: usize },
     #[error("credential store access denied: {0}")]
     Denied(String),
@@ -209,6 +287,24 @@ mod tests {
                 .canonical_name(),
             "vm-broker:main:egress-secrets.json"
         );
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct IdentifierVector {
+        input: String,
+        encoded: String,
+    }
+
+    #[test]
+    fn identifier_encoding_matches_shared_vectors_and_allowlist() {
+        let vectors: Vec<IdentifierVector> =
+            serde_json::from_str(include_str!("../testdata/identifier-vectors.json")).unwrap();
+        assert!(!vectors.is_empty());
+        for vector in vectors {
+            let encoded = encode_identifier(&vector.input);
+            assert_eq!(encoded, vector.encoded, "{:?}", vector.input);
+            assert!(StoreKey::cluster(encoded).is_ok());
+        }
     }
 
     #[derive(Debug, Deserialize)]

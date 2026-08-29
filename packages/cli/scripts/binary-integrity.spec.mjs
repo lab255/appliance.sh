@@ -73,10 +73,11 @@ describe('credential helper npm and release layouts', () => {
       'x86_64-apple-darwin',
       'x86_64-unknown-linux-gnu',
       'aarch64-unknown-linux-gnu',
-      'x86_64-pc-windows-msvc',
     ]) {
       expect(workflow).toContain(`triple: ${triple}`);
     }
+    expect(workflow).toContain('appliance-credhelper-x86_64-pc-windows-msvc.exe');
+    expect(workflow).toContain('pnpm --filter @appliance.sh/cli credhelper:digest -- --check');
     expect(workflow).toContain('"$OUT/$ASSET.sha256"');
   });
 });

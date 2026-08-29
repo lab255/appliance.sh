@@ -48,6 +48,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Setup Rust for Windows credential helper
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache credential-helper Cargo inputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/credhelper
+
+      - name: Install pinned Windows cross-builder
+        run: cargo install cargo-xwin --version 0.23.1 --locked
+
+      # TODO(AP-202): Authenticode-sign the Windows helper before upload.
+      # Until then, the baked SHA-256 is the release trust boundary.
+      - name: Build + verify Windows credential helper
+        env:
+          APPLIANCE_CREDHELPER_CACHE_DIR: ${{ runner.temp }}/appliance-credhelper-digest
+        run: pnpm --filter @appliance.sh/cli credhelper:digest -- --check
+
+      - name: Stage Windows credential helper
+        run: |
+          set -euo pipefail
+          ASSET=appliance-credhelper-x86_64-pc-windows-msvc.exe
+          SOURCE=packages/credhelper/target/x86_64-pc-windows-msvc/release/appliance-credhelper.exe
+          mkdir -p packages/cli/dist
+          cp "$SOURCE" "packages/cli/dist/$ASSET"
+          DIGEST=$(sha256sum "packages/cli/dist/$ASSET" | cut -d ' ' -f 1)
+          printf '%s  %s\n' "$DIGEST" "$ASSET" > "packages/cli/dist/$ASSET.sha256"
+
       # Build the CLI and its workspace deps in topological order straight
       # from the nx dependency graph (sdk → infra → bootstrap → helper →
       # cli) so every workspace import resolves to fresh dist at compile
@@ -126,6 +156,8 @@ jobs:
             appliance-x86_64-unknown-linux-gnu
             appliance-aarch64-unknown-linux-gnu
             appliance-x86_64-pc-windows-msvc.exe
+            appliance-credhelper-x86_64-pc-windows-msvc.exe
+            appliance-credhelper-x86_64-pc-windows-msvc.exe.sha256
           )
           # `--clobber` overwrites pre-existing assets so a re-run of
           # this workflow (e.g. fixing a build issue) updates the
@@ -167,12 +199,6 @@ jobs:
           - triple: aarch64-unknown-linux-gnu
             runs_on: ubuntu-24.04-arm
             extension: ''
-          - triple: x86_64-pc-windows-msvc
-            # The npm package contains this asset's digest before the
-            # downstream build runs. Use the pinned, reproducible cross-build
-            # recipe below and guard its output against that baked digest.
-            runs_on: ubuntu-latest
-            extension: '.exe'
     runs-on: ${{ matrix.runs_on }}
     steps:
       - name: Checkout
@@ -189,27 +215,10 @@ jobs:
           workspaces: packages/credhelper
 
       - name: Build credential helper (native target)
-        if: matrix.triple != 'x86_64-pc-windows-msvc'
         run: >-
           cargo build --locked --release
           --manifest-path packages/credhelper/Cargo.toml
           --target ${{ matrix.triple }}
-
-      - name: Install pinned Windows cross-builder
-        if: matrix.triple == 'x86_64-pc-windows-msvc'
-        run: cargo install cargo-xwin --version 0.23.1 --locked
-
-      - name: Build + normalize credential helper (Windows)
-        if: matrix.triple == 'x86_64-pc-windows-msvc'
-        env:
-          RUSTFLAGS: '-Clink-arg=/timestamp:0'
-          XWIN_MSVC_SYSROOT_DOWNLOAD_URL: https://github.com/trcrsired/windows-msvc-sysroot/releases/download/2026-08-07/windows-msvc-sysroot.tar.xz
-        run: |
-          cargo xwin build --locked --release --cross-compiler clang --xwin-version 17 \
-            --manifest-path packages/credhelper/Cargo.toml \
-            --target x86_64-pc-windows-msvc
-          node packages/cli/scripts/normalize-credential-helper-pe.mjs \
-            packages/credhelper/target/x86_64-pc-windows-msvc/release/appliance-credhelper.exe
 
       - name: Stage binary + SHA-256
         id: stage
@@ -228,16 +237,6 @@ jobs:
             DIGEST=$(sha256sum "$OUT/$ASSET" | cut -d ' ' -f 1)
           else
             DIGEST=$(shasum -a 256 "$OUT/$ASSET" | cut -d ' ' -f 1)
-          fi
-          if [ "$TRIPLE" = "x86_64-pc-windows-msvc" ]; then
-            BAKED_DIGEST=$(node --input-type=module -e \
-              "import fs from 'node:fs'; const value=JSON.parse(fs.readFileSync('packages/cli/scripts/credential-helper-checksums.json','utf8')).digests['x86_64-pc-windows-msvc']; process.stdout.write(value ?? '')")
-            if [ "$DIGEST" != "$BAKED_DIGEST" ]; then
-              echo "::error::Windows credential-helper digest drifted from the value baked into the npm package." >&2
-              echo "built: $DIGEST" >&2
-              echo "baked: $BAKED_DIGEST" >&2
-              exit 1
-            fi
           fi
           printf '%s  %s\n' "$DIGEST" "$ASSET" > "$OUT/$ASSET.sha256"
           echo "out=$OUT" >> "$GITHUB_OUTPUT"

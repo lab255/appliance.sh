@@ -29,4 +29,4 @@ export {
   waitForApiServerUrl,
 } from './api-server.js';
 export type { MintedApiKey } from './api-server.js';
-export { resolveCredHelperPath } from './credential-helper.js';
+export { encodeCredentialIdentifier, resolveCredHelperPath } from './credential-helper.js';
