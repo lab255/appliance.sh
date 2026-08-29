@@ -6,7 +6,7 @@ Everything local runs inside **one managed microVM**: a Kubernetes runtime, an i
 
 **Supported platforms:** macOS (Virtualization.framework); **Windows 11 with
 WSL2 — dev machine + App Runtime** is the supported scope, pending the
-[owner-run certification R01–R71](docs/live-test-runbook-windows.md#results-record).
+[owner-run certification R01–R72](docs/live-test-runbook-windows.md#results-record).
 Run `wsl --install` once and reboot if needed. Agent sandboxes are macOS-only
 today. Windows egress is a cooperative, bypassable proxy boundary, not a hard
 boundary; see the [Windows egress contract](docs/egress-firewall.md#windows-wsl-backend).

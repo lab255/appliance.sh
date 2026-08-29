@@ -7,9 +7,9 @@ running as a guest binary inside the VM and reads for workloads/logs served
 over HTTP (`packages/api-server/src/main.ts`, `routes/workloads/index.ts`).
 
 > **Prerequisites.** The managed VM needs a hypervisor: macOS uses
-> Virtualization.framework (nothing to install). The supported Windows scope is
-> **Windows 11 with WSL2 — dev machine + App Runtime** is the supported scope,
-> pending the [owner-run certification R01–R71](live-test-runbook-windows.md#results-record);
+> Virtualization.framework (nothing to install). **Windows 11 with WSL2 — dev
+> machine + App Runtime** is the supported scope, pending the [owner-run
+> certification R01–R72](live-test-runbook-windows.md#results-record);
 > its egress boundary is a cooperative, bypassable proxy, as documented in the
 > [Windows egress contract](egress-firewall.md#windows-wsl-backend). Agent
 > sandboxes are macOS-only today. Install WSL2 with `wsl --install`, then

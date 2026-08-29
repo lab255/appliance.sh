@@ -96,7 +96,7 @@ treating drvfs as immutable ([Windows certification](live-test-runbook-windows.m
 ### Windows 11 / WSL2 Runtime
 
 App Runtime is in the supported Windows 11 with WSL2 NAT scope, pending the
-[owner-run certification R01–R71](live-test-runbook-windows.md#results-record).
+[owner-run certification R01–R72](live-test-runbook-windows.md#results-record).
 The per-VM `wslMode` defaults to `strict`: Runtime refuses manifests with
 egress grants while networkless apps may run
 ([strict-mode tests](../packages/cli/src/appliance-runtime.spec.ts)).
