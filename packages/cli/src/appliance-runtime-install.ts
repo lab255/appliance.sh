@@ -106,7 +106,8 @@ export interface InstallBundleOptions {
 export async function installBundle(source: string, options: InstallBundleOptions = {}): Promise<InstalledApp> {
   const now = options.now ?? new Date();
   const root = options.root ?? runtimeRoot();
-  const target = currentWorkspaceTarget(options.target);
+  const entitlementHome = entitlementHomeForRuntimeRoot(root);
+  const target = currentWorkspaceTarget(options.target, entitlementHome);
   const sourceUrl = parseSourceUrl(source);
   const staging = await stageSource(source, sourceUrl, root, options.fetcher ?? fetch);
   let keepStaging = false;
@@ -171,7 +172,6 @@ export async function installBundle(source: string, options: InstallBundleOption
       if (!accepted) throw new UnknownPublisherError(unknownDetails);
     }
 
-    const entitlementHome = entitlementHomeForRuntimeRoot(root);
     const grantPrompt = entitlementGrantPrompt(verified.manifest, { home: entitlementHome, now });
     let approvedGrantIds: string[] = [];
     if (grantPrompt) {
@@ -528,7 +528,7 @@ export interface UninstallOptions {
 
 export async function uninstallInstalledApp(input: string, options: UninstallOptions = {}): Promise<InstalledApp> {
   const root = options.root ?? runtimeRoot();
-  const target = currentWorkspaceTarget(options.target);
+  const target = currentWorkspaceTarget(options.target, entitlementHomeForRuntimeRoot(root));
   const app = resolveInstalledApp(input, target, root);
   if (!app) throw new Error(`Installed app '${input}' was not found for target '${target}'.`);
   if (

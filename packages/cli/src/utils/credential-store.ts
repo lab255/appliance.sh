@@ -166,15 +166,17 @@ function helperArguments(target: StoreTarget, operation: 'get' | 'put' | 'delete
 }
 
 class WindowsBackend implements CredentialBackend {
-  private readonly helperPath: string;
+  private helperPath: string | undefined;
 
   constructor(helperPath?: string) {
-    if (helperPath) {
-      this.helperPath = helperPath;
-      return;
-    }
+    this.helperPath = helperPath;
+  }
+
+  private resolvedHelperPath(): string {
+    if (this.helperPath) return this.helperPath;
     try {
       this.helperPath = resolveCredHelperPath();
+      return this.helperPath;
     } catch (cause) {
       throw new CredentialStoreError(
         'helper-missing',
@@ -185,7 +187,8 @@ class WindowsBackend implements CredentialBackend {
   }
 
   private run(args: string[], input?: Buffer, missingIsNull = false): Buffer | null {
-    const result = spawnSync(this.helperPath, args, {
+    const helperPath = this.resolvedHelperPath();
+    const result = spawnSync(helperPath, args, {
       input,
       shell: false,
       windowsHide: true,
@@ -196,7 +199,7 @@ class WindowsBackend implements CredentialBackend {
       if (code === 'ENOENT') {
         throw new CredentialStoreError(
           'helper-missing',
-          `Windows credential helper is missing at its required sibling path: ${this.helperPath}`,
+          `Windows credential helper is missing at its required sibling path: ${helperPath}`,
           { cause: result.error }
         );
       }
@@ -294,11 +297,9 @@ function backendFor(options: BackendOptions = {}): CredentialBackend {
   const platform = options.platform ?? process.platform;
   const home = options.home ?? applianceHome();
   // The OS stores are production backends for the default appliance home only.
-  // An explicitly supplied non-default home is isolated (including on Windows)
-  // and follows the RFC's owner-only file rule on every platform.
-  const explicitNonDefaultHome =
-    options.home !== undefined && path.resolve(options.home) !== path.resolve(applianceHome());
-  if (options.forceFile || explicitNonDefaultHome || (platform !== 'darwin' && platform !== 'win32')) {
+  // Every other home is isolated and follows the owner-only file rule.
+  const nonDefaultHome = path.resolve(home) !== path.resolve(applianceHome());
+  if (options.forceFile || nonDefaultHome || (platform !== 'darwin' && platform !== 'win32')) {
     return new FileBackend(home);
   }
   if (platform === 'darwin') return new MacOSBackend();
@@ -1129,6 +1130,9 @@ export function migrateWindowsCredentialFiles(
   options: BackendOptions = {}
 ): CredentialMigrationReport {
   if ((options.platform ?? process.platform) !== 'win32') return { migrated: [], conflicts: [], missing: [] };
+  if (!fs.existsSync(paths.profilesFile) && !fs.existsSync(paths.legacyCredentialsFile)) {
+    return { migrated: [], conflicts: [], missing: [] };
+  }
   return migrateWindowsCredentialFilesWithBackend(paths, backendFor({ ...options, home: paths.home }));
 }
 

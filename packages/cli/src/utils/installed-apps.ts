@@ -8,9 +8,12 @@ import { runtimeRoot } from './runtime-registry.js';
 
 export const INSTALLED_APPS_SCHEMA = 'appliance.installed-apps/v1' as const;
 
-export function currentWorkspaceTarget(explicit?: string): string {
+export function currentWorkspaceTarget(explicit?: string, home?: string): string {
   const target =
-    explicit?.trim() || process.env.APPLIANCE_PROFILE?.trim() || readProfiles().activeProfile?.trim() || 'local';
+    explicit?.trim() ||
+    process.env.APPLIANCE_PROFILE?.trim() ||
+    readProfiles({ home }).activeProfile?.trim() ||
+    'local';
   if (!target) throw new Error('The current workspace target is empty.');
   return target;
 }

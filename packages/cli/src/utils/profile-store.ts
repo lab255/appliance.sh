@@ -70,16 +70,26 @@ interface LegacyCredentials {
   secret: string;
 }
 
-const APPLIANCE_DIR = path.join(os.homedir(), '.appliance');
-const PROFILES_PATH = path.join(APPLIANCE_DIR, 'profiles.json');
-const LEGACY_PATH = path.join(APPLIANCE_DIR, 'credentials.json');
-const LOCK_PATH = path.join(APPLIANCE_DIR, 'profiles.json.lock');
+function defaultApplianceHome(): string {
+  return path.join(os.homedir(), '.appliance');
+}
+
+function profilePaths(home = defaultApplianceHome()) {
+  return {
+    home,
+    profilesFile: path.join(home, 'profiles.json'),
+    legacyCredentialsFile: path.join(home, 'credentials.json'),
+    lockFile: path.join(home, 'profiles.json.lock'),
+  };
+}
+
+const DEFAULT_PROFILE_PATHS = profilePaths();
 
 /** Default profile name used when migrating a legacy single-credentials file. */
 export const DEFAULT_PROFILE_NAME = 'default';
 
 function ensureDir(): void {
-  ensurePrivateDirectory(APPLIANCE_DIR);
+  ensurePrivateDirectory(DEFAULT_PROFILE_PATHS.home);
 }
 
 /**
@@ -97,7 +107,7 @@ function ensureDir(): void {
  * profiles.json → credential-store without self-deadlocking.
  */
 function withProfilesLock<T>(fn: () => T): T {
-  return withProfilesFileLock(LOCK_PATH, fn);
+  return withProfilesFileLock(DEFAULT_PROFILE_PATHS.lockFile, fn);
 }
 
 function readJson<T>(p: string): T | null {
@@ -129,19 +139,20 @@ function migrateFromLegacy(legacy: LegacyCredentials): ProfilesFile {
  * otherwise falls back to the legacy credentials.json (folded in as the
  * "default" profile). Returns an empty store when neither file exists.
  */
-export function readProfiles(options: { migrateCredentials?: boolean } = {}): ProfilesFile {
+export function readProfiles(options: { migrateCredentials?: boolean; home?: string } = {}): ProfilesFile {
+  const paths = profilePaths(options.home);
   if (options.migrateCredentials !== false) {
     migrateWindowsCredentialFiles({
-      home: APPLIANCE_DIR,
-      profilesFile: PROFILES_PATH,
-      legacyCredentialsFile: LEGACY_PATH,
+      home: paths.home,
+      profilesFile: paths.profilesFile,
+      legacyCredentialsFile: paths.legacyCredentialsFile,
     });
   }
-  const parsed = readJson<ProfilesFile>(PROFILES_PATH);
+  const parsed = readJson<ProfilesFile>(paths.profilesFile);
   if (parsed && parsed.profiles) {
     return parsed;
   }
-  const legacy = readJson<LegacyCredentials>(LEGACY_PATH);
+  const legacy = readJson<LegacyCredentials>(paths.legacyCredentialsFile);
   if (legacy && legacy.apiUrl && legacy.keyId && legacy.secret) {
     return migrateFromLegacy(legacy);
   }
@@ -167,7 +178,7 @@ function atomicWriteJson(p: string, value: unknown, mode: number): void {
  */
 export function writeProfiles(file: ProfilesFile): void {
   ensureDir();
-  atomicWriteJson(PROFILES_PATH, file, 0o600);
+  atomicWriteJson(DEFAULT_PROFILE_PATHS.profilesFile, file, 0o600);
 
   const active = file.activeProfile ? file.profiles[file.activeProfile] : undefined;
   if (active) {
@@ -176,12 +187,12 @@ export function writeProfiles(file: ProfilesFile): void {
       keyId: active.keyId,
       secret: active.secret,
     };
-    atomicWriteJson(LEGACY_PATH, legacy, 0o600);
-  } else if (fs.existsSync(LEGACY_PATH)) {
+    atomicWriteJson(DEFAULT_PROFILE_PATHS.legacyCredentialsFile, legacy, 0o600);
+  } else if (fs.existsSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile)) {
     // No active profile any more — clear the legacy file so a downgraded
     // CLI doesn't keep using stale creds. Best-effort.
     try {
-      fs.unlinkSync(LEGACY_PATH);
+      fs.unlinkSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile);
     } catch {
       // ignore
     }
@@ -269,5 +280,5 @@ export function setActiveProfile(name: string): boolean {
   });
 }
 
-export const PROFILES_FILE = PROFILES_PATH;
-export const LEGACY_CREDENTIALS_FILE = LEGACY_PATH;
+export const PROFILES_FILE = DEFAULT_PROFILE_PATHS.profilesFile;
+export const LEGACY_CREDENTIALS_FILE = DEFAULT_PROFILE_PATHS.legacyCredentialsFile;
