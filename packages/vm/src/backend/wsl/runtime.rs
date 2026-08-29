@@ -132,7 +132,7 @@ struct PipeServer {
 impl PipeServer {
     fn create(pipe_name: &str, sddl: &str) -> Result<Self> {
         let descriptor = SecurityDescriptor::from_sddl(sddl)?;
-        let mut attributes = SECURITY_ATTRIBUTES {
+        let attributes = SECURITY_ATTRIBUTES {
             nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
             lpSecurityDescriptor: descriptor.0,
             bInheritHandle: 0,
@@ -147,7 +147,7 @@ impl PipeServer {
                 PIPE_BUFFER_BYTES,
                 PIPE_BUFFER_BYTES,
                 0,
-                &mut attributes,
+                &attributes,
             )
         };
         if handle == INVALID_HANDLE_VALUE {
