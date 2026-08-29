@@ -18,6 +18,11 @@ export interface RuntimeReconciliation {
   status: RuntimeSupervisorStatus | null;
 }
 
+export interface RuntimePsRow {
+  record: RuntimeRecord;
+  status: RuntimeSupervisorStatus | null;
+}
+
 export function isWarmRuntimeState(state: RuntimeState): boolean {
   return state === 'starting' || state === 'running' || state === 'degraded';
 }
@@ -50,6 +55,33 @@ export function reconcileRuntimeRecord(
     },
     status,
   };
+}
+
+/** Reconcile every registry row for `runtime ps`, retaining stopped/exited
+ * supervisor detail while pruning rows the live supervisor says are absent. */
+export function runtimePsRows(
+  records: RuntimeRecord[],
+  backend: RuntimeStatusBackend,
+  now = new Date().toISOString()
+): RuntimePsRow[] {
+  const rows: RuntimePsRow[] = [];
+  for (const record of records) {
+    const warm = isWarmRuntimeState(record.state);
+    const reconciled = reconcileRuntimeRecord(record, backend, now);
+    const status =
+      reconciled.status ??
+      (!warm && backend.poolRunning(record.poolVm) ? backend.appStatus(record.poolVm, record.appId) : null);
+    if (status?.state === 'missing') continue;
+
+    const state = runtimeState(status?.state);
+    const exitCode = numberOrUndefined(status?.exitCode);
+    const detailed =
+      state === 'exited' || state === 'failed'
+        ? { ...reconciled.record, state, ...(exitCode === undefined ? {} : { exitCode }) }
+        : reconciled.record;
+    rows.push({ record: detailed, status });
+  }
+  return rows;
 }
 
 export const engineRuntimeStatusBackend: RuntimeStatusBackend = {

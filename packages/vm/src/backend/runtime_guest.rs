@@ -89,6 +89,11 @@ const WSL_PRINCIPAL_RULES: &str = r#"table ip appliance_runtime_nat {
     iifname "r*" ip saddr 192.168.127.0/24 ip daddr __WSL_GATEWAY__ tcp dport __EGRESS_PORT__ accept
     iifname "r*" ip saddr 192.168.127.0/24 drop
   }
+  chain host_relay_input {
+    type filter hook input priority -9; policy accept;
+    iifname "eth0" ip saddr __WSL_GATEWAY__ tcp dport 22000-25839 accept
+    iifname "eth0" tcp dport 22000-25839 drop
+  }
 }
 "#;
 
@@ -118,11 +123,18 @@ pub fn runtime_principal_snat_script(
                  if ! nft list table ip appliance_runtime_nat >/dev/null 2>&1; then\n\
                    nft -f - <<'APPLIANCE_RUNTIME_NFT'\n\
                  {}APPLIANCE_RUNTIME_NFT\n\
-                 elif ! nft list chain ip appliance_runtime_nat principal_egress >/dev/null 2>&1; then\n\
-                   nft 'add chain ip appliance_runtime_nat principal_egress {{ type filter hook forward priority -9; policy accept; }}'\n\
-                   nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 ct state established,related accept\n\
-                   nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 ip daddr {gateway} tcp dport {egress_port} accept\n\
-                   nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 drop\n\
+                 else\n\
+                   if ! nft list chain ip appliance_runtime_nat principal_egress >/dev/null 2>&1; then\n\
+                     nft 'add chain ip appliance_runtime_nat principal_egress {{ type filter hook forward priority -9; policy accept; }}'\n\
+                     nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 ct state established,related accept\n\
+                     nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 ip daddr {gateway} tcp dport {egress_port} accept\n\
+                     nft add rule ip appliance_runtime_nat principal_egress iifname 'r*' ip saddr 192.168.127.0/24 drop\n\
+                   fi\n\
+                   if ! nft list chain ip appliance_runtime_nat host_relay_input >/dev/null 2>&1; then\n\
+                     nft 'add chain ip appliance_runtime_nat host_relay_input {{ type filter hook input priority -9; policy accept; }}'\n\
+                     nft add rule ip appliance_runtime_nat host_relay_input iifname eth0 ip saddr {gateway} tcp dport 22000-25839 accept\n\
+                     nft add rule ip appliance_runtime_nat host_relay_input iifname eth0 tcp dport 22000-25839 drop\n\
+                   fi\n\
                  fi\n",
                 rules
             ))
@@ -371,6 +383,13 @@ esac
             "allows must precede the drop"
         );
         assert!(rules.contains("type filter hook forward priority -9"));
+        let host = rules
+            .find("iifname \"eth0\" ip saddr 172.25.64.1 tcp dport 22000-25839 accept")
+            .expect("WSL host relay allow");
+        let sibling = rules
+            .find("iifname \"eth0\" tcp dport 22000-25839 drop")
+            .expect("sibling-distro relay drop");
+        assert!(host < sibling, "the WSL host allow must precede the relay drop");
         assert_eq!(
             runtime_principal_snat_script(RuntimeGuestBackend::VirtioFs, None, 5053).unwrap(),
             "#!/bin/sh\nset -eu\n"

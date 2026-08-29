@@ -36,7 +36,7 @@ const PIPE_BUFFER_BYTES: u32 = 16 * 1024;
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_RELAY_CONNECTIONS: usize = 64;
 
-pub fn spawn_forward_control(vm_name: String, guest_ip: Ipv4Addr) -> Result<()> {
+pub fn spawn_forward_control(vm_name: String, distro: String) -> Result<()> {
     let pipe_name = crate::runtime_forward::windows_pipe_name(&vm_name);
     let sddl = owner_only_pipe_sddl(&current_user_sid()?);
     // Create the first instance before returning so Runtime readiness never
@@ -52,9 +52,13 @@ pub fn spawn_forward_control(vm_name: String, guest_ip: Ipv4Addr) -> Result<()> 
                 serve_control_stream(file, |request| {
                     let spec = crate::store::load_spec(&vm_name)?
                         .with_context(|| format!("runtime pool '{vm_name}' does not exist"))?;
-                    table.apply(&spec, request, TargetMode::Wsl { guest_ip }, |target| {
-                        spawn_tcp_listener(request.host, target)
-                    })
+                    table.apply(
+                        &spec,
+                        request,
+                        TargetMode::Wsl,
+                        || super::current_guest_ipv4(&distro),
+                        |target| spawn_tcp_listener(request.host, target),
+                    )
                 })
             }) {
                 eprintln!("Runtime forward named pipe: {error:#}");

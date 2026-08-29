@@ -140,9 +140,11 @@ describe('runtime open reconciliation', () => {
 
   it('keeps the persisted host port when a post-restart open rebinds the app', async () => {
     const fake = fakeRuntime(false, null);
-    const result = await reconcileAndStartRuntimeOpen('journal', 'local', descriptor, false, fake.dependencies);
+    const stale = { ...descriptor, url: 'http://127.0.0.1:29999/' };
+    const result = await reconcileAndStartRuntimeOpen('journal', 'local', stale, false, fake.dependencies);
     expect(result.descriptor.hostPort).toBe(20421);
     expect(result.descriptor.url).toBe('http://127.0.0.1:20421/');
+    expect(result.descriptor.url).not.toBe(stale.url);
     expect(fake.starts).toHaveLength(1);
   });
 

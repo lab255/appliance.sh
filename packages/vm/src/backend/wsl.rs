@@ -1055,10 +1055,10 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
     crate::bringup::set(vm_dir, crate::bringup::Phase::Network, Some(guest_ip.to_string()));
 
     if spec.runtime {
-        let IpAddr::V4(guest_ip) = guest_ip else {
+        if !matches!(guest_ip, IpAddr::V4(_)) {
             bail!("WSL Runtime requires an IPv4 NAT lease");
-        };
-        runtime::spawn_forward_control(spec.name.clone(), guest_ip)?;
+        }
+        runtime::spawn_forward_control(spec.name.clone(), distro.to_string())?;
     }
 
     let bind_hint = |port: u16, what: &str| {
@@ -1187,6 +1187,21 @@ fn discover_guest_ip(distro: &str, timeout: Duration) -> Result<(IpAddr, u8)> {
         }
         std::thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// Resolve the lease at bind time so a restarted WSL VM cannot retain a
+/// listener aimed at its previous NAT address.
+fn current_guest_ipv4(distro: &str) -> Result<std::net::Ipv4Addr> {
+    let out = wsl_cmd()
+        .args(["-d", distro, "-u", "root", "--", "ip", "addr", "show", "eth0"])
+        .output()
+        .context("query current WSL guest eth0 address")?;
+    if !out.status.success() {
+        bail!("current WSL guest eth0 address is unavailable");
+    }
+    crate::network_lease::parse_inet_v4(&decode_wsl(&out.stdout))
+        .map(|(ip, _)| ip)
+        .context("current WSL guest has no IPv4 NAT lease")
 }
 
 /// The distro's default-gateway IPv4 — where the Windows host answers on

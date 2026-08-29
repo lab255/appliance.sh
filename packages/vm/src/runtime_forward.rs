@@ -40,7 +40,7 @@ pub enum TargetMode {
     Fixed { target: Ipv4Addr },
     /// WSL ignores the advisory request target and dials the current NAT lease.
     #[cfg_attr(not(windows), allow(dead_code))]
-    Wsl { guest_ip: Ipv4Addr },
+    Wsl,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,11 +120,12 @@ impl ForwardTable {
         spec: &VmSpec,
         request: ForwardRequest,
         mode: TargetMode,
+        resolve_wsl_guest: impl Fn() -> Result<Ipv4Addr>,
         start: impl FnOnce(ForwardTarget) -> Result<ListenerHandle>,
     ) -> Result<()> {
         match request.action {
             ForwardAction::Bind => {
-                let target = authorized_target(spec, request, mode)?;
+                let target = authorized_target(spec, request, mode, resolve_wsl_guest)?;
                 self.bind(request.host, target, start)
             }
             ForwardAction::Unbind => {
@@ -178,6 +179,7 @@ fn authorized_target(
     spec: &VmSpec,
     request: ForwardRequest,
     mode: TargetMode,
+    resolve_wsl_guest: impl Fn() -> Result<Ipv4Addr>,
 ) -> Result<ForwardTarget> {
     validate_request(spec, request)?;
     let published = spec
@@ -186,6 +188,7 @@ fn authorized_target(
         .find(|port| {
             port.host == request.host
                 && port.container == request.guest
+                && port.protocol == "tcp"
                 && port.runtime_target.is_some()
         })
         .with_context(|| {
@@ -207,7 +210,7 @@ fn authorized_target(
             }
             target
         }
-        TargetMode::Wsl { guest_ip } => guest_ip,
+        TargetMode::Wsl => resolve_wsl_guest().context("resolve current WSL guest lease")?,
     };
     debug_assert!(published.runtime_target.is_some());
     Ok(ForwardTarget {
@@ -347,9 +350,8 @@ mod tests {
             .apply(
                 &spec,
                 request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
-                TargetMode::Wsl {
-                    guest_ip: WSL_GUEST,
-                },
+                TargetMode::Wsl,
+                || Ok(WSL_GUEST),
                 move |target| {
                     *captured.lock().unwrap() = Some(target);
                     Ok(ListenerHandle::new(|| {}))
@@ -376,9 +378,8 @@ mod tests {
                 .apply(
                     &spec,
                     request(ForwardAction::Bind, 20_000, advisory, 22_000),
-                    TargetMode::Wsl {
-                        guest_ip: WSL_GUEST,
-                    },
+                    TargetMode::Wsl,
+                    || Ok(WSL_GUEST),
                     move |_| {
                         starts.fetch_add(1, Ordering::SeqCst);
                         Ok(ListenerHandle::new(|| {}))
@@ -391,6 +392,43 @@ mod tests {
     }
 
     #[test]
+    fn wsl_bind_fails_when_the_lease_moves_or_is_absent() {
+        let spec = runtime_spec(&[(20_000, 22_000)]);
+        let bind = request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000);
+        let mut table = ForwardTable::default();
+        table
+            .apply(
+                &spec,
+                bind,
+                TargetMode::Wsl,
+                || Ok(WSL_GUEST),
+                |_| Ok(ListenerHandle::new(|| {})),
+            )
+            .unwrap();
+        let moved = table
+            .apply(
+                &spec,
+                bind,
+                TargetMode::Wsl,
+                || Ok(Ipv4Addr::new(172, 23, 48, 12)),
+                |_| unreachable!("a moved lease must not replace the live listener"),
+            )
+            .unwrap_err();
+        assert!(moved.to_string().contains("already mapped"));
+
+        let missing = ForwardTable::default()
+            .apply(
+                &spec,
+                bind,
+                TargetMode::Wsl,
+                || bail!("guest eth0 lease is absent"),
+                |_| unreachable!("an absent lease must not start a listener"),
+            )
+            .unwrap_err();
+        assert!(missing.to_string().contains("resolve current WSL guest lease"));
+    }
+
+    #[test]
     fn collision_is_rejected() {
         let spec = runtime_spec(&[(20_000, 22_000), (20_000, 22_001)]);
         let mut table = ForwardTable::default();
@@ -398,9 +436,8 @@ mod tests {
             .apply(
                 &spec,
                 request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
-                TargetMode::Wsl {
-                    guest_ip: WSL_GUEST,
-                },
+                TargetMode::Wsl,
+                || Ok(WSL_GUEST),
                 |_| Ok(ListenerHandle::new(|| {})),
             )
             .unwrap();
@@ -408,9 +445,8 @@ mod tests {
             .apply(
                 &spec,
                 request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_001),
-                TargetMode::Wsl {
-                    guest_ip: WSL_GUEST,
-                },
+                TargetMode::Wsl,
+                || Ok(WSL_GUEST),
                 |_| Ok(ListenerHandle::new(|| {})),
             )
             .unwrap_err();
@@ -428,6 +464,7 @@ mod tests {
                 &spec,
                 request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
                 TargetMode::Fixed { target: PRINCIPAL },
+                || unreachable!("the fixed target does not resolve a WSL lease"),
                 move |_| {
                     Ok(ListenerHandle::new(move || {
                         listener_stopped.store(true, Ordering::SeqCst);
@@ -440,6 +477,7 @@ mod tests {
                 &spec,
                 request(ForwardAction::Unbind, 20_000, PRINCIPAL, 22_000),
                 TargetMode::Fixed { target: PRINCIPAL },
+                || unreachable!("unbind does not resolve a WSL lease"),
                 |_| unreachable!("unbind never starts a listener"),
             )
             .unwrap();
@@ -455,7 +493,8 @@ mod tests {
             .apply(
                 &spec,
                 request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
-                TargetMode::Wsl { guest_ip: WSL_GUEST },
+                TargetMode::Wsl,
+                || Ok(WSL_GUEST),
                 |_| Ok(ListenerHandle::new(|| {})),
             )
             .unwrap();
@@ -464,7 +503,8 @@ mod tests {
             .apply(
                 &spec,
                 request(ForwardAction::Unbind, 20_000, PRINCIPAL, 22_000),
-                TargetMode::Wsl { guest_ip: Ipv4Addr::new(172, 23, 48, 12) },
+                TargetMode::Wsl,
+                || unreachable!("unbind does not resolve a WSL lease"),
                 |_| unreachable!("unbind never starts a listener"),
             )
             .unwrap();
@@ -480,11 +520,28 @@ mod tests {
                     &spec,
                     request(ForwardAction::Bind, host, PRINCIPAL, relay),
                     TargetMode::Fixed { target: PRINCIPAL },
+                    || unreachable!("the fixed target does not resolve a WSL lease"),
                     |_| Ok(ListenerHandle::new(|| {})),
                 )
                 .unwrap_err();
             assert!(error.to_string().contains("invalid Runtime forward"));
         }
+    }
+
+    #[test]
+    fn non_tcp_published_rows_do_not_authorize_a_forward() {
+        let mut spec = runtime_spec(&[(20_000, 22_000)]);
+        spec.published[0].protocol = "udp".to_string();
+        let error = ForwardTable::default()
+            .apply(
+                &spec,
+                request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
+                TargetMode::Fixed { target: PRINCIPAL },
+                || unreachable!("the fixed target does not resolve a WSL lease"),
+                |_| Ok(ListenerHandle::new(|| {})),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("not authorized"));
     }
 
     #[test]
@@ -496,6 +553,7 @@ mod tests {
                 &spec,
                 request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
                 TargetMode::Fixed { target: PRINCIPAL },
+                || unreachable!("the fixed target does not resolve a WSL lease"),
                 |_| bail!("fake bind failure"),
             )
             .unwrap_err();
@@ -546,13 +604,10 @@ mod tests {
     }
 
     #[test]
-    fn unix_and_windows_control_transports_share_the_json_contract() {
+    fn control_stream_emits_golden_frames() {
         let request =
             b"{\"action\":\"bind\",\"host\":20000,\"target\":\"192.168.127.10\",\"guest\":22000}\n";
-        let fake_unix = fake_endpoint(request);
-        let fake_windows = fake_endpoint(request);
-        assert_eq!(fake_unix, fake_windows);
-        assert_eq!(fake_unix, b"{\"ok\":true}\n");
+        assert_eq!(fake_endpoint(request), b"{\"ok\":true}\n");
 
         let rejected =
             b"{\"action\":\"bind\",\"host\":20001,\"target\":\"192.168.127.10\",\"guest\":22000}\n";
@@ -560,5 +615,56 @@ mod tests {
             fake_endpoint(rejected),
             b"{\"ok\":false,\"message\":\"fake collision\"}\n"
         );
+    }
+
+    struct LoopbackTransport {
+        request: Vec<u8>,
+        response: io::Cursor<Vec<u8>>,
+    }
+
+    impl LoopbackTransport {
+        fn new() -> Self {
+            Self { request: Vec::new(), response: io::Cursor::new(Vec::new()) }
+        }
+    }
+
+    impl Read for LoopbackTransport {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.response.read(buf)
+        }
+    }
+
+    impl Write for LoopbackTransport {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.request.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            if self.response.get_ref().is_empty() && self.request.ends_with(b"\n") {
+                self.response = io::Cursor::new(fake_endpoint(&self.request));
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn client_and_server_control_helpers_round_trip() {
+        let request_frame = request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000);
+        let mut transport = LoopbackTransport::new();
+        send_control_request(&mut transport, request_frame).unwrap();
+        assert_eq!(
+            transport.request,
+            b"{\"action\":\"bind\",\"host\":20000,\"target\":\"192.168.127.10\",\"guest\":22000}\n"
+        );
+        assert_eq!(transport.response.get_ref(), b"{\"ok\":true}\n");
+
+        let mut rejected = LoopbackTransport::new();
+        let error = send_control_request(
+            &mut rejected,
+            request(ForwardAction::Bind, 20_001, PRINCIPAL, 22_000),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("fake collision"));
     }
 }

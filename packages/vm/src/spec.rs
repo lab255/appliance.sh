@@ -143,6 +143,10 @@ pub struct PublishedPort {
     pub host: u16,
     /// Container port inside the guest the host port forwards to.
     pub container: u16,
+    /// Runtime host forwarding is TCP-only. Explicit persistence keeps the
+    /// authorization check fail-closed if the schema later grows UDP rows.
+    #[serde(default = "tcp_protocol")]
+    pub protocol: String,
     /// Runtime-only target identity. Absent preserves the historical root
     /// guest forward; present routes to this principal's namespace `/32`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -169,9 +173,14 @@ impl PublishedPort {
         Ok(Self {
             host,
             container: guest,
+            protocol: tcp_protocol(),
             runtime_target: Some(RuntimeTarget { principal: principal.to_string(), address }),
         })
     }
+}
+
+fn tcp_protocol() -> String {
+    "tcp".to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -760,12 +769,15 @@ mod tests {
         let mut spec = VmSpec::defaults("x");
         assert!(spec.published.is_empty(), "fresh specs publish nothing");
         spec.published = vec![
-            PublishedPort { host: 20000, container: 8080, runtime_target: None },
-            PublishedPort { host: 20001, container: 5432, runtime_target: None },
+            PublishedPort { host: 20000, container: 8080, protocol: tcp_protocol(), runtime_target: None },
+            PublishedPort { host: 20001, container: 5432, protocol: tcp_protocol(), runtime_target: None },
         ];
         let json = serde_json::to_string(&spec).unwrap();
         let back: VmSpec = serde_json::from_str(&json).unwrap();
         assert_eq!(back.published, spec.published);
+        let legacy_port: PublishedPort =
+            serde_json::from_str(r#"{"host":20002,"container":3000}"#).unwrap();
+        assert_eq!(legacy_port.protocol, "tcp");
         // camelCase: the container field serializes as `container`,
         // host as `host`.
         assert!(json.contains("\"host\":20000"));

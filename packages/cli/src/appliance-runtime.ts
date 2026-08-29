@@ -50,7 +50,7 @@ import {
   readEntitlementStore,
   stampEntitlementUsage,
 } from './utils/entitlements.js';
-import { engineRuntimeStatusBackend, reconcileRuntimeRecord } from './utils/runtime-reconcile.js';
+import { engineRuntimeStatusBackend, runtimePsRows } from './utils/runtime-reconcile.js';
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
@@ -614,14 +614,11 @@ function runtimePs(args: string[]): void {
     return;
   }
   const json = args.includes('--json');
-  const kept: RuntimeRecord[] = [];
+  const rows = runtimePsRows(readRuntimeRegistry(), engineRuntimeStatusBackend);
+  const kept = rows.map((row) => row.record);
   const statuses = new Map<string, RuntimeAppStatus>();
-  for (const record of readRuntimeRegistry()) {
-    const reconciled = reconcileRuntimeRecord(record, engineRuntimeStatusBackend);
-    kept.push(reconciled.record);
-    if (reconciled.status && reconciled.status.state !== 'missing') {
-      statuses.set(record.appId, reconciled.status as RuntimeAppStatus);
-    }
+  for (const row of rows) {
+    if (row.status) statuses.set(row.record.appId, row.status as RuntimeAppStatus);
   }
   // A pool restart deliberately does not auto-start apps. Preserve their
   // allocations and report stopped until `runtime open` restarts one.

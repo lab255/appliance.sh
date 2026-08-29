@@ -38,6 +38,7 @@ pub fn spawn_forward_control(
                     TargetMode::Fixed {
                         target: crate::netstack::GUEST_IP,
                     },
+                    || unreachable!("the fixed target does not resolve a WSL lease"),
                     |target| spawn_netstack_listener(request.host, target, netstack.clone()),
                 )
             });
