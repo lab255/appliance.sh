@@ -113,8 +113,8 @@ pub struct ForwardTable {
 }
 
 impl ForwardTable {
-    /// Apply one already-decoded request. Authorization is re-evaluated from
-    /// the current persisted spec even for idempotent binds and absent unbinds.
+    /// Apply one already-decoded request. Bind authorization is re-evaluated
+    /// from the current persisted spec; a bound table row authorizes unbind.
     pub fn apply(
         &mut self,
         spec: &VmSpec,
@@ -122,10 +122,15 @@ impl ForwardTable {
         mode: TargetMode,
         start: impl FnOnce(ForwardTarget) -> Result<ListenerHandle>,
     ) -> Result<()> {
-        let target = authorized_target(spec, request, mode)?;
         match request.action {
-            ForwardAction::Bind => self.bind(request.host, target, start),
-            ForwardAction::Unbind => self.unbind(request.host, target),
+            ForwardAction::Bind => {
+                let target = authorized_target(spec, request, mode)?;
+                self.bind(request.host, target, start)
+            }
+            ForwardAction::Unbind => {
+                validate_request(spec, request)?;
+                self.unbind(request.host)
+            }
         }
     }
 
@@ -158,19 +163,7 @@ impl ForwardTable {
         Ok(())
     }
 
-    fn unbind(&mut self, host: u16, target: ForwardTarget) -> Result<()> {
-        let Some(existing) = self.bound.get(&host) else {
-            return Ok(());
-        };
-        if existing.target != target {
-            bail!(
-                "Runtime host port {host} is mapped to {}:{}, not {}:{}",
-                existing.target.address,
-                existing.target.port,
-                target.address,
-                target.port
-            );
-        }
+    fn unbind(&mut self, host: u16) -> Result<()> {
         self.bound.remove(&host);
         Ok(())
     }
@@ -186,19 +179,7 @@ fn authorized_target(
     request: ForwardRequest,
     mode: TargetMode,
 ) -> Result<ForwardTarget> {
-    if !(MIN_RUNTIME_HOST_PORT..=MAX_RUNTIME_HOST_PORT).contains(&request.host)
-        || request.guest == 0
-    {
-        bail!(
-            "invalid Runtime forward {}->{}:{}",
-            request.host,
-            request.target,
-            request.guest
-        );
-    }
-    if !spec.runtime {
-        bail!("VM '{}' is not an Appliance Runtime pool", spec.name);
-    }
+    validate_request(spec, request)?;
     let published = spec
         .published
         .iter()
@@ -213,10 +194,6 @@ fn authorized_target(
                 request.host, request.guest
             )
         })?;
-    let _principal = published
-        .runtime_target
-        .as_ref()
-        .expect("filtered Runtime target");
     let address = match mode {
         TargetMode::Fixed { target } => {
             if target != request.target {
@@ -232,10 +209,28 @@ fn authorized_target(
         }
         TargetMode::Wsl { guest_ip } => guest_ip,
     };
+    debug_assert!(published.runtime_target.is_some());
     Ok(ForwardTarget {
         address,
         port: request.guest,
     })
+}
+
+fn validate_request(spec: &VmSpec, request: ForwardRequest) -> Result<()> {
+    if !(MIN_RUNTIME_HOST_PORT..=MAX_RUNTIME_HOST_PORT).contains(&request.host)
+        || request.guest == 0
+    {
+        bail!(
+            "invalid Runtime forward {}->{}:{}",
+            request.host,
+            request.target,
+            request.guest
+        );
+    }
+    if !spec.runtime {
+        bail!("VM '{}' is not an Appliance Runtime pool", spec.name);
+    }
+    Ok(())
 }
 
 /// Serve one newline-delimited request on either control transport. A handler
@@ -450,6 +445,30 @@ mod tests {
             .unwrap();
         assert_eq!(table.len(), 0);
         assert!(stopped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn unbind_survives_removed_spec_row_and_changed_wsl_lease() {
+        let mut spec = runtime_spec(&[(20_000, 22_000)]);
+        let mut table = ForwardTable::default();
+        table
+            .apply(
+                &spec,
+                request(ForwardAction::Bind, 20_000, PRINCIPAL, 22_000),
+                TargetMode::Wsl { guest_ip: WSL_GUEST },
+                |_| Ok(ListenerHandle::new(|| {})),
+            )
+            .unwrap();
+        spec.published.clear();
+        table
+            .apply(
+                &spec,
+                request(ForwardAction::Unbind, 20_000, PRINCIPAL, 22_000),
+                TargetMode::Wsl { guest_ip: Ipv4Addr::new(172, 23, 48, 12) },
+                |_| unreachable!("unbind never starts a listener"),
+            )
+            .unwrap();
+        assert_eq!(table.len(), 0);
     }
 
     #[test]

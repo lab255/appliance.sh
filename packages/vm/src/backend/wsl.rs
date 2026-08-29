@@ -25,9 +25,9 @@
 //! errors) as UTF-16LE, while output of Linux commands passes through
 //! as the guest wrote it (UTF-8). `decode_wsl` sniffs per call.
 
-use super::runtime_guest::{shell_squote, strip_verbatim};
 mod runtime;
 
+use super::runtime_guest::{shell_squote, strip_verbatim};
 use super::VmBackend;
 use crate::spec::{VmPaths, VmSpec};
 use anyhow::{bail, Context, Result};

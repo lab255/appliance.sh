@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, LocalFree, ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
@@ -22,15 +22,19 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY,
     TOKEN_USER,
 };
-use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
+use windows_sys::Win32::Storage::FileSystem::{
+    FlushFileBuffers, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX,
+};
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
-    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
 };
 use windows_sys::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION;
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 const PIPE_BUFFER_BYTES: u32 = 16 * 1024;
+const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_RELAY_CONNECTIONS: usize = 64;
 
 pub fn spawn_forward_control(vm_name: String, guest_ip: Ipv4Addr) -> Result<()> {
     let pipe_name = crate::runtime_forward::windows_pipe_name(&vm_name);
@@ -41,9 +45,11 @@ pub fn spawn_forward_control(vm_name: String, guest_ip: Ipv4Addr) -> Result<()> 
     std::thread::spawn(move || {
         let mut table = ForwardTable::default();
         let mut server = first;
+        // Reuse the first-instance handle forever. Disconnecting a client
+        // resets the instance; dropping this handle would release the name.
         loop {
-            if let Err(error) = server.connect().and_then(|()| {
-                serve_control_stream(&mut server.file, |request| {
+            if let Err(error) = server.serve(|file| {
+                serve_control_stream(file, |request| {
                     let spec = crate::store::load_spec(&vm_name)?
                         .with_context(|| format!("runtime pool '{vm_name}' does not exist"))?;
                     table.apply(&spec, request, TargetMode::Wsl { guest_ip }, |target| {
@@ -52,15 +58,6 @@ pub fn spawn_forward_control(vm_name: String, guest_ip: Ipv4Addr) -> Result<()> 
                 })
             }) {
                 eprintln!("Runtime forward named pipe: {error:#}");
-            }
-            server.disconnect();
-            drop(server);
-            match PipeServer::create(&pipe_name, &sddl) {
-                Ok(next) => server = next,
-                Err(error) => {
-                    eprintln!("Runtime forward named pipe stopped: {error:#}");
-                    break;
-                }
             }
         }
     });
@@ -74,23 +71,36 @@ fn spawn_tcp_listener(host: u16, target: ForwardTarget) -> Result<ListenerHandle
             target.address, target.port
         )
     })?;
-    listener.set_nonblocking(true)?;
     let running = Arc::new(AtomicBool::new(true));
+    let active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let thread_running = running.clone();
+    let thread_active = active.clone();
     let thread = std::thread::spawn(move || {
         let upstream = SocketAddr::from((target.address, target.port));
         while thread_running.load(Ordering::Acquire) {
             match listener.accept() {
                 Ok((stream, _)) => {
+                    if !thread_running.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let _ = stream.set_nonblocking(false);
+                    if thread_active
+                        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                            (count < MAX_RELAY_CONNECTIONS).then_some(count + 1)
+                        })
+                        .is_err()
+                    {
+                        drop(stream);
+                        continue;
+                    }
+                    let connection = ActiveConnection(thread_active.clone());
                     std::thread::spawn(move || {
+                        let _connection = connection;
                         match TcpStream::connect_timeout(&upstream, Duration::from_secs(5)) {
                             Ok(guest) => crate::net::pump(stream, guest),
                             Err(_) => drop(stream),
                         }
                     });
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(25));
                 }
                 Err(_) => break,
             }
@@ -98,8 +108,17 @@ fn spawn_tcp_listener(host: u16, target: ForwardTarget) -> Result<ListenerHandle
     });
     Ok(ListenerHandle::new(move || {
         running.store(false, Ordering::Release);
+        let _ = TcpStream::connect((Ipv4Addr::LOCALHOST, host));
         let _ = thread.join();
     }))
+}
+
+struct ActiveConnection(Arc<std::sync::atomic::AtomicUsize>);
+
+impl Drop for ActiveConnection {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 struct PipeServer {
@@ -120,7 +139,7 @@ impl PipeServer {
                 wide.as_ptr(),
                 PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                1,
+                PIPE_UNLIMITED_INSTANCES,
                 PIPE_BUFFER_BYTES,
                 PIPE_BUFFER_BYTES,
                 0,
@@ -143,6 +162,39 @@ impl PipeServer {
                 .context("accept Runtime named-pipe client");
         }
         Ok(())
+    }
+
+    fn serve(&mut self, handle: impl FnOnce(&mut File) -> Result<()>) -> Result<()> {
+        self.connect()?;
+        // Named pipes have no Rust read deadline. A blocked ReadFile or
+        // FlushFileBuffers is released by disconnecting this same instance.
+        let completion = Arc::new((Mutex::new(false), Condvar::new()));
+        let watchdog_completion = completion.clone();
+        let raw_handle = self.file.as_raw_handle() as usize;
+        let watchdog = std::thread::spawn(move || {
+            let (lock, wake) = &*watchdog_completion;
+            let completed = lock.lock().expect("Runtime pipe watchdog lock");
+            let (completed, timeout) = wake
+                .wait_timeout_while(completed, CONTROL_TIMEOUT, |completed| !*completed)
+                .expect("Runtime pipe watchdog wait");
+            if timeout.timed_out() && !*completed {
+                unsafe { DisconnectNamedPipe(raw_handle as HANDLE); }
+            }
+        });
+
+        let outcome = handle(&mut self.file).and_then(|()| {
+            if unsafe { FlushFileBuffers(self.file.as_raw_handle()) } == 0 {
+                Err(std::io::Error::last_os_error()).context("flush Runtime named-pipe response")
+            } else {
+                Ok(())
+            }
+        });
+        let (lock, wake) = &*completion;
+        *lock.lock().expect("Runtime pipe completion lock") = true;
+        wake.notify_one();
+        let _ = watchdog.join();
+        self.disconnect();
+        outcome
     }
 
     fn disconnect(&mut self) {
@@ -219,15 +271,19 @@ fn current_user_sid() -> Result<String> {
         return Err(std::io::Error::last_os_error()).context("read current-user SID");
     }
     let user = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast::<TOKEN_USER>()) };
+    sid_to_string(user.User.Sid)
+}
+
+fn sid_to_string(sid: *mut c_void) -> Result<String> {
     let mut string_sid = null_mut();
-    if unsafe { ConvertSidToStringSidW(user.User.Sid, &mut string_sid) } == 0 {
+    if unsafe { ConvertSidToStringSidW(sid, &mut string_sid) } == 0 {
         return Err(std::io::Error::last_os_error()).context("format current-user SID");
     }
-    let sid = wide_ptr_to_string(string_sid);
+    let formatted = wide_ptr_to_string(string_sid);
     unsafe {
         LocalFree(string_sid.cast::<c_void>());
     }
-    Ok(sid)
+    Ok(formatted)
 }
 
 fn owner_only_pipe_sddl(owner_sid: &str) -> String {
@@ -251,6 +307,12 @@ fn wide_ptr_to_string(value: *const u16) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_KERNEL_OBJECT};
+    use windows_sys::Win32::Security::{
+        EqualSid, GetAce, ACCESS_ALLOWED_ACE, ACL, DACL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PSID,
+    };
+    use windows_sys::Win32::System::SystemServices::ACCESS_ALLOWED_ACE_TYPE;
 
     #[test]
     fn named_pipe_sddl_grants_only_the_owner_sid() {
@@ -265,5 +327,39 @@ mod tests {
         assert!(!sddl.contains(";;;AU"));
         assert!(!sddl.contains(";;;BA"));
         assert!(!sddl.contains(";;;SY"));
+    }
+
+    #[test]
+    fn live_named_pipe_dacl_grants_only_the_current_user() {
+        let current_sid = current_user_sid().unwrap();
+        let name = format!(r"\\.\pipe\appliance-runtime-forward-sddl-test-{}", std::process::id());
+        let server = PipeServer::create(&name, &owner_only_pipe_sddl(&current_sid)).unwrap();
+        let mut owner: PSID = null_mut();
+        let mut dacl: *mut ACL = null_mut();
+        let mut descriptor = null_mut();
+        let status = unsafe {
+            GetSecurityInfo(
+                server.file.as_raw_handle(),
+                SE_KERNEL_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                &mut owner,
+                null_mut(),
+                &mut dacl,
+                null_mut(),
+                &mut descriptor,
+            )
+        };
+        assert_eq!(status, 0, "GetSecurityInfo failed with {status}");
+        let _descriptor = SecurityDescriptor(descriptor);
+        assert_eq!(sid_to_string(owner).unwrap(), current_sid);
+        assert!(!dacl.is_null());
+        assert_eq!(unsafe { (*dacl).AceCount }, 1);
+
+        let mut raw_ace = null_mut();
+        assert_ne!(unsafe { GetAce(dacl, 0, &mut raw_ace) }, 0);
+        let ace = unsafe { &*raw_ace.cast::<ACCESS_ALLOWED_ACE>() };
+        assert_eq!(ace.Header.AceType, ACCESS_ALLOWED_ACE_TYPE as u8);
+        let ace_sid = (&ace.SidStart as *const u32).cast_mut().cast::<c_void>();
+        assert_ne!(unsafe { EqualSid(owner, ace_sid) }, 0);
     }
 }

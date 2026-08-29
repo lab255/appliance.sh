@@ -1899,12 +1899,38 @@ fn runtime_forward_request(
     target: std::net::Ipv4Addr,
     guest: u16,
 ) -> Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::time::{Duration, Instant};
+    use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
+    use windows_sys::Win32::Storage::FileSystem::SECURITY_IDENTIFICATION;
+    use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
+
     let pipe_name = runtime_forward::windows_pipe_name(name);
-    let mut pipe = std::fs::OpenOptions::new()
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut options = std::fs::OpenOptions::new();
+    options
         .read(true)
         .write(true)
-        .open(&pipe_name)
-        .with_context(|| format!("connect Runtime forward control for '{name}'"))?;
+        .security_qos_flags(SECURITY_IDENTIFICATION);
+    let mut pipe = loop {
+        match options.open(&pipe_name) {
+            Ok(pipe) => break pipe,
+            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(error)
+                        .with_context(|| format!("connect Runtime forward control for '{name}'"));
+                }
+                let timeout_ms = remaining.as_millis().min(u128::from(u32::MAX)) as u32;
+                let wide: Vec<u16> = pipe_name.encode_utf16().chain(std::iter::once(0)).collect();
+                unsafe { WaitNamedPipeW(wide.as_ptr(), timeout_ms); }
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("connect Runtime forward control for '{name}'"));
+            }
+        }
+    };
     let request = runtime_forward::ForwardRequest::new(action, host, target, guest)?;
     runtime_forward::send_control_request(&mut pipe, request)
 }
