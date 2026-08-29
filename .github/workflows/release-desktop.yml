@@ -436,9 +436,16 @@ jobs:
           INSTALL_DIR: ${{ steps.install.outputs.install_dir }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $installedFiles = @(Get-ChildItem $env:INSTALL_DIR -File -Force -Recurse | Sort-Object FullName)
+          Write-Host 'Installed bundle files:'
+          foreach ($file in $installedFiles) {
+            $relative = [IO.Path]::GetRelativePath($env:INSTALL_DIR, $file.FullName)
+            Write-Host "$relative ($($file.Length) bytes)"
+          }
+
           $required = @(
             'appliance-desktop.exe',
-            'appliance-x86_64-pc-windows-msvc.exe',
+            'appliance.exe',
             'vm-bin\appliance-vm.exe'
           )
           foreach ($relative in $required) {
@@ -466,7 +473,7 @@ jobs:
           $desktopVersion = (Get-Content 'packages/desktop/package.json' | ConvertFrom-Json).version
           $vmManifest = Get-Content 'packages/vm/Cargo.toml' -Raw
           $vmVersion = [regex]::Match($vmManifest, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
-          $sidecarVersion = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'appliance-x86_64-pc-windows-msvc.exe')
+          $sidecarVersion = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'appliance.exe')
           $vmVersionOutput = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'vm-bin\appliance-vm.exe')
           if ($sidecarVersion -notmatch "(?m)^v?$([regex]::Escape($desktopVersion))$") {
             throw "Sidecar version '$sidecarVersion' does not match desktop package version '$desktopVersion'."
@@ -488,7 +495,7 @@ jobs:
             '#### Installed files',
             ''
           ) >> $env:GITHUB_STEP_SUMMARY
-          Get-ChildItem $env:INSTALL_DIR -File -Recurse | Sort-Object FullName | ForEach-Object {
+          $installedFiles | ForEach-Object {
             $relative = [IO.Path]::GetRelativePath($env:INSTALL_DIR, $_.FullName)
             "- ``$relative`` ($($_.Length) bytes)" >> $env:GITHUB_STEP_SUMMARY
           }
