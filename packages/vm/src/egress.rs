@@ -844,6 +844,9 @@ pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<Runtime
 pub fn issue_runtime_proxy_credential(vm: &str, principal: &str) -> Result<String> {
     let mut runtime = runtime_policy_for_principal(vm, principal)
         .with_context(|| format!("no runtime policy for {vm}/{principal}"))?;
+    if runtime.app != principal || runtime.principal != principal || runtime.service.is_some() {
+        bail!("runtime proxy credentials may only be issued to an app principal");
+    }
     let mut random = [0u8; 32];
     SystemRandom::new()
         .fill(&mut random)
@@ -1116,7 +1119,7 @@ fn render_effective_policy_for_backend_inner(
         "\n  TLS interception (mitm): {}\n",
         if persisted.mitm { "on" } else { "off" }
     ));
-    if backend == "wsl" {
+    if runtime_wsl {
         let apps = runtime_app_policy_outputs(name);
         out.push_str("\n  authenticated per-app Runtime policies:\n");
         if apps.is_empty() {
@@ -1409,7 +1412,7 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
     } else {
         // VZ's standalone front door retains its historical VM policy. Its
         // enforced per-principal path remains the netstack `PolicyContext`.
-        ProxyPolicySelection::Legacy(proxy_policy_for_backend(&ctx.name, backend))
+        ProxyPolicySelection::Legacy(load_policy(&ctx.name))
     };
 
     if let ProxyPolicySelection::Unauthorized(runtime) = &selection {
@@ -2448,6 +2451,17 @@ mod tests {
             "EFFECTIVE egress policy for 'runtime'  (boundary: cooperative (in-guest proxy))"
         ));
         assert!(!cooperative.contains("host-enforced"));
+
+        let non_runtime = render_effective_policy_for_backend_inner(
+            "dev",
+            &policy,
+            false,
+            "wsl",
+            WslMode::Cooperative,
+            false,
+        );
+        assert!(!non_runtime.contains("authenticated per-app Runtime policies:"));
+        assert!(!non_runtime.contains("no credential: denied with 407"));
     }
 
     #[test]
@@ -2774,6 +2788,43 @@ mod tests {
             assert!(revoked.proxy_credential.is_none());
             assert!(remove_runtime_policy("appliance-runtime", "journal").unwrap());
             assert!(runtime_policy_for_principal("appliance-runtime", "journal").is_none());
+        });
+    }
+
+    #[test]
+    fn app_credential_is_never_issued_to_or_selected_from_a_compound_service_principal() {
+        with_runtime_test_root("compound-proxy-credential", |_root| {
+            let app = runtime_policy("notes", Ipv4Addr::new(192, 168, 127, 10), 443);
+            save_runtime_policy(&app).unwrap();
+
+            let mut service = app.clone();
+            service.service = Some("api".into());
+            service.principal = "notes/api".into();
+            service.source = Ipv4Addr::new(192, 168, 127, 11);
+            save_runtime_policy(&service).unwrap();
+
+            let app_credential = issue_runtime_proxy_credential("appliance-runtime", "notes").unwrap();
+            assert!(
+                issue_runtime_proxy_credential("appliance-runtime", "notes/api")
+                    .unwrap_err()
+                    .to_string()
+                    .contains("only be issued to an app principal")
+            );
+            assert!(
+                runtime_policy_for_principal("appliance-runtime", "notes/api")
+                    .unwrap()
+                    .proxy_credential
+                    .is_none()
+            );
+            assert!(matches!(
+                select_runtime_proxy_policy(
+                    "appliance-runtime",
+                    Some(&basic_proxy_auth("notes/api", &app_credential)),
+                    WslMode::Cooperative,
+                    &all_runtime_policies(),
+                ),
+                ProxyPolicySelection::Unauthorized(_)
+            ));
         });
     }
 

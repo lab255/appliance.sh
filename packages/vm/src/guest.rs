@@ -1311,6 +1311,7 @@ set -g destroy-unattached off
 /// /persist/runtime/apps/<app>.
 pub(crate) const RUNTIME_SUPERVISOR: &str = r#"#!/bin/sh
 set -eu
+umask 077
 REQ=${1:-'{}'}
 ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
 APP=$(printf '%s' "$REQ" | jq -r '.appId // .plan.appId // empty')
@@ -1636,9 +1637,17 @@ else
   : > "$STATE/args.txt"
 fi
 : > "$STATE/ctr.env"
-chmod 0600 "$STATE/ctr.env"
+CR=$(printf '\rx'); CR=${CR%x}
+LF=$(printf '\nx'); LF=${LF%x}
 while IFS="$(printf '\t')" read -r KEY VALUE; do
-  DECODED=$(printf '%s' "$VALUE" | base64 -d)
+  case "$KEY" in HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy) ;; *) continue;; esac
+  DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+  case "$DECODED" in *"$CR"*|*"$LF"*)
+    echo '{"state":"failed","message":"proxy environment values must not contain newlines"}'
+    cleanup_resources
+    exit 2
+    ;;
+  esac
   printf '%s=%s\n' "$KEY" "$DECODED" >> "$STATE/ctr.env"
 done < "$STATE/env.tsv"
 # The lifecycle RPC uses a one-shot shell transport. Ignore its closing SIGHUP
@@ -1681,7 +1690,12 @@ nohup setsid sh -c '
     --cap-drop CAP_SYS_CHROOT \
     --cap-drop CAP_KILL \
     --cap-drop CAP_AUDIT_WRITE
-  set -- "$@" --env-file "$STATE/ctr.env"
+  while IFS="$(printf '\t')" read -r KEY VALUE; do
+    case "$KEY" in HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy) continue;; esac
+    DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+    set -- "$@" --env "$KEY=$DECODED"
+  done < "$STATE/env.tsv"
+  [ ! -s "$STATE/ctr.env" ] || set -- "$@" --env-file "$STATE/ctr.env"
   if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ -f "$EGRESS_CA" ]; then
     set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
   fi
@@ -1745,6 +1759,7 @@ echo '{"state":"running"}'
 /// The v1 single-workload script above remains unchanged after dispatch.
 pub(crate) const RUNTIME_COMPOUND_SUPERVISOR: &str = r#"#!/bin/sh
 set -eu
+umask 077
 REQ=${1:-'{}'}
 ACTION=$(printf '%s' "$REQ" | jq -r '.action // empty')
 APP=$(printf '%s' "$REQ" | jq -r '.appId // .plan.appId // empty')
@@ -2105,9 +2120,17 @@ start_service() {
   ' "$STATE/request.json" >> "$SERVICE/env.tsv"
 
   : > "$SERVICE/ctr.env"
-  chmod 0600 "$SERVICE/ctr.env"
+  CR=$(printf '\rx'); CR=${CR%x}
+  LF=$(printf '\nx'); LF=${LF%x}
   while IFS="$(printf '\t')" read -r KEY VALUE; do
-    DECODED=$(printf '%s' "$VALUE" | base64 -d)
+    case "$KEY" in HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy) ;; *) continue;; esac
+    DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+    case "$DECODED" in *"$CR"*|*"$LF"*)
+      echo failed > "$SERVICE/state"
+      echo 'proxy environment values must not contain newlines' >> "$SERVICE/current.log"
+      return 1
+      ;;
+    esac
     printf '%s=%s\n' "$KEY" "$DECODED" >> "$SERVICE/ctr.env"
   done < "$SERVICE/env.tsv"
 
@@ -2128,7 +2151,12 @@ start_service() {
         --cap-drop CAP_SETGID --cap-drop CAP_SETUID --cap-drop CAP_SETFCAP \
         --cap-drop CAP_SETPCAP --cap-drop CAP_NET_BIND_SERVICE \
         --cap-drop CAP_SYS_CHROOT --cap-drop CAP_KILL --cap-drop CAP_AUDIT_WRITE
-      set -- "$@" --env-file "$SERVICE/ctr.env"
+      while IFS="$(printf '\t')" read -r KEY VALUE; do
+        case "$KEY" in HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy) continue;; esac
+        DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+        set -- "$@" --env "$KEY=$DECODED"
+      done < "$SERVICE/env.tsv"
+      [ ! -s "$SERVICE/ctr.env" ] || set -- "$@" --env-file "$SERVICE/ctr.env"
       if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf "\t")" "$SERVICE/env.tsv" && [ -f "$EGRESS_CA" ]; then
         set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
       fi
@@ -4017,21 +4045,57 @@ mod tests {
     }
 
     #[test]
-    fn runtime_supervisor_protects_plan_files_and_keeps_environment_out_of_argv() {
+    fn runtime_supervisor_creates_plan_files_owner_only_and_keeps_proxy_credentials_out_of_argv() {
         let supervisor = format!("{RUNTIME_SUPERVISOR}\n{RUNTIME_COMPOUND_SUPERVISOR}");
-        for protected_write in [
-            "printf '%s\\n' \"$REQ\" > \"$STATE/request.json\"\nchmod 0600 \"$STATE/request.json\"",
-            "> \"$STATE/env.tsv\"\nchmod 0600 \"$STATE/env.tsv\"",
-            "> \"$SERVICE/plan.json\"\n  chmod 0600 \"$SERVICE/plan.json\"",
-            "> \"$SERVICE/env.tsv\"\n    chmod 0600 \"$SERVICE/env.tsv\"",
+        for script in [RUNTIME_SUPERVISOR, RUNTIME_COMPOUND_SUPERVISOR] {
+            let umask = script.find("umask 077").expect("owner-only umask");
+            let first_state_write = script
+                .find("> \"$STATE/")
+                .expect("supervisor writes runtime state");
+            assert!(
+                umask < first_state_write,
+                "owner-only umask must be active when the first state file is created"
+            );
+        }
+        for protected_creation in [
+            "> \"$STATE/request.json\"",
+            "> \"$STATE/env.tsv\"",
+            "> \"$STATE/ctr.env\"",
+            "> \"$SERVICE/plan.json\"",
+            "> \"$SERVICE/env.tsv\"",
+            "> \"$SERVICE/ctr.env\"",
         ] {
             assert!(
-                supervisor.contains(protected_write),
-                "missing immediate owner-only protection: {protected_write}"
+                supervisor.contains(protected_creation),
+                "protected file must be created while umask 077 is active: {protected_creation}"
             );
         }
         assert_eq!(supervisor.matches("--env-file").count(), 2);
-        assert!(!supervisor.contains("set -- \"$@\" --env \"$KEY=$DECODED\""));
+        assert_eq!(supervisor.matches("set -- \"$@\" --env \"$KEY=$DECODED\"").count(), 2);
+        assert!(supervisor.contains(
+            "HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy"
+        ));
+        assert!(supervisor.contains("proxy environment values must not contain newlines"));
+    }
+
+    #[test]
+    fn runtime_supervisor_passes_multiline_non_proxy_environment_as_one_argv_entry() {
+        let value = "-----BEGIN CERTIFICATE-----\nline two\n-----END CERTIFICATE-----\n";
+        let script = r#"
+            KEY=TLS_CERT
+            VALUE=$1
+            EXPECTED=$2
+            DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+            set -- --env "$KEY=$DECODED"
+            test "$2" = "TLS_CERT=$EXPECTED"
+        "#;
+        use base64::Engine as _;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(value);
+        let status = std::process::Command::new("sh")
+            .args(["-c", script, "runtime-env-test", &encoded, value])
+            .status()
+            .expect("run argv-preservation shell probe");
+        assert!(status.success(), "multiline value must remain one --env argument");
     }
 
     #[test]
