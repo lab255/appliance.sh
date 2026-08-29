@@ -154,6 +154,8 @@ pub fn run_vm_checks(name: &str) -> Report {
     // distro and name the firewall boundary explicitly.
     #[cfg(windows)]
     report.findings.push(wsl_host_proxy_finding(name, spec.as_ref().unwrap().egress_port));
+    #[cfg(windows)]
+    report.findings.push(wsl_guest_policy_finding(name));
 
     // --- guest api-server reachability ------------------------------
     let agent_only = spec.as_ref().is_some_and(|s| s.agent_only);
@@ -312,6 +314,81 @@ fn proxy_reachability_finding(port: u16, detail: String, reachable: bool) -> Fin
     }
 }
 
+#[cfg(windows)]
+fn wsl_guest_policy_finding(name: &str) -> Finding {
+    const MARKER: &str = "__APPLIANCE_WSL_MOUNTS__\n";
+    let probe = run_wrapped(
+        name,
+        "cat /etc/wsl.conf 2>&1; printf '__APPLIANCE_WSL_MOUNTS__\\n'; mount",
+    );
+    match probe
+        .and_then(|output| evaluate_wsl_guest_policy(&output, crate::backend::WSL_CONF, MARKER))
+    {
+        Ok(detail) => Finding::new(
+            "engine:wsl-guest-policy",
+            "WSL automount confinement",
+            Severity::Ok,
+            detail,
+        ),
+        Err(detail) => Finding::new(
+            "engine:wsl-guest-policy",
+            "WSL automount confinement",
+            Severity::Fail,
+            detail,
+        )
+        .remedy(
+            "appliance vm stop && appliance vm up (or destroy the VM and run appliance vm up)"
+                .to_string(),
+        ),
+    }
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn evaluate_wsl_guest_policy(
+    output: &str,
+    expected_conf: &str,
+    marker: &str,
+) -> Result<String, String> {
+    let (actual_conf, mounts) = output
+        .split_once(marker)
+        .ok_or_else(|| "guest policy probe returned malformed output".to_string())?;
+    if actual_conf != expected_conf {
+        return Err("/etc/wsl.conf does not match the appliance automount policy".to_string());
+    }
+    let unexpected = unexpected_drvfs_mounts(mounts);
+    if !unexpected.is_empty() {
+        return Err(format!(
+            "drvfs is mounted outside appliance-managed targets: {}",
+            unexpected.join(", ")
+        ));
+    }
+    Ok("/etc/wsl.conf matches policy and drvfs mounts are confined".to_string())
+}
+
+fn unexpected_drvfs_mounts(output: &str) -> Vec<String> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let (mount, filesystem_and_options) = line.rsplit_once(" type ")?;
+            let (_, target) = mount.rsplit_once(" on ")?;
+            let filesystem = filesystem_and_options.split_whitespace().next().unwrap_or_default();
+            let is_drvfs = filesystem == "drvfs"
+                || filesystem_and_options.contains("aname=drvfs")
+                || filesystem_and_options.contains("aname=drvfs;");
+            let allowed = target == "/persist/workspace"
+                || target
+                    .strip_prefix("/run/appliance/shares/")
+                    .is_some_and(|tag| {
+                        let hex = tag.strip_prefix("ap-").unwrap_or_default();
+                        !hex.is_empty()
+                            && hex.len() <= 32
+                            && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    });
+            (is_drvfs && !allowed).then(|| target.to_string())
+        })
+        .collect()
+}
+
 // --- support-bundle log tail -------------------------------------------
 
 /// Tail the guest api-server log for a support bundle, scrubbed of
@@ -436,6 +513,28 @@ mod tests {
         let json = serde_json::to_string(&skew_finding(120)).unwrap();
         assert!(json.contains("\"severity\":\"fail\""));
         assert!(json.contains("\"remediation\":"));
+    }
+
+    #[test]
+    fn parses_wsl_mount_output_and_rejects_drvfs_outside_managed_targets() {
+        const CONF: &str = "[automount]\nenabled=false\n\n[interop]\nenabled=false\nappendWindowsPath=false\n";
+        let mounts = "C:\\payload on /run/appliance/shares/ap-0123 type 9p (ro,aname=drvfs;path=C:\\payload)\n\
+                      D:\\work on /persist/workspace type drvfs (rw,metadata)\n\
+                      C:\\ on /mnt/c type 9p (rw,aname=drvfs;path=C:\\)\n\
+                      tmpfs on /run type tmpfs (rw)\n";
+        assert_eq!(unexpected_drvfs_mounts(mounts), vec!["/mnt/c"]);
+
+        let output = format!("{CONF}__MARK__\n{mounts}");
+        let error =
+            evaluate_wsl_guest_policy(&output, CONF, "__MARK__\n").unwrap_err();
+        assert!(error.contains("/mnt/c"));
+
+        let allowed = mounts.replace(
+            "C:\\ on /mnt/c type 9p (rw,aname=drvfs;path=C:\\)\n",
+            "",
+        );
+        let output = format!("{CONF}__MARK__\n{allowed}");
+        assert!(evaluate_wsl_guest_policy(&output, CONF, "__MARK__\n").is_ok());
     }
 
     #[test]

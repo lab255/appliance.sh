@@ -30,6 +30,7 @@ const WSL_DRVFS_SHARE_MOUNT: &str = r#"#!/bin/sh
 set -eu
 TAG=${1:-}
 HOST_PATH=${2:-}
+STATE_DIR_WIN='__STATE_DIR_WIN__'
 case "$TAG" in ap-[0-9a-f]*) ;; *) echo "invalid runtime share tag" >&2; exit 2;; esac
 TAG_HEX=${TAG#ap-}
 case "$TAG_HEX" in ''|*[!0-9a-f]*) echo "invalid runtime share tag" >&2; exit 2;; esac
@@ -38,17 +39,15 @@ HOST_PATH=${HOST_PATH#\\\\?\\}
 case "$HOST_PATH" in ''|\\\\*|//* ) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 case "$HOST_PATH" in [A-Za-z]:[\\/]* ) ;; *) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
 case "$HOST_PATH" in *'\'..'\'*|*'\'..'/'*|*/..'\'*|*/../*|*'\'..|*/..) echo "unsupported WSL runtime share path" >&2; exit 2;; esac
-SOURCE=$(wslpath -u "$HOST_PATH") || { echo "runtime share path is not translatable by wslpath" >&2; exit 2; }
-[ -n "$SOURCE" ] && [ -d "$SOURCE" ] || { echo "translated runtime share is not a directory" >&2; exit 2; }
-[ ! -L "$SOURCE" ] || { echo "translated runtime share must not be a symlink" >&2; exit 2; }
+case "$HOST_PATH" in [A-Za-z]:[\\/] ) echo "WSL runtime share path must not be a drive root" >&2; exit 2;; esac
+case "$HOST_PATH" in "$STATE_DIR_WIN"|"$STATE_DIR_WIN"[\\/]*) echo "WSL runtime share path must not include appliance state" >&2; exit 2;; esac
 SHARE=/run/appliance/shares/$TAG
 mkdir -p "$SHARE"
 if ! grep -qs " $SHARE " /proc/mounts; then
-  mount --bind "$SOURCE" "$SHARE"
-  if ! mount -o remount,bind,ro "$SHARE"; then
-    umount "$SHARE" 2>/dev/null || true
-    exit 1
-  fi
+  # Guest root can still issue its own drvfs mounts; accepted pending the
+  # Runtime owner model. drvfs metadata also leaves 0777 cross-principal
+  # reads as a follow-up even though this appliance-managed mount is read-only.
+  mount -t drvfs "$HOST_PATH" "$SHARE" -o ro,uid=1000,gid=1000,metadata
 fi
 "#;
 
@@ -71,6 +70,16 @@ pub const fn runtime_share_mount_script(backend: RuntimeGuestBackend) -> &'stati
         RuntimeGuestBackend::VirtioFs => VIRTIOFS_SHARE_MOUNT,
         RuntimeGuestBackend::WslDrvFs => WSL_DRVFS_SHARE_MOUNT,
     }
+}
+
+/// Render the WSL helper with the canonical Windows appliance state directory
+/// embedded so the guest independently rejects a forged/stale Runtime plan.
+#[cfg(any(target_os = "windows", test))]
+pub fn wsl_runtime_share_mount_script(state_dir: &str) -> String {
+    WSL_DRVFS_SHARE_MOUNT.replace(
+        "__STATE_DIR_WIN__",
+        &shell_squote(strip_verbatim(state_dir)),
+    )
 }
 
 pub const fn runtime_share_unmount_script() -> &'static str {
@@ -142,9 +151,11 @@ pub fn runtime_principal_snat_script(
     }
 }
 
-/// Reject Windows paths for which WSL's drvfs adapter has no safe v1
-/// translation. `canonicalize` runs before this check in `runtime prepare`, so
-/// an accepted path is an existing local-drive directory.
+/// Reject paths that are not absolute Windows local-drive paths accepted by a
+/// targeted drvfs mount. `canonicalize` runs before this check in `runtime
+/// prepare`, so an accepted path is an existing directory with symlinks
+/// resolved host-side. In particular, never accept an automount-derived
+/// `/mnt/c/...` source or a path with a traversal component.
 pub fn validate_wsl_runtime_host_path(path: &str) -> Result<()> {
     let path = path.strip_prefix(r"\\?\").unwrap_or(path);
     if path.starts_with(r"\\") || path.starts_with("//") {
@@ -157,9 +168,93 @@ pub fn validate_wsl_runtime_host_path(path: &str) -> Result<()> {
         || !matches!(bytes[2], b'\\' | b'/')
         || path.contains(['\0', '\n', '\r'])
     {
-        bail!("WSL Runtime payload share path is not translatable by wslpath");
+        bail!("WSL Runtime payload share path must be an absolute local-drive path");
+    }
+    if path.split(['\\', '/']).any(|component| component == "..") {
+        bail!("WSL Runtime payload share path must not contain traversal");
+    }
+    if is_wsl_drive_root(path) {
+        bail!("WSL Runtime payload share path must not be a drive root");
     }
     Ok(())
+}
+
+pub fn is_wsl_drive_root(path: &str) -> bool {
+    let path = strip_verbatim(path);
+    path.len() >= 3
+        && path.as_bytes()[0].is_ascii_alphabetic()
+        && path.as_bytes()[1] == b':'
+        && path[2..].trim_matches(|c| c == '\\' || c == '/').is_empty()
+}
+
+/// Reject a mount that overlaps the appliance state directory in either
+/// direction: neither the state tree nor a parent containing it is shareable.
+/// Such a share would put credentials and helper configuration back in reach
+/// of guest root even though drive automounting is disabled.
+pub fn validate_mount_excludes_state_dir(
+    mount: &std::path::Path,
+    state_dir: &std::path::Path,
+) -> Result<()> {
+    let mount_cmp = path_for_state_comparison(mount);
+    let state_cmp = path_for_state_comparison(state_dir);
+    if mount_cmp == state_cmp
+        || state_cmp.starts_with(&mount_cmp)
+        || mount_cmp.starts_with(&state_cmp)
+    {
+        bail!(
+            "mount path must not contain the appliance state dir ({})",
+            state_dir.display()
+        );
+    }
+    Ok(())
+}
+
+fn path_for_state_comparison(path: &std::path::Path) -> std::path::PathBuf {
+    let canonical = crate::store::canonicalize_with_missing_tail(path);
+    #[cfg(windows)]
+    {
+        let rendered = canonical.to_string_lossy();
+        // Windows path identity is case-insensitive, and canonicalize may add
+        // a verbatim prefix even when the persisted path did not have one.
+        std::path::PathBuf::from(strip_verbatim(&rendered).to_lowercase())
+    }
+    #[cfg(not(windows))]
+    canonical
+}
+
+/// Pure receive plan for a host-streamed artifact. Only fixed absolute guest
+/// paths are accepted; the guest checks the exact byte count and sha256 before
+/// atomically installing the partial file.
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn artifact_receive_command(
+    destination: &str,
+    size: u64,
+    sha256: &str,
+) -> Result<String> {
+    if !destination.starts_with('/')
+        || destination.contains(['\0', '\n', '\r'])
+        || destination.split('/').any(|component| component == "..")
+    {
+        bail!("invalid guest artifact destination '{destination}'");
+    }
+    if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("invalid artifact sha256");
+    }
+    let destination = shell_squote(destination);
+    let sha256 = sha256.to_ascii_lowercase();
+    Ok(format!(
+        "set -eu\n\
+         DEST='{destination}'\n\
+         PARTIAL=\"$DEST.partial\"\n\
+         trap 'rm -f \"$PARTIAL\"' EXIT HUP INT TERM\n\
+         mkdir -p \"${{DEST%/*}}\"\n\
+         cat > \"$PARTIAL\"\n\
+         ACTUAL_SIZE=$(wc -c < \"$PARTIAL\" | tr -d '[:space:]')\n\
+         [ \"$ACTUAL_SIZE\" = '{size}' ] || {{ echo \"artifact size mismatch: expected {size}, got $ACTUAL_SIZE\" >&2; exit 1; }}\n\
+         printf '%s  %s\\n' '{sha256}' \"$PARTIAL\" | sha256sum -c >/dev/null\n\
+         mv -f \"$PARTIAL\" \"$DEST\"\n\
+         trap - EXIT HUP INT TERM\n"
+    ))
 }
 
 /// VZ shares are boot devices; drvfs payloads are acquired on demand by the
@@ -169,17 +264,17 @@ pub fn runtime_share_requires_restart(backend: &str, pool_running: bool, changed
 }
 
 /// Build the offline, signed APK install fragment for a WSL Runtime guest.
-/// Each input is `(repository name, Windows directory containing APKINDEX and
-/// the selected closure)`. Files are copied off drvfs into root-owned guest
-/// storage before apk verifies and installs them.
+/// The host streams each index and selected package into the fixed guest
+/// artifact directory before bootstrap. Files are copied into persistent
+/// root-owned storage before apk verifies signatures and installs them.
 #[cfg(any(target_os = "windows", test))]
-pub fn wsl_runtime_apk_install(repositories: &[(&str, &str)], world: &[&str]) -> Result<String> {
+pub fn wsl_runtime_apk_install(repositories: &[&str], world: &[&str]) -> Result<String> {
     if repositories.is_empty() {
         bail!("WSL Runtime requires the mirrored signed APK closure");
     }
     let mut copy = String::new();
     let mut repository_file = String::new();
-    for (name, host) in repositories {
+    for name in repositories {
         if name.is_empty()
             || !name
                 .bytes()
@@ -187,9 +282,8 @@ pub fn wsl_runtime_apk_install(repositories: &[(&str, &str)], world: &[&str]) ->
         {
             bail!("invalid Runtime APK repository name '{name}'");
         }
-        let host = shell_squote(strip_verbatim(host));
         copy.push_str(&format!(
-            "APK_SOURCE=$(wslpath -u '{host}') || {{ echo 'FATAL: Runtime APK mirror is not translatable by wslpath' >&2; exit 1; }}\n\
+            "APK_SOURCE=/opt/appliance/artifacts/runtime-apks/{name}\n\
              [ -f \"$APK_SOURCE/APKINDEX.tar.gz\" ] || {{ echo 'FATAL: Runtime APK mirror is incomplete' >&2; exit 1; }}\n\
              APK_STAGE=/persist/runtime/apks/{name}/$APK_ARCH.new\n\
              rm -rf \"$APK_STAGE\"\n\
@@ -233,20 +327,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn drvfs_helper_quotes_paths_remounts_read_only_and_confines_the_target() {
-        let script = runtime_share_mount_script(RuntimeGuestBackend::WslDrvFs);
-        assert!(script.contains("SOURCE=$(wslpath -u \"$HOST_PATH\")"));
-        assert!(script.contains("mount --bind \"$SOURCE\" \"$SHARE\""));
-        assert!(script.contains("mount -o remount,bind,ro \"$SHARE\""));
+    fn drvfs_helper_targets_only_the_granted_read_only_share() {
+        let script = wsl_runtime_share_mount_script(r"C:\Users\Avery\.appliance\vm");
+        assert!(script
+            .contains("mount -t drvfs \"$HOST_PATH\" \"$SHARE\" -o ro,uid=1000,gid=1000,metadata"));
         assert!(script.contains("SHARE=/run/appliance/shares/$TAG"));
         assert!(!script.contains("SHARE=$2"));
         assert!(!script.contains("mkdir -p \"$HOST_PATH\""));
+        assert!(!script.contains("wslpath"));
+        assert!(!script.contains("/mnt/c"));
     }
 
     #[cfg(unix)]
     #[test]
     fn drvfs_helper_executes_with_host_path_edge_cases_confined() {
-        use std::os::unix::fs::{symlink, PermissionsExt};
+        use std::os::unix::fs::PermissionsExt;
         use std::process::Command;
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -259,11 +354,7 @@ mod tests {
             std::process::id()
         ));
         let bin = root.join("bin");
-        let safe_source = root.join("source");
-        let linked_source = root.join("source-link");
         std::fs::create_dir_all(&bin).unwrap();
-        std::fs::create_dir_all(&safe_source).unwrap();
-        symlink(&safe_source, &linked_source).unwrap();
 
         let write_executable = |name: &str, body: &str| {
             let path = bin.join(name);
@@ -272,16 +363,6 @@ mod tests {
             permissions.set_mode(0o755);
             std::fs::set_permissions(&path, permissions).unwrap();
         };
-        write_executable(
-            "wslpath",
-            r#"#!/bin/sh
-case "$2" in
-  'C:\safe'|'D:\payload'|'C:\O'\''Brien') printf '%s\n' "$SAFE_SOURCE" ;;
-  'C:\linked') printf '%s\n' "$LINKED_SOURCE" ;;
-  *) printf '%s\n' "$SAFE_SOURCE" ;;
-esac
-"#,
-        );
         write_executable("mkdir", "#!/bin/sh\nexit 0\n");
         write_executable("grep", "#!/bin/sh\nexit 1\n");
         write_executable(
@@ -292,7 +373,7 @@ esac
         let helper = root.join("runtime-share-mount");
         std::fs::write(
             &helper,
-            runtime_share_mount_script(RuntimeGuestBackend::WslDrvFs),
+            wsl_runtime_share_mount_script(r"C:\Users\Avery\.appliance\vm"),
         )
         .unwrap();
         let mount_log = root.join("mount.log");
@@ -303,23 +384,25 @@ esac
                 .arg("ap-0123456789abcdef")
                 .arg(host_path)
                 .env("PATH", &bin)
-                .env("SAFE_SOURCE", &safe_source)
-                .env("LINKED_SOURCE", &linked_source)
                 .env("MOUNT_LOG", &mount_log)
                 .output()
                 .unwrap()
         };
         let assert_confined = || {
             let log = std::fs::read_to_string(&mount_log).unwrap();
-            assert!(!log.is_empty());
-            assert!(log
-                .lines()
-                .all(|line| line.ends_with("/run/appliance/shares/ap-0123456789abcdef")));
+            let lines: Vec<_> = log.lines().collect();
+            assert_eq!(lines.len(), 1);
+            assert!(lines[0].contains(
+                " /run/appliance/shares/ap-0123456789abcdef -o ro,uid=1000,gid=1000,metadata"
+            ));
         };
 
         assert!(!run(r"C:\payload\..\escape").status.success());
-        assert!(!run(r"C:\linked").status.success());
+        assert!(!run("/mnt/c/payload").status.success());
         assert!(!run(r"\\server\share").status.success());
+        assert!(!run(r"D:\").status.success());
+        assert!(!run(r"C:\Users\Avery\.appliance\vm").status.success());
+        assert!(!run(r"C:\Users\Avery\.appliance\vm\pool").status.success());
         assert!(run(r"D:\payload").status.success());
         assert_confined();
         assert!(run(r"\\?\D:\payload").status.success());
@@ -348,12 +431,123 @@ esac
             r"\var\lib\payload",
             r"relative\payload",
             r"\\?\Volume{abc}\payload",
+            r"C:\payload\..\state",
+            r"D:\",
+            "/mnt/c/payload",
         ] {
             assert!(
                 validate_wsl_runtime_host_path(unsupported).is_err(),
                 "unexpectedly accepted {unsupported}"
             );
         }
+    }
+
+    #[test]
+    fn mount_containment_rejects_the_state_dir_and_its_parents() {
+        let state = std::path::Path::new("/users/avery/.appliance");
+        assert!(validate_mount_excludes_state_dir(
+            std::path::Path::new("/users/avery/projects/app"),
+            state,
+        )
+        .is_ok());
+        for mount in [
+            std::path::Path::new("/users/avery"),
+            state,
+            std::path::Path::new("/users/avery/.appliance/vm/pool"),
+        ] {
+            assert!(validate_mount_excludes_state_dir(mount, state).is_err());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn mount_containment_ignores_windows_case_and_verbatim_prefixes() {
+        let state = std::path::Path::new(r"\\?\C:\Users\Avery\.appliance\vm");
+        for mount in [
+            std::path::Path::new(r"c:\users\avery"),
+            std::path::Path::new(r"C:\USERS\AVERY\.APPLIANCE\VM"),
+            std::path::Path::new(r"c:\Users\Avery\.appliance\vm\pool"),
+        ] {
+            assert!(validate_mount_excludes_state_dir(mount, state).is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn artifact_receive_plan_executes_size_and_stubbed_digest_checks() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::{Command, Stdio};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "appliance-artifact-receive-{}-{nonce}",
+            std::process::id()
+        ));
+        let bin = root.join("bin");
+        let destination = root.join("stage/artifact");
+        let digest_log = root.join("digest.log");
+        std::fs::create_dir_all(&bin).unwrap();
+        let sha256sum = bin.join("sha256sum");
+        std::fs::write(
+            &sha256sum,
+            "#!/bin/sh\n[ \"$1\" = -c ] || exit 2\nIFS= read -r CHECK\nprintf '%s\\n' \"$CHECK\" > \"$DIGEST_LOG\"\nexit 0\n",
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&sha256sum).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&sha256sum, permissions).unwrap();
+
+        let digest = "a".repeat(64);
+        let command = artifact_receive_command(&destination.to_string_lossy(), 7, &digest).unwrap();
+        let path = format!(
+            "{}:{}",
+            bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let mut child = Command::new("/bin/sh")
+            .args(["-c", &command])
+            .env("PATH", &path)
+            .env("DIGEST_LOG", &digest_log)
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(b"payload").unwrap();
+        assert!(child.wait().unwrap().success());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"payload");
+        let check = std::fs::read_to_string(&digest_log).unwrap();
+        assert!(check.starts_with(&digest));
+        assert!(check.ends_with("artifact.partial\n"));
+
+        let rejected = root.join("stage/rejected");
+        let command = artifact_receive_command(&rejected.to_string_lossy(), 8, &digest).unwrap();
+        let mut child = Command::new("/bin/sh")
+            .args(["-c", &command])
+            .env("PATH", &path)
+            .env("DIGEST_LOG", &digest_log)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(b"payload").unwrap();
+        assert!(!child.wait().unwrap().success());
+        assert!(!rejected.exists());
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn artifact_receive_plan_rejects_unsafe_targets_and_digests() {
+        let digest = "a".repeat(64);
+        for destination in ["relative", "/opt/../etc/passwd", "/opt/bad\npath"] {
+            assert!(artifact_receive_command(destination, 1, &digest).is_err());
+        }
+        assert!(artifact_receive_command("/opt/appliance/artifact", 1, "not-a-digest").is_err());
     }
 
     #[test]
@@ -397,16 +591,15 @@ esac
     }
 
     #[test]
-    fn wsl_runtime_apk_fragment_is_pinned_local_and_shell_quoted() {
-        let fragment = wsl_runtime_apk_install(
-            &[("main", r"\\?\C:\Users\Avery O'Brien\runtime-apks\main")],
-            &["containerd=2.0.0-r5", "socat=1.8.1.3-r0"],
-        )
-        .unwrap();
-        assert!(fragment.contains(r#"wslpath -u 'C:\Users\Avery O'\''Brien\runtime-apks\main'"#));
+    fn wsl_runtime_apk_fragment_is_pinned_and_guest_local() {
+        let fragment =
+            wsl_runtime_apk_install(&["main"], &["containerd=2.0.0-r5", "socat=1.8.1.3-r0"])
+                .unwrap();
+        assert!(fragment.contains("APK_SOURCE=/opt/appliance/artifacts/runtime-apks/main"));
         assert!(fragment.contains("containerd=2.0.0-r5"));
         assert!(fragment.contains("socat=1.8.1.3-r0"));
         assert!(fragment.contains("--no-network"));
         assert!(!fragment.contains("https://"));
+        assert!(!fragment.contains("wslpath"));
     }
 }
