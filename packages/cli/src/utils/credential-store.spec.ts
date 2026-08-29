@@ -271,6 +271,25 @@ describe('verified Windows agent and entitlement migration', () => {
 });
 
 describe('Windows helper fail-closed behavior', () => {
+  it('uses files for an explicit test home but keeps the default home fail-closed on a missing helper', () => {
+    const home = temporaryDirectory('windows-file-backend');
+    const missing = path.join(temporaryDirectory('missing-default-helper'), 'appliance-credhelper.exe');
+    const target = { kind: 'agent' as const, identifier: 'anthropic' };
+
+    const isolated = __testing.backendFor({ platform: 'win32', home, helperPath: missing });
+    expect(isolated).toBeInstanceOf(__testing.FileBackend);
+    expect(isolated.get(target)).toBeNull();
+
+    const production = __testing.backendFor({ platform: 'win32', helperPath: missing });
+    expect(production).toBeInstanceOf(__testing.WindowsBackend);
+    expect(() => production.get(target)).toThrowError(CredentialStoreError);
+    try {
+      production.get(target);
+    } catch (error) {
+      expect((error as CredentialStoreError).state).toBe('helper-missing');
+    }
+  });
+
   it('treats a missing sibling helper as a hard credential error', () => {
     const missing = path.join(temporaryDirectory('missing-helper'), 'appliance-credhelper.exe');
     const backend = new __testing.WindowsBackend(missing);

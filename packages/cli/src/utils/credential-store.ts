@@ -293,8 +293,12 @@ class FileBackend implements CredentialBackend {
 function backendFor(options: BackendOptions = {}): CredentialBackend {
   const platform = options.platform ?? process.platform;
   const home = options.home ?? applianceHome();
-  const defaultHome = path.resolve(home) === path.resolve(applianceHome());
-  if (options.forceFile || !defaultHome || (platform !== 'darwin' && platform !== 'win32')) {
+  // The OS stores are production backends for the default appliance home only.
+  // An explicitly supplied non-default home is isolated (including on Windows)
+  // and follows the RFC's owner-only file rule on every platform.
+  const explicitNonDefaultHome =
+    options.home !== undefined && path.resolve(options.home) !== path.resolve(applianceHome());
+  if (options.forceFile || explicitNonDefaultHome || (platform !== 'darwin' && platform !== 'win32')) {
     return new FileBackend(home);
   }
   if (platform === 'darwin') return new MacOSBackend();
@@ -1178,6 +1182,8 @@ function writeMigrationHint(home: string, key: string, state: 'migrated' | 'conf
 
 /** Test-only seams. Backends remain private to this module. */
 export const __testing = {
+  backendFor,
+  FileBackend,
   migrateWindowsCredentialFilesWithBackend,
   encodeClusterCredential,
   securityValue,
