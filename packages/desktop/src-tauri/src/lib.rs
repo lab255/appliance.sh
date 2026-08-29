@@ -5878,6 +5878,44 @@ fn legacy_anthropic_key_file() -> Option<PathBuf> {
     )
 }
 
+// Copy of the appliance-vm ACL helper: the desktop drives appliance-vm as a
+// sidecar binary rather than linking its crate, so this small security boundary
+// stays duplicated here (like decode_wsl_text above).
+#[cfg(all(unix, not(target_os = "macos")))]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|error| format!("could not chmod {}: {error}", path.display()))
+}
+
+#[cfg(windows)]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    let username = std::env::var("USERNAME")
+        .map_err(|_| "could not restrict the agent store: USERNAME is unavailable".to_string())?;
+    let principal = std::env::var("USERDOMAIN")
+        .ok()
+        .filter(|domain| !domain.is_empty() && domain != ".")
+        .map(|domain| format!(r"{domain}\{username}"))
+        .unwrap_or(username);
+    let output = std::process::Command::new("icacls")
+        .arg(path)
+        .args(["/inheritance:r", "/grant:r", &format!("{principal}:F")])
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .output()
+        .map_err(|error| format!("could not run icacls for {}: {error}", path.display()))?;
+    if !output.status.success() {
+        return Err(format!(
+            "could not restrict {} to {principal}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
 /// Whether a host credential is stored, and (best-effort) its kind. Never
 /// carries the secret value. Serialized to the frontend's `AgentAuthStatus`.
 #[derive(Serialize)]
@@ -5928,11 +5966,9 @@ fn store_agent_cred_envelope(provider: &str, envelope: &str) -> Result<(), Strin
             .map_err(|e| format!("could not create the agent store dir: {e}"))?;
     }
     std::fs::write(&file, envelope).map_err(|e| format!("could not write the agent store: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("could not chmod the agent store: {e}"))?;
+    if let Err(error) = restrict_to_current_user(&file) {
+        let _ = std::fs::remove_file(&file);
+        return Err(error);
     }
     Ok(())
 }

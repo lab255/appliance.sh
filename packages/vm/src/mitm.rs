@@ -88,10 +88,9 @@ pub fn ensure_ca(name: &str) -> Result<Ca> {
         .with_context(|| format!("write {}", cert_path.display()))?;
     std::fs::write(&key_path, key.serialize_pem())
         .with_context(|| format!("write {}", key_path.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600));
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(&key_path) {
+        let _ = std::fs::remove_file(&key_path);
+        return Err(error);
     }
 
     Ok(Ca { cert, key })

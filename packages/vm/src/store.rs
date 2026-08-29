@@ -53,7 +53,13 @@ pub fn save_spec(spec: &VmSpec) -> Result<()> {
     let mut spec = spec.clone();
     spec.normalise_net_link_for_backend(crate::backend::platform_backend_name());
     let paths = VmPaths::for_name(&spec.name);
+    let created = !paths.dir.exists();
     fs::create_dir_all(&paths.dir).with_context(|| format!("create {}", paths.dir.display()))?;
+    if created {
+        if let Err(error) = crate::fs_acl::restrict_to_current_user(&paths.dir) {
+            eprintln!("warning: could not restrict {}: {error:#}", paths.dir.display());
+        }
+    }
     let json = serde_json::to_string_pretty(&spec)?;
     fs::write(paths.spec(), json).with_context(|| format!("write {}", paths.spec().display()))?;
     Ok(())

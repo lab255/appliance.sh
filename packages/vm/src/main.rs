@@ -3,6 +3,7 @@ mod bringup;
 mod creds;
 mod doctor;
 mod egress;
+mod fs_acl;
 mod guest_exec;
 // guest/images/net/netstack carry the vz/kvm boot-media and
 // host-networking surfaces. They compile everywhere (their pure parts
