@@ -638,7 +638,6 @@ fn build_bootstrap(
     bootstrap_token: &str,
 ) -> Result<String> {
     crate::backend::ensure_runtime_supported("wsl", spec.runtime)?;
-    let runtime_provision = "";
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -725,7 +724,7 @@ fn build_bootstrap(
         )
         // Runtime specs have already failed through the AP-190 guard;
         // non-Runtime WSL bootstraps must still consume the shared marker.
-        .replace("__RUNTIME_PROVISION__", runtime_provision)
+        .replace("__RUNTIME_PROVISION__", "")
         // BuildKit rides every k3s VM, exactly as on the vz backend —
         // injected before the port markers below so its nested
         // __REGISTRY_*__/__BUILDKITD_GUEST_PORT__ markers expand too.

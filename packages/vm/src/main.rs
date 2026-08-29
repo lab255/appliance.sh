@@ -1277,9 +1277,9 @@ fn run() -> Result<()> {
 }
 
 fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
+    backend::ensure_runtime_supported(backend_name, true)?;
     match action {
         RuntimeCmd::Prepare { name, plan } => {
-            backend::ensure_runtime_supported(backend_name, true)?;
             let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime plan")?;
             validate_runtime_plan(&plan)?;
             if !plan.share.read_only {
@@ -2085,8 +2085,13 @@ fn run_egress(action: EgressCmd) -> Result<()> {
         }
         EgressCmd::Denied { name, tail } => {
             let denied = traffic::denied(&name, tail);
-            let report =
-                traffic::render_denied_report(&name, name == DEFAULT_VM, &denied, traffic::now_millis());
+            let report = traffic::render_denied_report(
+                &name,
+                name == DEFAULT_VM,
+                egress::is_netstack(&name),
+                &denied,
+                traffic::now_millis(),
+            );
             print!("{report}");
             Ok(())
         }
@@ -2101,6 +2106,11 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             egress::save_policy(&name, &policy)?;
             let _ = egress::publish_configmap(&name);
             println!("egress default for '{name}' set to {:?}", parsed);
+            if !egress::is_netstack(&name) {
+                eprintln!(
+                    "note: this VM's boundary is a cooperative proxy — software in the guest can bypass it"
+                );
+            }
             Ok(())
         }
         EgressCmd::Allow { host, name } => {

@@ -30,14 +30,20 @@ operator rules. Host rules match the named host and its subdomains; a deny rule
 wins over an allow rule. `remove` deletes one exact operator rule, while `reset`
 clears all operator rules.
 
+The policy JSON contract keeps policy fields flattened at the top level, with
+`boundary` as the stable scalar. Future work may add a sibling
+`enforcement {backend, bypassable, scope}` object; it will never re-nest the
+policy fields under `policy`.
+
 ## Windows (WSL backend)
 
 WSL VMs use `netLink: "nat"`, and `appliance vm egress policy` reports
 `boundary: "cooperative"`. Their rules are enforced by the WSL proxy, not by a
 host-owned network route, so software in the guest can bypass the proxy. The F4
-default-deny flip means the cooperative proxy defaults to deny on Windows; it
-does not turn that proxy into the Netstack hard egress boundary used by the VZ
-backend.
+flip does not change Windows: WSL VMs stay `nat` and their proxy default stays
+`allow` until you run `appliance vm egress default deny`, which is still
+cooperative. Here, F4 refers to the Netstack-default rollout for supported
+non-WSL backends.
 
 For a blocked request, inspect recent denials and allow only the required host:
 

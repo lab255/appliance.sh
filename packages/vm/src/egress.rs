@@ -88,7 +88,7 @@ impl EgressBoundary {
     pub fn label(self) -> &'static str {
         match self {
             Self::Enforced => "enforced (netstack)",
-            Self::Cooperative => "cooperative (WSL proxy)",
+            Self::Cooperative => "cooperative (in-guest proxy)",
         }
     }
 }
@@ -1713,7 +1713,7 @@ mod tests {
             mitm: true,
         };
         let out = render_effective_policy("dev", &persisted, false);
-        assert!(out.contains("boundary: cooperative (WSL proxy)"));
+        assert!(out.contains("boundary: cooperative (in-guest proxy)"));
         assert!(out.contains("default: ALLOW"));
         assert!(!out.contains("baked allowlist"));
         assert!(out.contains("✓ example.com"));
@@ -1729,7 +1729,7 @@ mod tests {
         assert_eq!(enforced.boundary, EgressBoundary::Enforced);
         assert_eq!(enforced.boundary.label(), "enforced (netstack)");
         assert_eq!(cooperative.boundary, EgressBoundary::Cooperative);
-        assert_eq!(cooperative.boundary.label(), "cooperative (WSL proxy)");
+        assert_eq!(cooperative.boundary.label(), "cooperative (in-guest proxy)");
         assert_eq!(
             serde_json::to_value(enforced).unwrap()["boundary"],
             "enforced"

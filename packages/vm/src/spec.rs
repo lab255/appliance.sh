@@ -356,12 +356,12 @@ impl VmSpec {
     /// host netstack attachment, so even a legacy/forced Netstack value
     /// becomes NAT and its egress boundary remains the cooperative proxy.
     pub fn normalise_net_link_for_backend(&mut self, backend: &str) -> bool {
-        if backend == "wsl" {
-            warn_wsl_cooperative_boundary_once();
-        }
         let resolved = resolve_net_link(self.net_link, false, backend);
         if resolved == self.net_link {
             return false;
+        }
+        if backend == "wsl" {
+            warn_wsl_cooperative_boundary_once();
         }
         self.net_link = resolved;
         true

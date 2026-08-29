@@ -84,7 +84,7 @@ export function EgressPanel({
   }, [events]);
 
   const enforced = policy?.boundary ? policy.boundary === 'enforced' : !!policy?.enforced;
-  const boundaryLabel = enforced ? 'enforced (netstack)' : 'cooperative (WSL proxy)';
+  const boundaryLabel = enforced ? 'enforced (netstack)' : 'cooperative (in-guest proxy)';
   // For a Netstack VM the effective `allow` merges the baked allowlist with
   // the operator's rules; partition it back so the UI shows what's inherited
   // (always-on) vs what the operator added — mirrors render_effective_policy.

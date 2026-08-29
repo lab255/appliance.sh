@@ -66,12 +66,8 @@ pub fn load_spec(name: &str) -> Result<Option<VmSpec>> {
         return Ok(None);
     }
     let raw = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let (spec, normalised) = parse_spec_for_backend(&raw, crate::backend::platform_backend_name())
+    let (spec, _) = parse_spec_for_backend(&raw, crate::backend::platform_backend_name())
         .with_context(|| format!("parse {}", path.display()))?;
-    if normalised {
-        let json = serde_json::to_string_pretty(&spec)?;
-        fs::write(&path, json).with_context(|| format!("normalise {}", path.display()))?;
-    }
     Ok(Some(spec))
 }
 
@@ -97,14 +93,9 @@ pub fn list_specs() -> Vec<VmSpec> {
         }
         let spec_path = entry.path().join("vm.json");
         if let Ok(raw) = fs::read_to_string(&spec_path) {
-            if let Ok((spec, normalised)) =
+            if let Ok((spec, _)) =
                 parse_spec_for_backend(&raw, crate::backend::platform_backend_name())
             {
-                if normalised {
-                    if let Ok(json) = serde_json::to_string_pretty(&spec) {
-                        let _ = fs::write(&spec_path, json);
-                    }
-                }
                 specs.push(spec);
             }
         }

@@ -4772,6 +4772,43 @@ struct EgressPolicy {
     net_link: String,
 }
 
+/// Resolve a VM's effective network link by reading the engine's
+/// persisted spec (`~/.appliance/vm/<name>/vm.json`, `netLink` field) and
+/// applying the same `APPLIANCE_NETSTACK=1` force-on override the engine's
+/// `VmSpec::net_link()` uses (packages/vm/src/spec.rs). Returns true when
+/// the host netstack is the enforced egress boundary (`net_link=Netstack`),
+/// false for the cooperative NAT proxy. A missing / unreadable spec ⇒ Nat
+/// unless the override is set, mirroring the engine. Read-only: this never
+/// writes the spec.
+fn microvm_netstack_enforced(name: &str) -> bool {
+    if std::env::var("APPLIANCE_NETSTACK")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    let Some(path) = home_dir().map(|h| {
+        h.join(SHARED_PROFILES_DIR)
+            .join("vm")
+            .join(name)
+            .join("vm.json")
+    }) else {
+        return false;
+    };
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|spec| {
+            spec.get("netLink")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_ascii_lowercase())
+        })
+        .map(|link| link == "netstack")
+        .unwrap_or(false)
+}
+
 fn microvm_ca_path(name: &str) -> Option<PathBuf> {
     let p = home_dir()?
         .join(SHARED_PROFILES_DIR)
@@ -4793,10 +4830,15 @@ async fn microvm_egress_get(name: Option<String>) -> Result<EgressPolicy, String
     // The engine prints the EFFECTIVE policy for a Netstack VM (default-Deny
     // + the baked allowlist merged over the operator's rules) — see
     // `egress::effective_policy`. We display that as-is and use its explicit
-    // boundary contract, without re-reading or inferring from the VM spec.
+    // boundary contract, falling back to the VM spec only for older engines
+    // that omit `boundary`.
     let mut policy: EgressPolicy = serde_json::from_str(&stdout).map_err(|e| e.to_string())?;
     policy.ca_path = microvm_ca_path(&name).map(|p| p.to_string_lossy().into_owned());
-    policy.enforced = policy.boundary == "enforced";
+    policy.enforced = if policy.boundary.is_empty() {
+        microvm_netstack_enforced(&name)
+    } else {
+        policy.boundary == "enforced"
+    };
     policy.net_link = if policy.enforced {
         "netstack".into()
     } else {
