@@ -220,7 +220,7 @@ impl VmBackend for WslBackend {
         crate::bringup::set(
             &paths.dir,
             crate::bringup::Phase::Media,
-            Some("skipped (WSL)".to_string()),
+            Some("artifacts streamed (WSL)".to_string()),
         );
         push_bootstrap(&distro, &script)?;
 
@@ -328,24 +328,64 @@ impl VmBackend for WslBackend {
         if !distro_registered(&distro)? {
             return Ok(());
         }
-        destroy_registered_distro(&distro, |args| {
-            let out = wsl_cmd().args(args).output()?;
-            Ok((out.status.success(), combined_output(&out)))
-        })
+        destroy_registered_distro(
+            &distro,
+            || stop_foreground_before_destroy(name),
+            |args| {
+                let out = wsl_cmd().args(args).output()?;
+                Ok((out.status.success(), combined_output(&out)))
+            },
+        )
     }
+}
+
+const DESTROY_STOP_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Ask the foreground owner to close its clock-sync worker, then wait up to
+/// ten seconds for its pidfile to clear or its process to exit. A bounded wait
+/// prevents `destroy` from hanging on a stale pid while ensuring a live worker
+/// cannot issue a final `wsl -d` that revives the distro after termination.
+fn stop_foreground_before_destroy(name: &str) -> Result<()> {
+    let paths = VmPaths::for_name(name);
+    if paths.dir.exists() {
+        std::fs::write(paths.stop_request(), b"stop\n")
+            .with_context(|| format!("write {}", paths.stop_request().display()))?;
+    }
+    let deadline = Instant::now() + DESTROY_STOP_TIMEOUT;
+    super::wait_for_foreground_exit(
+        || {
+            if Instant::now() >= deadline {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+            false
+        },
+        || paths.pidfile().exists() && crate::store::read_live_pid(name).is_some(),
+    );
+    Ok(())
 }
 
 /// Termination is best-effort: an already-stopped distro may reject it,
 /// but unregister must still run because it owns the destructive result.
-/// The runner seam makes the ordering testable without touching WSL.
-fn destroy_registered_distro<F>(distro: &str, mut run: F) -> Result<()>
+/// The stop and runner seams make the cross-process ordering testable without
+/// touching WSL or sleeping in unit tests.
+fn destroy_registered_distro<S, F>(
+    distro: &str,
+    mut stop_foreground: S,
+    mut run: F,
+) -> Result<()>
 where
+    S: FnMut() -> Result<()>,
     F: FnMut(&[&str]) -> std::io::Result<(bool, String)>,
 {
+    stop_foreground()?;
     let _ = run(&["--terminate", distro]);
     let (success, detail) = run(&["--unregister", distro]).context("wsl --unregister")?;
     if !success {
-        bail!("could not unregister WSL distro '{distro}': {}", detail.trim());
+        bail!(
+            "could not unregister WSL distro '{distro}': {}",
+            detail.trim()
+        );
     }
     Ok(())
 }
@@ -1498,18 +1538,30 @@ mod tests {
     }
 
     #[test]
-    fn destroy_terminates_before_unregistering() {
-        let mut calls: Vec<Vec<String>> = Vec::new();
-        destroy_registered_distro("appliance-vm-test", |args| {
-            calls.push(args.iter().map(|arg| (*arg).to_string()).collect());
-            // Termination failure is deliberately ignored; unregister still
-            // owns the final result.
-            Ok((calls.len() != 1, "already stopped".to_string()))
-        })
+    fn destroy_stops_foreground_then_terminates_before_unregistering() {
+        use std::cell::RefCell;
+
+        let calls = RefCell::new(Vec::<Vec<String>>::new());
+        destroy_registered_distro(
+            "appliance-vm-test",
+            || {
+                calls.borrow_mut().push(vec!["stop-and-wait".to_string()]);
+                Ok(())
+            },
+            |args| {
+                calls
+                    .borrow_mut()
+                    .push(args.iter().map(|arg| (*arg).to_string()).collect());
+                // Termination failure is deliberately ignored; unregister still
+                // owns the final result.
+                Ok((args[0] != "--terminate", "already stopped".to_string()))
+            },
+        )
         .unwrap();
         assert_eq!(
-            calls,
+            calls.into_inner(),
             vec![
+                vec!["stop-and-wait".to_string()],
                 vec!["--terminate".to_string(), "appliance-vm-test".to_string()],
                 vec!["--unregister".to_string(), "appliance-vm-test".to_string()],
             ]

@@ -619,6 +619,67 @@ export function classifyCredentialMigrationConflict(conflict: CredentialMigratio
   };
 }
 
+export interface VmCredentialRulesFixture {
+  vm: string;
+  config: unknown;
+}
+
+/** Warn for every explicit capture rule on Windows. Capture persists the
+ * selected header in the per-VM cleartext secret file, so the finding names
+ * both routing dimensions an operator needs to locate and disable the rule. */
+export function classifyWindowsCaptureRules(
+  platform: NodeJS.Platform,
+  fixtures: readonly VmCredentialRulesFixture[]
+): RuntimeFinding[] {
+  if (platform !== 'win32') return [];
+  return fixtures.flatMap(({ vm, config }) => {
+    const rules = (config as { rules?: unknown } | null)?.rules;
+    if (!Array.isArray(rules)) return [];
+    return rules.flatMap((rule) => {
+      const candidate = rule as { capture?: unknown; host?: unknown } | null;
+      if (candidate?.capture !== true || typeof candidate.host !== 'string' || !candidate.host.trim()) return [];
+      const host = candidate.host.trim();
+      return [
+        {
+          id: `credentials:capture:${encodeURIComponent(vm)}:${encodeURIComponent(host)}`,
+          title: `Capture-mode credential rule (${vm} → ${host})`,
+          severity: 'warn' as const,
+          detail: `VM '${vm}' captures credentials for host '${host}' into cleartext egress-secrets.json; backups, same-user code, Administrator/SYSTEM, and applicable WSL file access remain residual risks`,
+          remediation: `Disable capture for '${host}' in VM '${vm}' and remove any stored captured secret that is no longer needed.`,
+        },
+      ];
+    });
+  });
+}
+
+function readVmCredentialRulesFixtures(): VmCredentialRulesFixture[] {
+  if (process.platform !== 'win32') return [];
+  // This is intentionally an unverified diagnostic read: only hostnames escape
+  // into findings, never captured credential values.
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '.';
+  const root = path.resolve(home, '.appliance', 'vm');
+  try {
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => {
+        try {
+          const vmRoot = path.resolve(root, entry.name);
+          if (path.dirname(vmRoot) !== root) return [];
+          const credentialPath = path.resolve(vmRoot, 'egress-credentials.json');
+          if (path.dirname(credentialPath) !== vmRoot) return [];
+          if (fs.statSync(credentialPath).size > 1024 * 1024) return [];
+          const raw = fs.readFileSync(credentialPath, 'utf8');
+          return [{ vm: entry.name, config: JSON.parse(raw) }];
+        } catch {
+          return [];
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
 // ---- bootstrap token ---------------------------------------------------------
 
 export function bootstrapTokenPath(vm: string): string {
@@ -802,6 +863,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   // probe can report missing/conflict/migrated before any scrub occurs.
   const profilesFile = readProfiles({ migrateCredentials: false });
   findings.push(...readCredentialMigrationConflicts().map(classifyCredentialMigrationConflict));
+  findings.push(...classifyWindowsCaptureRules(process.platform, readVmCredentialRulesFixtures()));
   for (const [name, profile] of Object.entries(profilesFile.profiles)) {
     const binding = classifyProfileBinding(name, profile.apiUrl, listing);
     const bindingFinding = await renderBindingFinding(name, profile, binding, {

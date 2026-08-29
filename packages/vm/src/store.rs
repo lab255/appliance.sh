@@ -1,6 +1,7 @@
 use crate::spec::{VmPaths, VmSpec};
 use anyhow::{Context, Result};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 fn parse_spec_for_backend(raw: &str, backend: &str) -> serde_json::Result<(VmSpec, bool)> {
@@ -81,17 +82,28 @@ pub fn save_spec(spec: &VmSpec) -> Result<()> {
     crate::fs_acl::restrict_to_current_user(&paths.dir)?;
     let json = serde_json::to_string_pretty(&spec)?;
     fs::write(paths.spec(), json).with_context(|| format!("write {}", paths.spec().display()))?;
+    crate::fs_acl::restrict_to_current_user(&paths.spec())?;
     Ok(())
 }
 
 pub fn load_spec(name: &str) -> Result<Option<VmSpec>> {
     let paths = VmPaths::for_name(name);
     let path = paths.spec();
-    if !path.exists() {
-        return Ok(None);
-    }
-    let raw = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let (spec, _) = parse_spec_for_backend(&raw, crate::backend::platform_backend_name())
+    load_spec_path(&path, crate::backend::platform_backend_name())
+}
+
+pub(crate) fn load_spec_path(path: &Path, backend: &str) -> Result<Option<VmSpec>> {
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).with_context(|| format!("open {}", path.display())),
+    };
+    crate::creds::verify_config_integrity(path, &file)
+        .with_context(|| format!("verify {}", path.display()))?;
+    let mut raw = String::new();
+    file.read_to_string(&mut raw)
+        .with_context(|| format!("read {}", path.display()))?;
+    let (spec, _) = parse_spec_for_backend(&raw, backend)
         .with_context(|| format!("parse {}", path.display()))?;
     Ok(Some(spec))
 }
@@ -99,7 +111,8 @@ pub fn load_spec(name: &str) -> Result<Option<VmSpec>> {
 pub fn delete_vm_dir(name: &str) -> Result<()> {
     let paths = VmPaths::for_name(name);
     if paths.dir.exists() {
-        fs::remove_dir_all(&paths.dir).with_context(|| format!("remove {}", paths.dir.display()))?;
+        fs::remove_dir_all(&paths.dir)
+            .with_context(|| format!("remove {}", paths.dir.display()))?;
     }
     Ok(())
 }
@@ -245,5 +258,34 @@ mod tests {
         let (loaded, normalised) = parse_spec_for_backend(&raw, "wsl").unwrap();
         assert!(normalised);
         assert_eq!(loaded.net_link, NetLink::Nat);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spec_load_verifies_the_open_handle_before_reading() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-spec-integrity-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("vm.json");
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&VmSpec::defaults("safe")).unwrap(),
+        )
+        .unwrap();
+        crate::fs_acl::restrict_to_current_user(&dir).unwrap();
+        crate::fs_acl::restrict_to_current_user(&path).unwrap();
+        assert_eq!(load_spec_path(&path, "vz").unwrap().unwrap().name, "safe");
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(load_spec_path(&path, "vz").is_err());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

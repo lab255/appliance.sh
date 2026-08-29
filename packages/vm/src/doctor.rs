@@ -358,11 +358,11 @@ fn evaluate_wsl_guest_policy(
     let unexpected = unexpected_drvfs_mounts(mounts);
     if !unexpected.is_empty() {
         return Err(format!(
-            "drvfs is mounted outside appliance-managed targets: {}",
+            "Windows-source shares are mounted outside appliance-managed targets: {}",
             unexpected.join(", ")
         ));
     }
-    Ok("/etc/wsl.conf matches policy and drvfs mounts are confined".to_string())
+    Ok("/etc/wsl.conf matches policy and Windows-source mounts are confined".to_string())
 }
 
 fn unexpected_drvfs_mounts(output: &str) -> Vec<String> {
@@ -370,23 +370,37 @@ fn unexpected_drvfs_mounts(output: &str) -> Vec<String> {
         .lines()
         .filter_map(|line| {
             let (mount, filesystem_and_options) = line.rsplit_once(" type ")?;
-            let (_, target) = mount.rsplit_once(" on ")?;
+            let (source, target) = mount.rsplit_once(" on ")?;
             let filesystem = filesystem_and_options.split_whitespace().next().unwrap_or_default();
             let is_drvfs = filesystem == "drvfs"
                 || filesystem_and_options.contains("aname=drvfs")
-                || filesystem_and_options.contains("aname=drvfs;");
+                || (matches!(filesystem, "9p" | "virtiofs") && is_windows_mount_source(source));
+            let source_is_drive_root =
+                crate::backend::runtime_guest::is_wsl_drive_root(source);
             let allowed = target == "/persist/workspace"
                 || target
                     .strip_prefix("/run/appliance/shares/")
                     .is_some_and(|tag| {
                         let hex = tag.strip_prefix("ap-").unwrap_or_default();
-                        !hex.is_empty()
+                        !source_is_drive_root
+                            && !hex.is_empty()
                             && hex.len() <= 32
                             && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
                     });
             (is_drvfs && !allowed).then(|| target.to_string())
         })
         .collect()
+}
+
+fn is_windows_mount_source(source: &str) -> bool {
+    let source = crate::backend::runtime_guest::strip_verbatim(source);
+    let bytes = source.as_bytes();
+    source.starts_with(r"\\")
+        || source.starts_with("//")
+        || (bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'\\' | b'/'))
 }
 
 // --- support-bundle log tail -------------------------------------------
@@ -535,6 +549,18 @@ mod tests {
         );
         let output = format!("{CONF}__MARK__\n{allowed}");
         assert!(evaluate_wsl_guest_policy(&output, CONF, "__MARK__\n").is_ok());
+    }
+
+    #[test]
+    fn rejects_plain_windows_mounts_and_drive_root_appliance_shares() {
+        let mounts = "C:\\payload on /foreign type 9p (ro)\n\
+                      D:\\payload on /foreign-vfs type virtiofs (ro)\n\
+                      E:\\ on /run/appliance/shares/ap-0123 type drvfs (ro)\n\
+                      appliance-tag on /run/appliance/shares/ap-abcd type virtiofs (ro)\n";
+        assert_eq!(
+            unexpected_drvfs_mounts(mounts),
+            vec!["/foreign", "/foreign-vfs", "/run/appliance/shares/ap-0123"]
+        );
     }
 
     #[test]

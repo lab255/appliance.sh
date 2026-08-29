@@ -238,8 +238,9 @@ the selected header is cleartext in per-VM `egress-secrets.json`; Windows
 resets that file to the current-user ACL, but backups, same-user code,
 Administrator/SYSTEM, and WSL file access remain residuals. The capture and
 `capture:false` cases are tested in [`creds.rs`](../packages/vm/src/creds.rs).
-A Windows doctor warning when capture is enabled is planned (follow-up card),
-not implemented today.
+On Windows, `appliance doctor` warns for every enabled capture rule, naming
+the VM and host while restating those residual risks; the fixture coverage is
+in [`runtime-doctor.spec.ts`](../packages/cli/src/utils/runtime-doctor.spec.ts).
 The managed Appliance WSL2 distro also disables Windows interop and drive
 automount in [`wsl.rs`](../packages/vm/src/backend/wsl.rs).
 
