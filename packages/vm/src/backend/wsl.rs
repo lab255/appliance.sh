@@ -1039,6 +1039,41 @@ fn build_bootstrap(
     runtime_repositories: &[crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
 ) -> Result<String> {
+    let state_dir = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
+    build_bootstrap_with_inputs(
+        spec,
+        BootstrapInputs {
+            k3s,
+            egress_ca_pem,
+            apiserver,
+            bootstrap_token,
+            runtime_repositories,
+            runtime_gateway,
+            state_dir: &state_dir,
+        },
+    )
+}
+
+struct BootstrapInputs<'a> {
+    k3s: Option<(&'a Path, &'static str)>,
+    egress_ca_pem: Option<&'a str>,
+    apiserver: Option<&'a crate::guest::ApiServerAssets>,
+    bootstrap_token: &'a str,
+    runtime_repositories: &'a [crate::images::RuntimeApkRepository],
+    runtime_gateway: Option<std::net::Ipv4Addr>,
+    state_dir: &'a Path,
+}
+
+fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Result<String> {
+    let BootstrapInputs {
+        k3s,
+        egress_ca_pem,
+        apiserver,
+        bootstrap_token,
+        runtime_repositories,
+        runtime_gateway,
+        state_dir,
+    } = inputs;
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -1046,8 +1081,6 @@ fn build_bootstrap(
     let project_id = mount
         .map(|p| crate::images::content_sha256_hex(p.as_bytes())[..16].to_string())
         .unwrap_or_default();
-    let state_dir = std::fs::canonicalize(crate::store::vm_root())
-        .context("canonicalize appliance VM state directory")?;
     let state_dir = strip_verbatim(&state_dir.to_string_lossy()).to_string();
     let runtime_share_mount =
         crate::backend::runtime_guest::wsl_runtime_share_mount_script(&state_dir);
@@ -1414,6 +1447,29 @@ mod tests {
 
     fn spec(name: &str) -> VmSpec {
         VmSpec::defaults(name)
+    }
+
+    fn build_bootstrap(
+        spec: &VmSpec,
+        k3s: Option<(&Path, &'static str)>,
+        egress_ca_pem: Option<&str>,
+        apiserver: Option<&crate::guest::ApiServerAssets>,
+        bootstrap_token: &str,
+        runtime_repositories: &[crate::images::RuntimeApkRepository],
+        runtime_gateway: Option<std::net::Ipv4Addr>,
+    ) -> Result<String> {
+        super::build_bootstrap_with_inputs(
+            spec,
+            BootstrapInputs {
+                k3s,
+                egress_ca_pem,
+                apiserver,
+                bootstrap_token,
+                runtime_repositories,
+                runtime_gateway,
+                state_dir: Path::new(r"C:\Users\appliance-test\.appliance\vm"),
+            },
+        )
     }
 
     #[test]
