@@ -9,6 +9,7 @@ use anyhow::{bail, Result};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RuntimeGuestBackend {
     VirtioFs,
+    #[allow(dead_code)] // Constructed by the cfg(windows) WSL assembler.
     WslDrvFs,
 }
 
@@ -120,6 +121,12 @@ pub fn validate_wsl_runtime_host_path(path: &str) -> Result<()> {
     Ok(())
 }
 
+/// VZ shares are boot devices; drvfs payloads are acquired on demand by the
+/// guest helper and therefore never restart a live pool merely to add a share.
+pub fn runtime_share_requires_restart(backend: &str, pool_running: bool, changed: bool) -> bool {
+    backend != "wsl" && pool_running && changed
+}
+
 /// Build the offline, signed APK install fragment for a WSL Runtime guest.
 /// Each input is `(repository name, Windows directory containing APKINDEX and
 /// the selected closure)`. Files are copied off drvfs into root-owned guest
@@ -220,6 +227,14 @@ mod tests {
                 "unexpectedly accepted {unsupported}"
             );
         }
+    }
+
+    #[test]
+    fn drvfs_share_reconciliation_never_requires_a_pool_restart() {
+        assert!(!runtime_share_requires_restart("wsl", true, true));
+        assert!(runtime_share_requires_restart("vz", true, true));
+        assert!(!runtime_share_requires_restart("vz", false, true));
+        assert!(!runtime_share_requires_restart("vz", true, false));
     }
 
     #[test]

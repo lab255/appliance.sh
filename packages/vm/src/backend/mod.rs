@@ -1,5 +1,5 @@
 use crate::spec::VmSpec;
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 pub mod runtime_guest;
 
@@ -57,14 +57,6 @@ pub const fn platform_backend_name() -> &'static str {
     }
 }
 
-/// AP-190 removes this guard when the WSL Runtime design is implemented.
-pub fn ensure_runtime_supported(backend: &str, runtime: bool) -> Result<()> {
-    if backend == "wsl" && runtime {
-        bail!("the Appliance Runtime is not supported on the WSL backend yet");
-    }
-    Ok(())
-}
-
 /// The platform's backend.
 pub fn platform_backend() -> Box<dyn VmBackend> {
     #[cfg(target_os = "macos")]
@@ -78,21 +70,5 @@ pub fn platform_backend() -> Box<dyn VmBackend> {
     #[cfg(target_os = "windows")]
     {
         Box::new(wsl::WslBackend)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn wsl_runtime_guard_is_exact_and_platform_neutral() {
-        let error = ensure_runtime_supported("wsl", true).unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "the Appliance Runtime is not supported on the WSL backend yet"
-        );
-        assert!(ensure_runtime_supported("wsl", false).is_ok());
-        assert!(ensure_runtime_supported("vz", true).is_ok());
     }
 }

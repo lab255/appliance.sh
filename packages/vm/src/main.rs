@@ -669,7 +669,6 @@ fn run() -> Result<()> {
             agent_only,
             runtime,
         } => {
-            backend::ensure_runtime_supported(backend.name(), runtime)?;
             // A shared host folder only makes sense in a dev environment,
             // so --mount implies --dev. Agent-only implies --dev too: its
             // readiness handoff waits on the dev toolchain's .dev-ready.
@@ -752,7 +751,6 @@ fn run() -> Result<()> {
             time_budget,
         } => {
             let up_started = std::time::Instant::now();
-            backend::ensure_runtime_supported(backend.name(), runtime)?;
             backend.availability()?;
             let mut spec = ensure_spec_for_up(&name, runtime)?;
             // Persist resource overrides into the spec *before* spawning
@@ -1277,7 +1275,6 @@ fn run() -> Result<()> {
 }
 
 fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
-    backend::ensure_runtime_supported(backend_name, true)?;
     match action {
         RuntimeCmd::Prepare { name, plan } => {
             let plan: RuntimePlan = serde_json::from_str(&plan).context("parse runtime plan")?;
@@ -1287,6 +1284,9 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             }
             let host_path = std::fs::canonicalize(&plan.share.host_path)
                 .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
+            if backend_name == "wsl" {
+                backend::runtime_guest::validate_wsl_runtime_host_path(&host_path.to_string_lossy())?;
+            }
 
             let prior = store::load_spec(&name)?;
             let mut spec = match prior.clone() {
@@ -1370,8 +1370,11 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                 )?);
             }
             spec.published.sort_by_key(|published| published.host);
-            let restart_required = store::read_live_pid(&name).is_some()
-                && prior.as_ref().is_some_and(|old| old.runtime_mounts != spec.runtime_mounts);
+            let restart_required = backend::runtime_guest::runtime_share_requires_restart(
+                backend_name,
+                store::read_live_pid(&name).is_some(),
+                prior.as_ref().is_some_and(|old| old.runtime_mounts != spec.runtime_mounts),
+            );
             store::save_spec(&spec)?;
             store::ensure_disk(&spec)?;
             println!(
@@ -1379,6 +1382,7 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                 serde_json::json!({
                     "poolVm": name,
                     "restartRequired": restart_required,
+                    "shareTransport": if backend_name == "wsl" { "drvfs" } else { "virtiofs" },
                     "profile": {
                         "agentOnly": true,
                         "dev": false,
@@ -1386,7 +1390,7 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
                         "cluster": false,
                         "cpus": spec.cpus,
                         "memoryMib": spec.memory_mib,
-                        "netLink": "netstack"
+                        "netLink": if backend_name == "wsl" { "nat" } else { "netstack" }
                     }
                 })
             );
