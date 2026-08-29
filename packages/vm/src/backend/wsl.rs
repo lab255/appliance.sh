@@ -1005,16 +1005,17 @@ mod tests {
         let mut s = spec("x");
         s.dev = true;
         s.docker = true;
-        s.dev_mount = Some(r"\\?\C:\Users\dev\proj".to_string());
+        let mount = r"\\?\C:\project";
+        s.dev_mount = Some(mount.to_string());
+        let assets_dir = crate::guest::assets_dir();
+        let k3s = assets_dir.join("k3s");
         let assets = crate::guest::ApiServerAssets {
-            binary: PathBuf::from(r"C:\Users\dev\.appliance\vm\images\guest-assets\appliance-api-server"),
-            console: Some(PathBuf::from(
-                r"C:\Users\dev\.appliance\vm\images\guest-assets\appliance-console.tar.gz",
-            )),
+            binary: assets_dir.join("appliance-api-server"),
+            console: Some(assets_dir.join("appliance-console.tar.gz")),
         };
         let script = build_bootstrap(
             &s,
-            Some((Path::new(r"C:\Users\dev\.appliance\vm\images\guest-assets\k3s"), "abc123")),
+            Some((&k3s, "abc123")),
             Some("-----BEGIN CERTIFICATE-----\nX\n-----END CERTIFICATE-----\n"),
             Some(&assets),
             "tok3n",
@@ -1033,6 +1034,7 @@ mod tests {
             "__DEV_MOUNT__",
             "__MOUNT_WIN_PATH__",
             "__DOCKER_PROVISION__",
+            "__RUNTIME_PROVISION__",
             "__BUILDKIT_PROVISION__",
             "__BUILDKITD_GUEST_PORT__",
             "__K3S_AIRGAP_PREAMBLE__",
@@ -1067,10 +1069,12 @@ mod tests {
             "httpd -f -p {} -h /srv/handoff",
             crate::guest::KUBECONFIG_PORT
         )));
-        assert!(script.contains("wslpath -u 'C:\\Users\\dev\\.appliance\\vm\\images\\guest-assets\\k3s'"));
+        let k3s_path = shell_squote(strip_verbatim(&k3s.to_string_lossy()));
+        assert!(script.contains(&format!("wslpath -u '{k3s_path}'")));
         assert!(script.contains("abc123  /usr/local/bin/k3s"));
         // The verbatim prefix is stripped for wslpath.
-        assert!(script.contains(r"wslpath -u 'C:\Users\dev\proj'"));
+        let mount_path = shell_squote(strip_verbatim(mount));
+        assert!(script.contains(&format!("wslpath -u '{mount_path}'")));
         assert!(!script.contains(r"\\?\"));
         // Dev + docker + CA blocks are present; core-ready omits BuildKit.
         assert!(script.contains("appliance-dev: provisioning development environment"));
@@ -1082,18 +1086,11 @@ mod tests {
         )));
         assert!(script.contains("appliance-egress.crt"));
         assert!(script.contains("-----BEGIN CERTIFICATE-----"));
-        // The api-server guest binary: drvfs copy, token, launch env,
-        // ingress manifest, and the traefik route for the profile URL.
-        assert!(script.contains(r"wslpath -u 'C:\Users\dev\.appliance\vm\images\guest-assets\appliance-api-server'"));
-        assert!(script.contains(r"wslpath -u 'C:\Users\dev\.appliance\vm\images\guest-assets\appliance-console.tar.gz'"));
-        assert!(script.contains("printf '%s' 'tok3n' > /etc/appliance/bootstrap-token"));
-        assert!(script.contains(&format!(
-            "PORT={} HOST=0.0.0.0",
-            crate::guest::API_SERVER_GUEST_PORT
-        )));
-        assert!(script.contains("host: api.appliance.localhost"));
-        assert!(script.contains(&format!("\"hostPort\": {}", s.host_port)));
-        assert!(script.contains("/persist/.apiserver-ready"));
+        // VmSpec::defaults is core-only: even supplied assets are not
+        // staged until the spec is promoted to the cluster layer.
+        assert!(!script.contains("APISERVER_SRC=$(wslpath"));
+        assert!(!script.contains("CONSOLE_SRC=$(wslpath"));
+        assert!(!script.contains("/persist/.apiserver-ready"));
         // The user is pinned to the conventional 1000/1000 on WSL.
         assert!(script.contains("APP_UID=1000"));
         assert!(script.contains("APP_GID=1000"));
@@ -1145,7 +1142,7 @@ mod tests {
         let mut s = spec("x");
         s.dev = true;
         s.agent_only = true;
-        s.dev_mount = Some(r"C:\Users\dev\proj".to_string());
+        s.dev_mount = Some(r"C:\project".to_string());
         let script = build_bootstrap(&s, None, None, None, "");
         assert!(script.contains("rm -rf /persist/npm-global"));
         assert!(!script.contains("APPLIANCE_PROJECT=''"), "a mount must stamp a project id");
