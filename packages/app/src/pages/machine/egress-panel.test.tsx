@@ -76,4 +76,13 @@ describe('WSL egress panel', () => {
     expect(stale).not.toContain('Protection enforced');
     expect(stale).not.toContain('enforced (netstack)');
   });
+
+  it('never renders enforced on Windows when the WSL backend reports an enforced boundary', () => {
+    const wsl = renderWsl('strict', {
+      platform: 'windows',
+      policy: { boundary: 'enforced', enforced: true },
+    });
+    expect(wsl).toContain('cooperative (in-guest proxy)');
+    expect(wsl).not.toContain('enforced (netstack)');
+  });
 });

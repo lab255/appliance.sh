@@ -87,7 +87,7 @@ export function EgressPanel({
 
   const reportedEnforced = policy?.boundary ? policy.boundary === 'enforced' : !!policy?.enforced;
   const staleWindowsEngine = platform === 'windows' && policy?.enforcement?.backend !== 'wsl';
-  const enforced = staleWindowsEngine ? false : reportedEnforced;
+  const enforced = platform === 'windows' ? false : reportedEnforced;
   const wsl = platform === 'windows' || policy?.enforcement?.backend === 'wsl';
   const wslMode = policy?.wslMode ?? 'strict';
   const boundaryLabel = staleWindowsEngine
