@@ -50,6 +50,7 @@ import {
   readEntitlementStore,
   stampEntitlementUsage,
 } from './utils/entitlements.js';
+import { engineRuntimeStatusBackend, reconcileRuntimeRecord } from './utils/runtime-reconcile.js';
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
@@ -616,30 +617,14 @@ function runtimePs(args: string[]): void {
   const kept: RuntimeRecord[] = [];
   const statuses = new Map<string, RuntimeAppStatus>();
   for (const record of readRuntimeRegistry()) {
-    const queried = runVmCapture(['runtime', 'status', record.poolVm, record.appId]);
-    if (queried.status !== 0) {
-      kept.push(record);
-      continue;
+    const reconciled = reconcileRuntimeRecord(record, engineRuntimeStatusBackend);
+    kept.push(reconciled.record);
+    if (reconciled.status && reconciled.status.state !== 'missing') {
+      statuses.set(record.appId, reconciled.status as RuntimeAppStatus);
     }
-    let status: RuntimeAppStatus;
-    try {
-      status = JSON.parse(queried.stdout) as RuntimeAppStatus;
-    } catch {
-      kept.push(record);
-      continue;
-    }
-    if (status.state === 'missing') continue;
-    const state = runtimeState(status.state) ?? record.state;
-    const updated: RuntimeRecord = {
-      ...record,
-      state,
-      exitCode: numberOrUndefined(status.exitCode) ?? record.exitCode,
-      updatedAt: new Date().toISOString(),
-    };
-    kept.push(updated);
-    statuses.set(record.appId, status);
   }
-  // ps owns stale pruning: only entries the guest still recognizes survive.
+  // A pool restart deliberately does not auto-start apps. Preserve their
+  // allocations and report stopped until `runtime open` restarts one.
   writeRuntimeRegistry(kept);
   if (json) {
     console.log(
