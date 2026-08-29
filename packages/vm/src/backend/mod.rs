@@ -11,6 +11,8 @@ pub mod kvm;
 pub mod vz;
 #[cfg(target_os = "windows")]
 pub mod wsl;
+#[cfg(target_os = "windows")]
+pub(crate) use wsl::WSL_CONF;
 
 /// Platform-neutral gate for the WSL clock-sync worker, kept here so the
 /// no-revival invariant is tested on every host.

@@ -1293,6 +1293,12 @@ fn run_runtime_command(action: RuntimeCmd, backend_name: &str) -> Result<()> {
             }
             let host_path = std::fs::canonicalize(&plan.share.host_path)
                 .with_context(|| format!("resolve runtime share {}", plan.share.host_path))?;
+            if !host_path.is_dir() {
+                bail!("runtime payload share '{}' is not a directory", host_path.display());
+            }
+            let state_root = canonicalize_with_missing_tail(&crate::store::vm_root());
+            backend::runtime_guest::validate_mount_excludes_state_dir(&host_path, &state_root)
+                .context("validate runtime payload share")?;
             if backend_name == "wsl" {
                 backend::runtime_guest::validate_wsl_runtime_host_path(&host_path.to_string_lossy())?;
             }
@@ -1855,6 +1861,10 @@ fn validate_runtime_plan_against_spec(
 }
 
 fn runtime_start_host_path(persisted: &str, backend_name: &str) -> Result<String> {
+    backend::runtime_guest::validate_mount_excludes_state_dir(
+        std::path::Path::new(backend::runtime_guest::strip_verbatim(persisted)),
+        &canonicalize_with_missing_tail(&crate::store::vm_root()),
+    )?;
     if backend_name == "wsl" {
         backend::runtime_guest::validate_wsl_runtime_host_path(persisted)?;
         return Ok(backend::runtime_guest::strip_verbatim(persisted).to_string());
@@ -2246,14 +2256,21 @@ fn run_egress(action: EgressCmd) -> Result<()> {
 /// host-side fails fast with a clear message instead of a cryptic boot
 /// error.
 fn resolve_mount(path: &str) -> Result<String> {
+    if backend::runtime_guest::is_wsl_drive_root(path) {
+        bail!("--mount path must not be a drive root");
+    }
     let abs = std::fs::canonicalize(path).with_context(|| format!("--mount path '{path}' not found"))?;
     if !abs.is_dir() {
         bail!("--mount path '{}' is not a directory", abs.display());
     }
     let root = canonicalize_with_missing_tail(&crate::store::vm_root());
-    if abs == root || root.starts_with(&abs) {
-        bail!("--mount path must not contain the appliance state dir ({})", root.display());
-    }
+    backend::runtime_guest::validate_mount_excludes_state_dir(&abs, &root)
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "--mount path must not contain the appliance state dir ({})",
+                root.display()
+            )
+        })?;
     Ok(abs.to_string_lossy().into_owned())
 }
 
@@ -2467,6 +2484,12 @@ mod tests {
         assert!(error.to_string().contains("--mount path must not contain the appliance state dir"));
     }
 
+    #[test]
+    fn bare_windows_drive_root_is_rejected_before_canonicalize() {
+        let error = resolve_mount(r"D:\").unwrap_err();
+        assert!(error.to_string().contains("must not be a drive root"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn detached_host_process_uses_its_own_process_group() {
@@ -2549,10 +2572,13 @@ mod tests {
             r"D:\runtime\payload"
         );
         assert!(runtime_start_host_path(r"\\server\share\payload", "wsl").is_err());
+        assert!(runtime_start_host_path(r"D:\", "wsl").is_err());
         assert_eq!(
             runtime_start_host_path("/persisted/vz/payload", "vz").unwrap(),
             "/persisted/vz/payload"
         );
+        let state_root = canonicalize_with_missing_tail(&crate::store::vm_root());
+        assert!(runtime_start_host_path(&state_root.to_string_lossy(), "vz").is_err());
     }
 
     #[test]
