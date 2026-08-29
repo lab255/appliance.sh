@@ -15,6 +15,7 @@ mod guest;
 mod images;
 mod mint;
 mod mitm;
+mod network_lease;
 #[cfg_attr(windows, allow(dead_code))]
 mod net;
 #[cfg_attr(windows, allow(dead_code))]
@@ -24,6 +25,8 @@ mod shell;
 mod spec;
 mod store;
 mod traffic;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod wsl_config;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -71,12 +74,12 @@ enum Cmd {
     Create {
         #[arg(default_value = DEFAULT_VM)]
         name: String,
-        #[arg(long, default_value_t = spec::DEFAULT_CPUS)]
-        cpus: usize,
-        #[arg(long, default_value_t = spec::DEFAULT_MEMORY_MIB)]
-        memory: u64,
-        #[arg(long, default_value_t = spec::DEFAULT_DISK_GIB)]
-        disk: u64,
+        #[arg(long)]
+        cpus: Option<usize>,
+        #[arg(long)]
+        memory: Option<u64>,
+        #[arg(long)]
+        disk: Option<u64>,
         /// Provision this VM as a development environment (dev toolchain
         /// + persistent /persist/workspace you shell into).
         #[arg(long, default_value_t = false)]
@@ -669,6 +672,10 @@ fn run() -> Result<()> {
             agent_only,
             runtime,
         } => {
+            reject_unsupported_windows_sizing(cfg!(windows), cpus, memory, disk)?;
+            let cpus = cpus.unwrap_or(spec::DEFAULT_CPUS);
+            let memory = memory.unwrap_or(spec::DEFAULT_MEMORY_MIB);
+            let disk = disk.unwrap_or(spec::DEFAULT_DISK_GIB);
             // A shared host folder only makes sense in a dev environment,
             // so --mount implies --dev. Agent-only implies --dev too: its
             // readiness handoff waits on the dev toolchain's .dev-ready.
@@ -751,6 +758,7 @@ fn run() -> Result<()> {
             time_budget,
         } => {
             let up_started = std::time::Instant::now();
+            reject_unsupported_windows_sizing(cfg!(windows), cpus, memory, None)?;
             backend.availability()?;
             let mut spec = ensure_spec_for_up(&name, runtime)?;
             // Persist resource overrides into the spec *before* spawning
@@ -2275,6 +2283,34 @@ fn prefetch_boot_artifacts(spec: &VmSpec) -> Result<()> {
     Ok(())
 }
 
+/// WSL exposes CPU, memory, and VHD sizing at the utility-VM/user level,
+/// not per imported distro. Preserve defaults for compatibility, but never
+/// claim an explicit per-VM override succeeded when Windows ignores it.
+fn reject_unsupported_windows_sizing(
+    windows: bool,
+    cpus: Option<usize>,
+    memory_mib: Option<u64>,
+    disk_gib: Option<u64>,
+) -> Result<()> {
+    if !windows || (cpus.is_none() && memory_mib.is_none() && disk_gib.is_none()) {
+        return Ok(());
+    }
+    let mut flags = Vec::new();
+    if cpus.is_some() {
+        flags.push("--cpus");
+    }
+    if memory_mib.is_some() {
+        flags.push("--memory");
+    }
+    if disk_gib.is_some() {
+        flags.push("--disk");
+    }
+    bail!(
+        "{} cannot be set per VM on Windows. Configure WSL-wide sizing under `[wsl2]` in `%USERPROFILE%\\.wslconfig`, run `wsl --shutdown`, then retry without these flags.",
+        flags.join(", ")
+    )
+}
+
 /// Spawn the resident VM host process (this same binary, `run`),
 /// detached, with its output captured in the per-VM host.log — a
 /// silently discarded stderr turns every host-side failure (a proxy
@@ -2350,6 +2386,21 @@ fn tail_of(path: &std::path::Path, n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_refuses_explicit_per_vm_sizing_flags() {
+        assert!(reject_unsupported_windows_sizing(true, None, None, None).is_ok());
+        for result in [
+            reject_unsupported_windows_sizing(true, Some(4), None, None),
+            reject_unsupported_windows_sizing(true, None, Some(8192), None),
+            reject_unsupported_windows_sizing(true, None, None, Some(64)),
+        ] {
+            let message = result.unwrap_err().to_string();
+            assert!(message.contains("cannot be set per VM on Windows"));
+            assert!(message.contains(r"%USERPROFILE%\.wslconfig"));
+        }
+        assert!(reject_unsupported_windows_sizing(false, Some(4), Some(8192), Some(64)).is_ok());
+    }
 
     #[cfg(unix)]
     #[test]

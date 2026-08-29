@@ -77,6 +77,12 @@ impl VmBackend for WslBackend {
     }
 
     fn availability(&self) -> Result<()> {
+        if crate::wsl_config::current_uses_mirrored_networking() {
+            bail!(
+                "WSL mirrored networking is not supported by the managed VM. {}",
+                crate::wsl_config::MIRRORED_NETWORKING_REMEDIATION
+            );
+        }
         match wsl_cmd().arg("--status").output() {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(
                 "WSL is not installed (wsl.exe not found). Install it with `wsl --install` \
@@ -105,7 +111,11 @@ impl VmBackend for WslBackend {
 
         // First observable stage: any tarball/k3s download happens here.
         crate::bringup::clear(&paths.dir);
-        crate::bringup::set(&paths.dir, crate::bringup::Phase::Media, None);
+        crate::bringup::set(
+            &paths.dir,
+            crate::bringup::Phase::Media,
+            Some("skipped (WSL)".to_string()),
+        );
         // The pinned k3s binary is copied into the distro over drvfs and
         // re-verified guest-side. Agent-only VMs run no k3s at all.
         let k3s: Option<(PathBuf, &'static str)> = if spec.agent_only || !spec.cluster {
@@ -158,7 +168,9 @@ impl VmBackend for WslBackend {
         let _ = std::fs::remove_file(paths.agent_ready());
         let _ = std::fs::remove_file(paths.core_ready());
         let _ = std::fs::remove_file(paths.guest_ip());
-        let _ = std::fs::remove_file(paths.gateway_ip());
+        // Keep the last gateway + prefix across boots. Before the new exact
+        // guest lease lands, egress admission uses that recorded WSL /20;
+        // both files are refreshed as soon as address discovery completes.
         let _ = std::fs::remove_file(paths.stop_request());
 
         let log = std::fs::OpenOptions::new()
@@ -174,6 +186,7 @@ impl VmBackend for WslBackend {
             .stderr(Stdio::from(log_err))
             .spawn()
             .context("launch the WSL guest bootstrap")?;
+        spawn_clock_sync(distro.clone());
         eprintln!("VM '{}' started (WSL distro '{distro}')", spec.name);
         crate::bringup::set(&paths.dir, crate::bringup::Phase::Booting, None);
 
@@ -244,17 +257,73 @@ impl VmBackend for WslBackend {
         if !distro_registered(&distro)? {
             return Ok(());
         }
-        let out = wsl_cmd()
-            .args(["--unregister", &distro])
-            .output()
-            .context("wsl --unregister")?;
-        if !out.status.success() {
-            bail!(
-                "could not unregister WSL distro '{distro}': {}",
-                combined_output(&out).trim()
-            );
+        destroy_registered_distro(&distro, |args| {
+            let out = wsl_cmd().args(args).output()?;
+            Ok((out.status.success(), combined_output(&out)))
+        })
+    }
+}
+
+/// Termination is best-effort: an already-stopped distro may reject it,
+/// but unregister must still run because it owns the destructive result.
+/// The runner seam makes the ordering testable without touching WSL.
+fn destroy_registered_distro<F>(distro: &str, mut run: F) -> Result<()>
+where
+    F: FnMut(&[&str]) -> std::io::Result<(bool, String)>,
+{
+    let _ = run(&["--terminate", distro]);
+    let (success, detail) = run(&["--unregister", distro]).context("wsl --unregister")?;
+    if !success {
+        bail!("could not unregister WSL distro '{distro}': {}", detail.trim());
+    }
+    Ok(())
+}
+
+const CLOCK_RESYNC_INTERVAL: Duration = Duration::from_secs(30);
+const CLOCK_WATCH_TICK: Duration = Duration::from_secs(2);
+const WAKE_JUMP_SLACK: Duration = Duration::from_secs(45);
+
+/// Keep WSL's shared utility-VM clock aligned with the Windows host. WSL's
+/// clock commonly stops across host sleep; without this resident push the
+/// api-server's 15-second signature tolerance turns the drift into 401s.
+fn spawn_clock_sync(distro: String) {
+    std::thread::spawn(move || loop {
+        let epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs());
+        if let Ok(epoch) = epoch {
+            let command = format!("{}; hwclock -w 2>/dev/null || true", crate::shell::clock_set_command(epoch));
+            match wsl_cmd()
+                .args(["-d", &distro, "-u", "root", "--", "sh", "-c", &command])
+                .output()
+            {
+                Ok(out) if !out.status.success() => {
+                    eprintln!("clock sync: {}", combined_output(&out).trim());
+                }
+                Err(e) => eprintln!("clock sync: {e}"),
+                _ => {}
+            }
         }
-        Ok(())
+        if wait_watching_for_wake(CLOCK_RESYNC_INTERVAL, CLOCK_WATCH_TICK) {
+            eprintln!("clock sync: post-wake clock push");
+        }
+    });
+}
+
+fn wait_watching_for_wake(total: Duration, tick: Duration) -> bool {
+    let deadline = Instant::now() + total;
+    loop {
+        let wall_before = std::time::SystemTime::now();
+        std::thread::sleep(tick);
+        let wall_elapsed = std::time::SystemTime::now()
+            .duration_since(wall_before)
+            .unwrap_or(tick);
+        if wall_elapsed > tick + WAKE_JUMP_SLACK {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
     }
 }
 
@@ -756,9 +825,10 @@ fn build_bootstrap(
 /// forwards, the kubeconfig/agent handoff, the bringup phases and marker
 /// files `up` polls on — is the same contract.
 fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: bool) -> Result<()> {
-    let guest_ip = discover_guest_ip(distro, Duration::from_secs(120))?;
+    let (guest_ip, prefix_len) = discover_guest_ip(distro, Duration::from_secs(120))?;
     crate::bringup::hostlog(&format!("guest address: {guest_ip}"));
     std::fs::write(vm_dir.join("guest-ip"), guest_ip.to_string())?;
+    std::fs::write(vm_dir.join("guest-prefix-len"), prefix_len.to_string())?;
     // The guest reaches host-side services (the egress proxy) at its
     // default gateway. The WSL NAT prefix is a /20 — NOT the vz /24 —
     // so record the real gateway for egress::guest_proxy_url instead of
@@ -852,7 +922,7 @@ fn host_services(spec: &VmSpec, vm_dir: &Path, distro: &str, apiserver_staged: b
 
 /// Poll `ip addr show eth0` inside the distro until the WSL NAT lease
 /// appears (it is there within a second or two of the distro starting).
-fn discover_guest_ip(distro: &str, timeout: Duration) -> Result<IpAddr> {
+fn discover_guest_ip(distro: &str, timeout: Duration) -> Result<(IpAddr, u8)> {
     let deadline = Instant::now() + timeout;
     loop {
         let out = wsl_cmd()
@@ -860,8 +930,8 @@ fn discover_guest_ip(distro: &str, timeout: Duration) -> Result<IpAddr> {
             .output();
         if let Ok(out) = out {
             if out.status.success() {
-                if let Some(ip) = parse_inet(&decode_wsl(&out.stdout)) {
-                    return Ok(ip);
+                if let Some((ip, prefix_len)) = crate::network_lease::parse_inet_v4(&decode_wsl(&out.stdout)) {
+                    return Ok((IpAddr::V4(ip), prefix_len));
                 }
             }
         }
@@ -870,36 +940,17 @@ fn discover_guest_ip(distro: &str, timeout: Duration) -> Result<IpAddr> {
             // assumes classic NAT networking. Mirrored mode has no NAT
             // eth0 lease, so IP discovery times out here — name the real
             // cause instead of a bare timeout.
-            if wslconfig_uses_mirrored_networking() {
+            if crate::wsl_config::current_uses_mirrored_networking() {
                 bail!(
                     "guest eth0 address did not appear within {timeout:?} — your WSL is in \
-                     mirrored networking mode, which the managed VM does not support yet. \
-                     Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
-                     (or remove the setting), run `wsl --shutdown`, then retry."
+                     mirrored networking mode, which the managed VM does not support yet. {}",
+                    crate::wsl_config::MIRRORED_NETWORKING_REMEDIATION
                 );
             }
             bail!("guest eth0 address did not appear within {timeout:?}");
         }
         std::thread::sleep(Duration::from_millis(500));
     }
-}
-
-/// Whether `%USERPROFILE%\.wslconfig` opts WSL2 into mirrored
-/// networking. A plain-text sniff (ini parsing would be overkill):
-/// uncommented `networkingMode` set to `mirrored`, case-insensitive.
-fn wslconfig_uses_mirrored_networking() -> bool {
-    let Some(home) = std::env::var_os("USERPROFILE") else {
-        return false;
-    };
-    let Ok(text) = std::fs::read_to_string(PathBuf::from(home).join(".wslconfig")) else {
-        return false;
-    };
-    text.lines().any(|line| {
-        let line = line.trim();
-        !line.starts_with('#')
-            && !line.starts_with(';')
-            && line.to_lowercase().replace(' ', "").starts_with("networkingmode=mirrored")
-    })
 }
 
 /// The distro's default-gateway IPv4 — where the Windows host answers on
@@ -923,23 +974,6 @@ fn parse_default_via(raw: &str) -> Option<IpAddr> {
             if let Some(addr) = tokens.next() {
                 if let Ok(ip) = addr.parse::<std::net::Ipv4Addr>() {
                     return Some(IpAddr::V4(ip));
-                }
-            }
-        }
-    }
-    None
-}
-
-/// First non-loopback IPv4 `inet` address off `ip addr` output.
-fn parse_inet(raw: &str) -> Option<IpAddr> {
-    for line in raw.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("inet ") {
-            if let Some(addr) = rest.split(['/', ' ']).next() {
-                if let Ok(ip) = addr.parse::<std::net::Ipv4Addr>() {
-                    if !ip.is_loopback() {
-                        return Some(IpAddr::V4(ip));
-                    }
                 }
             }
         }
@@ -974,6 +1008,25 @@ mod tests {
     }
 
     #[test]
+    fn destroy_terminates_before_unregistering() {
+        let mut calls: Vec<Vec<String>> = Vec::new();
+        destroy_registered_distro("appliance-vm-test", |args| {
+            calls.push(args.iter().map(|arg| (*arg).to_string()).collect());
+            // Termination failure is deliberately ignored; unregister still
+            // owns the final result.
+            Ok((calls.len() != 1, "already stopped".to_string()))
+        })
+        .unwrap();
+        assert_eq!(
+            calls,
+            vec![
+                vec!["--terminate".to_string(), "appliance-vm-test".to_string()],
+                vec!["--unregister".to_string(), "appliance-vm-test".to_string()],
+            ]
+        );
+    }
+
+    #[test]
     fn parses_the_default_gateway() {
         // The WSL NAT is a /20 — the gateway is NOT the .1 of the
         // guest's /24, so it must come from the route table verbatim.
@@ -992,12 +1045,12 @@ mod tests {
                    inet 172.20.240.2/20 brd 172.20.255.255 scope global eth0\n    \
                    inet6 fe80::215:5dff:fe01:203/64 scope link\n";
         assert_eq!(
-            parse_inet(raw),
-            Some("172.20.240.2".parse::<IpAddr>().unwrap())
+            crate::network_lease::parse_inet_v4(raw),
+            Some(("172.20.240.2".parse().unwrap(), 20))
         );
         // Loopback is never the guest address; absent eth0 parses to none.
-        assert_eq!(parse_inet("inet 127.0.0.1/8 scope host lo"), None);
-        assert_eq!(parse_inet(""), None);
+        assert_eq!(crate::network_lease::parse_inet_v4("inet 127.0.0.1/8 scope host lo"), None);
+        assert_eq!(crate::network_lease::parse_inet_v4(""), None);
     }
 
     #[test]
