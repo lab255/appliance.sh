@@ -11,6 +11,7 @@ name = "appliance-vm"
 path = "src/main.rs"
 
 [dependencies]
+appliance-credential-store = { path = "../credential-store", default-features = false, features = ["file"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

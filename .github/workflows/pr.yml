@@ -190,6 +190,7 @@ jobs:
           New-Item -ItemType Directory -Force packages/desktop/src-tauri/vm-bin | Out-Null
           New-Item -ItemType Directory -Force packages/desktop/src-tauri/apiserver-bin | Out-Null
           New-Item -ItemType File -Force packages/desktop/src-tauri/binaries/appliance-x86_64-pc-windows-msvc.exe | Out-Null
+          New-Item -ItemType File -Force packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe | Out-Null
           New-Item -ItemType File -Force packages/desktop/src-tauri/vm-bin/appliance-vm.exe | Out-Null
       - name: Check desktop Rust
         run: cargo check --manifest-path packages/desktop/src-tauri/Cargo.toml

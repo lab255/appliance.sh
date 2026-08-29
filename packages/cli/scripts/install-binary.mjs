@@ -15,6 +15,12 @@ import * as fs from 'node:fs';
 import * as https from 'node:https';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  credentialHelperAssetName,
+  credentialHelperInstallPath,
+  expectedCredentialHelperDigest,
+  verifyDownloadedSha256,
+} from './binary-integrity.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgDir = path.resolve(__dirname, '..');
@@ -59,15 +65,21 @@ const destBin = path.join(binDir, `appliance-bin${ext}`);
 
 fs.mkdirSync(binDir, { recursive: true });
 
-await downloadWithRetry(url, destBin, {
-  attempts: 6,
-  // 5/10/20/40/80s — covers the typical ~5 minute window between npm
-  // publish and the GitHub Release asset upload completing.
-  delayMs: (n) => Math.min(5000 * 2 ** n, 80_000),
-});
-if (process.platform !== 'win32') fs.chmodSync(destBin, 0o755);
+try {
+  await downloadWithRetry(url, destBin, retryOptions());
+  if (process.platform !== 'win32') fs.chmodSync(destBin, 0o755);
+  console.log(`appliance-cli: installed ${assetName} (v${version}) at ${destBin}`);
 
-console.log(`appliance-cli: installed ${assetName} (v${version}) at ${destBin}`);
+  // Windows callers require the typed Credential Manager companion. Keep the
+  // naming/digest tables per-target so adding another helper consumer later is
+  // data-only, while installing only the Windows helper for this card.
+  if (process.platform === 'win32') {
+    await installCredentialHelper({ triple, version });
+  }
+} catch (err) {
+  console.error(`appliance-cli: installation failed: ${err.message ?? err}`);
+  process.exit(1);
+}
 
 // ---- helpers ----------------------------------------------------------
 
@@ -98,6 +110,39 @@ function isInsideWorkspace(startDir) {
   return false;
 }
 
+function retryOptions() {
+  return {
+    attempts: 6,
+    // 5/10/20/40/80s — covers the typical ~5 minute window between npm
+    // publish and the GitHub Release asset upload completing.
+    delayMs: (n) => Math.min(5000 * 2 ** n, 80_000),
+  };
+}
+
+async function installCredentialHelper({ triple, version }) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'credential-helper-checksums.json'), 'utf-8'));
+  const expectedDigest = expectedCredentialHelperDigest(manifest, triple);
+  const helperAsset = credentialHelperAssetName(triple);
+  const helperUrl = `https://github.com/lab255/appliance.sh/releases/download/v${version}/${helperAsset}`;
+  const destination = credentialHelperInstallPath(pkgDir, process.platform);
+  const candidate = `${destination}.verifying.${process.pid}`;
+
+  fs.rmSync(candidate, { force: true });
+  try {
+    await downloadWithRetry(helperUrl, candidate, retryOptions());
+    verifyDownloadedSha256(candidate, expectedDigest);
+    // The candidate is verified before the canonical helper is replaced. On
+    // any later failure, remove both paths so install remains fail-closed.
+    fs.rmSync(destination, { force: true });
+    fs.renameSync(candidate, destination);
+  } catch (error) {
+    fs.rmSync(candidate, { force: true });
+    fs.rmSync(destination, { force: true });
+    throw error;
+  }
+  console.log(`appliance-cli: installed ${helperAsset} (sha256 ${expectedDigest}) at ${destination}`);
+}
+
 async function downloadWithRetry(srcUrl, dest, opts) {
   const { attempts, delayMs } = opts;
   for (let n = 0; n < attempts; n++) {
@@ -116,8 +161,8 @@ async function downloadWithRetry(srcUrl, dest, opts) {
         if (lastAttempt) {
           console.error('  After multiple retries — check your network and retry, or download manually:');
           console.error('  https://github.com/lab255/appliance.sh/releases');
-          process.exit(1);
         }
+        throw err;
       }
       const wait = delayMs(n);
       console.warn(

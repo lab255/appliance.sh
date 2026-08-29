@@ -24,6 +24,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(desktopRoot, '..', '..');
 const cliDist = path.join(repoRoot, 'packages', 'cli', 'dist');
+const credhelperRoot = path.join(repoRoot, 'packages', 'credhelper');
 const binariesDir = path.join(desktopRoot, 'src-tauri', 'binaries');
 
 /**
@@ -75,18 +76,40 @@ function sourceBinary(triple) {
   throw new Error(`No CLI binary found in ${cliDist}. Run \`pnpm --filter @appliance.sh/cli run compile\` first.`);
 }
 
+function buildCredentialHelper(triple) {
+  execFileSync(
+    'cargo',
+    ['build', '--locked', '--release', '--manifest-path', path.join(credhelperRoot, 'Cargo.toml'), '--target', triple],
+    { cwd: repoRoot, stdio: 'inherit', windowsHide: true }
+  );
+  const extension = triple.includes('windows') ? '.exe' : '';
+  const source = path.join(credhelperRoot, 'target', triple, 'release', `appliance-credhelper${extension}`);
+  if (!fs.existsSync(source)) {
+    throw new Error(`Credential helper build did not produce ${source}`);
+  }
+  return source;
+}
+
+function copyExecutable(source, destination, triple) {
+  fs.copyFileSync(source, destination);
+  if (!triple.includes('windows')) {
+    fs.chmodSync(destination, 0o755);
+  }
+}
+
 function main() {
   const triple = targetTriple();
   const ext = triple.includes('windows') ? '.exe' : '';
-  const src = sourceBinary(triple);
-  const dest = path.join(binariesDir, `appliance-${triple}${ext}`);
+  const cliSource = sourceBinary(triple);
+  const cliDestination = path.join(binariesDir, `appliance-${triple}${ext}`);
+  const helperSource = buildCredentialHelper(triple);
+  const helperDestination = path.join(binariesDir, `appliance-credhelper-${triple}${ext}`);
 
   fs.mkdirSync(binariesDir, { recursive: true });
-  fs.copyFileSync(src, dest);
-  if (!triple.includes('windows')) {
-    fs.chmodSync(dest, 0o755);
-  }
-  console.log(`copy-cli: ${path.relative(repoRoot, src)} → ${path.relative(repoRoot, dest)}`);
+  copyExecutable(cliSource, cliDestination, triple);
+  copyExecutable(helperSource, helperDestination, triple);
+  console.log(`copy-cli: ${path.relative(repoRoot, cliSource)} → ${path.relative(repoRoot, cliDestination)}`);
+  console.log(`copy-cli: ${path.relative(repoRoot, helperSource)} → ${path.relative(repoRoot, helperDestination)}`);
 }
 
 main();

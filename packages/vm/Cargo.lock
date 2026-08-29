@@ -74,10 +74,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "appliance-credential-store"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.18",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "appliance-vm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "appliance-credential-store",
  "block2",
  "clap",
  "dispatch2",

@@ -22,6 +22,8 @@ jobs:
   build:
     name: Build + publish CLI binaries
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,3 +147,109 @@ jobs:
             appliance-api-server-linux-x64 \
             appliance-api-server-linux-arm64 \
             appliance-console.tar.gz
+
+  build-credential-helper:
+    name: Build + publish credential helper (${{ matrix.triple }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: aarch64-apple-darwin
+            runs_on: macos-14
+            extension: ''
+          - triple: x86_64-apple-darwin
+            runs_on: macos-15-intel
+            extension: ''
+          - triple: x86_64-unknown-linux-gnu
+            runs_on: ubuntu-latest
+            extension: ''
+          - triple: aarch64-unknown-linux-gnu
+            runs_on: ubuntu-24.04-arm
+            extension: ''
+          - triple: x86_64-pc-windows-msvc
+            # The npm package contains this asset's digest before the
+            # downstream build runs. Use the pinned, reproducible cross-build
+            # recipe below and guard its output against that baked digest.
+            runs_on: ubuntu-latest
+            extension: '.exe'
+    runs-on: ${{ matrix.runs_on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/credhelper
+
+      - name: Build credential helper (native target)
+        if: matrix.triple != 'x86_64-pc-windows-msvc'
+        run: >-
+          cargo build --locked --release
+          --manifest-path packages/credhelper/Cargo.toml
+          --target ${{ matrix.triple }}
+
+      - name: Install pinned Windows cross-builder
+        if: matrix.triple == 'x86_64-pc-windows-msvc'
+        run: cargo install cargo-xwin --version 0.23.1 --locked
+
+      - name: Build + normalize credential helper (Windows)
+        if: matrix.triple == 'x86_64-pc-windows-msvc'
+        env:
+          RUSTFLAGS: '-Clink-arg=/timestamp:0'
+          XWIN_MSVC_SYSROOT_DOWNLOAD_URL: https://github.com/trcrsired/windows-msvc-sysroot/releases/download/2026-08-07/windows-msvc-sysroot.tar.xz
+        run: |
+          cargo xwin build --locked --release --cross-compiler clang --xwin-version 17 \
+            --manifest-path packages/credhelper/Cargo.toml \
+            --target x86_64-pc-windows-msvc
+          node packages/cli/scripts/normalize-credential-helper-pe.mjs \
+            packages/credhelper/target/x86_64-pc-windows-msvc/release/appliance-credhelper.exe
+
+      - name: Stage binary + SHA-256
+        id: stage
+        shell: bash
+        env:
+          TRIPLE: ${{ matrix.triple }}
+          EXTENSION: ${{ matrix.extension }}
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/credential-helper-release"
+          ASSET="appliance-credhelper-${TRIPLE}${EXTENSION}"
+          SOURCE="packages/credhelper/target/${TRIPLE}/release/appliance-credhelper${EXTENSION}"
+          mkdir -p "$OUT"
+          cp "$SOURCE" "$OUT/$ASSET"
+          if command -v sha256sum >/dev/null 2>&1; then
+            DIGEST=$(sha256sum "$OUT/$ASSET" | cut -d ' ' -f 1)
+          else
+            DIGEST=$(shasum -a 256 "$OUT/$ASSET" | cut -d ' ' -f 1)
+          fi
+          if [ "$TRIPLE" = "x86_64-pc-windows-msvc" ]; then
+            BAKED_DIGEST=$(node --input-type=module -e \
+              "import fs from 'node:fs'; const value=JSON.parse(fs.readFileSync('packages/cli/scripts/credential-helper-checksums.json','utf8')).digests['x86_64-pc-windows-msvc']; process.stdout.write(value ?? '')")
+            if [ "$DIGEST" != "$BAKED_DIGEST" ]; then
+              echo "::error::Windows credential-helper digest drifted from the value baked into the npm package." >&2
+              echo "built: $DIGEST" >&2
+              echo "baked: $BAKED_DIGEST" >&2
+              exit 1
+            fi
+          fi
+          printf '%s  %s\n' "$DIGEST" "$ASSET" > "$OUT/$ASSET.sha256"
+          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+
+      - name: Upload helper + SHA-256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.build.outputs.tag }}
+          OUT: ${{ steps.stage.outputs.out }}
+          ASSET: ${{ steps.stage.outputs.asset }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" --clobber "$OUT/$ASSET" "$OUT/$ASSET.sha256"
