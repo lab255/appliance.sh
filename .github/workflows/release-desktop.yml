@@ -15,6 +15,11 @@ on:
         type: boolean
         required: false
         default: false
+      publish:
+        description: Publish the built bundles to a GitHub Release. Disable for branch smoke tests.
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write # to upload DMGs + the updater manifest to the release
@@ -382,6 +387,100 @@ jobs:
           fi
           echo "Updater signature present: $SIG"
 
+      - name: Install NSIS bundle silently
+        id: install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem 'packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe' |
+            Select-Object -First 1
+          if (-not $setup) { throw 'No NSIS *-setup.exe bundle was produced.' }
+
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($installer.ExitCode -ne 0) { throw "NSIS installer exited $($installer.ExitCode)." }
+
+          $installDir = Join-Path $env:LOCALAPPDATA 'Appliance'
+          if (-not (Test-Path $installDir -PathType Container)) {
+            throw "NSIS installer did not create expected currentUser directory: $installDir"
+          }
+          "install_dir=$installDir" >> $env:GITHUB_OUTPUT
+
+      - name: Verify installed binaries (GUI launch skipped — no smoke flag)
+        shell: pwsh
+        env:
+          INSTALL_DIR: ${{ steps.install.outputs.install_dir }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $required = @(
+            'appliance-desktop.exe',
+            'appliance-x86_64-pc-windows-msvc.exe',
+            'vm-bin\appliance-vm.exe'
+          )
+          foreach ($relative in $required) {
+            $path = Join-Path $env:INSTALL_DIR $relative
+            if (-not (Test-Path $path -PathType Leaf)) { throw "Installed bundle is missing $relative" }
+          }
+
+          $stagedApiServer = 'packages/desktop/src-tauri/apiserver-bin'
+          $apiServerFiles = @(Get-ChildItem $stagedApiServer -File -Recurse -ErrorAction SilentlyContinue)
+          foreach ($file in $apiServerFiles) {
+            $relative = [IO.Path]::GetRelativePath($stagedApiServer, $file.FullName)
+            $installed = Join-Path $env:INSTALL_DIR (Join-Path 'apiserver-bin' $relative)
+            if (-not (Test-Path $installed -PathType Leaf)) {
+              throw "Installed bundle is missing staged apiserver-bin\$relative"
+            }
+          }
+
+          function Get-VersionOutput([string] $path) {
+            $output = (& $path --version 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) { throw "$path --version exited $LASTEXITCODE." }
+            if ([string]::IsNullOrWhiteSpace($output)) { throw "$path --version printed no version." }
+            return $output
+          }
+
+          $desktopVersion = (Get-Content 'packages/desktop/package.json' | ConvertFrom-Json).version
+          $vmManifest = Get-Content 'packages/vm/Cargo.toml' -Raw
+          $vmVersion = [regex]::Match($vmManifest, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          $sidecarVersion = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'appliance-x86_64-pc-windows-msvc.exe')
+          $vmVersionOutput = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'vm-bin\appliance-vm.exe')
+          if ($sidecarVersion -notmatch "(?m)^v?$([regex]::Escape($desktopVersion))$") {
+            throw "Sidecar version '$sidecarVersion' does not match desktop package version '$desktopVersion'."
+          }
+          if ($vmVersionOutput -notmatch "(?m)^appliance-vm $([regex]::Escape($vmVersion))$") {
+            throw "VM version '$vmVersionOutput' does not match packages/vm/Cargo.toml '$vmVersion'."
+          }
+
+          @(
+            '### Windows NSIS installed-bundle smoke test',
+            '',
+            "Install directory: ``$env:INSTALL_DIR``",
+            '',
+            '#### Runnable versions',
+            '',
+            "- CLI sidecar: ``$sidecarVersion``",
+            "- VM engine: ``$vmVersionOutput``",
+            '',
+            '#### Installed files',
+            ''
+          ) >> $env:GITHUB_STEP_SUMMARY
+          Get-ChildItem $env:INSTALL_DIR -File -Recurse | Sort-Object FullName | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($env:INSTALL_DIR, $_.FullName)
+            "- ``$relative`` ($($_.Length) bytes)" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Uninstall smoke-tested bundle
+        if: always()
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:LOCALAPPDATA 'Appliance'
+          $uninstaller = Join-Path $installDir 'uninstall.exe'
+          if (Test-Path $uninstaller -PathType Leaf) {
+            $process = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "NSIS uninstaller exited $($process.ExitCode)." }
+          } else {
+            Write-Host "No installed uninstaller to run at $uninstaller"
+          }
+
       - name: Stage release assets
         id: stage
         working-directory: packages/desktop/src-tauri/target/release/bundle
@@ -417,6 +516,7 @@ jobs:
   # ----------------------------------------------------------------------
   publish:
     name: Publish bundles + updater manifest
+    if: inputs.publish
     needs: [build, build-windows]
     runs-on: ubuntu-latest
     steps:
