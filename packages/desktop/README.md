@@ -10,8 +10,10 @@ Tauri 2 shell for the Appliance desktop app. Frontend is `@appliance.sh/app`; th
 
 ## Windows notes
 
-The Windows build is fully supported (WSL2 backend). Platform specifics worth
-knowing when touching the Rust shell:
+The Windows desktop supports the scoped WSL2 workflow covered by the
+[Windows live-test runbook](../../docs/live-test-runbook-windows.md); features
+outside that certification are not implied to have macOS parity. Platform
+specifics worth knowing when touching the Rust shell:
 
 - **Guest shells ride `wsl.exe`, not a socket.** The vsock relay socket
   (`~/.appliance/vm/<vm>/shell.sock`) is a unix-only artifact; on Windows

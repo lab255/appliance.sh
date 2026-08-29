@@ -113,7 +113,7 @@ export interface AuthMode {
  *  another CLI agent is a new object — no transport/broker/runner change. */
 export interface AgentAdapter {
   type: string; // 'claude-code' | 'copilot' | 'codex'  (the registry/`--type` key)
-  /** The per-agent host cred-store key (Keychain account / 0600 filename) — §4.
+  /** The per-agent host cred-store key (OS-store account / Linux filename) — §4.
    *  Distinct stores so three agents' credentials never collide. */
   provider: string; // 'anthropic' | 'github-copilot' | 'openai'
   install: AgentInstall;
@@ -392,9 +392,12 @@ Requests` permission** before the prompt — that single scope is what makes
   `kind:'api-key'`.
 
 **Per-agent host store key.** The single Anthropic store generalizes to one item
-**per provider**: Keychain service `sh.appliance.agent`, **account =
-`adapter.provider`** (`anthropic` / `github-copilot` / `openai`); off-macOS a
-`0600` file `~/.appliance/agent/<provider>-cred`. So `readAgentKey(provider)`,
+**per provider**: service `sh.appliance.agent`, **account =
+`adapter.provider`** (`anthropic` / `github-copilot` / `openai`) in macOS
+Keychain or Windows Credential Manager; Linux uses an owner-only file at
+`~/.appliance/agent/<provider>-cred`. The Windows mapping and migration are
+covered by [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts).
+So `readAgentKey(provider)`,
 `writeAgentKey(provider, value, kind)`, `forgetAgentKey(provider)`, and
 `print-key --type <agent>` all key off the provider. Three agents' credentials
 coexist without collision, and `agent login --type copilot` never clobbers the
@@ -492,7 +495,7 @@ host-injection cred rule on one host**, fed by a host-resolved `print-key`,
 the [docs/agent-sandbox.md](agent-sandbox.md) §3/§4c guarantees, header-/scheme-
 agnostic, so they extend to `token`/`Bearer` unchanged. The **durable**
 credential (Anthropic key/OAuth, GitHub PAT, OpenAI key) lives **host-side only**
-(Keychain / `0600`), is written onto the request **only at the proxy on the
+(platform host store), is written onto the request **only at the proxy on the
 outbound copy**, and the guest holds at most an inert placeholder. The microVM
 remains the only real isolation boundary; egress is cooperative unless
 `net_link=Netstack` (then host-enforced); a jailbroken guest can spend brokered

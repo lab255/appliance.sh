@@ -201,121 +201,54 @@ The CLI gets the same reads for free (`appliance vm` could grow
 `workloads` / `logs` subcommands calling the new SDK methods) but that is not
 required for E4.3.
 
-## 5. Credential unification (E4.4) — Keychain-first (IMPLEMENTED)
+## 5. Credential unification (E4.4) — platform stores (IMPLEMENTED)
 
-**Current behavior.** The canonical secret store is the **OS keystore (macOS
-Keychain) on macOS**, with **`~/.appliance/profiles.json`
-(mode `0600`) as the fallback on non-macOS** (Linux / cloud / CI). The goal is a
-cluster authed in the desktop being usable by the CLI and vice-versa, with the
-secret living in the Keychain where one exists and **never duplicated to
-cleartext on macOS**. The notes below record what shipped (option (c) from the
-old "security fork", not (a)).
+Desktop and CLI share `profiles.json` for cluster discovery and metadata, but
+the platform determines where the secret is canonical:
 
-### The model — who reads what, from where
+| Platform | Secret source                                                              | File posture                                        | Evidence                                                                         |
+| -------- | -------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| macOS    | Keychain                                                                   | metadata plus empty secret after reconciliation     | [`keychain.spec.ts`](../packages/cli/src/utils/keychain.spec.ts)                 |
+| Windows  | Credential Manager through the packaged sibling `appliance-credhelper.exe` | metadata plus empty secret after verified migration | [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts) |
+| Linux    | owner-only files                                                           | cleartext secret remains at rest in `profiles.json` | [`file.rs`](../packages/credential-store/src/file.rs)                            |
 
-| Platform      | Canonical secret store                                | profiles.json holds                                                                   | CLI reads the secret from           |
-| ------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------- |
-| **macOS**     | OS Keychain (`sh.appliance.desktop` / `cluster:<id>`) | metadata only (apiUrl, keyId, name, …); **empty secret** for desktop-managed clusters | the Keychain (file is the fallback) |
-| **non-macOS** | `~/.appliance/profiles.json` (`0600`)                 | full credential (apiUrl, keyId, **secret**)                                           | profiles.json                       |
+The Windows CLI and desktop use the same typed Credential Manager contract;
+there is no DPAPI-unreadable CLI exception and no planned DPAPI-wrapped file
+DEK in this design. The helper uses private binary pipes and distinct
+fail-closed statuses, and its release digest is pinned. See
+[credentials.md](credentials.md#windows-helper-contract) and
+[`windows_cli.rs`](../packages/credhelper/tests/windows_cli.rs).
 
-Both surfaces still share **one** `profiles.json` for metadata + cluster
-discovery, so desktop and CLI see the same set of clusters everywhere.
+Windows migration is lazy, idempotent, and read-back verified. Equal legacy
+copies are scrubbed; differing copies remain intact and report `conflict`.
+After a successful scrub, an older Windows binary must be upgraded or the user
+must sign in again. [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts)
+covers this downgrade boundary and conflict preservation.
 
-**Forgetting a cluster (distinct from teardown).** Dropping a cluster from that
-shared set is a pure local-registry op — the inverse of _registering_ it, not of
-_bootstrapping_ it — and never touches any infrastructure. On the CLI it's
-`appliance cluster rm <name>` (the `appliance cluster` group is the user-facing
-view of the profile store, framed as clusters to match the desktop; `appliance
-profile` remains the lower-level alias). It removes the profile via
-`removeProfile` (which re-points `activeProfile` to a surviving cluster) and, on
-macOS, the desktop mirror's Keychain entry ages out on the next reconcile. For a
-local microVM cluster, `--delete-vm` additionally removes the backing VM + its
-state (sharing the `deleteVmAndProfile` helper `appliance vm delete` uses); the
-default leaves the VM on disk. On the desktop the same forget is the per-row
-**Remove** action on a connected cluster (`host.removeCluster`, a non-destructive
-confirm), visually distinct from the red **Destroy** panel. Destroying the actual
-cloud infrastructure stays `appliance teardown` / the Destroy panel (`pulumi
-destroy`), never `cluster rm`.
+### Doctor coherence states
 
-### Implementation
+Windows checks every profile; it does not return `not-applicable`. macOS checks
+desktop-managed profiles, while Linux has no OS-store coherence row. Doctor
+distinguishes `missing`, `denied`, `malformed`, `migrated`, `conflict`,
+`helper-missing`, and `legacy-name`. `doctor --fix` retries only safe
+write-back/migration cases; conflicts preserve both values for an explicit
+re-login decision. [`runtime-doctor.spec.ts`](../packages/cli/src/utils/runtime-doctor.spec.ts)
+asserts each rendered state and [`credential-store.spec.ts`](../packages/cli/src/utils/credential-store.spec.ts)
+asserts the underlying Windows probes.
 
-**CLI — read (`packages/cli/src/utils/keychain.ts`, wired in
-`utils/credentials.ts` `loadCredentials`).** A new `resolveProfileSecret(name,
-profile)` resolves the secret **Keychain-first on macOS** for desktop-managed
-profiles (`managed === "desktop"`), falling back to the file copy elsewhere /
-on a miss. The Keychain account mirrors the desktop's naming exactly — service
-`sh.appliance.desktop`, account `cluster:<id>`, where the profiles.json map key
-**is** the desktop cluster id. The read shells out to
-`/usr/bin/security find-generic-password -w` and parses the stored JSON
-`{"id","secret"}` (a serialized `ApiKey`). The pure `chooseCredential()` helper
-is unit-tested (`keychain.spec.ts`): Keychain wins normally, but a non-empty
-file secret whose `keyId` differs from the Keychain's is treated as **fresher**
-(a CLI rotate that couldn't reach the Keychain) and preferred — `keyId` is the
-version marker, so a degraded write self-heals instead of serving a stale key.
-All existing SDK-client consumers (`deploy`, `logs`, `open`, `whoami`, `keys`,
-…) go through `loadCredentials`, so they pick this up for free.
+### Remaining boundaries
 
-**Desktop — write (`packages/desktop/src-tauri/src/lib.rs`).**
-`mirror_to_shared_profiles` now writes an **empty secret** into profiles.json
-for desktop-managed clusters on macOS (`shared_secret_for_platform`, pure +
-unit-tested), keeping the (non-secret) `keyId`/metadata and leaving the secret
-solely in the Keychain. `seed_profiles_from_keychain` (which used to copy
-Keychain secrets _into_ profiles.json) is a **no-op on macOS** — that copy is
-exactly the cleartext duplication we now avoid; it stays active on non-macOS,
-where the file is canonical. `ingest_shared_into_legacy` skips the Keychain
-write when a shared entry's secret is empty, so a metadata-only macOS entry can
-never clobber the real Keychain copy.
+Linux credential files remain cleartext at rest; owner-only mode/ACL limits
+ordinary cross-user reads but is not encryption. Desktop and CLI also do not
+share one cross-process metadata lock: each writes atomically, but a concurrent
+desktop/CLI read-modify-write remains last-writer-wins. The CLI lock behavior
+is covered by [`profiles-lock.spec.ts`](../packages/cli/src/utils/profiles-lock.spec.ts).
 
-**Bridge — both directions.**
-
-- _Desktop-authed → CLI:_ desktop writes secret → Keychain + metadata →
-  profiles.json; CLI reads metadata from the file and the secret from the
-  Keychain. No cleartext on disk.
-- _CLI-authed → desktop:_ unchanged. `appliance login` / `init` / `vm up`
-  create **CLI-managed** profiles (secret in profiles.json), and the desktop
-  adopts them via the existing `sync_microvm_cluster` / `synced_key_id`
-  reconcile (profiles.json → Keychain on a `keyId` mismatch, judged by file
-  comparison so it never prompts). `appliance keys rotate` of a desktop-managed
-  cluster now pushes the new key **to the Keychain** (`writeKeychainApiKey`,
-  `-U` upsert) and keeps profiles.json secret empty; if that write fails it
-  falls back to writing the secret to the file, and the differing `keyId` makes
-  the CLI prefer that fresher copy.
-
-**Concurrency — `flock` on profiles.json.** `profile-store.ts` now wraps every
-read-modify-write (`upsertProfile` / `removeProfile` / `setActiveProfile`) in a
-best-effort advisory lockfile (`profiles.json.lock`, O_EXCL with stale-steal
-after 10 s and a 2 s give-up so it never wedges the CLI). This closes the
-CLI-vs-CLI interleave from the `credentials.md` open question (e.g. `keys
-rotate` racing `vm up`). **Residual:** the desktop (Rust) still uses an
-in-process mutex + atomic temp-rename and does **not** yet take this lockfile,
-so a desktop↔CLI interleave remains last-writer-wins (both write atomically, so
-no half-written read). Having the desktop adopt the same lockfile is the
-remaining piece.
-
-### At-rest security posture
-
-- **macOS:** the secret lives **only** in the OS-hardened, access-gated
-  Keychain. profiles.json carries metadata with an empty secret — no cleartext
-  secret on disk. Strongest posture; this is option (c) from the old fork.
-- **non-macOS:** secret in `profiles.json` at `0600` (cleartext), unchanged from
-  the CLI's prior posture — the CLI can't read libsecret/DPAPI, so the file
-  stays canonical there.
-
-**Flagged for review:**
-
-1. **Cross-binary Keychain access prompt.** The CLI reads the desktop-created
-   item via `/usr/bin/security` (a different binary), which can trigger a
-   one-time macOS access dialog; "Always Allow" suppresses it thereafter. This
-   is macOS ACL behaviour and is unavoidable without shipping a co-signed,
-   access-group-sharing CLI binary. A declined prompt → the CLI falls back to
-   the (empty) file secret and auth fails until allowed.
-2. **Secret on argv in the rotate write path.** `security add-generic-password`
-   has no stdin password option, so `writeKeychainApiKey` passes the new secret
-   on argv, briefly visible to `ps`. Scoped to the rare desktop-managed
-   `keys rotate` path only; the read path puts nothing sensitive on argv.
-3. **Linux/cloud cleartext.** Future hardening could encrypt profiles.json at
-   rest with an OS-bound key (libsecret/DPAPI-wrapped DEK) so the non-macOS
-   canonical file is ciphertext. Out of scope for E4.4.
+On macOS, `/usr/bin/security` writes still place a rotated value on that
+utility's argv and Keychain access can prompt. On Windows, Credential Manager
+does not defend against same-user, Administrator, SYSTEM, or allowed WSL
+interop execution. The full residual and managed-distro interop mitigation are
+in [credentials.md](credentials.md#windows-residual-risk).
 
 ## 6. One ObjectStore per server (confirmed)
 
