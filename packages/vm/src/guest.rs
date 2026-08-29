@@ -1690,13 +1690,13 @@ nohup setsid sh -c '
     --cap-drop CAP_SYS_CHROOT \
     --cap-drop CAP_KILL \
     --cap-drop CAP_AUDIT_WRITE
-  while IFS="$(printf '\t')" read -r KEY VALUE; do
+  while IFS="$(printf "\t")" read -r KEY VALUE; do
     case "$KEY" in HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy) continue;; esac
-    DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+    DECODED=$(printf "%s" "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
     set -- "$@" --env "$KEY=$DECODED"
   done < "$STATE/env.tsv"
   [ ! -s "$STATE/ctr.env" ] || set -- "$@" --env-file "$STATE/ctr.env"
-  if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ -f "$EGRESS_CA" ]; then
+  if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf "\t")" "$STATE/env.tsv" && [ -f "$EGRESS_CA" ]; then
     set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
   fi
   set +e
@@ -1705,7 +1705,7 @@ nohup setsid sh -c '
   else
     set -- "$@" --rootfs --cwd "$BINARY_CWD" "$STAGED" "$CID" "/$ENTRYPOINT"
     while IFS= read -r VALUE; do
-      DECODED=$(printf '%s' "$VALUE" | base64 -d)
+      DECODED=$(printf "%s" "$VALUE" | base64 -d)
       set -- "$@" "$DECODED"
     done < "$STATE/args.txt"
     ctr -n "$CTR_NS" run --rm --user "$UID_NUM:$UID_NUM" --cgroup "appliance/$APP" --seccomp --with-ns "network:/var/run/netns/$NS" "$@" >> "$STATE/current.log" 2>&1
@@ -2151,9 +2151,9 @@ start_service() {
         --cap-drop CAP_SETGID --cap-drop CAP_SETUID --cap-drop CAP_SETFCAP \
         --cap-drop CAP_SETPCAP --cap-drop CAP_NET_BIND_SERVICE \
         --cap-drop CAP_SYS_CHROOT --cap-drop CAP_KILL --cap-drop CAP_AUDIT_WRITE
-      while IFS="$(printf '\t')" read -r KEY VALUE; do
+      while IFS="$(printf "\t")" read -r KEY VALUE; do
         case "$KEY" in HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy) continue;; esac
-        DECODED=$(printf '%s' "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
+        DECODED=$(printf "%s" "$VALUE" | base64 -d; printf x); DECODED=${DECODED%x}
         set -- "$@" --env "$KEY=$DECODED"
       done < "$SERVICE/env.tsv"
       [ ! -s "$SERVICE/ctr.env" ] || set -- "$@" --env-file "$SERVICE/ctr.env"
@@ -4076,6 +4076,175 @@ mod tests {
             "HTTP_PROXY|HTTPS_PROXY|NO_PROXY|http_proxy|https_proxy|no_proxy"
         ));
         assert!(supervisor.contains("proxy environment values must not contain newlines"));
+    }
+
+    fn assert_generated_launcher_argv_is_secret_safe(
+        supervisor: &str,
+        launcher_marker: &str,
+        ctr_marker: &str,
+        label: &str,
+        compound: bool,
+    ) {
+        use base64::Engine as _;
+
+        let launcher = &supervisor[supervisor
+            .find(launcher_marker)
+            .unwrap_or_else(|| panic!("{label}: generated launcher marker"))..];
+        let ctr_start = launcher
+            .find(ctr_marker)
+            .unwrap_or_else(|| panic!("{label}: generated ctr invocation"));
+        let ctr_end = ctr_start
+            + launcher[ctr_start..]
+                .find('\n')
+                .unwrap_or_else(|| panic!("{label}: ctr invocation line ending"))
+            + 1;
+        // Keep the generated outer single-quoted sh -c syntax in the probe:
+        // that outer parse is exactly where an inner `printf '\t'` loses its
+        // quotes. Stop after the first ctr launch so compound restart/health
+        // policy does not obscure the argv boundary under test.
+        let mut probe = launcher[..ctr_end].replacen("nohup setsid sh -c", "/bin/sh -c", 1);
+        if compound {
+            probe.push_str("      fi\n      wait\n      break\n    done\n    exit 0\n  '\n");
+        } else {
+            probe.push_str("      fi\n      wait\n      exit 0\n    '\n");
+        }
+
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-runtime-launcher-{label}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create launcher probe directory");
+        let state = dir.join("state");
+        let service = state.join("service");
+        fs::create_dir_all(&service).expect("create launcher probe state");
+
+        let credential = "http://user:secret-with-token-0@proxy.internal:8080";
+        let multiline = "-----BEGIN VALUE-----\nline two\n-----END VALUE-----\n";
+        let encode = |value: &str| base64::engine::general_purpose::STANDARD.encode(value);
+        let encoded_credential = encode(credential);
+        assert!(
+            encoded_credential.contains('t'),
+            "the credential fixture must exercise the historical IFS=t split"
+        );
+        let env_tsv = format!(
+            "HTTPS_PROXY\t{encoded_credential}\nHTTP_PROXY\t{}\nMULTILINE_VALUE\t{}\n",
+            encode(credential),
+            encode(multiline)
+        );
+        let runtime_dir = if compound { &service } else { &state };
+        fs::write(runtime_dir.join("env.tsv"), env_tsv).expect("write env.tsv fixture");
+        let proxy_env = format!("HTTPS_PROXY={credential}\nHTTP_PROXY={credential}\n");
+        fs::write(runtime_dir.join("ctr.env"), &proxy_env).expect("write proxy env-file fixture");
+        fs::write(runtime_dir.join("current.log"), "").expect("create launcher log");
+        if compound {
+            fs::write(state.join("desired"), "starting\n").expect("write desired-state fixture");
+            fs::write(service.join("image"), "fixture-image\n").expect("write image fixture");
+        }
+
+        let argv_log = dir.join("ctr.argv");
+        let ctr_stub = dir.join("ctr");
+        fs::write(
+            &ctr_stub,
+            r#"#!/bin/sh
+: > "$CTR_ARGV"
+for ARG do
+  printf '%s' "$ARG" | base64 | tr -d '\n'
+  printf '\n'
+done >> "$CTR_ARGV"
+"#,
+        )
+        .expect("write ctr stub");
+        let chmod = std::process::Command::new("chmod")
+            .args(["0700", ctr_stub.to_str().expect("utf-8 ctr stub path")])
+            .status()
+            .expect("chmod ctr stub");
+        assert!(chmod.success(), "make ctr stub executable");
+
+        let path = format!(
+            "{}:{}",
+            dir.display(),
+            std::env::var("PATH").expect("PATH for shell probe")
+        );
+        let mut command = std::process::Command::new("/bin/sh");
+        command
+            .args(["-c", &probe])
+            .env("PATH", path)
+            .env("CTR_ARGV", &argv_log)
+            .env("STATE", &state)
+            .env("SERVICE", &service)
+            .env("KIND", "container")
+            .env("EGRESS_CA", dir.join("missing-egress-ca.crt"))
+            .env("CTR_NS", "fixture-ns")
+            .env("UID_NUM", "20000")
+            .env("APP", "fixture-app")
+            .env("SVC", "fixture-service")
+            .env("NS", "fixture-netns")
+            .env("IMAGE", "fixture-image")
+            .env("CID", "fixture-cid");
+        let output = command.output().expect("execute generated launcher with /bin/sh");
+        assert!(
+            output.status.success(),
+            "{label}: generated launcher probe failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let encoded_argv = fs::read_to_string(&argv_log).expect("read captured ctr argv");
+        let argv: Vec<String> = encoded_argv
+            .lines()
+            .map(|arg| {
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(arg)
+                    .expect("decode captured ctr argument");
+                String::from_utf8(bytes).expect("captured ctr argument is utf-8")
+            })
+            .collect();
+        assert!(
+            !argv.iter().any(|arg| arg.contains(credential)),
+            "{label}: proxy credential must never appear in ctr argv: {argv:?}"
+        );
+        assert!(
+            !argv.iter().any(|arg| arg.contains("HTTP_PROXY") || arg.contains("HTTPS_PROXY")),
+            "{label}: proxy variables belong only in the env-file: {argv:?}"
+        );
+        assert!(
+            argv.windows(2).any(|pair| pair[0] == "--env-file"
+                && pair[1] == runtime_dir.join("ctr.env").to_string_lossy()),
+            "{label}: ctr must receive the proxy env-file: {argv:?}"
+        );
+        assert!(
+            argv.windows(2).any(|pair| pair[0] == "--env"
+                && pair[1] == format!("MULTILINE_VALUE={multiline}")),
+            "{label}: multiline non-proxy value must remain one --env argument: {argv:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(runtime_dir.join("ctr.env")).expect("read proxy env-file"),
+            proxy_env,
+            "{label}: proxy values must remain intact in the env-file"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn runtime_single_app_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv() {
+        assert_generated_launcher_argv_is_secret_safe(
+            RUNTIME_SUPERVISOR,
+            "nohup setsid sh -c '\n  echo $$ > \"$STATE/pid\"",
+            "ctr -n \"$CTR_NS\" run --rm --user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP\"",
+            "single-app",
+            false,
+        );
+    }
+
+    #[test]
+    fn runtime_compound_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv() {
+        assert_generated_launcher_argv_is_secret_safe(
+            RUNTIME_COMPOUND_SUPERVISOR,
+            "nohup setsid sh -c '\n    echo $$ > \"$SERVICE/worker.pid\"",
+            "ctr -n \"$CTR_NS\" run --rm --user \"$UID_NUM:$UID_NUM\" --cgroup \"appliance/$APP/$SVC\"",
+            "compound",
+            true,
+        );
     }
 
     #[test]
