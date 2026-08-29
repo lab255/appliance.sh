@@ -126,6 +126,82 @@ mod tests {
     }
 
     #[cfg(windows)]
+    fn assert_windows_acl(path: &Path) {
+        use std::os::windows::io::AsRawHandle;
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE};
+        use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
+        use windows_sys::Win32::Security::{
+            EqualSid, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+        };
+
+        let output = std::process::Command::new("icacls")
+            .arg(path)
+            .creation_flags(0x0800_0000)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let listing = String::from_utf8_lossy(&output.stdout);
+        let path_text = path.to_string_lossy();
+        let actual: std::collections::BTreeSet<_> = listing
+            .lines()
+            .filter_map(|line| line.rsplit_once(":(").map(|(principal, _)| principal))
+            .map(|principal| {
+                principal
+                    .trim_start()
+                    .strip_prefix(path_text.as_ref())
+                    .unwrap_or(principal.trim_start())
+                    .trim()
+                    .to_ascii_lowercase()
+            })
+            .collect();
+        let current_principal = String::from_utf8_lossy(
+            &std::process::Command::new("whoami")
+                .creation_flags(0x0800_0000)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_ascii_lowercase();
+        let expected = std::collections::BTreeSet::from([
+            current_principal,
+            "nt authority\\system".to_owned(),
+            "builtin\\administrators".to_owned(),
+        ]);
+        assert_eq!(actual, expected, "unexpected ACL listing:\n{listing}");
+
+        let file = std::fs::File::open(path).unwrap();
+        let mut owner: PSID = std::ptr::null_mut();
+        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        let status = unsafe {
+            GetSecurityInfo(
+                file.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION,
+                &mut owner,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut descriptor,
+            )
+        };
+        assert_eq!(status, ERROR_SUCCESS, "GetSecurityInfo failed: {status}");
+        assert!(
+            !descriptor.is_null(),
+            "GetSecurityInfo returned no descriptor"
+        );
+        let current_user = current_user_sid().unwrap();
+        assert!(
+            !owner.is_null() && unsafe { EqualSid(owner, current_user.as_psid()) } != 0,
+            "credential file owner is not the current user SID"
+        );
+        unsafe {
+            let _ = LocalFree(descriptor.cast());
+        }
+    }
+
+    #[cfg(windows)]
     #[test]
     fn restricts_windows_acl_to_the_current_user() {
         use std::os::windows::process::CommandExt;
@@ -141,41 +217,7 @@ mod tests {
         assert!(status.success(), "failed to add the untrusted test ACE");
         restrict_to_current_user(&file).unwrap();
 
-        let output = std::process::Command::new("icacls")
-            .arg(&file)
-            .creation_flags(0x0800_0000)
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        let listing = String::from_utf8_lossy(&output.stdout);
-        let principal = String::from_utf8_lossy(
-            &std::process::Command::new("whoami")
-                .creation_flags(0x0800_0000)
-                .output()
-                .unwrap()
-                .stdout,
-        )
-        .trim()
-        .to_string();
-        let path_text = file.to_string_lossy();
-        let actual: std::collections::BTreeSet<_> = listing
-            .lines()
-            .filter_map(|line| line.rsplit_once(":(").map(|(principal, _)| principal))
-            .map(|principal| {
-                principal
-                    .trim_start()
-                    .strip_prefix(path_text.as_ref())
-                    .unwrap_or(principal.trim_start())
-                    .trim()
-                    .to_ascii_lowercase()
-            })
-            .collect();
-        let expected = std::collections::BTreeSet::from([
-            principal.to_ascii_lowercase(),
-            "nt authority\\system".to_string(),
-            "builtin\\administrators".to_string(),
-        ]);
-        assert_eq!(actual, expected, "unexpected ACL listing:\n{listing}");
+        assert_windows_acl(&file);
         std::fs::remove_file(file).unwrap();
     }
 }

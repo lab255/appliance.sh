@@ -474,25 +474,36 @@ mod tests {
     }
 
     #[cfg(windows)]
-    #[test]
-    fn resets_windows_acl_to_current_user() {
+    fn assert_windows_acl(path: &Path) {
+        use std::os::windows::io::AsRawHandle;
         use std::os::windows::process::CommandExt;
-
-        let root = test_root("acl");
-        let store = AclFileStore::new(&root);
-        let key = StoreKey::vm_broker("primary", VmBrokerFile::Secrets).unwrap();
-        store.put(&key, b"secret").unwrap();
-        let path = root.join("primary").join(VmBrokerFile::Secrets.file_name());
+        use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE};
+        use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
+        use windows_sys::Win32::Security::{
+            EqualSid, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+        };
 
         let output = std::process::Command::new("icacls")
-            .arg(&path)
+            .arg(path)
             .creation_flags(0x0800_0000)
             .output()
             .unwrap();
         assert!(output.status.success());
         let listing = String::from_utf8_lossy(&output.stdout);
-        let acl_lines: Vec<_> = listing.lines().filter(|line| line.contains(":(")).collect();
-        let principal = String::from_utf8_lossy(
+        let path_text = path.to_string_lossy();
+        let actual: std::collections::BTreeSet<_> = listing
+            .lines()
+            .filter_map(|line| line.rsplit_once(":(").map(|(principal, _)| principal))
+            .map(|principal| {
+                principal
+                    .trim_start()
+                    .strip_prefix(path_text.as_ref())
+                    .unwrap_or(principal.trim_start())
+                    .trim()
+                    .to_ascii_lowercase()
+            })
+            .collect();
+        let current_principal = String::from_utf8_lossy(
             &std::process::Command::new("whoami")
                 .creation_flags(0x0800_0000)
                 .output()
@@ -500,14 +511,54 @@ mod tests {
                 .stdout,
         )
         .trim()
-        .to_owned();
-        assert_eq!(acl_lines.len(), 1, "unexpected ACL listing:\n{listing}");
+        .to_ascii_lowercase();
+        let expected = std::collections::BTreeSet::from([
+            current_principal,
+            "nt authority\\system".to_owned(),
+            "builtin\\administrators".to_owned(),
+        ]);
+        assert_eq!(actual, expected, "unexpected ACL listing:\n{listing}");
+
+        let file = OpenOptions::new().read(true).open(path).unwrap();
+        let mut owner: PSID = std::ptr::null_mut();
+        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        let status = unsafe {
+            GetSecurityInfo(
+                file.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION,
+                &mut owner,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut descriptor,
+            )
+        };
+        assert_eq!(status, ERROR_SUCCESS, "GetSecurityInfo failed: {status}");
         assert!(
-            acl_lines[0]
-                .to_ascii_lowercase()
-                .contains(&principal.to_ascii_lowercase()),
-            "current principal missing from ACL listing:\n{listing}"
+            !descriptor.is_null(),
+            "GetSecurityInfo returned no descriptor"
         );
+        let current_user = current_user_sid().unwrap();
+        assert!(
+            !owner.is_null() && unsafe { EqualSid(owner, current_user.sid) } != 0,
+            "credential file owner is not the current user SID"
+        );
+        unsafe {
+            let _ = LocalFree(descriptor.cast());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resets_windows_acl_to_current_user() {
+        let root = test_root("acl");
+        let store = AclFileStore::new(&root);
+        let key = StoreKey::vm_broker("primary", VmBrokerFile::Secrets).unwrap();
+        store.put(&key, b"secret").unwrap();
+        let path = root.join("primary").join(VmBrokerFile::Secrets.file_name());
+
+        assert_windows_acl(&path);
         fs::remove_dir_all(root).unwrap();
     }
 }
