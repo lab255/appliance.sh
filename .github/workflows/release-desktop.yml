@@ -58,11 +58,10 @@ jobs:
     # The Developer ID cert (APPLE_CERTIFICATE + password), the notarization
     # creds (APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID) and
     # the Tauri updater keys (TAURI_SIGNING_PRIVATE_KEY, TAURI_UPDATER_PUBKEY)
-    # are scoped to the `publish` GitHub environment. A job only sees
-    # environment-scoped secrets when it opts in here; without this the
-    # secrets.* refs below resolve to empty strings and the bundle ships
-    # UNSIGNED + un-notarized with a placeholder updater key.
-    environment: publish
+    # are scoped to the `publish` GitHub environment. Publishing runs opt in;
+    # branch smoke tests do not request the protected environment, so their
+    # secrets.* refs resolve to empty strings.
+    environment: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish) && 'publish' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -123,13 +122,28 @@ jobs:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: node packages/desktop/scripts/set-updater-pubkey.mjs
 
+      # The release overlay enables updater artifacts, which makes Tauri
+      # require TAURI_SIGNING_PRIVATE_KEY. Smoke tests deliberately have no
+      # publish-environment secrets, so keep the ordinary bundles but disable
+      # their updater archives and signatures.
+      - name: Disable updater artifacts for non-publishing build
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'packages/desktop/src-tauri/tauri.release.conf.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.bundle.createUpdaterArtifacts = false;
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
       # Build, Developer-ID-sign (hardened runtime), notarize + staple,
-      # and emit signed updater artifacts. Every secret below is OPTIONAL
-      # at the script level: tauri.release.conf.json's
-      # createUpdaterArtifacts only signs when TAURI_SIGNING_PRIVATE_KEY
-      # is set, and notarize-macos.mjs no-ops without the APPLE_* creds —
-      # so a fork without secrets still gets unsigned bundles instead of
-      # a hard failure. See packages/desktop/README.md -> Auto-update.
+      # and emit signed updater artifacts. The Apple secrets are optional at
+      # the script level: notarize-macos.mjs no-ops without them. Tauri does
+      # require TAURI_SIGNING_PRIVATE_KEY when updater artifacts are enabled,
+      # so the non-publishing step above disables those artifacts for smoke
+      # tests. See packages/desktop/README.md -> Auto-update.
       - name: Build + sign + notarize bundle
         id: bundle
         working-directory: packages/desktop
@@ -296,12 +310,11 @@ jobs:
   build-windows:
     name: Build windows-x86_64 bundle
     runs-on: windows-latest
-    # Opt in to the `publish` environment for the Tauri updater secrets
-    # (TAURI_SIGNING_PRIVATE_KEY + TAURI_UPDATER_PUBKEY). Without it the
-    # NSIS installer's updater archive ships unsigned and the injected
-    # pubkey stays the fail-safe placeholder, so self-update breaks. (No
-    # Apple creds are used here — Authenticode signing is still TODO.)
-    environment: publish
+    # Publishing runs opt in to the `publish` environment for the Tauri
+    # updater secrets (TAURI_SIGNING_PRIVATE_KEY + TAURI_UPDATER_PUBKEY).
+    # Branch smoke tests skip the protected environment and updater artifacts.
+    # (No Apple creds are used here — Authenticode signing is still TODO.)
+    environment: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish) && 'publish' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -347,6 +360,18 @@ jobs:
         env:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: node packages/desktop/scripts/set-updater-pubkey.mjs
+
+      - name: Disable updater artifacts for non-publishing build
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'packages/desktop/src-tauri/tauri.release.conf.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.bundle.createUpdaterArtifacts = false;
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
 
       # No Apple secrets here — notarize-macos.mjs skips itself off-darwin.
       # Windows Authenticode signing is not configured yet; the installer
