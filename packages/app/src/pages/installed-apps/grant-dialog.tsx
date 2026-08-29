@@ -101,8 +101,8 @@ export function GrantDialog({
           {wslEgressWarning ? (
             <Banner id="grant-wsl-egress-warning" tone="warning" title="WSL cooperative mode is bypassable">
               Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through
-              proxy CONNECT by hostname; direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across
-              apps, dropping per-grant ports.
+              proxy CONNECT by hostname; direct UDP 53 is dropped. Proxy-aware Runtime traffic keeps each app&apos;s
+              granted hosts and TCP ports separate.
             </Banner>
           ) : null}
           {requiredGrants.length ? (

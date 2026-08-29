@@ -524,6 +524,7 @@ export interface UninstallOptions {
   root?: string;
   keepData?: boolean;
   stop?: (appId: string) => void | Promise<void>;
+  revokePolicy?: (appId: string) => void | Promise<void>;
 }
 
 export async function uninstallInstalledApp(input: string, options: UninstallOptions = {}): Promise<InstalledApp> {
@@ -531,10 +532,20 @@ export async function uninstallInstalledApp(input: string, options: UninstallOpt
   const target = currentWorkspaceTarget(options.target, entitlementHomeForRuntimeRoot(root));
   const app = resolveInstalledApp(input, target, root);
   if (!app) throw new Error(`Installed app '${input}' was not found for target '${target}'.`);
-  if (
-    readRuntimeRegistry().some((record) => record.appId === app.appId && ['starting', 'running'].includes(record.state))
-  ) {
-    await options.stop?.(app.appId);
+  const active = readRuntimeRegistry().some(
+    (record) => record.appId === app.appId && ['starting', 'running'].includes(record.state)
+  );
+  if (active) {
+    try {
+      await options.stop?.(app.appId);
+    } finally {
+      // A failed guest stop must not preserve a usable host credential.
+      await options.revokePolicy?.(app.appId);
+    }
+  } else {
+    // Revoke even when the local registry says the app is already stopped: a
+    // stale/missing record must not leave an effective policy or proxy bearer.
+    await options.revokePolicy?.(app.appId);
   }
   const runtimeAppsRoot = path.resolve(root, 'apps');
   const extractedAppPath = path.resolve(runtimeAppsRoot, app.appId, app.version);
@@ -661,7 +672,8 @@ export async function runRuntimeInstallCommand(args: string[]): Promise<void> {
 
 export async function runRuntimeUninstallCommand(
   args: string[],
-  stop: (appId: string) => void | Promise<void>
+  stop: (appId: string) => void | Promise<void>,
+  revokePolicy: (appId: string) => void | Promise<void>
 ): Promise<void> {
   if (args.includes('--help') || args.includes('-h')) {
     console.log('Usage: appliance runtime uninstall <app> [--keep-data]');
@@ -673,6 +685,7 @@ export async function runRuntimeUninstallCommand(
     target: optionValue(args, '--target'),
     keepData: args.includes('--keep-data'),
     stop,
+    revokePolicy,
   });
   console.log(
     `${chalk.green('✓')} uninstalled ${removed.name}${args.includes('--keep-data') ? '; app data kept' : ''}`

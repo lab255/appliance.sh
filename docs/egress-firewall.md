@@ -39,7 +39,10 @@ backend capability; policy fields are never re-nested under `policy`.
 
 WSL VMs use `netLink: "nat"`, and `appliance vm egress policy` reports
 `boundary: "cooperative"` plus
-`enforcement: {"backend":"wsl","bypassable":true,"scope":["http","https"]}`.
+`enforcement:
+{"backend":"wsl","bypassable":true,"scope":["http","https","per-app"]}`
+and an `apps` block containing each Runtime app's exact host and TCP-port
+grants.
 Never interpret this as a host-enforced boundary.
 
 Runtime defaults to strict mode:
@@ -52,11 +55,15 @@ appliance vm egress wsl-mode cooperative
 Strict refuses Runtime apps whose manifests request any egress grant. Apps
 without egress grants may run; the WSL guest chain drops their outbound
 traffic. Cooperative is an explicit opt-in: Runtime tasks receive the VM proxy
-and CA environment, and granted hosts are unioned across apps in the v1
-VM-wide host-only policy; this union drops each grant's port restriction. It is
-bypassable: an app can ignore the proxy and use direct TCP, UDP other than DNS,
-or raw IP. DNS must go through the proxy using CONNECT by hostname; direct UDP
-53 is dropped. `egress list` states the bypass limitation in its header.
+and CA environment plus a per-start proxy credential. Credential-bearing
+requests select only that app's host-and-port policy; stopped, uninstalled, and
+VM-deleted apps lose the credential. Runtime proxy requests without a valid app
+credential receive `407 Proxy Authentication Required`; there is no VM-wide
+union fallback. Cooperative mode is bypassable: an app can ignore the proxy and
+use direct TCP, UDP other than DNS, or raw IP. DNS must go through the proxy
+using CONNECT by hostname; direct UDP 53 is dropped. `egress list` states the
+bypass limitation in its header and shows per-app rows without exposing
+credentials.
 
 The per-VM value is persisted as `wslMode` in `vm.json`. New VMs capture the
 optional global default from `~/.appliance/settings.json`:

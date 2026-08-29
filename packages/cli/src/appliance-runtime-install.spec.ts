@@ -490,6 +490,23 @@ describe('runtime uninstall/list', () => {
     expect(fs.readFileSync(external, 'utf8')).toBe('keep me');
   });
 
+  it('revokes effective policy even when the app is already stopped', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-uninstall-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const installed = app(root, 'local');
+    upsertInstalledApp('local', installed, root);
+    const revoked: string[] = [];
+
+    await uninstallInstalledApp('journal', {
+      target: 'local',
+      root,
+      revokePolicy: (appId) => revoked.push(appId),
+    });
+
+    expect(revoked).toEqual(['journal']);
+  });
+
   it('formats the per-target CLI table', () => {
     const row = app('/tmp/runtime', 'local');
     expect(formatInstalledAppsTable([{ target: 'local', app: row }])).toBe(

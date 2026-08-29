@@ -98,7 +98,7 @@ describe('mock host platform', () => {
     expect(await egress.get()).toMatchObject({
       boundary: 'cooperative',
       wslMode: 'strict',
-      enforcement: { backend: 'wsl', bypassable: true, scope: ['http', 'https'] },
+      enforcement: { backend: 'wsl', bypassable: true, scope: ['http', 'https', 'per-app'] },
     });
     await egress.setWslMode('cooperative');
     expect(await egress.get()).toMatchObject({ wslMode: 'cooperative' });

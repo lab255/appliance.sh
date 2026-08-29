@@ -345,7 +345,7 @@ export async function runRuntimeCommand(verb: string, args: string[]): Promise<v
       await runRuntimeInstallCommand(args);
       return;
     case 'uninstall':
-      await runRuntimeUninstallCommand(args, (appId) => runtimeStop([appId], false));
+      await runRuntimeUninstallCommand(args, (appId) => runtimeStop([appId], false), removeEffectiveRuntimePolicy);
       return;
     case 'list':
       runRuntimeListCommand(args);
@@ -989,6 +989,17 @@ export function installEffectiveRuntimePolicy(policy: EffectiveRuntimePolicy): v
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || '').trim();
     fail(`could not install effective Runtime policy for '${policy.app}'${detail ? `: ${detail}` : ''}`, 1);
+  }
+}
+
+export function removeEffectiveRuntimePolicy(appId: string): void {
+  const result = spawnSync(vmBinary(), ['runtime-policy', 'remove', RUNTIME_POOL_VM, appId], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || '').trim();
+    fail(`could not revoke effective Runtime policy for '${appId}'${detail ? `: ${detail}` : ''}`, 1);
   }
 }
 

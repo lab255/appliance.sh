@@ -1034,6 +1034,7 @@ mod tests {
             source: Ipv4Addr::new(192, 168, 127, 10),
             policy: policy(&["example.com"], true),
             allow_ports: std::collections::BTreeMap::from([("example.com".to_string(), vec![443])]),
+            proxy_credential: None,
         })
     }
 

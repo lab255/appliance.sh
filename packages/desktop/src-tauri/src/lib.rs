@@ -5011,6 +5011,8 @@ struct EgressPolicy {
     enforcement: Option<EgressEnforcement>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     wsl_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    apps: Option<Vec<EgressAppPolicy>>,
     /// CA cert path, populated for the UI when interception is on and
     /// the cert exists — the user injects this into clients to trust
     /// the interceptor.
@@ -5036,6 +5038,27 @@ struct EgressEnforcement {
     backend: String,
     bypassable: bool,
     scope: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EgressAppPolicy {
+    app: String,
+    principal: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    service: Option<String>,
+    #[serde(default)]
+    hosts: Vec<EgressHostPolicy>,
+    #[serde(default)]
+    mitm: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EgressHostPolicy {
+    host: String,
+    #[serde(default)]
+    ports: Vec<u16>,
 }
 
 /// Resolve a VM's effective network link by reading the engine's

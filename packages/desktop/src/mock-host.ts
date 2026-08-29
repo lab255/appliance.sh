@@ -1186,7 +1186,12 @@ export function createMockHost(): ConsoleHost {
                 enforcement: {
                   backend: wsl ? 'wsl' : mockPlatform() === 'macos' ? 'vz' : 'kvm',
                   bypassable: boundary !== 'enforced',
-                  scope: boundary === 'enforced' ? ['tcp', 'udp', 'dns'] : ['http', 'https'],
+                  scope:
+                    boundary === 'enforced'
+                      ? ['tcp', 'udp', 'dns']
+                      : wsl
+                        ? ['http', 'https', 'per-app']
+                        : ['http', 'https'],
                 },
                 ...(wsl ? { wslMode: vm.egress.wslMode ?? 'strict' } : {}),
               };

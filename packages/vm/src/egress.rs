@@ -20,7 +20,11 @@
 //! (`curl -x http://127.0.0.1:<port> https://example.com`).
 
 use anyhow::{bail, Context, Result};
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+use base64::Engine as _;
+use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
@@ -113,6 +117,28 @@ pub struct EgressPolicyOutput {
     pub enforcement: EgressEnforcement,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wsl_mode: Option<WslMode>,
+    /// Authenticated Runtime policies, present for WSL Runtime pools. Secret
+    /// selectors are deliberately not part of this observation shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apps: Option<Vec<RuntimeAppPolicyOutput>>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeAppPolicyOutput {
+    pub app: String,
+    pub principal: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service: Option<String>,
+    pub hosts: Vec<RuntimeHostPolicyOutput>,
+    pub mitm: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeHostPolicyOutput {
+    pub host: String,
+    pub ports: Vec<u16>,
 }
 
 impl EgressPolicyOutput {
@@ -131,6 +157,7 @@ impl EgressPolicyOutput {
                 },
             },
             wsl_mode: (backend == "wsl").then_some(wsl_mode),
+            apps: None,
         }
     }
 }
@@ -153,6 +180,21 @@ pub struct RuntimePolicy {
     /// Granted destination ports for each normalized allow suffix. Every
     /// runtime allow entry must have a non-empty port set.
     pub allow_ports: BTreeMap<String, Vec<u16>>,
+    /// Host-minted per-start proxy bearer. It is persisted only in the
+    /// ACL-protected effective state and never included in policy output or
+    /// logs. `None` means this principal has no live proxy session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) proxy_credential: Option<ProxyCredential>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub(crate) struct ProxyCredential(String);
+
+impl std::fmt::Debug for ProxyCredential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("<redacted>")
+    }
 }
 
 impl RuntimePolicy {
@@ -442,6 +484,14 @@ pub fn normalize_runtime_host(raw: &str) -> Result<String> {
 
 fn validate_runtime_policy(mut runtime: RuntimePolicy) -> Result<RuntimePolicy> {
     validate_runtime_identity(&runtime)?;
+    if let Some(credential) = &runtime.proxy_credential {
+        let decoded = URL_SAFE_NO_PAD
+            .decode(credential.0.as_bytes())
+            .context("runtime proxy credential must be base64url without padding")?;
+        if decoded.len() != 32 || credential.0.len() != 43 {
+            bail!("runtime proxy credential must encode exactly 32 random bytes");
+        }
+    }
     runtime.policy.default = Action::Deny;
     runtime.policy.allow = runtime
         .policy
@@ -501,7 +551,11 @@ fn runtime_policy_path(app: &str) -> Result<PathBuf> {
 }
 
 pub fn save_runtime_policy(runtime: &RuntimePolicy) -> Result<()> {
-    let runtime = validate_runtime_policy(runtime.clone())?;
+    save_runtime_policy_inner(runtime, true)
+}
+
+fn save_runtime_policy_inner(runtime: &RuntimePolicy, preserve_credential: bool) -> Result<()> {
+    let mut runtime = validate_runtime_policy(runtime.clone())?;
     let path = runtime_policy_path(&runtime.app)?;
     let parent = path.parent().context("runtime policy parent")?;
     std::fs::create_dir_all(parent)?;
@@ -511,6 +565,12 @@ pub fn save_runtime_policy(runtime: &RuntimePolicy) -> Result<()> {
     } else {
         Vec::new()
     };
+    if preserve_credential && runtime.proxy_credential.is_none() {
+        runtime.proxy_credential = existing
+            .iter()
+            .find(|stored| stored.vm == runtime.vm && stored.principal == runtime.principal)
+            .and_then(|stored| stored.proxy_credential.clone());
+    }
     let mut principals = existing
         .into_iter()
         .filter(|existing| existing.principal != runtime.principal)
@@ -730,6 +790,26 @@ fn all_runtime_policies() -> Vec<RuntimePolicy> {
     policies
 }
 
+fn runtime_app_policy_outputs(vm: &str) -> Vec<RuntimeAppPolicyOutput> {
+    let mut apps = all_runtime_policies()
+        .into_iter()
+        .filter(|runtime| runtime.vm == vm)
+        .map(|runtime| RuntimeAppPolicyOutput {
+            app: runtime.app,
+            principal: runtime.principal,
+            service: runtime.service,
+            hosts: runtime
+                .allow_ports
+                .into_iter()
+                .map(|(host, ports)| RuntimeHostPolicyOutput { host, ports })
+                .collect(),
+            mitm: runtime.policy.mitm,
+        })
+        .collect::<Vec<_>>();
+    apps.sort_by(|left, right| left.principal.cmp(&right.principal));
+    apps
+}
+
 /// Best-effort removal of every Runtime principal owned by a deleted VM.
 /// Results stay per-principal so VM deletion can report store failures without
 /// resurrecting or failing an otherwise-complete backend deletion.
@@ -756,6 +836,39 @@ pub fn runtime_policy_for_principal(vm: &str, principal: &str) -> Option<Runtime
         .filter(|runtime| runtime.vm == vm && runtime.principal == principal);
     let found = matches.next()?;
     matches.next().is_none().then_some(found)
+}
+
+/// Rotate the per-app proxy bearer for a new task start. Issuing happens only
+/// after the start plan has matched the persisted Runtime pool spec, so a
+/// rejected plan never gains a credential.
+pub fn issue_runtime_proxy_credential(vm: &str, principal: &str) -> Result<String> {
+    let mut runtime = runtime_policy_for_principal(vm, principal)
+        .with_context(|| format!("no runtime policy for {vm}/{principal}"))?;
+    if runtime.app != principal || runtime.principal != principal || runtime.service.is_some() {
+        bail!("runtime proxy credentials may only be issued to an app principal");
+    }
+    let mut random = [0u8; 32];
+    SystemRandom::new()
+        .fill(&mut random)
+        .map_err(|_| anyhow::anyhow!("generate runtime proxy credential"))?;
+    let credential = URL_SAFE_NO_PAD.encode(random);
+    runtime.proxy_credential = Some(ProxyCredential(credential.clone()));
+    save_runtime_policy_inner(&runtime, false)?;
+    Ok(credential)
+}
+
+/// Revoke only the live proxy bearer while retaining the resolved policy for
+/// inspection/retry. Normal stop/uninstall/delete remove the complete policy;
+/// this narrower path is used when a start fails after credential issuance.
+pub fn revoke_runtime_proxy_credential(vm: &str, principal: &str) -> Result<bool> {
+    let Some(mut runtime) = runtime_policy_for_principal(vm, principal) else {
+        return Ok(false);
+    };
+    if runtime.proxy_credential.take().is_none() {
+        return Ok(false);
+    }
+    save_runtime_policy_inner(&runtime, false)?;
+    Ok(true)
 }
 
 pub fn policy_for(vm: &str, source: Ipv4Addr) -> PolicyContext {
@@ -819,53 +932,28 @@ fn is_wsl_runtime(name: &str, backend: &str) -> bool {
             .is_some_and(|spec| spec.runtime)
 }
 
-/// AP-205 step 3a: WSL's legacy proxy remains VM-wide. Its effective allowlist
-/// is the union of installed Runtime policies; operator deny rules still win.
-/// Port-aware, authenticated per-app selection replaces this in 3b.
-fn wsl_runtime_proxy_policy(name: &str, mode: WslMode) -> EgressPolicy {
-    let persisted = load_policy(name);
-    union_wsl_runtime_policy(
-        &persisted,
-        &all_runtime_policies()
-            .into_iter()
-            .filter(|runtime| runtime.vm == name)
-            .collect::<Vec<_>>(),
-        mode,
-    )
+fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_wsl_runtime(name, backend) {
+        runtime_proxy_summary_policy(name)
+    } else if is_netstack(name) && backend != "wsl" {
+        netstack_policy(name)
+    } else {
+        load_policy(name)
+    }
 }
 
-fn union_wsl_runtime_policy(
-    persisted: &EgressPolicy,
-    runtimes: &[RuntimePolicy],
-    mode: WslMode,
-) -> EgressPolicy {
-    if mode == WslMode::Strict {
-        return EgressPolicy {
-            default: Action::Deny,
-            allow: Vec::new(),
-            deny: persisted.deny.clone(),
-            mitm: false,
-        };
-    }
-    let mut allow = runtimes
-        .iter()
-        .flat_map(|runtime| runtime.policy.allow.iter().cloned())
-        .collect::<Vec<_>>();
-    allow.sort();
-    allow.dedup();
+fn runtime_proxy_summary_policy(name: &str) -> EgressPolicy {
     EgressPolicy {
         default: Action::Deny,
-        allow,
-        deny: persisted.deny.clone(),
-        mitm: persisted.mitm,
+        allow: Vec::new(),
+        deny: load_policy(name).deny,
+        mitm: false,
     }
 }
 
-fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
-    if is_netstack(name) && backend != "wsl" {
-        netstack_policy(name)
-    } else if is_wsl_runtime(name, backend) {
-        wsl_runtime_proxy_policy(name, wsl_mode(name))
+fn proxy_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_wsl_runtime(name, backend) {
+        runtime_proxy_summary_policy(name)
     } else {
         load_policy(name)
     }
@@ -882,22 +970,20 @@ pub fn effective_policy(name: &str) -> EgressPolicy {
     effective_policy_for_backend(name, crate::backend::platform_backend_name())
 }
 
-fn proxy_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
-    if is_wsl_runtime(name, backend) {
-        effective_policy_for_backend(name, backend)
-    } else {
-        load_policy(name)
-    }
-}
-
-fn proxy_policy(name: &str) -> EgressPolicy {
-    proxy_policy_for_backend(name, crate::backend::platform_backend_name())
-}
-
 pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
     let backend = crate::backend::platform_backend_name();
     let netstack = is_netstack(name);
-    EgressPolicyOutput::for_backend(effective_policy_for_backend(name, backend), netstack, backend, wsl_mode(name))
+    let mut output = EgressPolicyOutput::for_backend(
+        effective_policy_for_backend(name, backend),
+        netstack,
+        backend,
+        wsl_mode(name),
+    );
+    if is_wsl_runtime(name, backend) {
+        output.enforcement.scope.push("per-app".into());
+        output.apps = Some(runtime_app_policy_outputs(name));
+    }
+    output
 }
 
 /// Render the **effective** egress policy as a human-readable report.
@@ -919,11 +1005,29 @@ pub fn render_effective_policy_for_backend(
     backend: &str,
     wsl_mode: WslMode,
 ) -> String {
+    render_effective_policy_for_backend_inner(
+        name,
+        persisted,
+        netstack,
+        backend,
+        wsl_mode,
+        is_wsl_runtime(name, backend),
+    )
+}
+
+fn render_effective_policy_for_backend_inner(
+    name: &str,
+    persisted: &EgressPolicy,
+    netstack: bool,
+    backend: &str,
+    wsl_mode: WslMode,
+    runtime_wsl: bool,
+) -> String {
     let denied = |h: &str| persisted.deny.iter().any(|d| host_matches(h, d));
     let mut out = String::new();
     let enforced = netstack && backend != "wsl";
 
-    if backend == "wsl" {
+    if runtime_wsl {
         out.push_str(match wsl_mode {
             WslMode::Cooperative => {
                 "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
@@ -1015,6 +1119,36 @@ pub fn render_effective_policy_for_backend(
         "\n  TLS interception (mitm): {}\n",
         if persisted.mitm { "on" } else { "off" }
     ));
+    if runtime_wsl {
+        let apps = runtime_app_policy_outputs(name);
+        out.push_str("\n  authenticated per-app Runtime policies:\n");
+        if apps.is_empty() {
+            out.push_str("    (none)\n");
+        } else {
+            for app in apps {
+                out.push_str(&format!(
+                    "    {}  (principal: {}, mitm: {})\n",
+                    app.app,
+                    app.principal,
+                    if app.mitm { "on" } else { "off" }
+                ));
+                if app.hosts.is_empty() {
+                    out.push_str("      (no hosts)\n");
+                } else {
+                    for host in app.hosts {
+                        let ports = host
+                            .ports
+                            .iter()
+                            .map(u16::to_string)
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        out.push_str(&format!("      ✓ {}  tcp/{ports}\n", host.host));
+                    }
+                }
+            }
+        }
+        out.push_str("    no credential: denied with 407 Proxy Authentication Required\n");
+    }
     out
 }
 
@@ -1042,7 +1176,7 @@ pub fn save_policy(name: &str, policy: &EgressPolicy) -> Result<()> {
 /// connection so the desktop's edits take effect without a restart.
 pub fn run_proxy(name: &str, addr: SocketAddr, log: bool) -> Result<()> {
     let (listener, ctx) = build(name, addr, log)?;
-    let policy = proxy_policy(name);
+    let policy = proxy_policy_for_backend(name, crate::backend::platform_backend_name());
     println!(
         "egress proxy for VM '{name}' listening on {}",
         listener.local_addr().unwrap_or(addr)
@@ -1125,6 +1259,113 @@ fn read_head(stream: &mut TcpStream) -> Result<String> {
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProxyRequestHead {
+    method: String,
+    target: String,
+    proxy_authorization: Option<String>,
+}
+
+fn parse_proxy_request_head(head: &str) -> ProxyRequestHead {
+    let request_line = head.lines().next().unwrap_or_default();
+    let mut parts = request_line.split_whitespace();
+    ProxyRequestHead {
+        method: parts.next().unwrap_or_default().to_string(),
+        target: parts.next().unwrap_or_default().to_string(),
+        proxy_authorization: header_value(head, "proxy-authorization"),
+    }
+}
+
+#[derive(Debug)]
+enum ProxyPolicySelection {
+    Legacy(EgressPolicy),
+    Runtime(RuntimePolicy),
+    /// Authentication failed. A Runtime policy is retained only when the
+    /// presented username names one unique, credential-revoked app, allowing
+    /// the deny event to remain attributable without granting any access.
+    Unauthorized(Option<RuntimePolicy>),
+}
+
+fn parse_basic_proxy_authorization(value: &str) -> Option<(String, String)> {
+    let (scheme, encoded) = value.trim().split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("basic") || encoded.is_empty() {
+        return None;
+    }
+    let decoded = STANDARD.decode(encoded.trim()).ok()?;
+    let colon = decoded.iter().position(|byte| *byte == b':')?;
+    let username = std::str::from_utf8(&decoded[..colon]).ok()?.to_string();
+    let credential = std::str::from_utf8(&decoded[colon + 1..]).ok()?.to_string();
+    Some((username, credential))
+}
+
+/// Compare fixed-size base64url credentials without data-dependent byte
+/// exits. Presented values are normalized to the expected width before
+/// [`subtle::ConstantTimeEq::ct_eq`] runs; length validity is checked only
+/// afterwards.
+fn constant_time_credential_eq(stored: &str, presented: &str) -> bool {
+    const ENCODED_LEN: usize = 43;
+    let mut candidate = [0u8; ENCODED_LEN];
+    let bytes = presented.as_bytes();
+    let copied = bytes.len().min(ENCODED_LEN);
+    candidate[..copied].copy_from_slice(&bytes[..copied]);
+    let equal = bool::from(stored.as_bytes().ct_eq(&candidate));
+    equal && bytes.len() == ENCODED_LEN
+}
+
+fn select_runtime_proxy_policy(
+    vm: &str,
+    authorization: Option<&str>,
+    mode: WslMode,
+    runtimes: &[RuntimePolicy],
+) -> ProxyPolicySelection {
+    let Some(authorization) = authorization else {
+        return ProxyPolicySelection::Unauthorized(None);
+    };
+    // Strict mode issues no credentials and rejects any stale value presented
+    // after a mode change. Runtime WSL never has a credential-less fallback.
+    if mode == WslMode::Strict {
+        return ProxyPolicySelection::Unauthorized(None);
+    }
+    let Some((username, presented)) = parse_basic_proxy_authorization(authorization) else {
+        return ProxyPolicySelection::Unauthorized(None);
+    };
+    let mut selected = None;
+    let mut revoked = None;
+    for runtime in runtimes.iter().filter(|runtime| runtime.vm == vm) {
+        if runtime.app == username && runtime.proxy_credential.is_none() {
+            if revoked.is_some() {
+                return ProxyPolicySelection::Unauthorized(None);
+            }
+            revoked = Some(runtime.clone());
+        }
+        let credential_matches = runtime
+            .proxy_credential
+            .as_ref()
+            .is_some_and(|stored| constant_time_credential_eq(&stored.0, &presented));
+        if credential_matches && runtime.app == username {
+            if selected.is_some() {
+                return ProxyPolicySelection::Unauthorized(None);
+            }
+            selected = Some(runtime.clone());
+        }
+    }
+    selected.map_or(
+        ProxyPolicySelection::Unauthorized(revoked),
+        ProxyPolicySelection::Runtime,
+    )
+}
+
+fn wsl_runtime_mode(name: &str, backend: &str) -> Option<WslMode> {
+    if backend != "wsl" {
+        return None;
+    }
+    crate::store::load_spec(name)
+        .ok()
+        .flatten()
+        .filter(|spec| spec.runtime)
+        .map(|spec| spec.wsl_mode)
+}
+
 fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
     let log = ctx.log;
     // Guard against being an open proxy: only the guest (the VM's
@@ -1152,22 +1393,67 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
         Err(_) => None,
     };
     let head = read_head(&mut client)?;
-    let mut lines = head.lines();
-    let request_line = lines.next().unwrap_or_default();
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or_default().to_string();
-    let target = parts.next().unwrap_or_default().to_string();
-    let policy = proxy_policy(&ctx.name);
+    let request = parse_proxy_request_head(&head);
+    let method = request.method;
+    let target = request.target;
+    let backend = crate::backend::platform_backend_name();
+    // Read vm.json once for this connection: runtime identity and mode are a
+    // single decision, so auth does not perform repeated state-dir reads.
+    let runtime_wsl_mode = wsl_runtime_mode(&ctx.name, backend);
+    let runtime_wsl = runtime_wsl_mode.is_some();
+    let selection = if let Some(mode) = runtime_wsl_mode {
+        let runtimes = all_runtime_policies();
+        select_runtime_proxy_policy(
+            &ctx.name,
+            request.proxy_authorization.as_deref(),
+            mode,
+            &runtimes,
+        )
+    } else {
+        // VZ's standalone front door retains its historical VM policy. Its
+        // enforced per-principal path remains the netstack `PolicyContext`.
+        ProxyPolicySelection::Legacy(load_policy(&ctx.name))
+    };
+
+    if let ProxyPolicySelection::Unauthorized(runtime) = &selection {
+        if log {
+            eprintln!("egress: proxy authentication failed -> deny");
+        }
+        let (host, port) = if method.eq_ignore_ascii_case("CONNECT") {
+            split_host_port(&target)
+        } else {
+            http_destination(&head, &target).unwrap_or_default()
+        };
+        crate::traffic::record_proxy_auth_failure(
+            &ctx.name,
+            runtime.as_ref(),
+            &host,
+            port,
+            &method,
+        );
+        return require_proxy_authentication(&mut client);
+    }
+    let operator_policy = load_policy(&ctx.name);
 
     if method.eq_ignore_ascii_case("CONNECT") {
         // target is `host:port`.
-        let allowed = policy.allows(&target);
         let (host, port) = split_host_port(&target);
+        let allowed = selection_allows(&selection, &operator_policy, &host, port);
         // Scope TLS interception to hosts that actually carry a credential
         // rule, and only when the connecting peer is THIS VM's exact leased
         // guest IP (re-attributed here — see should_intercept).
-        let intercept =
-            peer_ip.is_some_and(|ip| should_intercept(&ctx.name, ip, allowed, policy.mitm, &host));
+        let intercept = match &selection {
+            ProxyPolicySelection::Runtime(runtime) => {
+                should_inspect_runtime(&runtime.policy, allowed)
+            }
+            ProxyPolicySelection::Legacy(policy) => {
+                !runtime_wsl
+                    && peer_ip.is_some_and(|ip| {
+                        should_intercept(&ctx.name, ip, allowed, policy.mitm, &host)
+                    })
+            }
+            ProxyPolicySelection::Unauthorized(_) => false,
+        };
         if log {
             let action = if !allowed {
                 "deny"
@@ -1176,10 +1462,24 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
             } else {
                 "allow"
             };
-            eprintln!("egress: CONNECT {target} -> {action}");
+            let _ = write_connect_log(
+                &mut std::io::stderr().lock(),
+                selection_principal(&selection),
+                &target,
+                action,
+            );
         }
         if !allowed {
-            crate::traffic::record(&ctx.name, &host, port, "CONNECT", None, "deny");
+            record_proxy_decision(
+                &ctx.name,
+                &selection,
+                &host,
+                port,
+                "CONNECT",
+                None,
+                "deny",
+                Some("policy"),
+            );
             return refuse(&mut client, &target);
         }
         if intercept {
@@ -1195,50 +1495,134 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
                 port,
                 upstream: None,
             };
-            return mitm::intercept(
-                &ctx.name,
-                client,
-                target,
-                ctx.server_cfg.clone(),
-                ctx.client_cfg.clone(),
-                log,
-            );
+            return match &selection {
+                ProxyPolicySelection::Runtime(runtime) => mitm::intercept_observe(
+                    &ctx.name,
+                    runtime,
+                    client,
+                    target,
+                    ctx.server_cfg.clone(),
+                    ctx.client_cfg.clone(),
+                    log,
+                ),
+                ProxyPolicySelection::Legacy(_) => mitm::intercept(
+                    &ctx.name,
+                    client,
+                    target,
+                    ctx.server_cfg.clone(),
+                    ctx.client_cfg.clone(),
+                    log,
+                ),
+                ProxyPolicySelection::Unauthorized(_) => unreachable!(),
+            };
         }
-        crate::traffic::record(&ctx.name, &host, port, "CONNECT", None, "allow");
+        record_proxy_decision(
+            &ctx.name,
+            &selection,
+            &host,
+            port,
+            "CONNECT",
+            None,
+            "allow",
+            None,
+        );
         let upstream = TcpStream::connect(&target).with_context(|| format!("connect {target}"))?;
         client.write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")?;
         splice(client, upstream)
     } else {
         // Plain HTTP: decide by the Host header (or the absolute-URI
         // authority in the request line).
-        let host = header_value(&head, "host")
-            .or_else(|| authority_of(&target))
-            .unwrap_or_default();
-        let allowed = !host.is_empty() && policy.allows(&host);
+        let (host, port) = http_destination(&head, &target).unwrap_or_default();
+        let allowed = !host.is_empty() && selection_allows(&selection, &operator_policy, &host, port);
         if log {
             eprintln!(
-                "egress: {method} {host} -> {}",
+                "egress [{}]: {method} {host}:{port} -> {}",
+                selection_principal(&selection),
                 if allowed { "allow" } else { "deny" }
             );
         }
         let req_path = target_path(&target);
-        crate::traffic::record(
+        record_proxy_decision(
             &ctx.name,
+            &selection,
             &host,
-            80,
+            port,
             &method,
             Some(&req_path),
             if allowed { "allow" } else { "deny" },
+            (!allowed).then_some("policy"),
         );
         if !allowed {
             return refuse(&mut client, &host);
         }
-        let port = 80;
         let dest = format!("{host}:{port}");
         let mut upstream = TcpStream::connect(&dest).with_context(|| format!("connect {dest}"))?;
-        // Replay the head verbatim, then splice the rest both ways.
-        upstream.write_all(head.as_bytes())?;
+        // Never forward the proxy bearer to the destination origin.
+        let forwarded_head = remove_header(&head, "proxy-authorization");
+        upstream.write_all(forwarded_head.as_bytes())?;
         splice(client, upstream)
+    }
+}
+
+fn write_connect_log(
+    output: &mut impl Write,
+    principal: &str,
+    target: &str,
+    action: &str,
+) -> std::io::Result<()> {
+    writeln!(output, "egress [{principal}]: CONNECT {target} -> {action}")
+}
+
+fn selection_principal(selection: &ProxyPolicySelection) -> &str {
+    match selection {
+        ProxyPolicySelection::Legacy(_) => "vm",
+        ProxyPolicySelection::Runtime(runtime) => &runtime.principal,
+        ProxyPolicySelection::Unauthorized(Some(runtime)) => &runtime.principal,
+        ProxyPolicySelection::Unauthorized(None) => "unknown",
+    }
+}
+
+fn selection_allows(
+    selection: &ProxyPolicySelection,
+    operator_policy: &EgressPolicy,
+    host: &str,
+    port: u16,
+) -> bool {
+    match selection {
+        ProxyPolicySelection::Legacy(policy) => policy.allows(&format!("{host}:{port}")),
+        ProxyPolicySelection::Runtime(runtime) => {
+            runtime.allows_host_port(host, port)
+                && !operator_policy.deny.iter().any(|deny| host_matches(host, deny))
+        }
+        ProxyPolicySelection::Unauthorized(_) => false,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn record_proxy_decision(
+    name: &str,
+    selection: &ProxyPolicySelection,
+    host: &str,
+    port: u16,
+    method: &str,
+    path: Option<&str>,
+    decision: &str,
+    reason: Option<&str>,
+) {
+    match selection {
+        ProxyPolicySelection::Runtime(runtime) => crate::traffic::record_runtime(
+            runtime,
+            host,
+            port,
+            method,
+            path,
+            decision,
+            crate::traffic::TrafficDetails { reason, ..Default::default() },
+        ),
+        ProxyPolicySelection::Legacy(_) => {
+            crate::traffic::record(name, host, port, method, path, decision)
+        }
+        ProxyPolicySelection::Unauthorized(_) => {}
     }
 }
 
@@ -1250,6 +1634,19 @@ fn refuse(client: &mut TcpStream, host: &str) -> Result<()> {
     );
     client.write_all(resp.as_bytes())?;
     Ok(())
+}
+
+fn require_proxy_authentication(client: &mut TcpStream) -> Result<()> {
+    client.write_all(proxy_authentication_response().as_bytes())?;
+    Ok(())
+}
+
+fn proxy_authentication_response() -> String {
+    let body = "proxy authentication required\n";
+    format!(
+        "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"appliance-runtime\"\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
 }
 
 /// Pump bytes both directions until either side closes.
@@ -1276,14 +1673,40 @@ fn header_value(head: &str, name: &str) -> Option<String> {
         .map(|(_, v)| v.trim().to_string())
 }
 
+fn remove_header(head: &str, name: &str) -> String {
+    head.split_inclusive('\n')
+        .filter(|line| {
+            line.trim_end_matches(['\r', '\n'])
+                .split_once(':')
+                .is_none_or(|(key, _)| !key.trim().eq_ignore_ascii_case(name))
+        })
+        .collect()
+}
+
+fn http_destination(head: &str, target: &str) -> Option<(String, u16)> {
+    if let Some(rest) = target.strip_prefix("http://") {
+        return Some(split_authority_port(rest.split('/').next().unwrap_or(rest), 80));
+    }
+    if let Some(rest) = target.strip_prefix("https://") {
+        return Some(split_authority_port(rest.split('/').next().unwrap_or(rest), 443));
+    }
+    header_value(head, "host").map(|authority| split_authority_port(&authority, 80))
+}
+
+fn split_authority_port(authority: &str, default_port: u16) -> (String, u16) {
+    match authority.rsplit_once(':') {
+        Some((host, raw_port)) if !host.is_empty() => {
+            (host.to_string(), raw_port.parse().unwrap_or(default_port))
+        }
+        _ => (authority.to_string(), default_port),
+    }
+}
+
 /// Pull the authority out of an absolute request URI
 /// (`http://host:port/path` → `host:port` → `host`).
+#[cfg(test)]
 fn authority_of(target: &str) -> Option<String> {
-    let rest = target
-        .strip_prefix("http://")
-        .or_else(|| target.strip_prefix("https://"))?;
-    let authority = rest.split('/').next().unwrap_or(rest);
-    let host = authority.rsplit_once(':').map_or(authority, |(h, _)| h);
+    let (host, _) = http_destination("", target)?;
     (!host.is_empty()).then(|| host.to_string())
 }
 
@@ -1445,6 +1868,20 @@ pub fn guest_proxy_url(name: &str, port: u16) -> String {
         })
         .unwrap_or(std::net::Ipv4Addr::new(192, 168, 64, 1));
     format!("http://{gw}:{port}")
+}
+
+/// Mint a fresh app credential and return the standards-compatible proxy URL
+/// injected into that principal's task environment. Both CONNECT and
+/// absolute-form HTTP clients translate URL userinfo into
+/// `Proxy-Authorization: Basic`; the proxy removes that header before origin
+/// forwarding and never prints this URL.
+pub fn authenticated_guest_proxy_url(name: &str, principal: &str, port: u16) -> Result<String> {
+    let credential = issue_runtime_proxy_credential(name, principal)?;
+    let proxy = guest_proxy_url(name, port);
+    let authority = proxy
+        .strip_prefix("http://")
+        .context("guest proxy URL must use http scheme")?;
+    Ok(format!("http://{principal}:{credential}@{authority}"))
 }
 
 /// Split a CONNECT `host:port` target, defaulting to 443.
@@ -1987,12 +2424,26 @@ mod tests {
     #[test]
     fn wsl_rendering_uses_truthful_mode_headers_and_never_host_enforced() {
         let policy = EgressPolicy { default: Action::Deny, allow: vec![], deny: vec![], mitm: false };
-        let strict = render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Strict);
+        let strict = render_effective_policy_for_backend_inner(
+            "runtime",
+            &policy,
+            true,
+            "wsl",
+            WslMode::Strict,
+            true,
+        );
         assert!(strict.starts_with("WSL NAT - strict: apps with egress grants are refused\n"));
         assert!(strict.contains("EFFECTIVE egress policy for 'runtime'  (boundary: strict)"));
         assert!(!strict.contains("host-enforced"));
         let cooperative =
-            render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Cooperative);
+            render_effective_policy_for_backend_inner(
+                "runtime",
+                &policy,
+                true,
+                "wsl",
+                WslMode::Cooperative,
+                true,
+            );
         assert!(cooperative.starts_with(
             "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
         ));
@@ -2000,6 +2451,17 @@ mod tests {
             "EFFECTIVE egress policy for 'runtime'  (boundary: cooperative (in-guest proxy))"
         ));
         assert!(!cooperative.contains("host-enforced"));
+
+        let non_runtime = render_effective_policy_for_backend_inner(
+            "dev",
+            &policy,
+            false,
+            "wsl",
+            WslMode::Cooperative,
+            false,
+        );
+        assert!(!non_runtime.contains("authenticated per-app Runtime policies:"));
+        assert!(!non_runtime.contains("no credential: denied with 407"));
     }
 
     #[test]
@@ -2055,32 +2517,325 @@ mod tests {
                 mitm: true,
             },
             allow_ports: BTreeMap::from([("example.com".to_string(), vec![port])]),
+            proxy_credential: None,
+        }
+    }
+
+    fn proxy_credential(byte: u8) -> String {
+        URL_SAFE_NO_PAD.encode([byte; 32])
+    }
+
+    fn basic_proxy_auth(app: &str, credential: &str) -> String {
+        format!("Basic {}", STANDARD.encode(format!("{app}:{credential}")))
+    }
+
+    fn credentialed(mut runtime: RuntimePolicy, byte: u8) -> (RuntimePolicy, String) {
+        let credential = proxy_credential(byte);
+        runtime.proxy_credential = Some(ProxyCredential(credential.clone()));
+        (runtime, credential)
+    }
+
+    #[test]
+    fn proxy_auth_parses_connect_and_absolute_form_http() {
+        let credential = proxy_credential(7);
+        let authorization = basic_proxy_auth("journal", &credential);
+        for (request, method, target) in [
+            (
+                format!(
+                    "CONNECT api.example.com:443 HTTP/1.1\r\nProxy-Authorization: {authorization}\r\n\r\n"
+                ),
+                "CONNECT",
+                "api.example.com:443",
+            ),
+            (
+                format!(
+                    "GET http://api.example.com/v1 HTTP/1.1\r\nHost: api.example.com\r\nproxy-authorization: {authorization}\r\n\r\n"
+                ),
+                "GET",
+                "http://api.example.com/v1",
+            ),
+        ] {
+            let parsed = parse_proxy_request_head(&request);
+            assert_eq!(parsed.method, method);
+            assert_eq!(parsed.target, target);
+            assert_eq!(
+                parsed
+                    .proxy_authorization
+                    .as_deref()
+                    .and_then(parse_basic_proxy_authorization),
+                Some(("journal".to_string(), credential.clone()))
+            );
         }
     }
 
     #[test]
-    fn wsl_cooperative_policy_unions_runtime_hosts_while_strict_denies_all() {
-        let persisted = EgressPolicy {
-            default: Action::Allow,
-            allow: vec!["legacy.example".into()],
-            deny: vec!["blocked.example.com".into()],
-            mitm: true,
-        };
-        let mut journal = runtime_policy("journal", "192.168.127.10".parse().unwrap(), 443);
-        journal.policy.allow = vec!["api.example.com".into()];
-        let mut notes = runtime_policy("notes", "192.168.127.11".parse().unwrap(), 443);
-        notes.policy.allow = vec!["sync.example.com".into(), "api.example.com".into()];
-        let cooperative =
-            union_wsl_runtime_policy(&persisted, &[journal, notes], WslMode::Cooperative);
-        assert_eq!(cooperative.default, Action::Deny);
-        assert_eq!(cooperative.allow, vec!["api.example.com", "sync.example.com"]);
-        assert_eq!(cooperative.deny, vec!["blocked.example.com"]);
-        assert!(cooperative.mitm);
+    fn authenticated_runtime_selection_never_unions_apps_or_ports() {
+        let (mut journal, journal_credential) = credentialed(
+            runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443),
+            1,
+        );
+        journal.policy.allow = vec!["shared.example.com".into(), "journal.example.com".into()];
+        journal.allow_ports = BTreeMap::from([
+            ("shared.example.com".into(), vec![443]),
+            ("journal.example.com".into(), vec![443]),
+        ]);
+        let (mut notes, notes_credential) = credentialed(
+            runtime_policy("notes", Ipv4Addr::new(192, 168, 127, 11), 8443),
+            2,
+        );
+        notes.policy.allow = vec!["shared.example.com".into(), "notes.example.com".into()];
+        notes.allow_ports = BTreeMap::from([
+            ("shared.example.com".into(), vec![8443]),
+            ("notes.example.com".into(), vec![8443]),
+        ]);
+        let operator = EgressPolicy::default();
+        let runtimes = [journal, notes];
 
-        let strict = union_wsl_runtime_policy(&persisted, &[], WslMode::Strict);
-        assert_eq!(strict.default, Action::Deny);
-        assert!(strict.allow.is_empty());
-        assert!(!strict.mitm);
+        let journal_selection = select_runtime_proxy_policy(
+            "appliance-runtime",
+            Some(&basic_proxy_auth("journal", &journal_credential)),
+            WslMode::Cooperative,
+            &runtimes,
+        );
+        assert!(matches!(
+            &journal_selection,
+            ProxyPolicySelection::Runtime(runtime) if runtime.app == "journal"
+        ));
+        assert!(selection_allows(
+            &journal_selection,
+            &operator,
+            "shared.example.com",
+            443
+        ));
+        assert!(!selection_allows(
+            &journal_selection,
+            &operator,
+            "shared.example.com",
+            8443
+        ));
+        assert!(!selection_allows(
+            &journal_selection,
+            &operator,
+            "notes.example.com",
+            8443
+        ));
+
+        let notes_selection = select_runtime_proxy_policy(
+            "appliance-runtime",
+            Some(&basic_proxy_auth("notes", &notes_credential)),
+            WslMode::Cooperative,
+            &runtimes,
+        );
+        assert!(selection_allows(
+            &notes_selection,
+            &operator,
+            "notes.example.com",
+            8443
+        ));
+        assert!(!selection_allows(
+            &notes_selection,
+            &operator,
+            "journal.example.com",
+            443
+        ));
+    }
+
+    #[test]
+    fn unknown_revoked_and_strict_credentials_fail_closed_without_union_fallback() {
+        let (runtime, credential) = credentialed(
+            runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443),
+            3,
+        );
+        let unknown = select_runtime_proxy_policy(
+            "appliance-runtime",
+            Some(&basic_proxy_auth("journal", &proxy_credential(9))),
+            WslMode::Cooperative,
+            std::slice::from_ref(&runtime),
+        );
+        assert!(matches!(unknown, ProxyPolicySelection::Unauthorized(None)));
+        assert!(proxy_authentication_response().starts_with(
+            "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic"
+        ));
+
+        let mut revoked = runtime.clone();
+        revoked.proxy_credential = None;
+        let revoked = select_runtime_proxy_policy(
+            "appliance-runtime",
+            Some(&basic_proxy_auth("journal", &credential)),
+            WslMode::Cooperative,
+            &[revoked],
+        );
+        assert!(matches!(
+            revoked,
+            ProxyPolicySelection::Unauthorized(Some(runtime)) if runtime.app == "journal"
+        ));
+
+        let strict = select_runtime_proxy_policy(
+            "appliance-runtime",
+            Some(&basic_proxy_auth("journal", &credential)),
+            WslMode::Strict,
+            std::slice::from_ref(&runtime),
+        );
+        assert!(matches!(strict, ProxyPolicySelection::Unauthorized(None)));
+        assert!(matches!(
+            select_runtime_proxy_policy(
+                "appliance-runtime",
+                None,
+                WslMode::Cooperative,
+                &[]
+            ),
+            ProxyPolicySelection::Unauthorized(None)
+        ));
+
+        for malformed in [
+            "Bearer x".to_string(),
+            "Basic !!!".to_string(),
+            "Basic".to_string(),
+            "Basic ".to_string(),
+            format!("Basic {}", STANDARD.encode("journal:")),
+            format!("Basic {}", STANDARD.encode([0xff, b':', b'x'])),
+            format!("Basic {}", STANDARD.encode("no-colon")),
+        ] {
+            assert!(matches!(
+                select_runtime_proxy_policy(
+                    "appliance-runtime",
+                    Some(&malformed),
+                    WslMode::Cooperative,
+                    std::slice::from_ref(&runtime),
+                ),
+                ProxyPolicySelection::Unauthorized(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn proxy_credentials_compare_constant_time_and_never_enter_logs() {
+        let (runtime, credential) = credentialed(
+            runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443),
+            4,
+        );
+        assert!(constant_time_credential_eq(&credential, &credential));
+        assert!(!constant_time_credential_eq(&credential, &proxy_credential(5)));
+        assert!(!constant_time_credential_eq(&credential, "short"));
+        assert!(!constant_time_credential_eq(&credential, ""));
+        assert!(!constant_time_credential_eq(
+            &credential,
+            &format!("{credential}x")
+        ));
+        let selection = ProxyPolicySelection::Runtime(runtime.clone());
+        let mut captured_stderr = Vec::new();
+        write_connect_log(
+            &mut captured_stderr,
+            selection_principal(&selection),
+            "api.example.com:443",
+            "allow",
+        )
+        .unwrap();
+        let captured_stderr = String::from_utf8(captured_stderr).unwrap();
+        assert!(!captured_stderr.contains(&credential));
+        assert!(!format!("{runtime:?}").contains(&credential));
+        let forwarded = remove_header(
+            &format!(
+                "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\nProxy-Authorization: {}\r\n\r\n",
+                basic_proxy_auth("journal", &credential)
+            ),
+            "proxy-authorization",
+        );
+        assert!(!forwarded.to_ascii_lowercase().contains("proxy-authorization"));
+        assert!(!forwarded.contains(&credential));
+    }
+
+    #[test]
+    fn issued_proxy_credential_rotates_and_revokes_with_effective_state() {
+        with_runtime_test_root("proxy-credential", |_root| {
+            let runtime = runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443);
+            save_runtime_policy(&runtime).unwrap();
+            let first = issue_runtime_proxy_credential("appliance-runtime", "journal").unwrap();
+            // An entitlement policy rewrite must not strand the running task
+            // by silently clearing its live proxy bearer.
+            save_runtime_policy(&runtime).unwrap();
+            assert_eq!(
+                runtime_policy_for_principal("appliance-runtime", "journal")
+                    .unwrap()
+                    .proxy_credential
+                    .as_ref()
+                    .map(|value| value.0.as_str()),
+                Some(first.as_str())
+            );
+            let second = issue_runtime_proxy_credential("appliance-runtime", "journal").unwrap();
+            assert_ne!(first, second);
+            assert_eq!(URL_SAFE_NO_PAD.decode(&second).unwrap().len(), 32);
+            let apps = runtime_app_policy_outputs("appliance-runtime");
+            let json = serde_json::to_string(&apps).unwrap();
+            assert!(json.contains("\"app\":\"journal\""));
+            assert!(json.contains("\"hosts\":[{\"host\":\"example.com\",\"ports\":[443]}]"));
+            assert!(!json.contains(&second));
+            let rendered = render_effective_policy_for_backend_inner(
+                "appliance-runtime",
+                &EgressPolicy::default(),
+                false,
+                "wsl",
+                WslMode::Cooperative,
+                true,
+            );
+            assert!(rendered.contains("authenticated per-app Runtime policies:"));
+            assert!(rendered.contains("journal  (principal: journal, mitm: on)"));
+            assert!(rendered.contains("example.com  tcp/443"));
+            assert!(!rendered.contains(&second));
+            assert!(revoke_runtime_proxy_credential("appliance-runtime", "journal").unwrap());
+            assert!(!revoke_runtime_proxy_credential("appliance-runtime", "journal").unwrap());
+            let revoked = runtime_policy_for_principal("appliance-runtime", "journal").unwrap();
+            assert!(revoked.proxy_credential.is_none());
+            assert!(remove_runtime_policy("appliance-runtime", "journal").unwrap());
+            assert!(runtime_policy_for_principal("appliance-runtime", "journal").is_none());
+        });
+    }
+
+    #[test]
+    fn app_credential_is_never_issued_to_or_selected_from_a_compound_service_principal() {
+        with_runtime_test_root("compound-proxy-credential", |_root| {
+            let app = runtime_policy("notes", Ipv4Addr::new(192, 168, 127, 10), 443);
+            save_runtime_policy(&app).unwrap();
+
+            let mut service = app.clone();
+            service.service = Some("api".into());
+            service.principal = "notes/api".into();
+            service.source = Ipv4Addr::new(192, 168, 127, 11);
+            save_runtime_policy(&service).unwrap();
+
+            let app_credential = issue_runtime_proxy_credential("appliance-runtime", "notes").unwrap();
+            assert!(
+                issue_runtime_proxy_credential("appliance-runtime", "notes/api")
+                    .unwrap_err()
+                    .to_string()
+                    .contains("only be issued to an app principal")
+            );
+            assert!(
+                runtime_policy_for_principal("appliance-runtime", "notes/api")
+                    .unwrap()
+                    .proxy_credential
+                    .is_none()
+            );
+            assert!(matches!(
+                select_runtime_proxy_policy(
+                    "appliance-runtime",
+                    Some(&basic_proxy_auth("notes/api", &app_credential)),
+                    WslMode::Cooperative,
+                    &all_runtime_policies(),
+                ),
+                ProxyPolicySelection::Unauthorized(_)
+            ));
+        });
+    }
+
+    #[test]
+    fn credentialless_wsl_runtime_requests_are_unauthorized_in_every_mode() {
+        for mode in [WslMode::Cooperative, WslMode::Strict] {
+            assert!(matches!(
+                select_runtime_proxy_policy("appliance-runtime", None, mode, &[]),
+                ProxyPolicySelection::Unauthorized(None)
+            ));
+        }
     }
 
     #[test]
@@ -2095,13 +2850,22 @@ mod tests {
             save_runtime_policy(&journal).unwrap();
             save_runtime_policy(&notes).unwrap();
             save_runtime_policy(&other).unwrap();
+            issue_runtime_proxy_credential("deleted-runtime", "journal").unwrap();
+            issue_runtime_proxy_credential("deleted-runtime", "notes").unwrap();
+            let survivor_credential =
+                issue_runtime_proxy_credential("surviving-runtime", "other").unwrap();
 
             let removed = prune_runtime_policies_for_vm("deleted-runtime");
             assert_eq!(removed.len(), 2);
             assert!(removed.into_iter().all(|(_, result)| result.unwrap()));
             assert!(runtime_policy_for_principal("deleted-runtime", "journal").is_none());
             assert!(runtime_policy_for_principal("deleted-runtime", "notes").is_none());
-            assert_eq!(runtime_policy_for_principal("surviving-runtime", "other"), Some(other));
+            let surviving = runtime_policy_for_principal("surviving-runtime", "other").unwrap();
+            assert_eq!(surviving.app, other.app);
+            assert_eq!(
+                surviving.proxy_credential.as_ref().map(|value| value.0.as_str()),
+                Some(survivor_credential.as_str())
+            );
         });
     }
 
