@@ -32,6 +32,7 @@ import {
   configureBroker,
   copilotAdapter,
   extractOAuthToken,
+  hostClaudeCommand,
   installCommandFor,
   looksLikeOpenAiKey,
   parseStoredCred,
@@ -668,6 +669,19 @@ describe('looksLikeOpenAiKey (codex soft sk- warning)', () => {
     expect(looksLikeOpenAiKey('sk-proj-abc')).toBe(true);
     expect(looksLikeOpenAiKey('  sk-abc ')).toBe(true);
     expect(looksLikeOpenAiKey('nope')).toBe(false);
+  });
+});
+
+describe('hostClaudeCommand', () => {
+  it('uses cmd.exe on Windows so npm-installed .cmd shims resolve through PATHEXT', () => {
+    expect(hostClaudeCommand(['--version'], 'win32')).toEqual({
+      command: 'cmd.exe',
+      args: ['/C', 'claude', '--version'],
+    });
+    expect(hostClaudeCommand(['setup-token'], 'linux')).toEqual({
+      command: 'claude',
+      args: ['setup-token'],
+    });
   });
 });
 

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { externalUrlCommand } from './open-external-url';
+import { EXTERNAL_URL_SPAWN_OPTIONS, externalUrlCommand } from './open-external-url';
 
 describe('external URL command', () => {
+  it('spawns directly without a shell', () => {
+    expect(EXTERNAL_URL_SPAWN_OPTIONS).toMatchObject({ shell: false });
+  });
+
   const urls = [
     ['ampersand', 'https://example.com/path?first=one&second=two'],
     ['percent pair', 'https://example.com/path?directory=%APPDATA%'],

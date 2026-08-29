@@ -1821,8 +1821,8 @@ enum AwsProfileSource {
 /// whole listing, so the wizard always has *something* to show.
 #[tauri::command]
 fn list_aws_profiles() -> Result<Vec<AwsProfile>, HostError> {
-    let home = match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
-        Some(h) => PathBuf::from(h),
+    let home = match home_dir() {
+        Some(home) => home,
         None => return Ok(Vec::new()),
     };
     let aws_dir = home.join(".aws");
@@ -6237,12 +6237,18 @@ async fn microvm_agent_logout(agent_type: String) -> Result<(), String> {
 /// launch PATH is pre-augmented with the user's bin dirs at startup
 /// (ensure_user_paths_on_path), so a Homebrew / `~/.local/bin` `claude`
 /// resolves the same as in the user's shell.
+fn claude_probe_argv(platform: &str) -> Vec<&'static str> {
+    if platform == "windows" {
+        vec!["cmd.exe", "/C", "claude", "--version"]
+    } else {
+        vec!["claude", "--version"]
+    }
+}
+
 #[tauri::command]
 async fn microvm_agent_has_host_claude() -> bool {
-    matches!(
-        run_status_command(&["claude", "--version"]).await,
-        Ok((true, _, _))
-    )
+    let argv = claude_probe_argv(host_platform());
+    matches!(run_status_command(&argv).await, Ok((true, _, _)))
 }
 
 /// Best-effort: open Terminal.app running `claude setup-token` (macOS) so the
@@ -6269,9 +6275,11 @@ async fn open_setup_token_terminal() -> Result<bool, String> {
 }
 
 #[cfg(any(target_os = "windows", test))]
-fn windows_setup_token_launchers() -> Vec<Vec<String>> {
-    [
-        [
+fn windows_setup_token_launcher(wt_available: bool) -> Vec<String> {
+    let argv: &[&str] = if wt_available {
+        // Owner runbook: verify this `wt.exe -- cmd /K ...` form on real
+        // Windows hardware; CI only covers argv selection.
+        &[
             "cmd.exe",
             "/C",
             "start",
@@ -6283,8 +6291,8 @@ fn windows_setup_token_launchers() -> Vec<Vec<String>> {
             "claude",
             "setup-token",
         ]
-        .as_slice(),
-        [
+    } else {
+        &[
             "cmd.exe",
             "/C",
             "start",
@@ -6294,29 +6302,29 @@ fn windows_setup_token_launchers() -> Vec<Vec<String>> {
             "claude",
             "setup-token",
         ]
-        .as_slice(),
-    ]
-    .into_iter()
-    .map(|argv| argv.iter().map(|arg| (*arg).to_string()).collect())
-    .collect()
+    };
+    argv.iter().map(|arg| (*arg).to_string()).collect()
 }
 
 /// Best-effort: prefer Windows Terminal, then fall back to a visible Command
 /// Prompt that stays open after `claude setup-token` exits.
 #[cfg(target_os = "windows")]
 async fn open_setup_token_terminal() -> Result<bool, String> {
-    let mut last_error = String::new();
-    for argv in windows_setup_token_launchers() {
-        let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-        match run_status_command(&refs).await {
-            Ok((true, _, _)) => return Ok(true),
-            Ok((false, _, stderr)) => last_error = stderr.trim().to_string(),
-            Err(error) => last_error = error,
-        }
+    let wt_available = matches!(
+        run_status_command(&["cmd.exe", "/C", "where", "wt.exe"]).await,
+        Ok((true, _, _))
+    );
+    let argv = windows_setup_token_launcher(wt_available);
+    let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+    let (ok, _, stderr) = run_status_command(&refs).await?;
+    if ok {
+        Ok(true)
+    } else {
+        Err(format!(
+            "could not open a terminal to run `claude setup-token`: {}",
+            stderr.trim()
+        ))
     }
-    Err(format!(
-        "could not open a terminal to run `claude setup-token`: {last_error}"
-    ))
 }
 
 /// Linux keeps the manual command fallback until a desktop-terminal contract
@@ -6854,9 +6862,7 @@ fn managed_bin_dirs_for(
 }
 
 fn ensure_managed_bins_on_path() {
-    let home = std::env::var("HOME")
-        .ok()
-        .or_else(|| std::env::var("USERPROFILE").ok());
+    let home = home_dir().and_then(|path| path.into_os_string().into_string().ok());
     let local_app_data = std::env::var("LOCALAPPDATA").ok();
     let dirs = managed_bin_dirs_for(host_platform(), home.as_deref(), local_app_data.as_deref());
     prepend_to_path(&dirs);
@@ -6864,11 +6870,13 @@ fn ensure_managed_bins_on_path() {
 
 fn windows_user_path_candidates(
     local_app_data: Option<&str>,
+    app_data: Option<&str>,
     user_profile: Option<&str>,
     program_files: Option<&str>,
 ) -> Vec<String> {
     [
         local_app_data.map(|base| join_platform_path(base, r"Microsoft\WinGet\Links", "windows")),
+        app_data.map(|base| join_platform_path(base, "npm", "windows")),
         user_profile.map(|base| join_platform_path(base, r"scoop\shims", "windows")),
         program_files
             .map(|base| join_platform_path(base, r"Docker\Docker\resources\bin", "windows")),
@@ -6923,6 +6931,7 @@ fn ensure_user_paths_on_path() {
     } else {
         candidates.extend(windows_user_path_candidates(
             std::env::var("LOCALAPPDATA").ok().as_deref(),
+            std::env::var("APPDATA").ok().as_deref(),
             std::env::var("USERPROFILE").ok().as_deref(),
             std::env::var("ProgramFiles").ok().as_deref(),
         ));
@@ -6950,14 +6959,28 @@ fn ensure_user_paths_on_path() {
 }
 
 fn composed_path(current: &str, dirs: &[String], sep: char) -> String {
-    let existing: std::collections::HashSet<&str> = current.split(sep).collect();
+    let windows = sep == ';';
+    let normalize = |entry: &str| {
+        let entry = if windows {
+            entry.trim_end_matches(['/', '\\'])
+        } else {
+            entry
+        };
+        if windows {
+            entry.to_ascii_lowercase()
+        } else {
+            entry.to_string()
+        }
+    };
+    let mut seen: std::collections::HashSet<String> = current.split(sep).map(&normalize).collect();
 
     let mut prefix = String::new();
     for dir in dirs {
-        if dir.is_empty() || existing.contains(dir.as_str()) || prefix.split(sep).any(|p| p == dir)
-        {
+        let normalized = normalize(dir);
+        if dir.is_empty() || seen.contains(&normalized) {
             continue;
         }
+        seen.insert(normalized);
         if !prefix.is_empty() {
             prefix.push(sep);
         }
@@ -6996,10 +7019,9 @@ fn prepend_to_path(dirs: &[String]) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Order matters: user paths first so Homebrew etc. resolve before
-    // any helper-installed fallback. The helper dir is then prepended
-    // on top — its binaries win when both system + helper have a
-    // copy, which keeps versioning predictable.
+    // Order matters: user paths are added first, then managed bins are
+    // prepended so helpers win on PATH. `vm_binary()` independently prefers
+    // its HOME-managed engine before consulting PATH.
     ensure_user_paths_on_path();
     ensure_managed_bins_on_path();
     let mut builder = tauri::Builder::default()
@@ -7161,11 +7183,13 @@ mod tests {
     fn windows_path_composition_uses_both_managed_bins_and_existing_user_bins() {
         let user_candidates = windows_user_path_candidates(
             Some(r"C:\Users\Blake\AppData\Local"),
+            Some(r"C:\Users\Blake\AppData\Roaming"),
             Some(r"C:\Users\Blake"),
             Some(r"C:\Program Files"),
         );
         let existing = std::collections::HashSet::from([
             r"C:\Users\Blake\AppData\Local\Microsoft\WinGet\Links",
+            r"C:\Users\Blake\AppData\Roaming\npm",
             r"C:\Users\Blake\scoop\shims",
             r"C:\Program Files\Docker\Docker\resources\bin",
         ]);
@@ -7184,6 +7208,7 @@ mod tests {
                 r"C:\Users\Blake\AppData\Local\Appliance\bin;",
                 r"C:\git-bash-home\.appliance\bin;",
                 r"C:\Users\Blake\AppData\Local\Microsoft\WinGet\Links;",
+                r"C:\Users\Blake\AppData\Roaming\npm;",
                 r"C:\Users\Blake\scoop\shims;",
                 r"C:\Program Files\Docker\Docker\resources\bin;",
                 r"C:\Windows\System32"
@@ -7192,33 +7217,55 @@ mod tests {
     }
 
     #[test]
-    fn windows_setup_token_launcher_argv_prefers_wt_then_cmd() {
+    fn claude_probe_uses_cmd_on_windows_for_pathext_resolution() {
         assert_eq!(
-            windows_setup_token_launchers(),
+            claude_probe_argv("windows"),
+            vec!["cmd.exe", "/C", "claude", "--version"]
+        );
+        assert_eq!(claude_probe_argv("linux"), vec!["claude", "--version"]);
+    }
+
+    #[test]
+    fn windows_setup_token_launcher_depends_on_wt_probe() {
+        assert_eq!(
+            windows_setup_token_launcher(true),
             vec![
-                vec![
-                    "cmd.exe",
-                    "/C",
-                    "start",
-                    "",
-                    "wt.exe",
-                    "--",
-                    "cmd",
-                    "/K",
-                    "claude",
-                    "setup-token"
-                ],
-                vec![
-                    "cmd.exe",
-                    "/C",
-                    "start",
-                    "",
-                    "cmd",
-                    "/K",
-                    "claude",
-                    "setup-token"
-                ],
+                "cmd.exe",
+                "/C",
+                "start",
+                "",
+                "wt.exe",
+                "--",
+                "cmd",
+                "/K",
+                "claude",
+                "setup-token"
             ]
+        );
+        assert_eq!(
+            windows_setup_token_launcher(false),
+            vec![
+                "cmd.exe",
+                "/C",
+                "start",
+                "",
+                "cmd",
+                "/K",
+                "claude",
+                "setup-token"
+            ]
+        );
+    }
+
+    #[test]
+    fn windows_path_dedupe_ignores_case_and_trailing_slashes() {
+        assert_eq!(
+            composed_path(
+                r"C:\Tools\;C:\Windows\System32",
+                &[r"c:\tools".into(), r"C:\TOOLS\\".into()],
+                ';'
+            ),
+            r"C:\Tools\;C:\Windows\System32"
         );
     }
 

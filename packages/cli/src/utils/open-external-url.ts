@@ -5,6 +5,12 @@ export interface ExternalUrlCommand {
   args: string[];
 }
 
+export const EXTERNAL_URL_SPAWN_OPTIONS = {
+  detached: true,
+  stdio: 'ignore',
+  shell: false,
+} as const;
+
 export function externalUrlCommand(url: string, platform: NodeJS.Platform): ExternalUrlCommand {
   if (platform === 'darwin') return { command: 'open', args: [url] };
   if (platform === 'win32') {
@@ -20,7 +26,7 @@ export function externalUrlCommand(url: string, platform: NodeJS.Platform): Exte
 export function openExternalUrl(url: string): void {
   const launch = externalUrlCommand(url, process.platform);
   try {
-    const child = spawn(launch.command, launch.args, { detached: true, stdio: 'ignore' });
+    const child = spawn(launch.command, launch.args, EXTERNAL_URL_SPAWN_OPTIONS);
     child.on('error', () => console.log(url));
     child.unref();
   } catch {

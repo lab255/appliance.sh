@@ -673,12 +673,20 @@ export function looksLikeOpenAiKey(raw: string): boolean {
   return raw.trim().startsWith('sk-');
 }
 
+export function hostClaudeCommand(
+  args: string[],
+  platform: NodeJS.Platform = process.platform
+): { command: string; args: string[] } {
+  return platform === 'win32' ? { command: 'cmd.exe', args: ['/C', 'claude', ...args] } : { command: 'claude', args };
+}
+
 /** Is the `claude` binary present + runnable on this HOST? OAuth login shells
  *  `claude setup-token` host-side, so a missing host `claude` is a precondition
  *  with an actionable error rather than a crash (docs/agent-login.md §2, §7). */
 export function hostHasClaude(): boolean {
   try {
-    execFileSync('claude', ['--version'], { stdio: 'ignore' });
+    const launch = hostClaudeCommand(['--version']);
+    execFileSync(launch.command, launch.args, { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -693,7 +701,8 @@ export function hostHasClaude(): boolean {
  *  §7), so the caller captures it via a hidden in-process paste prompt. This
  *  helper NEVER writes a tmp file and NEVER logs the token (Sasha §7.1). */
 export function runSetupTokenInteractive(): number {
-  const r = spawnSync('claude', ['setup-token'], { stdio: 'inherit' });
+  const launch = hostClaudeCommand(['setup-token']);
+  const r = spawnSync(launch.command, launch.args, { stdio: 'inherit', shell: false });
   if (r.error) {
     const code = (r.error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') return 127; // host `claude` vanished between checks

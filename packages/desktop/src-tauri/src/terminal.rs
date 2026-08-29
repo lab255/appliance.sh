@@ -76,6 +76,9 @@ pub fn open(
     rows: u16,
     on_event: Channel<TermEvent>,
 ) -> Result<(), String> {
+    if argv.is_empty() {
+        return Err("empty terminal command".into());
+    }
     let pty = native_pty_system();
     let pair = pty
         .openpty(PtySize {
