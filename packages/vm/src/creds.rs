@@ -207,7 +207,7 @@ pub fn save_config(name: &str, cfg: &CredentialConfig) -> anyhow::Result<()> {
 }
 
 #[cfg(unix)]
-fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
+pub(crate) fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
     use std::os::unix::fs::MetadataExt;
 
     let uid = unsafe { libc::geteuid() };
@@ -232,7 +232,7 @@ fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<
 }
 
 #[cfg(windows)]
-fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
+pub(crate) fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<()> {
     use std::os::windows::fs::OpenOptionsExt;
     use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
 
@@ -249,7 +249,7 @@ fn verify_config_integrity(path: &Path, file: &std::fs::File) -> anyhow::Result<
 }
 
 #[cfg(not(any(unix, windows)))]
-fn verify_config_integrity(_path: &Path, _file: &std::fs::File) -> anyhow::Result<()> {
+pub(crate) fn verify_config_integrity(_path: &Path, _file: &std::fs::File) -> anyhow::Result<()> {
     bail!("credential config integrity checks are unsupported on this platform")
 }
 
