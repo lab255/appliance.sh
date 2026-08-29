@@ -394,9 +394,10 @@ pub fn intercept_observe<S: Read + Write>(
     let client_conn = ClientConnection::new(client_cfg, sni).context("client tls conn")?;
     let mut up_tls = StreamOwned::new(client_conn, upstream_tcp);
 
-    // Byte-for-byte forwarding: unlike the broker path, do not add
-    // Connection: close and do not inspect or rewrite any header/body.
-    up_tls.write_all(&head_bytes)?;
+    // Preserve every byte except the hop-by-hop proxy credential, which must
+    // never cross the MITM boundary to the destination origin.
+    let forwarded_head = remove_http_header_bytes(&head_bytes, b"proxy-authorization");
+    up_tls.write_all(&forwarded_head)?;
     let request_body = copy_request_body_count(&mut client_tls, &mut up_tls, &head)?;
     up_tls.flush()?;
 
@@ -424,12 +425,38 @@ pub fn intercept_observe<S: Read + Write>(
             tls_version: tls_version.as_deref(),
             sni: Some(host),
             status,
-            bytes_in: Some((head_bytes.len() as u64).saturating_add(request_body)),
+            bytes_in: Some((forwarded_head.len() as u64).saturating_add(request_body)),
             bytes_out: Some((response_head_bytes.len() as u64).saturating_add(response_body)),
             duration_ms: Some(started.elapsed().as_millis() as u64),
         },
     );
     Ok(())
+}
+
+fn remove_http_header_bytes(head: &[u8], name: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(head.len());
+    let mut cursor = 0;
+    let mut request_line = true;
+    while cursor < head.len() {
+        let line_end = head[cursor..]
+            .windows(2)
+            .position(|window| window == b"\r\n")
+            .map(|offset| cursor + offset)
+            .unwrap_or(head.len());
+        let line = &head[cursor..line_end];
+        let is_target = !request_line
+            && line
+                .splitn(2, |byte| *byte == b':')
+                .next()
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name));
+        let next = (line_end + 2).min(head.len());
+        if !is_target {
+            output.extend_from_slice(&head[cursor..next]);
+        }
+        request_line = false;
+        cursor = next;
+    }
+    output
 }
 
 fn copy_request_body_count<R: Read, W: Write>(
@@ -899,6 +926,16 @@ mod tests {
         let mut out: Vec<u8> = Vec::new();
         copy_chunked(&mut reader, &mut out).unwrap();
         assert_eq!(String::from_utf8(out).unwrap(), body);
+    }
+
+    #[test]
+    fn observed_mitm_request_strips_proxy_authorization_only() {
+        let head = b"GET /v1 HTTP/1.1\r\nHost: api.example.com\r\nProxy-Authorization: Basic secret\r\nX-Exact: \xff\r\n\r\n";
+        let forwarded = remove_http_header_bytes(head, b"proxy-authorization");
+        assert_eq!(
+            forwarded,
+            b"GET /v1 HTTP/1.1\r\nHost: api.example.com\r\nX-Exact: \xff\r\n\r\n"
+        );
     }
 
     #[test]

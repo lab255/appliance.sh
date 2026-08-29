@@ -929,53 +929,28 @@ fn is_wsl_runtime(name: &str, backend: &str) -> bool {
             .is_some_and(|spec| spec.runtime)
 }
 
-/// Credentialless compatibility path for WSL cooperative mode. Its effective
-/// allowlist is the union of installed Runtime policies; authenticated app
-/// requests never enter this path and retain their host+port policy.
-fn wsl_runtime_proxy_policy(name: &str, mode: WslMode) -> EgressPolicy {
-    let persisted = load_policy(name);
-    union_wsl_runtime_policy(
-        &persisted,
-        &all_runtime_policies()
-            .into_iter()
-            .filter(|runtime| runtime.vm == name)
-            .collect::<Vec<_>>(),
-        mode,
-    )
+fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_wsl_runtime(name, backend) {
+        runtime_proxy_summary_policy(name)
+    } else if is_netstack(name) && backend != "wsl" {
+        netstack_policy(name)
+    } else {
+        load_policy(name)
+    }
 }
 
-fn union_wsl_runtime_policy(
-    persisted: &EgressPolicy,
-    runtimes: &[RuntimePolicy],
-    mode: WslMode,
-) -> EgressPolicy {
-    if mode == WslMode::Strict {
-        return EgressPolicy {
-            default: Action::Deny,
-            allow: Vec::new(),
-            deny: persisted.deny.clone(),
-            mitm: false,
-        };
-    }
-    let mut allow = runtimes
-        .iter()
-        .flat_map(|runtime| runtime.policy.allow.iter().cloned())
-        .collect::<Vec<_>>();
-    allow.sort();
-    allow.dedup();
+fn runtime_proxy_summary_policy(name: &str) -> EgressPolicy {
     EgressPolicy {
         default: Action::Deny,
-        allow,
-        deny: persisted.deny.clone(),
-        mitm: persisted.mitm,
+        allow: Vec::new(),
+        deny: load_policy(name).deny,
+        mitm: false,
     }
 }
 
-fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
-    if is_netstack(name) && backend != "wsl" {
-        netstack_policy(name)
-    } else if is_wsl_runtime(name, backend) {
-        wsl_runtime_proxy_policy(name, wsl_mode(name))
+fn proxy_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
+    if is_wsl_runtime(name, backend) {
+        runtime_proxy_summary_policy(name)
     } else {
         load_policy(name)
     }
@@ -990,18 +965,6 @@ fn effective_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
 /// is what leaves NAT-VM behaviour unchanged.
 pub fn effective_policy(name: &str) -> EgressPolicy {
     effective_policy_for_backend(name, crate::backend::platform_backend_name())
-}
-
-fn proxy_policy_for_backend(name: &str, backend: &str) -> EgressPolicy {
-    if is_wsl_runtime(name, backend) {
-        effective_policy_for_backend(name, backend)
-    } else {
-        load_policy(name)
-    }
-}
-
-fn proxy_policy(name: &str) -> EgressPolicy {
-    proxy_policy_for_backend(name, crate::backend::platform_backend_name())
 }
 
 pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
@@ -1039,11 +1002,29 @@ pub fn render_effective_policy_for_backend(
     backend: &str,
     wsl_mode: WslMode,
 ) -> String {
+    render_effective_policy_for_backend_inner(
+        name,
+        persisted,
+        netstack,
+        backend,
+        wsl_mode,
+        is_wsl_runtime(name, backend),
+    )
+}
+
+fn render_effective_policy_for_backend_inner(
+    name: &str,
+    persisted: &EgressPolicy,
+    netstack: bool,
+    backend: &str,
+    wsl_mode: WslMode,
+    runtime_wsl: bool,
+) -> String {
     let denied = |h: &str| persisted.deny.iter().any(|d| host_matches(h, d));
     let mut out = String::new();
     let enforced = netstack && backend != "wsl";
 
-    if backend == "wsl" {
+    if runtime_wsl {
         out.push_str(match wsl_mode {
             WslMode::Cooperative => {
                 "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
@@ -1163,7 +1144,7 @@ pub fn render_effective_policy_for_backend(
                 }
             }
         }
-        out.push_str("    no credential: VM-wide compatibility policy (cooperative mode only)\n");
+        out.push_str("    no credential: denied with 407 Proxy Authentication Required\n");
     }
     out
 }
@@ -1192,7 +1173,7 @@ pub fn save_policy(name: &str, policy: &EgressPolicy) -> Result<()> {
 /// connection so the desktop's edits take effect without a restart.
 pub fn run_proxy(name: &str, addr: SocketAddr, log: bool) -> Result<()> {
     let (listener, ctx) = build(name, addr, log)?;
-    let policy = proxy_policy(name);
+    let policy = proxy_policy_for_backend(name, crate::backend::platform_backend_name());
     println!(
         "egress proxy for VM '{name}' listening on {}",
         listener.local_addr().unwrap_or(addr)
@@ -1296,7 +1277,10 @@ fn parse_proxy_request_head(head: &str) -> ProxyRequestHead {
 enum ProxyPolicySelection {
     Legacy(EgressPolicy),
     Runtime(RuntimePolicy),
-    Unauthorized,
+    /// Authentication failed. A Runtime policy is retained only when the
+    /// presented username names one unique, credential-revoked app, allowing
+    /// the deny event to remain attributable without granting any access.
+    Unauthorized(Option<RuntimePolicy>),
 }
 
 fn parse_basic_proxy_authorization(value: &str) -> Option<(String, String)> {
@@ -1312,8 +1296,8 @@ fn parse_basic_proxy_authorization(value: &str) -> Option<(String, String)> {
 }
 
 /// Compare fixed-size base64url credentials without data-dependent byte
-/// exits. Presented values are normalized to the expected width before ring's
-/// constant-time equality primitive runs; length validity is checked only
+/// exits. Presented values are normalized to the expected width before
+/// [`subtle::ConstantTimeEq::ct_eq`] runs; length validity is checked only
 /// afterwards.
 fn constant_time_credential_eq(stored: &str, presented: &str) -> bool {
     const ENCODED_LEN: usize = 43;
@@ -1328,36 +1312,55 @@ fn constant_time_credential_eq(stored: &str, presented: &str) -> bool {
 fn select_runtime_proxy_policy(
     vm: &str,
     authorization: Option<&str>,
-    legacy: EgressPolicy,
     mode: WslMode,
     runtimes: &[RuntimePolicy],
 ) -> ProxyPolicySelection {
     let Some(authorization) = authorization else {
-        return ProxyPolicySelection::Legacy(legacy);
+        return ProxyPolicySelection::Unauthorized(None);
     };
-    // A credential-bearing request is never allowed to fall back to the
-    // compatibility union. Strict mode issues no credentials and rejects any
-    // stale value presented after a mode change.
+    // Strict mode issues no credentials and rejects any stale value presented
+    // after a mode change. Runtime WSL never has a credential-less fallback.
     if mode == WslMode::Strict {
-        return ProxyPolicySelection::Unauthorized;
+        return ProxyPolicySelection::Unauthorized(None);
     }
     let Some((username, presented)) = parse_basic_proxy_authorization(authorization) else {
-        return ProxyPolicySelection::Unauthorized;
+        return ProxyPolicySelection::Unauthorized(None);
     };
     let mut selected = None;
+    let mut revoked = None;
     for runtime in runtimes.iter().filter(|runtime| runtime.vm == vm) {
+        if runtime.app == username && runtime.proxy_credential.is_none() {
+            if revoked.is_some() {
+                return ProxyPolicySelection::Unauthorized(None);
+            }
+            revoked = Some(runtime.clone());
+        }
         let credential_matches = runtime
             .proxy_credential
             .as_ref()
             .is_some_and(|stored| constant_time_credential_eq(&stored.0, &presented));
         if credential_matches && runtime.app == username {
             if selected.is_some() {
-                return ProxyPolicySelection::Unauthorized;
+                return ProxyPolicySelection::Unauthorized(None);
             }
             selected = Some(runtime.clone());
         }
     }
-    selected.map_or(ProxyPolicySelection::Unauthorized, ProxyPolicySelection::Runtime)
+    selected.map_or(
+        ProxyPolicySelection::Unauthorized(revoked),
+        ProxyPolicySelection::Runtime,
+    )
+}
+
+fn wsl_runtime_mode(name: &str, backend: &str) -> Option<WslMode> {
+    if backend != "wsl" {
+        return None;
+    }
+    crate::store::load_spec(name)
+        .ok()
+        .flatten()
+        .filter(|spec| spec.runtime)
+        .map(|spec| spec.wsl_mode)
 }
 
 fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
@@ -1391,33 +1394,39 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
     let method = request.method;
     let target = request.target;
     let backend = crate::backend::platform_backend_name();
-    let runtime_wsl = is_wsl_runtime(&ctx.name, backend);
-    let selection = if runtime_wsl {
+    // Read vm.json once for this connection: runtime identity and mode are a
+    // single decision, so auth does not perform repeated state-dir reads.
+    let runtime_wsl_mode = wsl_runtime_mode(&ctx.name, backend);
+    let runtime_wsl = runtime_wsl_mode.is_some();
+    let selection = if let Some(mode) = runtime_wsl_mode {
         let runtimes = all_runtime_policies();
         select_runtime_proxy_policy(
             &ctx.name,
             request.proxy_authorization.as_deref(),
-            proxy_policy(&ctx.name),
-            wsl_mode(&ctx.name),
+            mode,
             &runtimes,
         )
     } else {
         // VZ's standalone front door retains its historical VM policy. Its
         // enforced per-principal path remains the netstack `PolicyContext`.
-        ProxyPolicySelection::Legacy(load_policy(&ctx.name))
+        ProxyPolicySelection::Legacy(proxy_policy_for_backend(&ctx.name, backend))
     };
 
-    if matches!(selection, ProxyPolicySelection::Unauthorized) {
+    if let ProxyPolicySelection::Unauthorized(runtime) = &selection {
         if log {
             eprintln!("egress: proxy authentication failed -> deny");
         }
-        crate::traffic::record_unknown(
+        let (host, port) = if method.eq_ignore_ascii_case("CONNECT") {
+            split_host_port(&target)
+        } else {
+            http_destination(&head, &target).unwrap_or_default()
+        };
+        crate::traffic::record_proxy_auth_failure(
             &ctx.name,
-            "unknown:proxy-auth",
-            "proxy-auth",
-            0,
+            runtime.as_ref(),
+            &host,
+            port,
             &method,
-            "proxy-auth",
         );
         return require_proxy_authentication(&mut client);
     }
@@ -1440,7 +1449,7 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
                         should_intercept(&ctx.name, ip, allowed, policy.mitm, &host)
                     })
             }
-            ProxyPolicySelection::Unauthorized => false,
+            ProxyPolicySelection::Unauthorized(_) => false,
         };
         if log {
             let action = if !allowed {
@@ -1450,9 +1459,11 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
             } else {
                 "allow"
             };
-            eprintln!(
-                "egress [{}]: CONNECT {target} -> {action}",
-                selection_principal(&selection)
+            let _ = write_connect_log(
+                &mut std::io::stderr().lock(),
+                selection_principal(&selection),
+                &target,
+                action,
             );
         }
         if !allowed {
@@ -1499,7 +1510,7 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
                     ctx.client_cfg.clone(),
                     log,
                 ),
-                ProxyPolicySelection::Unauthorized => unreachable!(),
+                ProxyPolicySelection::Unauthorized(_) => unreachable!(),
             };
         }
         record_proxy_decision(
@@ -1550,11 +1561,21 @@ fn handle_conn(mut client: TcpStream, ctx: &ProxyCtx) -> Result<()> {
     }
 }
 
+fn write_connect_log(
+    output: &mut impl Write,
+    principal: &str,
+    target: &str,
+    action: &str,
+) -> std::io::Result<()> {
+    writeln!(output, "egress [{principal}]: CONNECT {target} -> {action}")
+}
+
 fn selection_principal(selection: &ProxyPolicySelection) -> &str {
     match selection {
         ProxyPolicySelection::Legacy(_) => "vm",
         ProxyPolicySelection::Runtime(runtime) => &runtime.principal,
-        ProxyPolicySelection::Unauthorized => "unknown",
+        ProxyPolicySelection::Unauthorized(Some(runtime)) => &runtime.principal,
+        ProxyPolicySelection::Unauthorized(None) => "unknown",
     }
 }
 
@@ -1570,7 +1591,7 @@ fn selection_allows(
             runtime.allows_host_port(host, port)
                 && !operator_policy.deny.iter().any(|deny| host_matches(host, deny))
         }
-        ProxyPolicySelection::Unauthorized => false,
+        ProxyPolicySelection::Unauthorized(_) => false,
     }
 }
 
@@ -1598,7 +1619,7 @@ fn record_proxy_decision(
         ProxyPolicySelection::Legacy(_) => {
             crate::traffic::record(name, host, port, method, path, decision)
         }
-        ProxyPolicySelection::Unauthorized => {}
+        ProxyPolicySelection::Unauthorized(_) => {}
     }
 }
 
@@ -2400,12 +2421,26 @@ mod tests {
     #[test]
     fn wsl_rendering_uses_truthful_mode_headers_and_never_host_enforced() {
         let policy = EgressPolicy { default: Action::Deny, allow: vec![], deny: vec![], mitm: false };
-        let strict = render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Strict);
+        let strict = render_effective_policy_for_backend_inner(
+            "runtime",
+            &policy,
+            true,
+            "wsl",
+            WslMode::Strict,
+            true,
+        );
         assert!(strict.starts_with("WSL NAT - strict: apps with egress grants are refused\n"));
         assert!(strict.contains("EFFECTIVE egress policy for 'runtime'  (boundary: strict)"));
         assert!(!strict.contains("host-enforced"));
         let cooperative =
-            render_effective_policy_for_backend("runtime", &policy, true, "wsl", WslMode::Cooperative);
+            render_effective_policy_for_backend_inner(
+                "runtime",
+                &policy,
+                true,
+                "wsl",
+                WslMode::Cooperative,
+                true,
+            );
         assert!(cooperative.starts_with(
             "WSL NAT - cooperative proxy, bypassable; direct TCP/UDP is not blocked\n"
         ));
@@ -2539,19 +2574,12 @@ mod tests {
             ("shared.example.com".into(), vec![8443]),
             ("notes.example.com".into(), vec![8443]),
         ]);
-        let compatibility_union = EgressPolicy {
-            default: Action::Deny,
-            allow: vec!["shared.example.com".into(), "journal.example.com".into(), "notes.example.com".into()],
-            deny: vec![],
-            mitm: false,
-        };
         let operator = EgressPolicy::default();
         let runtimes = [journal, notes];
 
         let journal_selection = select_runtime_proxy_policy(
             "appliance-runtime",
             Some(&basic_proxy_auth("journal", &journal_credential)),
-            compatibility_union.clone(),
             WslMode::Cooperative,
             &runtimes,
         );
@@ -2581,7 +2609,6 @@ mod tests {
         let notes_selection = select_runtime_proxy_policy(
             "appliance-runtime",
             Some(&basic_proxy_auth("notes", &notes_credential)),
-            compatibility_union,
             WslMode::Cooperative,
             &runtimes,
         );
@@ -2605,20 +2632,13 @@ mod tests {
             runtime_policy("journal", Ipv4Addr::new(192, 168, 127, 10), 443),
             3,
         );
-        let legacy = EgressPolicy {
-            default: Action::Allow,
-            allow: vec![],
-            deny: vec![],
-            mitm: false,
-        };
         let unknown = select_runtime_proxy_policy(
             "appliance-runtime",
             Some(&basic_proxy_auth("journal", &proxy_credential(9))),
-            legacy.clone(),
             WslMode::Cooperative,
             std::slice::from_ref(&runtime),
         );
-        assert!(matches!(unknown, ProxyPolicySelection::Unauthorized));
+        assert!(matches!(unknown, ProxyPolicySelection::Unauthorized(None)));
         assert!(proxy_authentication_response().starts_with(
             "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic"
         ));
@@ -2628,30 +2648,50 @@ mod tests {
         let revoked = select_runtime_proxy_policy(
             "appliance-runtime",
             Some(&basic_proxy_auth("journal", &credential)),
-            legacy.clone(),
             WslMode::Cooperative,
             &[revoked],
         );
-        assert!(matches!(revoked, ProxyPolicySelection::Unauthorized));
+        assert!(matches!(
+            revoked,
+            ProxyPolicySelection::Unauthorized(Some(runtime)) if runtime.app == "journal"
+        ));
 
         let strict = select_runtime_proxy_policy(
             "appliance-runtime",
             Some(&basic_proxy_auth("journal", &credential)),
-            legacy.clone(),
             WslMode::Strict,
-            &[runtime],
+            std::slice::from_ref(&runtime),
         );
-        assert!(matches!(strict, ProxyPolicySelection::Unauthorized));
+        assert!(matches!(strict, ProxyPolicySelection::Unauthorized(None)));
         assert!(matches!(
             select_runtime_proxy_policy(
                 "appliance-runtime",
                 None,
-                legacy,
                 WslMode::Cooperative,
                 &[]
             ),
-            ProxyPolicySelection::Legacy(policy) if policy.default == Action::Allow
+            ProxyPolicySelection::Unauthorized(None)
         ));
+
+        for malformed in [
+            "Bearer x".to_string(),
+            "Basic !!!".to_string(),
+            "Basic".to_string(),
+            "Basic ".to_string(),
+            format!("Basic {}", STANDARD.encode("journal:")),
+            format!("Basic {}", STANDARD.encode([0xff, b':', b'x'])),
+            format!("Basic {}", STANDARD.encode("no-colon")),
+        ] {
+            assert!(matches!(
+                select_runtime_proxy_policy(
+                    "appliance-runtime",
+                    Some(&malformed),
+                    WslMode::Cooperative,
+                    std::slice::from_ref(&runtime),
+                ),
+                ProxyPolicySelection::Unauthorized(_)
+            ));
+        }
     }
 
     #[test]
@@ -2663,12 +2703,22 @@ mod tests {
         assert!(constant_time_credential_eq(&credential, &credential));
         assert!(!constant_time_credential_eq(&credential, &proxy_credential(5)));
         assert!(!constant_time_credential_eq(&credential, "short"));
+        assert!(!constant_time_credential_eq(&credential, ""));
+        assert!(!constant_time_credential_eq(
+            &credential,
+            &format!("{credential}x")
+        ));
         let selection = ProxyPolicySelection::Runtime(runtime.clone());
-        let log_line = format!(
-            "egress [{}]: CONNECT api.example.com:443 -> allow",
-            selection_principal(&selection)
-        );
-        assert!(!log_line.contains(&credential));
+        let mut captured_stderr = Vec::new();
+        write_connect_log(
+            &mut captured_stderr,
+            selection_principal(&selection),
+            "api.example.com:443",
+            "allow",
+        )
+        .unwrap();
+        let captured_stderr = String::from_utf8(captured_stderr).unwrap();
+        assert!(!captured_stderr.contains(&credential));
         assert!(!format!("{runtime:?}").contains(&credential));
         let forwarded = remove_header(
             &format!(
@@ -2706,12 +2756,13 @@ mod tests {
             assert!(json.contains("\"app\":\"journal\""));
             assert!(json.contains("\"hosts\":[{\"host\":\"example.com\",\"ports\":[443]}]"));
             assert!(!json.contains(&second));
-            let rendered = render_effective_policy_for_backend(
+            let rendered = render_effective_policy_for_backend_inner(
                 "appliance-runtime",
                 &EgressPolicy::default(),
                 false,
                 "wsl",
                 WslMode::Cooperative,
+                true,
             );
             assert!(rendered.contains("authenticated per-app Runtime policies:"));
             assert!(rendered.contains("journal  (principal: journal, mitm: on)"));
@@ -2727,28 +2778,13 @@ mod tests {
     }
 
     #[test]
-    fn credentialless_wsl_compatibility_unions_hosts_while_strict_denies_all() {
-        let persisted = EgressPolicy {
-            default: Action::Allow,
-            allow: vec!["legacy.example".into()],
-            deny: vec!["blocked.example.com".into()],
-            mitm: true,
-        };
-        let mut journal = runtime_policy("journal", "192.168.127.10".parse().unwrap(), 443);
-        journal.policy.allow = vec!["api.example.com".into()];
-        let mut notes = runtime_policy("notes", "192.168.127.11".parse().unwrap(), 443);
-        notes.policy.allow = vec!["sync.example.com".into(), "api.example.com".into()];
-        let cooperative =
-            union_wsl_runtime_policy(&persisted, &[journal, notes], WslMode::Cooperative);
-        assert_eq!(cooperative.default, Action::Deny);
-        assert_eq!(cooperative.allow, vec!["api.example.com", "sync.example.com"]);
-        assert_eq!(cooperative.deny, vec!["blocked.example.com"]);
-        assert!(cooperative.mitm);
-
-        let strict = union_wsl_runtime_policy(&persisted, &[], WslMode::Strict);
-        assert_eq!(strict.default, Action::Deny);
-        assert!(strict.allow.is_empty());
-        assert!(!strict.mitm);
+    fn credentialless_wsl_runtime_requests_are_unauthorized_in_every_mode() {
+        for mode in [WslMode::Cooperative, WslMode::Strict] {
+            assert!(matches!(
+                select_runtime_proxy_policy("appliance-runtime", None, mode, &[]),
+                ProxyPolicySelection::Unauthorized(None)
+            ));
+        }
     }
 
     #[test]

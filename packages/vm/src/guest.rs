@@ -1429,6 +1429,7 @@ cleanup_resources
 rm -f "$STATE/exit-code" "$STATE/current.log" "$STATE/pid"
 echo 0 > "$STATE/log-base"
 printf '%s\n' "$REQ" > "$STATE/request.json"
+chmod 0600 "$STATE/request.json"
 TAG=$(printf '%s' "$REQ" | jq -r '.plan.share.tag')
 HOST_PATH=$(printf '%s' "$REQ" | jq -r '.plan.share.hostPath // empty')
 IP=$(printf '%s' "$REQ" | jq -r '.plan.principalIp')
@@ -1617,6 +1618,7 @@ if [ -f "$STATE/relay.pids" ]; then
 fi
 
 printf '%s' "$REQ" | jq -r '(.plan.target.env // .plan.env) | to_entries[] | [.key,(.value|@base64)] | @tsv' > "$STATE/env.tsv"
+chmod 0600 "$STATE/env.tsv"
 EGRESS_CA=/usr/local/share/ca-certificates/appliance-egress.crt
 if grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ ! -f "$EGRESS_CA" ]; then
   echo '{"state":"failed","message":"egress CA certificate is unavailable"}'
@@ -1633,6 +1635,12 @@ if [ "$KIND" = binary ]; then
 else
   : > "$STATE/args.txt"
 fi
+: > "$STATE/ctr.env"
+chmod 0600 "$STATE/ctr.env"
+while IFS="$(printf '\t')" read -r KEY VALUE; do
+  DECODED=$(printf '%s' "$VALUE" | base64 -d)
+  printf '%s=%s\n' "$KEY" "$DECODED" >> "$STATE/ctr.env"
+done < "$STATE/env.tsv"
 # The lifecycle RPC uses a one-shot shell transport. Ignore its closing SIGHUP
 # so the pooled workload outlives that control connection, and let containerd
 # place the actual task (rather than this short-lived launcher) in the app's
@@ -1673,10 +1681,7 @@ nohup setsid sh -c '
     --cap-drop CAP_SYS_CHROOT \
     --cap-drop CAP_KILL \
     --cap-drop CAP_AUDIT_WRITE
-  while IFS="$(printf '\t')" read -r KEY VALUE; do
-    DECODED=$(printf '%s' "$VALUE" | base64 -d)
-    set -- "$@" --env "$KEY=$DECODED"
-  done < "$STATE/env.tsv"
+  set -- "$@" --env-file "$STATE/ctr.env"
   if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf '\t')" "$STATE/env.tsv" && [ -f "$EGRESS_CA" ]; then
     set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
   fi
@@ -1925,6 +1930,7 @@ cleanup_app_resources
 rm -rf "$SERVICES"
 mkdir -p "$SERVICES"
 printf '%s\n' "$REQ" > "$STATE/request.json"
+chmod 0600 "$STATE/request.json"
 echo starting > "$STATE/desired"
 rm -f "$STATE/culprit" "$STATE/exit-code" "$STATE/start-failed" "$STATE/failed-service" "$STATE/ca-missing" \
   "$STATE/clean-required" "$STATE/degraded"
@@ -2012,6 +2018,7 @@ start_service() {
   SERVICE=$SERVICES/$SVC
   mkdir -p "$SERVICE"
   jq -c --arg svc "$SVC" '.plan.services[] | select(.name == $svc)' "$STATE/request.json" > "$SERVICE/plan.json"
+  chmod 0600 "$SERVICE/plan.json"
   echo starting > "$SERVICE/state"
   echo none > "$SERVICE/health"
   echo 0 > "$SERVICE/restart-count"
@@ -2048,6 +2055,7 @@ start_service() {
     [ -n "$IMAGE" ] || { echo failed > "$SERVICE/state"; return 1; }
     echo "$IMAGE" > "$SERVICE/image"
     jq -r '.env | to_entries[] | [.key,(.value|@base64)] | @tsv' "$SERVICE/plan.json" > "$SERVICE/env.tsv"
+    chmod 0600 "$SERVICE/env.tsv"
     : > "$SERVICE/args.txt"
   elif [ "$KIND" = binary ]; then
     BINARY_PATH=$(jq -r '.target.path' "$SERVICE/plan.json")
@@ -2067,6 +2075,7 @@ start_service() {
     printf '%s\n' "$ENTRYPOINT" > "$SERVICE/entrypoint"
     printf '%s\n' "$BINARY_CWD" > "$SERVICE/cwd"
     jq -r '.target.env | to_entries[] | [.key,(.value|@base64)] | @tsv' "$SERVICE/plan.json" > "$SERVICE/env.tsv"
+    chmod 0600 "$SERVICE/env.tsv"
     jq -r '.target.args[] | @base64' "$SERVICE/plan.json" > "$SERVICE/args.txt"
   else echo failed > "$SERVICE/state"; return 1; fi
 
@@ -2095,6 +2104,13 @@ start_service() {
     [$key, (("http://127.0.0.1:" + ($port.guest | tostring)) | @base64)] | @tsv
   ' "$STATE/request.json" >> "$SERVICE/env.tsv"
 
+  : > "$SERVICE/ctr.env"
+  chmod 0600 "$SERVICE/ctr.env"
+  while IFS="$(printf '\t')" read -r KEY VALUE; do
+    DECODED=$(printf '%s' "$VALUE" | base64 -d)
+    printf '%s=%s\n' "$KEY" "$DECODED" >> "$SERVICE/ctr.env"
+  done < "$SERVICE/env.tsv"
+
   export APP SVC STATE SERVICE SERVICES CTR_NS NS CG UID_NUM KIND CID EGRESS_CA
   nohup setsid sh -c '
     echo $$ > "$SERVICE/worker.pid"
@@ -2112,10 +2128,7 @@ start_service() {
         --cap-drop CAP_SETGID --cap-drop CAP_SETUID --cap-drop CAP_SETFCAP \
         --cap-drop CAP_SETPCAP --cap-drop CAP_NET_BIND_SERVICE \
         --cap-drop CAP_SYS_CHROOT --cap-drop CAP_KILL --cap-drop CAP_AUDIT_WRITE
-      while IFS="$(printf "\t")" read -r KEY VALUE; do
-        DECODED=$(printf "%s" "$VALUE" | base64 -d)
-        set -- "$@" --env "$KEY=$DECODED"
-      done < "$SERVICE/env.tsv"
+      set -- "$@" --env-file "$SERVICE/ctr.env"
       if [ "$KIND" = container ] && grep -q "^APPLIANCE_EGRESS_CA$(printf "\t")" "$SERVICE/env.tsv" && [ -f "$EGRESS_CA" ]; then
         set -- "$@" --mount type=bind,src="$EGRESS_CA",dst=/appliance-egress-ca.pem,options=rbind:ro
       fi
@@ -4001,6 +4014,24 @@ mod tests {
         for line in supervisor.lines().filter(|line| line.trim_start().starts_with("nft ")) {
             assert!(!line.contains("|| true"), "nft rule must fail closed: {line}");
         }
+    }
+
+    #[test]
+    fn runtime_supervisor_protects_plan_files_and_keeps_environment_out_of_argv() {
+        let supervisor = format!("{RUNTIME_SUPERVISOR}\n{RUNTIME_COMPOUND_SUPERVISOR}");
+        for protected_write in [
+            "printf '%s\\n' \"$REQ\" > \"$STATE/request.json\"\nchmod 0600 \"$STATE/request.json\"",
+            "> \"$STATE/env.tsv\"\nchmod 0600 \"$STATE/env.tsv\"",
+            "> \"$SERVICE/plan.json\"\n  chmod 0600 \"$SERVICE/plan.json\"",
+            "> \"$SERVICE/env.tsv\"\n    chmod 0600 \"$SERVICE/env.tsv\"",
+        ] {
+            assert!(
+                supervisor.contains(protected_write),
+                "missing immediate owner-only protection: {protected_write}"
+            );
+        }
+        assert_eq!(supervisor.matches("--env-file").count(), 2);
+        assert!(!supervisor.contains("set -- \"$@\" --env \"$KEY=$DECODED\""));
     }
 
     #[test]

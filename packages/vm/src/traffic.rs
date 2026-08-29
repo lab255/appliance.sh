@@ -6,7 +6,8 @@
 //! each host can be allowed or blocked. Recording is best-effort: a
 //! logging failure must never affect proxying.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -117,8 +118,10 @@ pub fn record(name: &str, host: &str, port: u16, method: &str, path: Option<&str
     append_legacy_event(&events_path(name), &ev);
 }
 
-/// Record an app-scoped decision. Runtime records never share the VM log and
-/// never persist query/fragment values, headers, cookies, or bodies.
+/// Record an app-scoped decision. Runtime records are retained in both the
+/// app log and the VM-wide audit feed so operators can count all decisions
+/// from one `egress traffic` capture. Neither copy persists query/fragment
+/// values, headers, cookies, or bodies.
 pub fn record_runtime(
     runtime: &RuntimePolicy,
     host: &str,
@@ -148,6 +151,39 @@ pub fn record_runtime(
         duration_ms: details.duration_ms,
     };
     append_runtime_event(&runtime_events_path(&runtime.app), &ev);
+    append_legacy_event(&events_path(&runtime.vm), &ev);
+}
+
+/// Record a 407 without ever serializing the presented credential. A revoked
+/// but still-known policy carries app attribution; credential-less, malformed,
+/// and unknown requests deliberately leave principal null.
+pub fn record_proxy_auth_failure(
+    name: &str,
+    runtime: Option<&RuntimePolicy>,
+    host: &str,
+    port: u16,
+    method: &str,
+) {
+    let ev = TrafficEvent {
+        ts: now_millis(),
+        host: host.to_string(),
+        port,
+        method: method.to_string(),
+        path: None,
+        decision: "deny".to_string(),
+        app: runtime.map(|runtime| runtime.app.clone()),
+        service: runtime.and_then(|runtime| runtime.service.clone()),
+        principal: runtime.map(|runtime| runtime.principal.clone()),
+        reason: Some("proxy-auth".to_string()),
+        transport: default_transport(),
+        tls_version: None,
+        sni: None,
+        status: Some(407),
+        bytes_in: None,
+        bytes_out: None,
+        duration_ms: None,
+    };
+    append_auth_failure_event(&events_path(name), &ev);
 }
 
 pub fn record_unknown(
@@ -220,6 +256,31 @@ fn append_legacy_event(path: &std::path::Path, event: &TrafficEvent) {
         }
         let _ = append_line(path, &line);
     });
+}
+
+/// At most one proxy-auth failure per principal (or the credential-less
+/// bucket) is appended per minute. This prevents an untrusted guest from
+/// rotating the bounded audit log with repeated 407s.
+type AuthFailureKey = (PathBuf, Option<String>);
+type AuthFailureMinutes = HashMap<AuthFailureKey, u64>;
+
+fn append_auth_failure_event(path: &Path, event: &TrafficEvent) {
+    static AUTH_FAILURE_MINUTES: OnceLock<Mutex<AuthFailureMinutes>> = OnceLock::new();
+    let minute = event.ts / 60_000;
+    let key = (path.to_path_buf(), event.principal.clone());
+    let Ok(mut seen) = AUTH_FAILURE_MINUTES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+    else {
+        return;
+    };
+    seen.retain(|_, recorded_minute| recorded_minute.saturating_add(1) >= minute);
+    if seen.get(&key) == Some(&minute) {
+        return;
+    }
+    seen.insert(key, minute);
+    drop(seen);
+    append_legacy_event(path, event);
 }
 
 /// Runtime logs append in the common case and compact to the exact ring cap
@@ -553,6 +614,40 @@ mod tests {
             serde_json::from_str::<TrafficEvent>(raw.lines().last().unwrap()).unwrap(),
             latest
         );
+
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn proxy_auth_failures_are_attributed_and_deduped_per_principal_minute() {
+        let dir = std::env::temp_dir().join(format!(
+            "appliance-auth-throttle-{}-{}",
+            std::process::id(),
+            now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("events.jsonl");
+        let mut credentialless = ev("api.example.com", 443, "deny", 120_000);
+        credentialless.method = "CONNECT".into();
+        credentialless.reason = Some("proxy-auth".into());
+        credentialless.status = Some(407);
+        append_auth_failure_event(&path, &credentialless);
+        append_auth_failure_event(&path, &credentialless);
+
+        let mut revoked = credentialless.clone();
+        revoked.app = Some("journal".into());
+        revoked.principal = Some("journal".into());
+        append_auth_failure_event(&path, &revoked);
+
+        credentialless.ts += 60_000;
+        append_auth_failure_event(&path, &credentialless);
+        let events = tail_path(&path, 10);
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].host, "api.example.com");
+        assert_eq!(events[0].status, Some(407));
+        assert!(events[0].principal.is_none());
+        assert_eq!(events[1].app.as_deref(), Some("journal"));
+        assert_eq!(events[1].principal.as_deref(), Some("journal"));
 
         std::fs::remove_dir_all(dir).unwrap();
     }

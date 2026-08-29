@@ -1933,6 +1933,9 @@ fn inject_authenticated_runtime_proxy_environment(
     if spec.wsl_mode != WslMode::Cooperative {
         return Ok(false);
     }
+    // Start plans are app-scoped even when they contain services. Effective
+    // service policies use `app/service` principals, so they must not silently
+    // diverge from the app-level `plan.app_id` credential selected here.
     let proxy = egress::authenticated_guest_proxy_url(name, &plan.app_id, spec.egress_port)?;
     inject_runtime_proxy_environment(plan, &proxy);
     Ok(true)
@@ -2276,7 +2279,7 @@ fn run_egress(action: EgressCmd) -> Result<()> {
             );
             if spec.wsl_mode == WslMode::Cooperative {
                 eprintln!(
-                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through the proxy (CONNECT by hostname); direct UDP 53 is dropped. Proxy-aware Runtime traffic keeps each app's granted hosts and TCP ports separate."
+                    "WARNING: WSL cooperative mode is bypassable: Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through the proxy (CONNECT by hostname); direct UDP 53 is dropped. Proxy-aware Runtime traffic is authenticated per app: each app gets only its granted hosts and TCP ports, and requests without a valid app credential are denied with 407."
                 );
             }
             Ok(())

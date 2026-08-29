@@ -769,6 +769,7 @@ egress
 
 egress
   .command('log')
+  .alias('traffic')
   .description('print recorded egress traffic as JSON (the desktop traffic view feed)')
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
   .option('--tail <n>', 'most-recent events to print', '200')
