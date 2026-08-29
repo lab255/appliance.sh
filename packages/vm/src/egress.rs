@@ -1499,7 +1499,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("printf real-key".into()),
+                helper: Some(crate::creds::CredentialHelper::legacy("printf real-key")),
             },
         )
         .unwrap();

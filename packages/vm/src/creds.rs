@@ -13,10 +13,12 @@
 //! guest can't read them. Secrets are written 0600.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 
 use crate::egress::host_matches;
@@ -24,6 +26,38 @@ use crate::spec::VmPaths;
 
 fn default_header() -> String {
     "authorization".to_string()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, Hash, PartialEq)]
+#[serde(untagged)]
+pub enum CredentialHelper {
+    /// Preferred, cross-platform form. The first element is the executable and
+    /// every remaining element is passed as one literal argument.
+    Argv(Vec<String>),
+    /// Compatibility for rules persisted before argv helpers. Never accepted
+    /// on Windows because appliance-vm intentionally has no shell dependency.
+    LegacyShell(String),
+}
+
+impl CredentialHelper {
+    pub fn legacy(value: impl Into<String>) -> Self {
+        Self::LegacyShell(value.into())
+    }
+
+    /// Parse the single `--helper` CLI value. New callers pass a JSON array;
+    /// everything else remains a legacy shell command for persisted/manual
+    /// compatibility on Unix.
+    pub fn from_cli_arg(raw: String) -> anyhow::Result<Self> {
+        if raw.trim_start().starts_with('[') {
+            let argv: Vec<String> = serde_json::from_str(&raw).context("parse --helper argv JSON")?;
+            if argv.is_empty() || argv.iter().any(String::is_empty) {
+                bail!("credential helper argv must contain a non-empty executable and arguments");
+            }
+            Ok(Self::Argv(argv))
+        } else {
+            Ok(Self::legacy(raw))
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -40,10 +74,11 @@ pub struct CredentialRule {
     /// Header to capture/inject (lowercased; default `authorization`).
     #[serde(default = "default_header")]
     pub header: String,
-    /// Optional command whose stdout is the credential to inject
-    /// (overrides the stored secret). Run via `sh -c`.
+    /// Optional helper whose stdout is the credential to inject (overrides the
+    /// stored secret). New rules use an argv array; legacy strings run through
+    /// `sh -c` on Unix only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub helper: Option<String>,
+    pub helper: Option<CredentialHelper>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -64,7 +99,13 @@ fn secrets_path(name: &str) -> PathBuf {
 pub fn load_config(name: &str) -> CredentialConfig {
     std::fs::read_to_string(config_path(name))
         .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .and_then(|raw| match serde_json::from_str(&raw) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                eprintln!("egress creds: ignoring unreadable {}: {e}", config_path(name).display());
+                None
+            }
+        })
         .unwrap_or_default()
 }
 
@@ -236,7 +277,13 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
         return Injection::NoRule;
     };
     let value = match &rule.helper {
-        Some(cmd) => run_helper(cmd),
+        Some(helper) => match run_helper(helper) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("egress mitm: credential helper failed: {e:#}");
+                None
+            }
+        },
         None => get_secret(name, host, &rule.header),
     };
     match value {
@@ -247,8 +294,8 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
 
 /// Short TTL for the resolved-helper cache. The brokered key rotates
 /// rarely; a few-second cache is invisible to correctness and removes a
-/// per-request `sh -c` fork of the host helper (`appliance agent
-/// print-key`) on streaming/keep-alive traffic where one CONNECT carries
+/// per-request process spawn of the host helper (`appliance agent print-key`)
+/// on streaming/keep-alive traffic where one CONNECT carries
 /// many intercepted requests.
 ///
 /// Staleness vs rotation (accepted): after the host key is rotated, a
@@ -258,37 +305,140 @@ pub fn resolve_injection(cfg: &CredentialConfig, name: &str, host: &str) -> Inje
 /// so the 15s window is an accepted trade for not forking per request.
 const HELPER_TTL: Duration = Duration::from_secs(15);
 
-/// `helper command -> (resolved_at, value)`. Process-global so it spans
+/// `helper definition -> (resolved_at, value)`. Process-global so it spans
 /// the per-connection threads the proxy spawns. Never logged.
-fn helper_cache() -> &'static Mutex<HashMap<String, (Instant, String)>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, String)>>> = OnceLock::new();
+fn helper_cache() -> &'static Mutex<HashMap<CredentialHelper, (Instant, String)>> {
+    static CACHE: OnceLock<Mutex<HashMap<CredentialHelper, (Instant, String)>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Run an apiKeyHelper command; stdout (trimmed) is the credential. The
-/// result is cached for `HELPER_TTL` keyed on the command string so we
-/// don't fork `sh -c` per intercepted request. The value is a secret —
-/// it is never logged here or by callers.
-fn run_helper(cmd: &str) -> Option<String> {
+/// Resolve a helper program to an absolute executable. Emitters pin their
+/// running appliance executable. Unix also accepts a bare PATH name for the
+/// generic credential-rule API; Windows requires an absolute program path.
+fn resolve_helper_program(program: &str) -> anyhow::Result<PathBuf> {
+    let path = Path::new(program);
+    if path.is_absolute() {
+        return validate_helper_program(path);
+    }
+
+    #[cfg(windows)]
+    {
+        bail!("credential helper executable must be an absolute path on Windows");
+    }
+
+    #[cfg(not(windows))]
+    {
+        if path.components().count() != 1 {
+            bail!("credential helper executable must be absolute or resolvable on PATH");
+        }
+
+        let path_var = std::env::var_os("PATH").unwrap_or_default();
+        for dir in std::env::split_paths(&path_var) {
+            for candidate in helper_program_candidates(&dir, program) {
+                if let Ok(valid) = validate_helper_program(&candidate) {
+                    return Ok(valid);
+                }
+            }
+        }
+        bail!("credential helper executable '{program}' was not found on PATH")
+    }
+}
+
+#[cfg(not(windows))]
+fn helper_program_candidates(dir: &Path, program: &str) -> Vec<PathBuf> {
+    vec![dir.join(program)]
+}
+
+fn validate_helper_program(path: &Path) -> anyhow::Result<PathBuf> {
+    if !path.is_absolute() {
+        bail!("credential helper executable must resolve to an absolute path");
+    }
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("credential helper executable does not exist: {}", path.display()))?;
+    if !metadata.is_file() {
+        bail!("credential helper executable is not a file: {}", path.display());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            bail!("credential helper file is not executable: {}", path.display());
+        }
+    }
+    #[cfg(windows)]
+    {
+        let extension = path.extension().and_then(|x| x.to_str()).unwrap_or_default();
+        if !extension.eq_ignore_ascii_case("exe") && !extension.eq_ignore_ascii_case("com") {
+            bail!("credential helper executable must be an .exe or .com file on Windows");
+        }
+    }
+    Ok(path.to_path_buf())
+}
+
+#[cfg(windows)]
+fn hide_helper_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_helper_window(_command: &mut Command) {}
+
+/// Run an apiKeyHelper; stdout (trimmed) is the credential. The result is
+/// cached for `HELPER_TTL` keyed on the complete helper definition. The value
+/// is a secret — it is never logged here or by callers.
+fn run_helper(helper: &CredentialHelper) -> anyhow::Result<String> {
     {
         let cache = helper_cache().lock().unwrap_or_else(|p| p.into_inner());
-        if let Some((at, value)) = cache.get(cmd) {
+        if let Some((at, value)) = cache.get(helper) {
             if at.elapsed() < HELPER_TTL {
-                return Some(value.clone());
+                return Ok(value.clone());
             }
         }
     }
-    let out = std::process::Command::new("sh").arg("-c").arg(cmd).output().ok()?;
+
+    let mut command = match helper {
+        CredentialHelper::Argv(argv) => {
+            let (program, args) = argv
+                .split_first()
+                .filter(|(program, _)| !program.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("credential helper argv must start with an executable"))?;
+            let mut command = Command::new(resolve_helper_program(program)?);
+            command.args(args);
+            command.stdin(std::process::Stdio::null());
+            hide_helper_window(&mut command);
+            command
+        }
+        CredentialHelper::LegacyShell(cmd) => {
+            #[cfg(windows)]
+            {
+                let _ = cmd;
+                bail!("legacy shell helper is not supported on Windows; re-run `appliance agent login`");
+            }
+            #[cfg(not(windows))]
+            {
+                let mut command = Command::new("sh");
+                command.args(["-c", cmd]);
+                command.stdin(std::process::Stdio::null());
+                command
+            }
+        }
+    };
+    let out = command.output().context("run credential helper")?;
     if !out.status.success() {
-        return None;
+        bail!("credential helper exited with status {}", out.status);
     }
     let value = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if value.is_empty() {
-        return None;
+        bail!("credential helper returned an empty value");
+    }
+    if value.contains(['\r', '\n']) {
+        bail!("credential helper output must be a single line");
     }
     let mut cache = helper_cache().lock().unwrap_or_else(|p| p.into_inner());
-    cache.insert(cmd.to_string(), (Instant::now(), value.clone()));
-    Some(value)
+    cache.insert(helper.clone(), (Instant::now(), value.clone()));
+    Ok(value)
 }
 
 /// Rewrite an HTTP head to set `header: value`, replacing any existing
@@ -385,6 +535,7 @@ mod tests {
         let _ = remove_rule(name, "api.example.com");
     }
 
+    #[cfg(unix)]
     #[test]
     fn helper_overrides_stored_secret() {
         let name = "creds-test-helper";
@@ -397,7 +548,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "authorization".into(),
-                helper: Some("printf 'Bearer from-helper'".into()),
+                helper: Some(CredentialHelper::legacy("printf 'Bearer from-helper'")),
             },
         )
         .unwrap();
@@ -407,6 +558,107 @@ mod tests {
         };
         assert_eq!(value, "Bearer from-helper");
         let _ = remove_rule(name, "h.test");
+    }
+
+    fn build_test_helper() -> (PathBuf, PathBuf) {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("appliance-cred-helper-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("helper.rs");
+        std::fs::write(
+            &source,
+            r###"fn main() {
+                if std::env::args().any(|arg| arg == "--multiline") {
+                    print!("first\nsecond");
+                } else {
+                    print!("{}", r#"{"kind":"api-key","value":"from-argv"}"#);
+                }
+            }"###,
+        )
+        .unwrap();
+        let executable = dir.join(if cfg!(windows) { "helper.exe" } else { "helper" });
+        #[cfg(not(windows))]
+        let rustc = resolve_helper_program("rustc").expect("rustc is on PATH during cargo test");
+        #[cfg(windows)]
+        let rustc = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .flat_map(|dir| [dir.join("rustc.exe"), dir.join("rustc.com")])
+            .find(|candidate| candidate.is_file())
+            .expect("rustc is on PATH during cargo test");
+        let status = Command::new(rustc)
+            .args([source.as_os_str(), std::ffi::OsStr::new("-o"), executable.as_os_str()])
+            .status()
+            .expect("compile argv credential helper");
+        assert!(status.success());
+        (dir, executable)
+    }
+
+    #[test]
+    fn argv_helper_resolves_kind_value_envelope() {
+        let (dir, executable) = build_test_helper();
+        let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned()]);
+        let value = run_helper(&helper).expect("run argv credential helper");
+        let envelope: serde_json::Value = serde_json::from_str(&value).expect("helper envelope JSON");
+        assert_eq!(envelope, serde_json::json!({ "kind": "api-key", "value": "from-argv" }));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn helper_rejects_multiline_output() {
+        let (dir, executable) = build_test_helper();
+        let helper = CredentialHelper::Argv(vec![executable.to_string_lossy().into_owned(), "--multiline".into()]);
+        assert_eq!(run_helper(&helper).unwrap_err().to_string(), "credential helper output must be a single line");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_helper_program_must_be_absolute() {
+        assert_eq!(
+            resolve_helper_program("rustc").unwrap_err().to_string(),
+            "credential helper executable must be an absolute path on Windows"
+        );
+    }
+
+    #[test]
+    fn helper_json_round_trips_argv_and_legacy_forms() {
+        let argv = CredentialHelper::Argv(vec![
+            if cfg!(windows) {
+                r"C:\Program Files\Appliance\appliance.exe".into()
+            } else {
+                "/Applications/Appliance.app/Contents/MacOS/appliance".into()
+            },
+            "agent".into(),
+            "print-key".into(),
+            "--type".into(),
+            "claude-code".into(),
+        ]);
+        let encoded = serde_json::to_string(&argv).unwrap();
+        assert!(encoded.starts_with('['));
+        assert_eq!(serde_json::from_str::<CredentialHelper>(&encoded).unwrap(), argv);
+        assert_eq!(
+            serde_json::from_str::<CredentialHelper>(r#""printf legacy""#).unwrap(),
+            CredentialHelper::legacy("printf legacy")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn legacy_shell_helper_still_works_on_unix() {
+        let helper = CredentialHelper::legacy("printf legacy-helper");
+        assert_eq!(run_helper(&helper).unwrap(), "legacy-helper");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn legacy_shell_helper_is_rejected_on_windows_with_migration_error() {
+        let helper = CredentialHelper::legacy("echo legacy-helper");
+        assert_eq!(
+            run_helper(&helper).unwrap_err().to_string(),
+            "legacy shell helper is not supported on Windows; re-run `appliance agent login`"
+        );
     }
 
     #[test]
@@ -424,7 +676,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("exit 7".into()),
+                helper: Some(CredentialHelper::legacy("exit 7")),
             },
         )
         .unwrap();
@@ -458,7 +710,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("printf real-key".into()),
+                helper: Some(CredentialHelper::legacy("printf real-key")),
             },
         )
         .unwrap();
