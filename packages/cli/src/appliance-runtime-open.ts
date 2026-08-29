@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
@@ -9,6 +9,7 @@ import { currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-a
 import { readBundleManifest } from './utils/bundle-read.js';
 import { readRuntimeRegistry, type RuntimeRecord } from './utils/runtime-registry.js';
 import { resolveVmBinary } from './utils/microvm-up.js';
+import { openExternalUrl } from './utils/open-external-url.js';
 
 export interface RuntimeOpenDescriptor {
   appId: string;
@@ -196,7 +197,7 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
   descriptor = { ...descriptor, openMetric: { kind, startedAtMs } };
   const routed = await routeRuntimeOpen(descriptor, {
     sendDesktop: sendRuntimeOpenToDesktop,
-    openBrowser: openInBrowser,
+    openBrowser: openExternalUrl,
   });
   if (args.includes('--json')) {
     console.log(JSON.stringify(runtimeOpenJson(descriptor, routed)));
@@ -259,22 +260,6 @@ function effectiveEgressHostCount(installed: InstalledApp): number {
     }
   }
   return installed.controlsSummary.egressHosts.length;
-}
-
-function openInBrowser(url: string): void {
-  const command =
-    process.platform === 'darwin'
-      ? { command: 'open', args: [url] }
-      : process.platform === 'win32'
-        ? { command: 'rundll32', args: ['url.dll,FileProtocolHandler', url] }
-        : { command: 'xdg-open', args: [url] };
-  try {
-    const child = spawn(command.command, command.args, { detached: true, stdio: 'ignore' });
-    child.on('error', () => console.log(url));
-    child.unref();
-  } catch {
-    console.log(url);
-  }
 }
 
 function optionValue(args: string[], option: string): string | undefined {

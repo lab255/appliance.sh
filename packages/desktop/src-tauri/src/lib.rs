@@ -254,10 +254,18 @@ impl Default for SharedProfilesFile {
     }
 }
 
+fn home_dir_from_env(
+    home: Option<std::ffi::OsString>,
+    user_profile: Option<std::ffi::OsString>,
+) -> Option<PathBuf> {
+    // Deliberately prefer HOME, even on Windows. Git Bash launches set it and
+    // the CLI's VM egress code uses the same order; changing only Desktop would
+    // split shared state across two ~/.appliance directories.
+    home.or(user_profile).map(PathBuf::from)
+}
+
 fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
+    home_dir_from_env(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -6109,9 +6117,58 @@ async fn open_setup_token_terminal() -> Result<bool, String> {
     Ok(true)
 }
 
-/// No reliable cross-platform "open a visible terminal running X" — the UI
-/// falls back to showing the manual `claude setup-token` command.
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "windows", test))]
+fn windows_setup_token_launchers() -> Vec<Vec<String>> {
+    [
+        [
+            "cmd.exe",
+            "/C",
+            "start",
+            "",
+            "wt.exe",
+            "--",
+            "claude",
+            "setup-token",
+        ]
+        .as_slice(),
+        [
+            "cmd.exe",
+            "/C",
+            "start",
+            "",
+            "cmd",
+            "/K",
+            "claude",
+            "setup-token",
+        ]
+        .as_slice(),
+    ]
+    .into_iter()
+    .map(|argv| argv.iter().map(|arg| (*arg).to_string()).collect())
+    .collect()
+}
+
+/// Best-effort: prefer Windows Terminal, then fall back to a visible Command
+/// Prompt that stays open after `claude setup-token` exits.
+#[cfg(target_os = "windows")]
+async fn open_setup_token_terminal() -> Result<bool, String> {
+    let mut last_error = String::new();
+    for argv in windows_setup_token_launchers() {
+        let refs: Vec<&str> = argv.iter().map(String::as_str).collect();
+        match run_status_command(&refs).await {
+            Ok((true, _, _)) => return Ok(true),
+            Ok((false, _, stderr)) => last_error = stderr.trim().to_string(),
+            Err(error) => last_error = error,
+        }
+    }
+    Err(format!(
+        "could not open a terminal to run `claude setup-token`: {last_error}"
+    ))
+}
+
+/// Linux keeps the manual command fallback until a desktop-terminal contract
+/// is available across the supported window managers.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 async fn open_setup_token_terminal() -> Result<bool, String> {
     Ok(false)
 }
@@ -6608,31 +6665,71 @@ fn forward_cli_output(bytes: &[u8], stream: &str, on_event: &Channel<serde_json:
     }
 }
 
-/// Resolve the helper-managed bin dir (`~/.appliance/bin` on POSIX,
-/// `%LOCALAPPDATA%\Appliance\bin` on Windows) so we can prepend it to
-/// PATH before spawning child processes. Mirrors `helperBinDir()` in
-/// `@appliance.sh/helper` — both sides must agree on the location for
-/// `appliance local install` (Node) to land binaries the desktop's
-/// `Command::new("kubectl")` calls then pick up.
-fn helper_bin_dir() -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(local) = std::env::var("LOCALAPPDATA") {
-            return Some(PathBuf::from(local).join("Appliance").join("bin"));
-        }
-    }
-    let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".appliance").join("bin"))
+fn join_platform_path(base: &str, suffix: &str, platform: &str) -> String {
+    let separator = if platform == "windows" { '\\' } else { '/' };
+    format!(
+        "{}{}{}",
+        base.trim_end_matches(['/', '\\']),
+        separator,
+        suffix
+    )
 }
 
-/// Prepend the helper bin dir to this process's PATH so every
-/// downstream `Command::new(...)` sees `~/.appliance/bin/kubectl` etc.
-/// without each call site having to manage env vars. Idempotent.
-fn ensure_helper_bin_on_path() {
-    let Some(dir) = helper_bin_dir() else {
-        return;
-    };
-    prepend_to_path(&[dir]);
+/// Resolve both managed bin directories. They coincide on POSIX; on Windows
+/// helper-installed tools use LOCALAPPDATA while the VM engine shared with the
+/// CLI remains under HOME (falling back to USERPROFILE via `home_dir`).
+fn managed_bin_dirs_for(
+    platform: &str,
+    home: Option<&str>,
+    local_app_data: Option<&str>,
+) -> Vec<String> {
+    let mut dirs = Vec::new();
+    if platform == "windows" {
+        if let Some(local) = local_app_data {
+            dirs.push(join_platform_path(local, r"Appliance\bin", platform));
+        }
+    }
+    if let Some(home) = home {
+        let suffix = if platform == "windows" {
+            r".appliance\bin"
+        } else {
+            ".appliance/bin"
+        };
+        dirs.push(join_platform_path(home, suffix, platform));
+    }
+    dirs
+}
+
+fn ensure_managed_bins_on_path() {
+    let home = std::env::var("HOME")
+        .ok()
+        .or_else(|| std::env::var("USERPROFILE").ok());
+    let local_app_data = std::env::var("LOCALAPPDATA").ok();
+    let dirs = managed_bin_dirs_for(host_platform(), home.as_deref(), local_app_data.as_deref());
+    prepend_to_path(&dirs);
+}
+
+fn windows_user_path_candidates(
+    local_app_data: Option<&str>,
+    user_profile: Option<&str>,
+    program_files: Option<&str>,
+) -> Vec<String> {
+    [
+        local_app_data.map(|base| join_platform_path(base, r"Microsoft\WinGet\Links", "windows")),
+        user_profile.map(|base| join_platform_path(base, r"scoop\shims", "windows")),
+        program_files
+            .map(|base| join_platform_path(base, r"Docker\Docker\resources\bin", "windows")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+fn existing_path_candidates(candidates: Vec<String>, is_dir: impl Fn(&str) -> bool) -> Vec<String> {
+    candidates
+        .into_iter()
+        .filter(|candidate| is_dir(candidate))
+        .collect()
 }
 
 /// macOS GUI apps (anything launched from Finder, the Dock, or
@@ -6649,49 +6746,82 @@ fn ensure_helper_bin_on_path() {
 /// the same binaries the user runs from their shell. Existence
 /// filtering avoids littering PATH with non-existent entries.
 fn ensure_user_paths_on_path() {
-    let mut candidates: Vec<PathBuf> = Vec::new();
+    let mut candidates: Vec<String> = Vec::new();
 
     if cfg!(target_os = "macos") {
         candidates.extend([
             // Homebrew on Apple Silicon.
-            PathBuf::from("/opt/homebrew/bin"),
-            PathBuf::from("/opt/homebrew/sbin"),
+            "/opt/homebrew/bin".to_string(),
+            "/opt/homebrew/sbin".to_string(),
             // Homebrew on Intel + common manual installs.
-            PathBuf::from("/usr/local/bin"),
-            PathBuf::from("/usr/local/sbin"),
+            "/usr/local/bin".to_string(),
+            "/usr/local/sbin".to_string(),
             // MacPorts.
-            PathBuf::from("/opt/local/bin"),
-            PathBuf::from("/opt/local/sbin"),
+            "/opt/local/bin".to_string(),
+            "/opt/local/sbin".to_string(),
         ]);
     } else if cfg!(target_os = "linux") {
         candidates.extend([
-            PathBuf::from("/usr/local/bin"),
-            PathBuf::from("/usr/local/sbin"),
-            PathBuf::from("/snap/bin"),
-            PathBuf::from("/var/lib/flatpak/exports/bin"),
+            "/usr/local/bin".to_string(),
+            "/usr/local/sbin".to_string(),
+            "/snap/bin".to_string(),
+            "/var/lib/flatpak/exports/bin".to_string(),
         ]);
+    } else {
+        candidates.extend(windows_user_path_candidates(
+            std::env::var("LOCALAPPDATA").ok().as_deref(),
+            std::env::var("USERPROFILE").ok().as_deref(),
+            std::env::var("ProgramFiles").ok().as_deref(),
+        ));
     }
 
     if !cfg!(target_os = "windows") {
         if let Ok(home) = std::env::var("HOME") {
-            let home = PathBuf::from(home);
-            candidates.push(home.join(".local").join("bin"));
+            candidates.push(join_platform_path(&home, ".local/bin", host_platform()));
             // cargo, mise, asdf shims; cheap to include since
             // prepend_to_path filters missing entries.
-            candidates.push(home.join(".cargo").join("bin"));
-            candidates.push(home.join(".local").join("share").join("mise").join("shims"));
-            candidates.push(home.join(".asdf").join("shims"));
+            candidates.push(join_platform_path(&home, ".cargo/bin", host_platform()));
+            candidates.push(join_platform_path(
+                &home,
+                ".local/share/mise/shims",
+                host_platform(),
+            ));
+            candidates.push(join_platform_path(&home, ".asdf/shims", host_platform()));
         }
     }
 
-    let existing: Vec<PathBuf> = candidates.into_iter().filter(|p| p.is_dir()).collect();
+    let existing = existing_path_candidates(candidates, |candidate| {
+        std::path::Path::new(candidate).is_dir()
+    });
     prepend_to_path(&existing);
 }
 
-/// Prepend any dirs not already on PATH, preserving order. Skips
-/// empty / unresolvable paths and dirs that are already present so
-/// repeat calls are no-ops.
-fn prepend_to_path(dirs: &[PathBuf]) {
+fn composed_path(current: &str, dirs: &[String], sep: char) -> String {
+    let existing: std::collections::HashSet<&str> = current.split(sep).collect();
+
+    let mut prefix = String::new();
+    for dir in dirs {
+        if dir.is_empty() || existing.contains(dir.as_str()) || prefix.split(sep).any(|p| p == dir)
+        {
+            continue;
+        }
+        if !prefix.is_empty() {
+            prefix.push(sep);
+        }
+        prefix.push_str(dir);
+    }
+    if prefix.is_empty() {
+        return current.to_string();
+    }
+    if current.is_empty() {
+        prefix
+    } else {
+        format!("{prefix}{sep}{current}")
+    }
+}
+
+/// Prepend any dirs not already on PATH, preserving order. Idempotent.
+fn prepend_to_path(dirs: &[String]) {
     if dirs.is_empty() {
         return;
     }
@@ -6701,29 +6831,10 @@ fn prepend_to_path(dirs: &[PathBuf]) {
         ':'
     };
     let current = std::env::var("PATH").unwrap_or_default();
-    let existing: std::collections::HashSet<&str> = current.split(sep).collect();
-
-    let mut prefix = String::new();
-    for dir in dirs {
-        let Some(dir_str) = dir.to_str() else {
-            continue;
-        };
-        if existing.contains(dir_str) || prefix.split(sep).any(|p| p == dir_str) {
-            continue;
-        }
-        if !prefix.is_empty() {
-            prefix.push(sep);
-        }
-        prefix.push_str(dir_str);
-    }
-    if prefix.is_empty() {
+    let next = composed_path(&current, dirs, sep);
+    if next == current {
         return;
     }
-    let next = if current.is_empty() {
-        prefix
-    } else {
-        format!("{prefix}{sep}{current}")
-    };
     // Safety: set_var is unsafe in newer Rust because env mutation
     // races other threads. We call it once at startup before any
     // tokio runtime is up.
@@ -6737,7 +6848,7 @@ pub fn run() {
     // on top — its binaries win when both system + helper have a
     // copy, which keeps versioning predictable.
     ensure_user_paths_on_path();
-    ensure_helper_bin_on_path();
+    ensure_managed_bins_on_path();
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
@@ -6881,6 +6992,80 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn home_resolution_keeps_home_before_userprofile() {
+        assert_eq!(
+            home_dir_from_env(
+                Some(r"C:\git-bash-home".into()),
+                Some(r"C:\Users\Blake".into())
+            ),
+            Some(PathBuf::from(r"C:\git-bash-home"))
+        );
+    }
+
+    #[test]
+    fn windows_path_composition_uses_both_managed_bins_and_existing_user_bins() {
+        let user_candidates = windows_user_path_candidates(
+            Some(r"C:\Users\Blake\AppData\Local"),
+            Some(r"C:\Users\Blake"),
+            Some(r"C:\Program Files"),
+        );
+        let existing = std::collections::HashSet::from([
+            r"C:\Users\Blake\AppData\Local\Microsoft\WinGet\Links",
+            r"C:\Users\Blake\scoop\shims",
+            r"C:\Program Files\Docker\Docker\resources\bin",
+        ]);
+        let user_dirs =
+            existing_path_candidates(user_candidates, |candidate| existing.contains(candidate));
+        let with_user_dirs = composed_path(r"C:\Windows\System32", &user_dirs, ';');
+        let managed_dirs = managed_bin_dirs_for(
+            "windows",
+            Some(r"C:\git-bash-home"),
+            Some(r"C:\Users\Blake\AppData\Local"),
+        );
+
+        assert_eq!(
+            composed_path(&with_user_dirs, &managed_dirs, ';'),
+            concat!(
+                r"C:\Users\Blake\AppData\Local\Appliance\bin;",
+                r"C:\git-bash-home\.appliance\bin;",
+                r"C:\Users\Blake\AppData\Local\Microsoft\WinGet\Links;",
+                r"C:\Users\Blake\scoop\shims;",
+                r"C:\Program Files\Docker\Docker\resources\bin;",
+                r"C:\Windows\System32"
+            )
+        );
+    }
+
+    #[test]
+    fn windows_setup_token_launcher_argv_prefers_wt_then_cmd() {
+        assert_eq!(
+            windows_setup_token_launchers(),
+            vec![
+                vec![
+                    "cmd.exe",
+                    "/C",
+                    "start",
+                    "",
+                    "wt.exe",
+                    "--",
+                    "claude",
+                    "setup-token"
+                ],
+                vec![
+                    "cmd.exe",
+                    "/C",
+                    "start",
+                    "",
+                    "cmd",
+                    "/K",
+                    "claude",
+                    "setup-token"
+                ],
+            ]
+        );
+    }
 
     #[test]
     fn app_window_identity_matches_the_desktop_contract() {

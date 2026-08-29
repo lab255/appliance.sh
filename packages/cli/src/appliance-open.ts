@@ -1,36 +1,12 @@
 import { Command } from 'commander';
-import { spawn } from 'node:child_process';
 import { createApplianceClient, DeploymentStatus } from '@appliance.sh/sdk';
 import { loadCredentials } from './utils/credentials.js';
 import { attachProfileOption } from './utils/profile-flag.js';
 import { readLink } from './utils/link.js';
 import { extractDeploymentUrl } from './utils/deploy-poll.js';
 import { printCliError } from './utils/errors.js';
+import { openExternalUrl } from './utils/open-external-url.js';
 import chalk from 'chalk';
-
-// Open a URL in the OS default browser. Picks the right shell tool
-// for the platform; falls back to printing the URL if we can't find
-// one.
-function openInBrowser(url: string): void {
-  // Windows: rundll32's FileProtocolHandler takes the URL as a plain
-  // argument. `cmd /c start` re-parses its command line, so a URL with
-  // a query string (`&`) gets split into separate commands.
-  const command =
-    process.platform === 'darwin'
-      ? { cmd: 'open', args: [url] }
-      : process.platform === 'win32'
-        ? { cmd: 'rundll32', args: ['url.dll,FileProtocolHandler', url] }
-        : { cmd: 'xdg-open', args: [url] };
-  try {
-    const child = spawn(command.cmd, command.args, { stdio: 'ignore', detached: true });
-    child.on('error', () => {
-      console.log(url);
-    });
-    child.unref();
-  } catch {
-    console.log(url);
-  }
-}
 
 const program = new Command();
 
@@ -119,7 +95,7 @@ program
       }
 
       console.log(chalk.dim(`Opening ${url}`));
-      openInBrowser(url);
+      openExternalUrl(url);
     } catch (error) {
       printCliError(error, { apiUrl: credentials.apiUrl });
     }

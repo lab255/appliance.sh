@@ -12,6 +12,7 @@
 //! in one place next to the other kube wiring.
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::sync::{Mutex, OnceLock};
 
@@ -43,6 +44,29 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Session>> {
     sessions().lock().unwrap_or_else(|p| p.into_inner())
 }
 
+fn command_builder(
+    argv: &[String],
+    process_path: Option<OsString>,
+) -> Result<CommandBuilder, String> {
+    let Some(program) = argv.first() else {
+        return Err("empty terminal command".into());
+    };
+    let mut cmd = CommandBuilder::new(program);
+    cmd.args(&argv[1..]);
+    // A sensible TERM so curses apps and color work; the host env is
+    // otherwise inherited (PATH already carries Desktop's composed paths).
+    cmd.env("TERM", "xterm-256color");
+    // On Windows portable-pty rebuilds the child env from the registry
+    // (system + user Environment keys), which silently discards this
+    // process's PATH — including the managed/user dirs prepended at startup.
+    // Re-assert the live process PATH; a no-op on unix where the base
+    // env already is the process env.
+    if let Some(path) = process_path {
+        cmd.env("PATH", path);
+    }
+    Ok(cmd)
+}
+
 /// Spawn `argv` in a PTY of the given size. Returns the session id;
 /// output then streams on `on_event` until the child exits.
 pub fn open(
@@ -52,9 +76,6 @@ pub fn open(
     rows: u16,
     on_event: Channel<TermEvent>,
 ) -> Result<(), String> {
-    if argv.is_empty() {
-        return Err("empty terminal command".into());
-    }
     let pty = native_pty_system();
     let pair = pty
         .openpty(PtySize {
@@ -65,20 +86,7 @@ pub fn open(
         })
         .map_err(|e| format!("openpty: {e}"))?;
 
-    let mut cmd = CommandBuilder::new(&argv[0]);
-    cmd.args(&argv[1..]);
-    // A sensible TERM so curses apps and color work; the host env is
-    // otherwise inherited (PATH already carries the helper bin dir).
-    cmd.env("TERM", "xterm-256color");
-    // On Windows portable-pty rebuilds the child env from the registry
-    // (system + user Environment keys), which silently discards this
-    // process's PATH — including the helper bin dir prepended at startup
-    // (ensure_helper_bin_on_path), so `kubectl` would not resolve.
-    // Re-assert the live process PATH; a no-op on unix where the base
-    // env already is the process env.
-    if let Ok(path) = std::env::var("PATH") {
-        cmd.env("PATH", path);
-    }
+    let cmd = command_builder(&argv, std::env::var_os("PATH"))?;
 
     let child = pair
         .slave
@@ -169,4 +177,18 @@ pub fn close(id: &str) -> Result<(), String> {
         let _ = session.child.kill();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn command_builder_reasserts_the_process_path() {
+        let process_path = OsString::from(r"C:\managed\bin;C:\Windows\System32");
+        let cmd = command_builder(&["kubectl".to_string()], Some(process_path.clone())).unwrap();
+
+        assert_eq!(cmd.get_env("PATH"), Some(OsStr::new(&process_path)));
+    }
 }

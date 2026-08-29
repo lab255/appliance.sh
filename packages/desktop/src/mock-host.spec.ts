@@ -70,6 +70,13 @@ describe('mock host platform', () => {
     expect(mockHostEnabled()).toBe(true);
     expect(createMockHost().platform).toBe('macos');
   });
+
+  it('exposes the Windows Claude install-copy fixture', async () => {
+    vi.stubGlobal('window', { location: { search: '?mock-host&platform=windows' } });
+    expect(mockHostEnabled()).toBe(true);
+
+    await expect(createMockHost().agentAuth?.hasHostClaude()).resolves.toBe(false);
+  });
 });
 
 describe('mock host catalogue scenarios', () => {
