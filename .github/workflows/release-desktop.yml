@@ -15,6 +15,11 @@ on:
         type: boolean
         required: false
         default: false
+      publish:
+        description: Publish the built bundles to a GitHub Release. Disable for branch smoke tests.
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write # to upload DMGs + the updater manifest to the release
@@ -53,11 +58,10 @@ jobs:
     # The Developer ID cert (APPLE_CERTIFICATE + password), the notarization
     # creds (APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID) and
     # the Tauri updater keys (TAURI_SIGNING_PRIVATE_KEY, TAURI_UPDATER_PUBKEY)
-    # are scoped to the `publish` GitHub environment. A job only sees
-    # environment-scoped secrets when it opts in here; without this the
-    # secrets.* refs below resolve to empty strings and the bundle ships
-    # UNSIGNED + un-notarized with a placeholder updater key.
-    environment: publish
+    # are scoped to the `publish` GitHub environment. Publishing runs opt in;
+    # branch smoke tests do not request the protected environment, so their
+    # secrets.* refs resolve to empty strings.
+    environment: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish) && 'publish' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -120,13 +124,28 @@ jobs:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: node packages/desktop/scripts/set-updater-pubkey.mjs
 
+      # The release overlay enables updater artifacts, which makes Tauri
+      # require TAURI_SIGNING_PRIVATE_KEY. Smoke tests deliberately have no
+      # publish-environment secrets, so keep the ordinary bundles but disable
+      # their updater archives and signatures.
+      - name: Disable updater artifacts for non-publishing build
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'packages/desktop/src-tauri/tauri.release.conf.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.bundle.createUpdaterArtifacts = false;
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
       # Build, Developer-ID-sign (hardened runtime), notarize + staple,
-      # and emit signed updater artifacts. Every secret below is OPTIONAL
-      # at the script level: tauri.release.conf.json's
-      # createUpdaterArtifacts only signs when TAURI_SIGNING_PRIVATE_KEY
-      # is set, and notarize-macos.mjs no-ops without the APPLE_* creds —
-      # so a fork without secrets still gets unsigned bundles instead of
-      # a hard failure. See packages/desktop/README.md -> Auto-update.
+      # and emit signed updater artifacts. The Apple secrets are optional at
+      # the script level: notarize-macos.mjs no-ops without them. Tauri does
+      # require TAURI_SIGNING_PRIVATE_KEY when updater artifacts are enabled,
+      # so the non-publishing step above disables those artifacts for smoke
+      # tests. See packages/desktop/README.md -> Auto-update.
       - name: Build + sign + notarize bundle
         id: bundle
         working-directory: packages/desktop
@@ -293,12 +312,11 @@ jobs:
   build-windows:
     name: Build windows-x86_64 bundle
     runs-on: windows-latest
-    # Opt in to the `publish` environment for the Tauri updater secrets
-    # (TAURI_SIGNING_PRIVATE_KEY + TAURI_UPDATER_PUBKEY). Without it the
-    # NSIS installer's updater archive ships unsigned and the injected
-    # pubkey stays the fail-safe placeholder, so self-update breaks. (No
-    # Apple creds are used here — Authenticode signing is still TODO.)
-    environment: publish
+    # Publishing runs opt in to the `publish` environment for the Tauri
+    # updater secrets (TAURI_SIGNING_PRIVATE_KEY + TAURI_UPDATER_PUBKEY).
+    # Branch smoke tests skip the protected environment and updater artifacts.
+    # (No Apple creds are used here — Authenticode signing is still TODO.)
+    environment: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish) && 'publish' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -346,6 +364,18 @@ jobs:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: node packages/desktop/scripts/set-updater-pubkey.mjs
 
+      - name: Disable updater artifacts for non-publishing build
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'packages/desktop/src-tauri/tauri.release.conf.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.bundle.createUpdaterArtifacts = false;
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
       # No Apple secrets here — notarize-macos.mjs skips itself off-darwin.
       # Windows Authenticode signing is not configured yet; the installer
       # ships unsigned (SmartScreen shows a "more info" step) until a
@@ -385,6 +415,107 @@ jobs:
           fi
           echo "Updater signature present: $SIG"
 
+      - name: Install NSIS bundle silently
+        id: install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem 'packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe' |
+            Select-Object -First 1
+          if (-not $setup) { throw 'No NSIS *-setup.exe bundle was produced.' }
+
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($installer.ExitCode -ne 0) { throw "NSIS installer exited $($installer.ExitCode)." }
+
+          $installDir = Join-Path $env:LOCALAPPDATA 'Appliance'
+          if (-not (Test-Path $installDir -PathType Container)) {
+            throw "NSIS installer did not create expected currentUser directory: $installDir"
+          }
+          "install_dir=$installDir" >> $env:GITHUB_OUTPUT
+
+      - name: Verify installed binaries (GUI launch skipped — no smoke flag)
+        shell: pwsh
+        env:
+          INSTALL_DIR: ${{ steps.install.outputs.install_dir }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installedFiles = @(Get-ChildItem $env:INSTALL_DIR -File -Force -Recurse | Sort-Object FullName)
+          Write-Host 'Installed bundle files:'
+          foreach ($file in $installedFiles) {
+            $relative = [IO.Path]::GetRelativePath($env:INSTALL_DIR, $file.FullName)
+            Write-Host "$relative ($($file.Length) bytes)"
+          }
+
+          $required = @(
+            'appliance-desktop.exe',
+            'appliance.exe',
+            'vm-bin\appliance-vm.exe'
+          )
+          foreach ($relative in $required) {
+            $path = Join-Path $env:INSTALL_DIR $relative
+            if (-not (Test-Path $path -PathType Leaf)) { throw "Installed bundle is missing $relative" }
+          }
+
+          $stagedApiServer = 'packages/desktop/src-tauri/apiserver-bin'
+          $apiServerFiles = @(Get-ChildItem $stagedApiServer -File -Recurse -ErrorAction SilentlyContinue)
+          foreach ($file in $apiServerFiles) {
+            $relative = [IO.Path]::GetRelativePath($stagedApiServer, $file.FullName)
+            $installed = Join-Path $env:INSTALL_DIR (Join-Path 'apiserver-bin' $relative)
+            if (-not (Test-Path $installed -PathType Leaf)) {
+              throw "Installed bundle is missing staged apiserver-bin\$relative"
+            }
+          }
+
+          function Get-VersionOutput([string] $path) {
+            $output = (& $path --version 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) { throw "$path --version exited $LASTEXITCODE." }
+            if ([string]::IsNullOrWhiteSpace($output)) { throw "$path --version printed no version." }
+            return $output
+          }
+
+          $desktopVersion = (Get-Content 'packages/desktop/package.json' | ConvertFrom-Json).version
+          $vmManifest = Get-Content 'packages/vm/Cargo.toml' -Raw
+          $vmVersion = [regex]::Match($vmManifest, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          $sidecarVersion = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'appliance.exe')
+          $vmVersionOutput = Get-VersionOutput (Join-Path $env:INSTALL_DIR 'vm-bin\appliance-vm.exe')
+          if ($sidecarVersion -notmatch "(?m)^v?$([regex]::Escape($desktopVersion))$") {
+            throw "Sidecar version '$sidecarVersion' does not match desktop package version '$desktopVersion'."
+          }
+          if ($vmVersionOutput -notmatch "(?m)^appliance-vm $([regex]::Escape($vmVersion))$") {
+            throw "VM version '$vmVersionOutput' does not match packages/vm/Cargo.toml '$vmVersion'."
+          }
+
+          @(
+            '### Windows NSIS installed-bundle smoke test',
+            '',
+            "Install directory: ``$env:INSTALL_DIR``",
+            '',
+            '#### Runnable versions',
+            '',
+            "- CLI sidecar: ``$sidecarVersion``",
+            "- VM engine: ``$vmVersionOutput``",
+            '',
+            '#### Installed files',
+            ''
+          ) >> $env:GITHUB_STEP_SUMMARY
+          $installedFiles | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($env:INSTALL_DIR, $_.FullName)
+            "- ``$relative`` ($($_.Length) bytes)" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Uninstall smoke-tested bundle
+        if: always()
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:LOCALAPPDATA 'Appliance'
+          $uninstaller = Join-Path $installDir 'uninstall.exe'
+          if (Test-Path $uninstaller -PathType Leaf) {
+            $process = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "NSIS uninstaller exited $($process.ExitCode)." }
+          } else {
+            Write-Host "No installed uninstaller to run at $uninstaller"
+          }
+
       - name: Stage release assets
         id: stage
         working-directory: packages/desktop/src-tauri/target/release/bundle
@@ -420,6 +551,7 @@ jobs:
   # ----------------------------------------------------------------------
   publish:
     name: Publish bundles + updater manifest
+    if: inputs.publish
     needs: [build, build-windows]
     runs-on: ubuntu-latest
     steps:

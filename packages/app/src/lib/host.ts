@@ -625,6 +625,8 @@ export interface EgressPolicy {
   deny: string[];
   /** TLS interception on — the proxy decrypts allowed HTTPS. */
   mitm: boolean;
+  /** Whether the network boundary is host-enforced or a cooperative proxy. */
+  boundary?: 'enforced' | 'cooperative';
   /** Path to the VM's egress CA cert, when interception is on. */
   caPath?: string;
   /** True when the host netstack is the ENFORCED egress boundary
@@ -697,7 +699,7 @@ export interface CredentialRule {
   capture: boolean;
   inject: boolean;
   header: string;
-  helper?: string;
+  helper?: string | string[];
 }
 
 /** A stored secret, value masked. */
@@ -714,7 +716,13 @@ export interface CredentialsState {
 
 export interface MicroVmCredsHost {
   list(): Promise<CredentialsState>;
-  add(rule: { host: string; capture: boolean; inject: boolean; header?: string; helper?: string }): Promise<void>;
+  add(rule: {
+    host: string;
+    capture: boolean;
+    inject: boolean;
+    header?: string;
+    helper?: string | string[];
+  }): Promise<void>;
   remove(host: string): Promise<void>;
   /** Manually store a secret (e.g. paste an API key). */
   setSecret(host: string, value: string, header?: string): Promise<void>;

@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Profile } from './profile-store.js';
 import { keyIdForPublicKey, type DevSigningKey } from './bundle-sign.js';
+import { restrictWindowsAcl } from './fs-acl.js';
 
 // Keychain-first credential resolution (E4.4).
 //
@@ -97,6 +98,7 @@ function getOrCreateFileDeviceKey(home: string): DevSigningKey {
       throw new Error('The device entitlement key file is invalid. No entitlement was changed.');
     }
     fs.chmodSync(file, 0o600);
+    restrictWindowsAcl(file);
     return deviceSigningKeyFromWire((parsed as { privateKey: string }).privateKey);
   }
   const created = createDeviceSigningKey();
@@ -106,6 +108,12 @@ function getOrCreateFileDeviceKey(home: string): DevSigningKey {
     flag: 'wx',
   });
   fs.chmodSync(temporary, 0o600);
+  try {
+    restrictWindowsAcl(temporary);
+  } catch (cause) {
+    fs.rmSync(temporary, { force: true });
+    throw cause;
+  }
   try {
     // link is the no-overwrite commit: concurrent first users cannot replace
     // a key another process already used to sign the initial store.
@@ -119,6 +127,7 @@ function getOrCreateFileDeviceKey(home: string): DevSigningKey {
     throw cause;
   }
   fs.chmodSync(file, 0o600);
+  restrictWindowsAcl(file);
   return created;
 }
 
@@ -226,8 +235,15 @@ export function writeEntitlementAnchor(anchor: EntitlementAnchor, options: Devic
   } finally {
     fs.closeSync(descriptor);
   }
+  try {
+    restrictWindowsAcl(temporary);
+  } catch (cause) {
+    fs.rmSync(temporary, { force: true });
+    throw cause;
+  }
   fs.renameSync(temporary, file);
   fs.chmodSync(file, 0o600);
+  restrictWindowsAcl(file);
 }
 
 function parseEntitlementAnchor(value: string): EntitlementAnchor {

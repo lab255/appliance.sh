@@ -200,5 +200,7 @@ packages/desktop/src-tauri/apiserver-bin/
 bun.lockb
 bun.lock
 .gstack/
+packages/credential-store/target/
+packages/credhelper/target/
 packages/vm/target/
 cdk.out/

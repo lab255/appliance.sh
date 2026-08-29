@@ -68,6 +68,49 @@ pub struct EgressPolicy {
     pub mitm: bool,
 }
 
+/// Whether policy is a hard host boundary or a bypassable guest proxy.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EgressBoundary {
+    Enforced,
+    Cooperative,
+}
+
+impl EgressBoundary {
+    pub fn for_link(netstack: bool) -> Self {
+        if netstack {
+            Self::Enforced
+        } else {
+            Self::Cooperative
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Enforced => "enforced (netstack)",
+            Self::Cooperative => "cooperative (in-guest proxy)",
+        }
+    }
+}
+
+/// Machine-readable effective policy returned by `egress policy`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EgressPolicyOutput {
+    #[serde(flatten)]
+    pub policy: EgressPolicy,
+    pub boundary: EgressBoundary,
+}
+
+impl EgressPolicyOutput {
+    pub fn new(policy: EgressPolicy, netstack: bool) -> Self {
+        Self {
+            policy,
+            boundary: EgressBoundary::for_link(netstack),
+        }
+    }
+}
+
 /// Host-enforced policy for one runnable app/service leaf. The runtime
 /// controller writes this resolved record to
 /// `~/.appliance/runtime/<app>/effective.json`; it is deliberately free of
@@ -496,12 +539,20 @@ fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
         .open(path)?;
     file.write_all(bytes)?;
     file.sync_all()?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(error);
+    }
     Ok(())
 }
 
 #[cfg(not(unix))]
 fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     std::fs::write(path, bytes)?;
+    if let Err(error) = crate::fs_acl::restrict_to_current_user(path) {
+        let _ = std::fs::remove_file(path);
+        return Err(error);
+    }
     Ok(())
 }
 
@@ -692,6 +743,11 @@ pub fn effective_policy(name: &str) -> EgressPolicy {
     }
 }
 
+pub fn effective_policy_output(name: &str) -> EgressPolicyOutput {
+    let netstack = is_netstack(name);
+    EgressPolicyOutput::new(effective_policy(name), netstack)
+}
+
 /// Render the **effective** egress policy as a human-readable report.
 ///
 /// For a Netstack VM this reconciles the persisted file (which keeps the
@@ -709,19 +765,23 @@ pub fn render_effective_policy(name: &str, persisted: &EgressPolicy, netstack: b
     let mut out = String::new();
 
     if netstack {
+        let boundary = EgressBoundary::for_link(true);
         out.push_str(&format!(
-            "EFFECTIVE egress policy for '{name}'  (net_link=Netstack — host-enforced boundary)\n"
+            "EFFECTIVE egress policy for '{name}'  (boundary: {})\n",
+            boundary.label()
         ));
         out.push_str(
             "  default: DENY  (host-enforced; the persisted file keeps the serde-default allow, the netstack forces deny)\n",
         );
     } else {
+        let boundary = EgressBoundary::for_link(false);
         let default = match persisted.default {
             Action::Allow => "ALLOW",
             Action::Deny => "DENY",
         };
         out.push_str(&format!(
-            "egress policy for '{name}'  (net_link=Nat — cooperative proxy)\n"
+            "egress policy for '{name}'  (boundary: {})\n",
+            boundary.label()
         ));
         out.push_str(&format!("  default: {default}\n"));
     }
@@ -1072,7 +1132,7 @@ fn target_path(target: &str) -> String {
 /// the guest otherwise. This is the coarse open-proxy admission gate, NOT
 /// the brokered-injection gate: once this VM's leased guest IP is known we
 /// pin to the EXACT address, but until then (very early boot) we fall back
-/// to the /24 subnet match — tight enough to keep the wider LAN out of a
+/// to the backend-recorded subnet (WSL /20, vz /24) — tight enough to keep the wider LAN out of a
 /// gateway/0.0.0.0-bound open proxy, while still admitting the guest before
 /// its lease file lands so early-boot egress isn't refused.
 ///
@@ -1092,11 +1152,10 @@ fn peer_allowed(peer: std::net::IpAddr, name: &str) -> bool {
     match guest_ip_v4(name) {
         // Steady state: only this VM's own guest IP.
         Some(ip) => peer == ip,
-        // Pre-lease window only: coarse /24 match.
+        // Pre-lease window only: the backend's last recorded NAT range.
         None => {
-            let subnet = guest_subnet_v3(name);
-            let o = peer.octets();
-            [o[0], o[1], o[2]] == subnet
+            let (anchor, prefix_len) = guest_admission_prefix(name);
+            crate::network_lease::same_prefix(anchor, peer, prefix_len)
         }
     }
 }
@@ -1158,15 +1217,28 @@ fn guest_ip_v4(name: &str) -> Option<std::net::Ipv4Addr> {
         .and_then(|raw| raw.trim().parse::<std::net::Ipv4Addr>().ok())
 }
 
-/// First three octets of the VM's subnet, from the guest's leased IP
-/// (defaults to vz's 192.168.64.x when not yet known).
-fn guest_subnet_v3(name: &str) -> [u8; 3] {
-    guest_ip_v4(name)
-        .map(|ip| {
-            let o = ip.octets();
-            [o[0], o[1], o[2]]
-        })
-        .unwrap_or([192, 168, 64])
+/// Backend-recorded admission range retained across boots. WSL records
+/// its gateway and dynamic prefix (normally /20); vz needs no files and
+/// falls back to its stable 192.168.64.0/24 NAT.
+fn guest_admission_prefix(name: &str) -> (std::net::Ipv4Addr, u8) {
+    let paths = VmPaths::for_name(name);
+    let gateway = std::fs::read_to_string(paths.gateway_ip())
+        .ok()
+        .and_then(|raw| raw.trim().parse().ok());
+    let prefix_len = std::fs::read_to_string(paths.guest_prefix_len())
+        .ok()
+        .and_then(|raw| parse_guest_prefix_len(&raw));
+    match (gateway, prefix_len) {
+        (Some(gateway), Some(prefix_len)) => (gateway, prefix_len),
+        _ => (std::net::Ipv4Addr::new(192, 168, 64, 1), 24),
+    }
+}
+
+fn parse_guest_prefix_len(raw: &str) -> Option<u8> {
+    raw.trim()
+        .parse::<u8>()
+        .ok()
+        .filter(|prefix| (8..=32).contains(prefix))
 }
 
 /// The proxy URL a guest workload should point `HTTPS_PROXY` at,
@@ -1395,6 +1467,31 @@ mod tests {
     }
 
     #[test]
+    fn peer_guard_uses_recorded_wsl_prefix_before_exact_lease() {
+        let name = "egress-peer-test-wsl-prefix";
+        let paths = VmPaths::for_name(name);
+        let _ = std::fs::remove_dir_all(&paths.dir);
+        std::fs::create_dir_all(&paths.dir).unwrap();
+        std::fs::write(paths.gateway_ip(), "172.25.64.1\n").unwrap();
+        std::fs::write(paths.guest_prefix_len(), "20\n").unwrap();
+
+        assert!(peer_allowed("172.25.66.42".parse().unwrap(), name));
+        assert!(peer_allowed("172.25.79.254".parse().unwrap(), name));
+        assert!(!peer_allowed("172.25.80.1".parse().unwrap(), name));
+
+        let _ = std::fs::remove_dir_all(&paths.dir);
+    }
+
+    #[test]
+    fn peer_guard_rejects_corrupt_overbroad_prefixes() {
+        for prefix in ["0", "2", "7", "33"] {
+            assert_eq!(parse_guest_prefix_len(prefix), None);
+        }
+        assert_eq!(parse_guest_prefix_len("8\n"), Some(8));
+        assert_eq!(parse_guest_prefix_len("32"), Some(32));
+    }
+
+    #[test]
     fn peer_guard_pins_exact_guest_ip_when_known() {
         // With the lease known, only this VM's exact guest IP is allowed:
         // a sibling VM sharing the /24 (which the old subnet gate let
@@ -1447,7 +1544,7 @@ mod tests {
                 capture: false,
                 inject: true,
                 header: "x-api-key".into(),
-                helper: Some("printf real-key".into()),
+                helper: Some(crate::creds::resolving_test_helper()),
             },
         )
         .unwrap();
@@ -1631,7 +1728,7 @@ mod tests {
         let out = render_effective_policy("agent", &persisted, true);
 
         // The EFFECTIVE boundary is shown as Deny, not the persisted Allow.
-        assert!(out.contains("net_link=Netstack"));
+        assert!(out.contains("boundary: enforced (netstack)"));
         assert!(out.contains("default: DENY"));
         assert!(!out.contains("default: ALLOW"));
 
@@ -1661,11 +1758,31 @@ mod tests {
             mitm: true,
         };
         let out = render_effective_policy("dev", &persisted, false);
-        assert!(out.contains("net_link=Nat"));
+        assert!(out.contains("boundary: cooperative (in-guest proxy)"));
         assert!(out.contains("default: ALLOW"));
         assert!(!out.contains("baked allowlist"));
         assert!(out.contains("✓ example.com"));
         assert!(out.contains("TLS interception (mitm): on"));
+    }
+
+    #[test]
+    fn policy_output_labels_both_boundary_kinds() {
+        let policy = EgressPolicy::default();
+        let enforced = EgressPolicyOutput::new(policy.clone(), true);
+        let cooperative = EgressPolicyOutput::new(policy, false);
+
+        assert_eq!(enforced.boundary, EgressBoundary::Enforced);
+        assert_eq!(enforced.boundary.label(), "enforced (netstack)");
+        assert_eq!(cooperative.boundary, EgressBoundary::Cooperative);
+        assert_eq!(cooperative.boundary.label(), "cooperative (in-guest proxy)");
+        assert_eq!(
+            serde_json::to_value(enforced).unwrap()["boundary"],
+            "enforced"
+        );
+        assert_eq!(
+            serde_json::to_value(cooperative).unwrap()["boundary"],
+            "cooperative"
+        );
     }
 
     #[test]

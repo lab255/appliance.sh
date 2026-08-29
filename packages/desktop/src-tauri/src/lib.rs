@@ -1140,8 +1140,8 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     fs::write(&tmp, raw)?;
     fs::rename(&tmp, &path)?;
     // 0600 on unix so the secrets aren't world-readable. On Windows the
-    // equivalent is an ACL reset: strip inherited ACEs and grant only
-    // the current user (the OpenSSH key-file posture) — mirrors
+    // equivalent is a protected ACL containing the current user, SYSTEM, and
+    // Administrators (the latter two can take ownership regardless) — mirrors
     // restrictWindowsAcl in the CLI's profile-store.ts, which manages
     // the same file. Both best-effort: a failed tightening never breaks
     // the write.
@@ -1152,14 +1152,7 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     }
     #[cfg(windows)]
     {
-        if let Ok(user) = std::env::var("USERNAME") {
-            use std::os::windows::process::CommandExt;
-            let _ = std::process::Command::new("icacls")
-                .arg(&path)
-                .args(["/inheritance:r", "/grant:r", &format!("{user}:F")])
-                .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-                .output();
-        }
+        let _ = restrict_to_current_user(&path);
     }
     Ok(())
 }
@@ -2542,6 +2535,8 @@ async fn local_preflight() -> Vec<PreflightCheck> {
 /// even-offset-NUL sniff; this any-NUL form is adequate for wsl.exe
 /// diagnostics, which are pure ASCII UTF-16LE.
 #[cfg(windows)]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wsl_text(bytes: &[u8]) -> String {
     if bytes.iter().take(64).any(|&b| b == 0) {
         let units: Vec<u16> = bytes
@@ -2554,11 +2549,73 @@ fn decode_wsl_text(bytes: &[u8]) -> String {
     }
 }
 
+#[cfg(windows)]
+const WSL_MIRRORED_REMEDIATION: &str =
+    "Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
+     (or remove the setting), run `wsl --shutdown`, then retry.";
+
+#[cfg(any(windows, test))]
+fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
+    let mut in_wsl2 = false;
+    let mut mode: Option<&str> = None;
+    for raw in text.lines() {
+        let line = raw.trim().trim_start_matches('\u{feff}');
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_wsl2 = line[1..line.len() - 1].trim().eq_ignore_ascii_case("wsl2");
+            continue;
+        }
+        if !in_wsl2 {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim().eq_ignore_ascii_case("networkingMode") {
+            mode = Some(value.split(['#', ';']).next().unwrap_or_default().trim());
+        }
+    }
+    mode.is_some_and(|value| value.eq_ignore_ascii_case("mirrored"))
+}
+
+#[cfg(any(windows, test))]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
+fn decode_wslconfig(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xff, 0xfe]) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 /// Probe WSL2 readiness for the doctor view. Reports "installed but
 /// broken" with wsl.exe's own first diagnostic line (virtualization
 /// disabled, kernel outdated, …) rather than a bare boolean.
 #[cfg(windows)]
 async fn wsl_preflight_check() -> PreflightCheck {
+    let mirrored = std::env::var_os("USERPROFILE")
+        .and_then(|home| std::fs::read(std::path::PathBuf::from(home).join(".wslconfig")).ok())
+        .is_some_and(|bytes| wslconfig_uses_mirrored_networking(&decode_wslconfig(&bytes)));
+    if mirrored {
+        return PreflightCheck {
+            tool: "wsl".to_string(),
+            installed: false,
+            version: None,
+            purpose: "Windows Subsystem for Linux 2 — mirrored networking is unsupported by the Dev Machine.".to_string(),
+            install_hint: WSL_MIRRORED_REMEDIATION.to_string(),
+            auto_installable: false,
+            error: Some("WSL mirrored networking is enabled.".to_string()),
+            daemon_running: None,
+            daemon_startable: None,
+        };
+    }
     let probe = quiet_command("wsl.exe").arg("--status").output().await;
     let (installed, version, error) = match probe {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
@@ -4750,6 +4807,9 @@ struct EgressPolicy {
     deny: Vec<String>,
     #[serde(default)]
     mitm: bool,
+    /// Engine-owned boundary contract: `"enforced"` or `"cooperative"`.
+    #[serde(default)]
+    boundary: String,
     /// CA cert path, populated for the UI when interception is on and
     /// the cert exists — the user injects this into clients to trust
     /// the interceptor.
@@ -4759,8 +4819,7 @@ struct EgressPolicy {
     /// (`net_link=Netstack`): default-DENY plus the baked allowlist, and
     /// `microvm_egress_get` returns the *effective* merged policy. False
     /// for the cooperative NAT proxy (`net_link=Nat`, default-Allow).
-    /// Host-populated from the VM's persisted spec (the engine's JSON does
-    /// not carry it), like `ca_path` above — never round-tripped back.
+    /// Derived from the engine's boundary contract for legacy UI callers.
     #[serde(default)]
     enforced: bool,
     /// `"netstack"` | `"nat"` — the VM's resolved network link, so the
@@ -4827,12 +4886,16 @@ async fn microvm_egress_get(name: Option<String>) -> Result<EgressPolicy, String
     }
     // The engine prints the EFFECTIVE policy for a Netstack VM (default-Deny
     // + the baked allowlist merged over the operator's rules) — see
-    // `egress::effective_policy`. We display that as-is, and tag it with the
-    // VM's resolved link so the UI can label the boundary as enforced vs
-    // cooperative. Read-only: nothing here is ever written back.
+    // `egress::effective_policy`. We display that as-is and use its explicit
+    // boundary contract, falling back to the VM spec only for older engines
+    // that omit `boundary`.
     let mut policy: EgressPolicy = serde_json::from_str(&stdout).map_err(|e| e.to_string())?;
     policy.ca_path = microvm_ca_path(&name).map(|p| p.to_string_lossy().into_owned());
-    policy.enforced = microvm_netstack_enforced(&name);
+    policy.enforced = if policy.boundary.is_empty() {
+        microvm_netstack_enforced(&name)
+    } else {
+        policy.boundary == "enforced"
+    };
     policy.net_link = if policy.enforced {
         "netstack".into()
     } else {
@@ -4984,6 +5047,13 @@ async fn microvm_egress_clear_log(name: Option<String>) -> Result<(), String> {
 // `appliance-vm creds` surface the CLI uses.
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+enum CredentialHelper {
+    Argv(Vec<String>),
+    LegacyShell(String),
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CredentialRule {
     host: String,
@@ -4994,7 +5064,7 @@ struct CredentialRule {
     #[serde(default)]
     header: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    helper: Option<String>,
+    helper: Option<CredentialHelper>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -5035,7 +5105,25 @@ struct CredsAddInput {
     #[serde(default)]
     header: Option<String>,
     #[serde(default)]
-    helper: Option<String>,
+    helper: Option<CredentialHelper>,
+}
+
+/// Encode the helper for appliance-vm's one-argument `--helper` transport.
+/// The VM parses argv JSON and persists the array itself; legacy strings pass
+/// through unchanged for Unix compatibility.
+fn credential_helper_cli_arg(helper: CredentialHelper) -> Result<Option<String>, String> {
+    match helper {
+        CredentialHelper::Argv(argv) => {
+            if argv.is_empty() || argv.iter().any(String::is_empty) {
+                return Err("credential helper argv must contain a non-empty executable and arguments".into());
+            }
+            serde_json::to_string(&argv).map(Some).map_err(|e| e.to_string())
+        }
+        CredentialHelper::LegacyShell(command) => {
+            let command = command.trim().to_string();
+            Ok((!command.is_empty()).then_some(command))
+        }
+    }
 }
 
 #[tauri::command]
@@ -5061,7 +5149,7 @@ async fn microvm_creds_add(name: Option<String>, input: CredsAddInput) -> Result
         args.push("--header".into());
         args.push(h);
     }
-    if let Some(c) = input.helper.filter(|c| !c.trim().is_empty()) {
+    if let Some(c) = input.helper.map(credential_helper_cli_arg).transpose()?.flatten() {
         args.push("--helper".into());
         args.push(c);
     }
@@ -5847,6 +5935,205 @@ fn legacy_anthropic_key_file() -> Option<PathBuf> {
     )
 }
 
+// Copy of the appliance-vm ACL helper: the desktop drives appliance-vm as a
+// sidecar binary rather than linking its crate, so this small security boundary
+// stays duplicated here (like decode_wsl_text above).
+#[cfg(windows)]
+fn current_user_sid_string() -> Result<String, String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, IsValidSid, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct OwnedHandle(HANDLE);
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    let mut token = std::ptr::null_mut();
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(format!(
+            "could not open the current process token: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let token = OwnedHandle(token);
+    let mut needed = 0;
+    unsafe {
+        GetTokenInformation(token.0, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+    }
+    if needed == 0 {
+        return Err(format!(
+            "could not size the current process token user: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let words = (needed as usize + std::mem::size_of::<usize>() - 1)
+        / std::mem::size_of::<usize>();
+    let mut buffer = vec![0usize; words];
+    if unsafe {
+        GetTokenInformation(
+            token.0,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not read the current process token user: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let sid = unsafe { (*(buffer.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+        return Err("the current process token has an invalid user SID".to_string());
+    }
+
+    let mut raw = std::ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(sid, &mut raw) } == 0 {
+        return Err(format!(
+            "could not convert the current user SID to text: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let result = (|| {
+        let mut len = 0;
+        while unsafe { *raw.add(len) } != 0 {
+            len += 1;
+        }
+        String::from_utf16(unsafe { std::slice::from_raw_parts(raw, len) })
+            .map_err(|error| format!("the current user SID is not valid UTF-16: {error}"))
+    })();
+    unsafe {
+        let _ = LocalFree(raw.cast());
+    }
+    result
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|error| format!("could not chmod {}: {error}", path.display()))
+}
+
+#[cfg(windows)]
+fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS};
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SetNamedSecurityInfoW,
+        SDDL_REVISION_1, SE_FILE_OBJECT,
+    };
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorDacl, GetSecurityDescriptorOwner, DACL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    };
+
+    struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
+    impl Drop for LocalSecurityDescriptor {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = LocalFree(self.0);
+            }
+        }
+    }
+
+    let current_user = current_user_sid_string()?;
+    let inheritance = if path.is_dir() { "OICI" } else { "" };
+    let sddl = format!(
+        "O:{current_user}D:P(A;{inheritance};FA;;;{current_user})(A;{inheritance};FA;;;SY)(A;{inheritance};FA;;;BA)"
+    );
+    let wide_sddl: Vec<u16> = std::ffi::OsStr::new(&sddl)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            wide_sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut descriptor,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(format!(
+            "could not build protected DACL for {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+    let _descriptor = LocalSecurityDescriptor(descriptor);
+    let mut owner = std::ptr::null_mut();
+    let mut owner_defaulted = 0;
+    if unsafe { GetSecurityDescriptorOwner(descriptor, &mut owner, &mut owner_defaulted) } == 0
+        || owner.is_null()
+    {
+        return Err(format!(
+            "could not read protected ACL owner for {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+    let mut dacl_present = 0;
+    let mut dacl_defaulted = 0;
+    let mut dacl = std::ptr::null_mut();
+    if unsafe {
+        GetSecurityDescriptorDacl(
+            descriptor,
+            &mut dacl_present,
+            &mut dacl,
+            &mut dacl_defaulted,
+        )
+    } == 0
+        || dacl_present == 0
+        || dacl.is_null()
+    {
+        return Err(format!(
+            "could not read protected DACL for {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+
+    let wide_path: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let status = unsafe {
+        SetNamedSecurityInfoW(
+            wide_path.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION
+                | DACL_SECURITY_INFORMATION
+                | PROTECTED_DACL_SECURITY_INFORMATION,
+            owner,
+            std::ptr::null_mut(),
+            dacl,
+            std::ptr::null_mut(),
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return Err(format!(
+            "could not restrict {} to trusted Windows principals: {}",
+            path.display(),
+            std::io::Error::from_raw_os_error(status as i32)
+        ));
+    }
+    Ok(())
+}
+
 /// Whether a host credential is stored, and (best-effort) its kind. Never
 /// carries the secret value. Serialized to the frontend's `AgentAuthStatus`.
 #[derive(Serialize)]
@@ -5897,11 +6184,9 @@ fn store_agent_cred_envelope(provider: &str, envelope: &str) -> Result<(), Strin
             .map_err(|e| format!("could not create the agent store dir: {e}"))?;
     }
     std::fs::write(&file, envelope).map_err(|e| format!("could not write the agent store: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("could not chmod the agent store: {e}"))?;
+    if let Err(error) = restrict_to_current_user(&file) {
+        let _ = std::fs::remove_file(&file);
+        return Err(error);
     }
     Ok(())
 }
@@ -6881,6 +7166,43 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wslconfig_reader_detects_shared_utf8_and_utf16le_fixtures() {
+        for fixture in [
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored.ini").as_slice(),
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored-utf16le.ini").as_slice(),
+        ] {
+            assert!(wslconfig_uses_mirrored_networking(&decode_wslconfig(
+                fixture
+            )));
+        }
+    }
+
+    #[test]
+    fn credential_helper_argv_stays_an_array_across_desktop_vm_boundary() {
+        let argv = vec![
+            r"C:\Program Files\Appliance\appliance.exe".to_string(),
+            "agent".to_string(),
+            "print-key".to_string(),
+            "--type".to_string(),
+            "claude-code".to_string(),
+        ];
+        let transport = credential_helper_cli_arg(CredentialHelper::Argv(argv.clone()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Vec<String>>(&transport).unwrap(), argv);
+
+        let rule = CredentialRule {
+            host: "api.anthropic.com".into(),
+            capture: false,
+            inject: true,
+            header: "x-api-key".into(),
+            helper: Some(CredentialHelper::Argv(argv.clone())),
+        };
+        let json = serde_json::to_value(rule).unwrap();
+        assert_eq!(json["helper"], serde_json::json!(argv));
+    }
 
     #[test]
     fn app_window_identity_matches_the_desktop_contract() {
