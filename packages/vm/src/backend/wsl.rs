@@ -1072,11 +1072,11 @@ mod tests {
         // The verbatim prefix is stripped for wslpath.
         assert!(script.contains(r"wslpath -u 'C:\Users\dev\proj'"));
         assert!(!script.contains(r"\\?\"));
-        // Dev + docker + buildkit + CA blocks are present.
+        // Dev + docker + CA blocks are present; core-ready omits BuildKit.
         assert!(script.contains("appliance-dev: provisioning development environment"));
         assert!(script.contains("appliance-docker: provisioning in-guest Docker engine"));
-        assert!(script.contains("appliance-buildkit: provisioning in-guest BuildKit"));
-        assert!(script.contains(&format!(
+        assert!(!script.contains("appliance-buildkit: provisioning in-guest BuildKit"));
+        assert!(!script.contains(&format!(
             "--addr tcp://0.0.0.0:{}",
             crate::guest::BUILDKITD_GUEST_PORT
         )));
