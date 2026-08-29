@@ -1,0 +1,2 @@
+packages/vm/tests/fixtures/wsl-output/*.bin binary
+packages/vm/tests/fixtures/wsl-output/expected.json text eol=lf
