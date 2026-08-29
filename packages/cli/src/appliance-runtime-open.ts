@@ -7,7 +7,13 @@ import * as path from 'node:path';
 import { applianceV2Input, type ApplianceV2, type InstalledApp } from '@appliance.sh/sdk';
 import { currentWorkspaceTarget, resolveInstalledApp } from './utils/installed-apps.js';
 import { readBundleManifest } from './utils/bundle-read.js';
-import { readRuntimeRegistry, type RuntimeRecord } from './utils/runtime-registry.js';
+import { readRuntimeRegistry, updateRuntimeRecord, type RuntimeRecord } from './utils/runtime-registry.js';
+import {
+  engineRuntimeStatusBackend,
+  isWarmRuntimeState,
+  reconcileRuntimeRecord,
+  type RuntimeStatusBackend,
+} from './utils/runtime-reconcile.js';
 import { resolveVmBinary } from './utils/microvm-up.js';
 import { openExternalUrl } from './utils/open-external-url.js';
 
@@ -43,6 +49,17 @@ export interface RuntimeOpenRoute {
   openBrowser(url: string): void;
 }
 
+export interface RuntimeOpenBackend extends RuntimeStatusBackend {
+  runDetached(selector: string, target: string, acceptUnknownPublisher: boolean): Promise<void>;
+}
+
+export interface RuntimeOpenDependencies {
+  backend: RuntimeOpenBackend;
+  readRecords(): RuntimeRecord[];
+  updateRecord(appId: string, update: Partial<Omit<RuntimeRecord, 'appId'>>): RuntimeRecord | null;
+  describe(selector: string, target: string): RuntimeOpenDescriptor;
+}
+
 const RUNTIME_POOL_VM = 'appliance-runtime';
 
 export function desktopIpcFile(home = os.homedir()): string {
@@ -65,10 +82,10 @@ export function describeRuntimeApp(
   const record = options.record ?? readRuntimeRegistry().find((candidate) => candidate.appId === installed.appId);
   const state = record?.state ?? 'stopped';
   const ui = runtimeUi(manifest);
-  const portName = ui.type === 'web' ? (ui.service ? `${ui.service}.${ui.port}` : ui.port) : undefined;
+  const portName = runtimeUiPortName(manifest);
   const hostPort = portName ? record?.hostPorts.find((candidate) => candidate.name === portName)?.host : undefined;
   const pathName = ui.type === 'web' ? ui.path : undefined;
-  const url = hostPort == null ? undefined : `http://127.0.0.1:${hostPort}${pathName ?? '/'}`;
+  const url = hostPort == null ? undefined : runtimeOpenUrl(hostPort, pathName);
 
   return {
     appId: installed.appId,
@@ -163,7 +180,6 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
   const target = currentWorkspaceTarget(optionValue(args, '--target'));
   const startedAtMs = Date.now();
   let descriptor = describeRuntimeApp(selector, target);
-  const kind = descriptor.state === 'running' || descriptor.state === 'starting' ? 'warm' : 'cold';
 
   if (args.includes('--describe')) {
     console.log(JSON.stringify(descriptor));
@@ -174,18 +190,13 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
       `'${descriptor.name}' has no web UI. View its logs with: appliance runtime logs ${descriptor.appId}`
     );
   }
-  if (descriptor.state !== 'running' && descriptor.state !== 'starting') {
-    const { runRuntimeCommand } = await import('./appliance-runtime.js');
-    await runRuntimeCommand('run', [
-      selector,
-      '--target',
-      target,
-      '--detach',
-      '--json',
-      ...(args.includes('--accept-unknown-publisher') ? ['--accept-unknown-publisher'] : []),
-    ]);
-    descriptor = describeRuntimeApp(selector, target);
-  }
+  const prepared = await reconcileAndStartRuntimeOpen(
+    selector,
+    target,
+    descriptor,
+    args.includes('--accept-unknown-publisher')
+  );
+  descriptor = prepared.descriptor;
   if (!descriptor.url || descriptor.hostPort == null) {
     throw new Error(`'${descriptor.name}' did not publish its manifest UI port`);
   }
@@ -194,7 +205,7 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
     console.log(descriptor.url);
     return;
   }
-  descriptor = { ...descriptor, openMetric: { kind, startedAtMs } };
+  descriptor = { ...descriptor, openMetric: { kind: prepared.kind, startedAtMs } };
   const routed = await routeRuntimeOpen(descriptor, {
     sendDesktop: sendRuntimeOpenToDesktop,
     openBrowser: openExternalUrl,
@@ -206,6 +217,67 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
   console.log(
     chalk.dim(routed === 'desktop' ? `Opened ${descriptor.name} in Appliance Desktop` : `Opening ${descriptor.url}`)
   );
+}
+
+export async function reconcileAndStartRuntimeOpen(
+  selector: string,
+  target: string,
+  initial: RuntimeOpenDescriptor,
+  acceptUnknownPublisher: boolean,
+  dependencies: RuntimeOpenDependencies = defaultRuntimeOpenDependencies
+): Promise<{ descriptor: RuntimeOpenDescriptor; kind: RuntimeOpenMetricContext['kind'] }> {
+  let descriptor = initial;
+  if (isWarmRuntimeState(descriptor.state)) {
+    const record = dependencies.readRecords().find((candidate) => candidate.appId === descriptor.appId);
+    if (record) {
+      const reconciled = reconcileRuntimeRecord(record, dependencies.backend);
+      if (reconciled.record.state !== record.state || reconciled.record.exitCode !== record.exitCode) {
+        dependencies.updateRecord(record.appId, {
+          state: reconciled.record.state,
+          exitCode: reconciled.record.exitCode,
+        });
+      }
+      descriptor = dependencies.describe(selector, target);
+    } else {
+      descriptor = { ...descriptor, state: 'stopped', exitCode: undefined };
+    }
+  }
+
+  const warm = isWarmRuntimeState(descriptor.state);
+  if (!warm) {
+    await dependencies.backend.runDetached(selector, target, acceptUnknownPublisher);
+    descriptor = dependencies.describe(selector, target);
+  }
+  return { descriptor, kind: warm ? 'warm' : 'cold' };
+}
+
+const defaultRuntimeOpenDependencies: RuntimeOpenDependencies = {
+  backend: {
+    ...engineRuntimeStatusBackend,
+    async runDetached(selector, target, acceptUnknownPublisher) {
+      const { runRuntimeCommand } = await import('./appliance-runtime.js');
+      await runRuntimeCommand('run', [
+        selector,
+        '--target',
+        target,
+        '--detach',
+        '--json',
+        ...(acceptUnknownPublisher ? ['--accept-unknown-publisher'] : []),
+      ]);
+    },
+  },
+  readRecords: readRuntimeRegistry,
+  updateRecord: updateRuntimeRecord,
+  describe: describeRuntimeApp,
+};
+
+export function runtimeUiPortName(manifest: ApplianceV2): string | undefined {
+  const ui = runtimeUi(manifest);
+  return ui.type === 'web' ? (ui.service ? `${ui.service}.${ui.port}` : ui.port) : undefined;
+}
+
+export function runtimeOpenUrl(hostPort: number, pathName = '/'): string {
+  return `http://127.0.0.1:${hostPort}${pathName}`;
 }
 
 export function waitForTcpPort(port: number, timeoutMs: number): Promise<void> {

@@ -118,7 +118,7 @@ pub fn fetch_kubeconfig(guest_ip: IpAddr, handoff_port: u16, api_port: u16) -> R
 }
 
 /// Bidirectional byte pump for one proxied connection.
-fn pump(mut a: TcpStream, mut b: TcpStream) {
+pub(crate) fn pump(mut a: TcpStream, mut b: TcpStream) {
     let mut a2 = match a.try_clone() {
         Ok(s) => s,
         Err(_) => return,

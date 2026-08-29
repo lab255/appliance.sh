@@ -50,6 +50,7 @@ import {
   readEntitlementStore,
   stampEntitlementUsage,
 } from './utils/entitlements.js';
+import { engineRuntimeStatusBackend, runtimePsRows } from './utils/runtime-reconcile.js';
 
 export const RUNTIME_POOL_VM = 'appliance-runtime';
 
@@ -613,33 +614,14 @@ function runtimePs(args: string[]): void {
     return;
   }
   const json = args.includes('--json');
-  const kept: RuntimeRecord[] = [];
+  const rows = runtimePsRows(readRuntimeRegistry(), engineRuntimeStatusBackend);
+  const kept = rows.map((row) => row.record);
   const statuses = new Map<string, RuntimeAppStatus>();
-  for (const record of readRuntimeRegistry()) {
-    const queried = runVmCapture(['runtime', 'status', record.poolVm, record.appId]);
-    if (queried.status !== 0) {
-      kept.push(record);
-      continue;
-    }
-    let status: RuntimeAppStatus;
-    try {
-      status = JSON.parse(queried.stdout) as RuntimeAppStatus;
-    } catch {
-      kept.push(record);
-      continue;
-    }
-    if (status.state === 'missing') continue;
-    const state = runtimeState(status.state) ?? record.state;
-    const updated: RuntimeRecord = {
-      ...record,
-      state,
-      exitCode: numberOrUndefined(status.exitCode) ?? record.exitCode,
-      updatedAt: new Date().toISOString(),
-    };
-    kept.push(updated);
-    statuses.set(record.appId, status);
+  for (const row of rows) {
+    if (row.status) statuses.set(row.record.appId, row.status as RuntimeAppStatus);
   }
-  // ps owns stale pruning: only entries the guest still recognizes survive.
+  // A pool restart deliberately does not auto-start apps. Preserve their
+  // allocations and report stopped until `runtime open` restarts one.
   writeRuntimeRegistry(kept);
   if (json) {
     console.log(
@@ -832,12 +814,6 @@ interface RuntimeAppStatus extends Record<string, unknown> {
   exitCode?: unknown;
   culprit?: unknown;
   services?: RuntimeServiceStatus[];
-}
-
-function runtimeState(value: unknown): RuntimeRecord['state'] | undefined {
-  return typeof value === 'string' && ['starting', 'running', 'degraded', 'stopped', 'exited', 'failed'].includes(value)
-    ? (value as RuntimeRecord['state'])
-    : undefined;
 }
 
 function optionValue(args: string[], name: string): string | undefined {
