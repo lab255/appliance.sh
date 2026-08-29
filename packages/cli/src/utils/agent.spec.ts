@@ -1,7 +1,20 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+
+const runVmMock = vi.hoisted(() => vi.fn<(_args: string[]) => number>());
+const homeState = vi.hoisted(() => ({ home: undefined as string | undefined }));
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, homedir: () => homeState.home ?? actual.homedir() };
+});
+vi.mock('./sandbox.js', async () => {
+  const actual = await vi.importActual<typeof import('./sandbox.js')>('./sandbox.js');
+  return { ...actual, runVm: runVmMock };
+});
+
 import {
   ANTHROPIC_HOST,
   ANTHROPIC_OAUTH_PLACEHOLDER,
@@ -16,6 +29,7 @@ import {
   codexAdapter,
   composeAutonomousCaptureLine,
   composeLaunchLine,
+  configureBroker,
   copilotAdapter,
   extractOAuthToken,
   installCommandFor,
@@ -28,13 +42,19 @@ import {
   tailLines,
   validateCopilotPat,
   wireValueForCred,
+  writeAgentKey,
 } from './agent.js';
+import { restrictWindowsAcl } from './fs-acl.js';
 
 const PROXY = 'http://192.168.64.1:5053';
 
 /** The api-key + oauth modes Claude Code declares, looked up by kind. */
 const apiKeyMode: AuthMode = resolveAuthMode(claudeCodeAdapter, 'api-key');
 const oauthMode: AuthMode = resolveAuthMode(claudeCodeAdapter, 'oauth');
+
+afterEach(() => {
+  homeState.home = undefined;
+});
 
 describe('claudeCodeAdapter', () => {
   it('injects on the single Anthropic apiHost and declares BOTH auth modes', () => {
@@ -249,20 +269,20 @@ describe('readAutonomousResultFromFiles (A6)', () => {
 });
 
 describe('printKeyHelperCommand', () => {
-  it('pins the absolute interpreter + a stable agent entry, ending in print-key --type <agent>', () => {
-    const cmd = printKeyHelperCommand('claude-code');
+  it('pins absolute executable/entry paths and returns literal argv on every platform', () => {
+    const argv = printKeyHelperCommand('claude-code');
     // The pinned helper carries the agent type so it reads that provider's store.
-    expect(cmd.endsWith("print-key --type 'claude-code'")).toBe(true);
-    // First quoted token is the absolute interpreter (execPath) —
-    // absolute in the host platform's own path style.
-    const firstQuoted = cmd.match(/^'([^']+)'/)?.[1];
-    expect(firstQuoted).toBe(process.execPath);
-    expect(path.isAbsolute(firstQuoted ?? '')).toBe(true);
+    expect(argv.slice(-3)).toEqual(['print-key', '--type', 'claude-code']);
+    expect(argv[0]).toBe(process.execPath);
+    expect(path.isAbsolute(argv[0])).toBe(true);
     // The node/interpreter path targets the runnable agent entry directly.
-    expect(cmd).toContain('appliance-agent.js');
+    expect(path.basename(argv[1])).toBe('appliance-agent.js');
+    expect(path.isAbsolute(argv[1])).toBe(true);
+    // No token has POSIX wrapper quotes: each is already one argv element.
+    expect(argv.every((token) => !(token.startsWith("'") && token.endsWith("'")))).toBe(true);
     // The type rides through per agent.
-    expect(printKeyHelperCommand('copilot').endsWith("print-key --type 'copilot'")).toBe(true);
-    expect(printKeyHelperCommand('codex').endsWith("print-key --type 'codex'")).toBe(true);
+    expect(printKeyHelperCommand('copilot').slice(-2)).toEqual(['--type', 'copilot']);
+    expect(printKeyHelperCommand('codex').slice(-2)).toEqual(['--type', 'codex']);
   });
 
   it('ignores a dispatcher-clobbered process.argv[1]', () => {
@@ -273,15 +293,29 @@ describe('printKeyHelperCommand', () => {
     const saved = process.argv;
     try {
       process.argv = [process.execPath, 'appliance-agent', 'print-key'];
-      const cmd = printKeyHelperCommand('claude-code');
+      const argv = printKeyHelperCommand('claude-code');
       // Not the bogus cwd-resolved literal.
-      expect(cmd).not.toContain(`'${path.resolve('appliance-agent')}'`);
+      expect(argv).not.toContain(path.resolve('appliance-agent'));
       // The stable, runnable entry instead.
-      expect(cmd).toContain('appliance-agent.js');
-      expect(cmd.endsWith("print-key --type 'claude-code'")).toBe(true);
+      expect(path.basename(argv[1])).toBe('appliance-agent.js');
+      expect(argv.slice(-3)).toEqual(['print-key', '--type', 'claude-code']);
     } finally {
       process.argv = saved;
     }
+  });
+
+  it('round-trips the argv array through configureBroker JSON without shell quoting', () => {
+    runVmMock.mockReset().mockReturnValue(0);
+    configureBroker('ap-194-test', claudeCodeAdapter, apiKeyMode);
+
+    expect(runVmMock).toHaveBeenCalledTimes(2);
+    const credsArgs = runVmMock.mock.calls[0][0];
+    const helperIndex = credsArgs.indexOf('--helper');
+    expect(helperIndex).toBeGreaterThan(0);
+    const persisted = JSON.parse(credsArgs[helperIndex + 1]) as string[];
+    expect(persisted).toEqual(printKeyHelperCommand('claude-code'));
+    expect(persisted.slice(-3)).toEqual(['print-key', '--type', 'claude-code']);
+    expect(credsArgs[helperIndex + 1].startsWith('[')).toBe(true);
   });
 });
 
@@ -335,6 +369,40 @@ describe('parseStoredCred (envelope back-compat + fail-closed)', () => {
     expect(parseStoredCred('{"kind":"api-key","value":""}')).toBeNull();
     // Empty / whitespace-only → null.
     expect(parseStoredCred('   ')).toBeNull();
+  });
+});
+
+describe('agent credential file permissions', () => {
+  it('restricts writeAgentKey output to the current user and leaves POSIX chmod semantics unchanged', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-agent-key-acl-'));
+    try {
+      if (process.platform === 'darwin') {
+        // writeAgentKey uses Keychain on macOS. Exercise the shared helper's
+        // POSIX no-op directly so this cross-platform test is never skipped.
+        const file = path.join(home, 'mode-check');
+        fs.writeFileSync(file, 'not-a-secret', { mode: 0o640 });
+        restrictWindowsAcl(file);
+        expect(fs.statSync(file).mode & 0o777).toBe(0o640);
+        return;
+      }
+
+      homeState.home = home;
+      writeAgentKey('acl-test', 'test-secret', 'api-key');
+      const file = path.join(home, '.appliance', 'agent', 'acl-test-cred');
+      expect(fs.existsSync(file)).toBe(true);
+
+      if (process.platform === 'win32') {
+        const listing = execFileSync('icacls', [file], { encoding: 'utf8', windowsHide: true });
+        const aclLines = listing.split(/\r?\n/).filter((line) => line.includes(':('));
+        const principal = execFileSync('whoami', [], { encoding: 'utf8', windowsHide: true }).trim();
+        expect(aclLines, listing).toHaveLength(1);
+        expect(aclLines[0]!.toLocaleLowerCase()).toContain(principal.toLocaleLowerCase());
+      } else {
+        expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
