@@ -204,7 +204,7 @@ fn path_for_state_comparison(path: &std::path::Path) -> std::path::PathBuf {
         let rendered = canonical.to_string_lossy();
         // Windows path identity is case-insensitive, and canonicalize may add
         // a verbatim prefix even when the persisted path did not have one.
-        return std::path::PathBuf::from(strip_verbatim(&rendered).to_lowercase());
+        std::path::PathBuf::from(strip_verbatim(&rendered).to_lowercase())
     }
     #[cfg(not(windows))]
     canonical

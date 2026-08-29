@@ -1040,28 +1040,40 @@ fn build_bootstrap(
     runtime_gateway: Option<std::net::Ipv4Addr>,
 ) -> Result<String> {
     let state_dir = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
-    build_bootstrap_with_state_dir(
+    build_bootstrap_with_inputs(
         spec,
+        BootstrapInputs {
+            k3s,
+            egress_ca_pem,
+            apiserver,
+            bootstrap_token,
+            runtime_repositories,
+            runtime_gateway,
+            state_dir: &state_dir,
+        },
+    )
+}
+
+struct BootstrapInputs<'a> {
+    k3s: Option<(&'a Path, &'static str)>,
+    egress_ca_pem: Option<&'a str>,
+    apiserver: Option<&'a crate::guest::ApiServerAssets>,
+    bootstrap_token: &'a str,
+    runtime_repositories: &'a [crate::images::RuntimeApkRepository],
+    runtime_gateway: Option<std::net::Ipv4Addr>,
+    state_dir: &'a Path,
+}
+
+fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Result<String> {
+    let BootstrapInputs {
         k3s,
         egress_ca_pem,
         apiserver,
         bootstrap_token,
         runtime_repositories,
         runtime_gateway,
-        &state_dir,
-    )
-}
-
-fn build_bootstrap_with_state_dir(
-    spec: &VmSpec,
-    k3s: Option<(&Path, &'static str)>,
-    egress_ca_pem: Option<&str>,
-    apiserver: Option<&crate::guest::ApiServerAssets>,
-    bootstrap_token: &str,
-    runtime_repositories: &[crate::images::RuntimeApkRepository],
-    runtime_gateway: Option<std::net::Ipv4Addr>,
-    state_dir: &Path,
-) -> Result<String> {
+        state_dir,
+    } = inputs;
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -1446,15 +1458,17 @@ mod tests {
         runtime_repositories: &[crate::images::RuntimeApkRepository],
         runtime_gateway: Option<std::net::Ipv4Addr>,
     ) -> Result<String> {
-        super::build_bootstrap_with_state_dir(
+        super::build_bootstrap_with_inputs(
             spec,
-            k3s,
-            egress_ca_pem,
-            apiserver,
-            bootstrap_token,
-            runtime_repositories,
-            runtime_gateway,
-            Path::new(r"C:\Users\appliance-test\.appliance\vm"),
+            BootstrapInputs {
+                k3s,
+                egress_ca_pem,
+                apiserver,
+                bootstrap_token,
+                runtime_repositories,
+                runtime_gateway,
+                state_dir: Path::new(r"C:\Users\appliance-test\.appliance\vm"),
+            },
         )
     }
 
