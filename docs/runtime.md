@@ -89,6 +89,9 @@ and TLS inspection is on. Each app has its own runtime principal, payload,
 process controls, policy, state, and logs; compound services share the app's
 network principal.
 
+Payload integrity is verified on every open; WSL drvfs retains a TOCTOU
+residual because Windows can mutate payload bytes after verification.
+
 ## Desktop screens
 
 **Installed Apps.** This screen lists apps for the selected workspace with

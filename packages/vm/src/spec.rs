@@ -117,8 +117,9 @@ pub struct VmSpec {
     /// default and absent from legacy specs (which parse to `vec![]`).
     #[serde(default)]
     pub published: Vec<PublishedPort>,
-    /// Boot-configured per-app VirtioFS exports. VZ devices cannot be
-    /// hot-added, so changes require a pool restart.
+    /// Per-app Runtime payload grants. VZ materializes them as boot-configured
+    /// VirtioFS devices (changes require a pool restart); WSL retains them as
+    /// validation metadata and mounts drvfs payloads on demand.
     #[serde(default)]
     pub runtime_mounts: Vec<RuntimeMount>,
     /// How the guest NIC attaches to the host. Defaults to `Nat`
