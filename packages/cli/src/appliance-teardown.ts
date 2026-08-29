@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { runTeardown, type BootstrapEvent } from '@appliance.sh/bootstrap';
 import { createAwsCloudLifecycleDependencies, runCloudTeardown } from '@appliance.sh/install-aws';
 import { getActiveProfileOverride } from './utils/credentials.js';
-import { resolveProfileSecret } from './utils/keychain.js';
+import { resolveProfileSecret } from './utils/credential-store.js';
 import { readProfiles, resolveProfile } from './utils/profile-store.js';
 
 const program = new Command();

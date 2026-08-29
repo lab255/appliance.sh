@@ -2,10 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   chooseCredential,
   classifySecurityExit,
-  keychainAccountFor,
   parseKeychainPayload,
   type KeychainApiKey,
-} from './keychain.js';
+} from './credential-store.js';
 
 describe('chooseCredential', () => {
   const fileCopy = { keyId: 'file-key', secret: 'file-secret' };
@@ -52,23 +51,6 @@ describe('classifySecurityExit', () => {
     expect(classifySecurityExit(128)).toBe('unreadable');
     expect(classifySecurityExit(null)).toBe('unreadable'); // killed / no status
     expect(classifySecurityExit(undefined)).toBe('unreadable'); // spawn failure
-  });
-});
-
-describe('keychainAccountFor', () => {
-  it('never targets the Keychain for CLI-managed profiles', () => {
-    // True on every platform: login / bootstrap / microVM secrets live in profiles.json.
-    expect(keychainAccountFor('prod', { managed: 'cli' })).toBeNull();
-    expect(keychainAccountFor('prod', { managed: undefined })).toBeNull();
-  });
-
-  it('maps a desktop-managed profile to cluster:<id> on macOS, and null elsewhere', () => {
-    const account = keychainAccountFor('abc-123', { managed: 'desktop' });
-    if (process.platform === 'darwin') {
-      expect(account).toBe('cluster:abc-123');
-    } else {
-      expect(account).toBeNull();
-    }
   });
 });
 

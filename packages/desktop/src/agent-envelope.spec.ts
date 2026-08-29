@@ -17,17 +17,15 @@ import { describe, expect, it } from 'vitest';
 //             packages/cli/src/utils/agent.ts (the `appliance agent login`
 //             path + the print-key reader).
 //
-// Both write the SAME Keychain item (`sh.appliance.agent`, account = the
-// agent's PROVIDER) — or the SAME `<provider>-cred` 0600 file off-macOS —
-// holding the SAME `{"kind","value"}` JSON envelope, with the SAME kind strings
+// Both call the SAME neutral store boundary, which selects Keychain on macOS,
+// Credential Manager on Windows, or `<provider>-cred` on Linux, holding the
+// SAME `{"kind","value"}` JSON envelope with the SAME kind strings
 // (`api-key` / `oauth` / `pat`). The per-provider store keys (claude-code →
 // anthropic, copilot → github-copilot, codex → openai) MUST also agree.
 //
-// This is a TS-only test: it (1) round-trips the envelope shape both producers
-// emit and (2) cross-checks the two SOURCE files so either side drifting fails
-// the build. A true end-to-end cross-language test would need a VM/Keychain
-// fixture (packages/vm) — out of scope here — so the Rust-parity expectation is
-// asserted against the Rust source text and documented above.
+// The Rust unit suite reads the shared golden vectors directly. This TS test
+// checks the same vectors and guards that both thin callers still route through
+// the neutral store rather than reintroducing platform-specific persistence.
 // ============================================================
 
 /** The canonical envelope + per-provider store contract. Both producers + the
@@ -40,8 +38,6 @@ const CONTRACT = {
     copilot: 'github-copilot',
     codex: 'openai',
   } as Record<string, string>,
-  /** off-macOS 0600 file is `<provider>-cred`. */
-  offMacSuffix: '-cred',
   kinds: ['api-key', 'oauth', 'pat'] as const,
   envelopeKeys: ['kind', 'value'] as const,
 };
@@ -52,9 +48,8 @@ interface StoredCred {
   value: string;
 }
 
-/** Build the envelope exactly as BOTH producers do — the Rust side uses
- *  `serde_json::json!({ "kind": kind, "value": value })` and the TS side uses
- *  `JSON.stringify({ kind, value })`; both serialize the same two-key object. */
+/** Build the envelope exactly as both central encoders do. Rust uses an ordered
+ * struct and TS uses an object literal with `kind` before `value`. */
 function buildEnvelope(kind: AgentAuthKind, value: string): string {
   return JSON.stringify({ kind, value });
 }
@@ -84,6 +79,11 @@ function parseStoredCredMirror(raw: string): StoredCred | null {
 const here = dirname(fileURLToPath(import.meta.url));
 const RUST_SRC = readFileSync(resolve(here, '../src-tauri/src/lib.rs'), 'utf-8');
 const CLI_SRC = readFileSync(resolve(here, '../../cli/src/utils/agent.ts'), 'utf-8');
+const CREDENTIAL_STORE_SRC = readFileSync(resolve(here, '../../cli/src/utils/credential-store.ts'), 'utf-8');
+const KEYRING_STORE_SRC = readFileSync(resolve(here, '../../credential-store/src/keyring_store.rs'), 'utf-8');
+const ENVELOPE_VECTORS = JSON.parse(
+  readFileSync(resolve(here, '../../credential-store/testdata/envelope-vectors.json'), 'utf-8')
+) as Array<{ kind: AgentAuthKind | 'control'; value: string; encoded: string }>;
 // The desktop UI's adapter registry is a THIRD producer of the type→provider
 // map (+ the github_pat_/ghp_ prefixes + the mirrored validateCopilotPat /
 // looksLikeOpenAiKey). It can't import the CLI module (node built-ins) so it
@@ -141,6 +141,12 @@ describe('agent-credential envelope round-trip', () => {
     }
   });
 
+  it('matches every checked-in cross-language golden vector byte-for-byte', () => {
+    for (const vector of ENVELOPE_VECTORS) {
+      expect(buildEnvelope(vector.kind as AgentAuthKind, vector.value)).toBe(vector.encoded);
+    }
+  });
+
   it('reads a legacy bare string as an api-key (back-compat)', () => {
     expect(parseStoredCredMirror('sk-ant-api03-legacy')).toEqual({
       kind: 'api-key',
@@ -157,12 +163,18 @@ describe('agent-credential envelope round-trip', () => {
 });
 
 describe('Rust producer parity (packages/desktop/src-tauri/src/lib.rs)', () => {
-  it('declares the canonical Keychain service', () => {
-    expect(RUST_SRC).toContain(`const AGENT_KEYCHAIN_SERVICE: &str = "${CONTRACT.keychainService}";`);
+  it('uses the neutral store that declares the canonical service', () => {
+    expect(RUST_SRC).toMatch(
+      /desktop_credential_store\(\)\s*\.put\(&agent_store_key\(provider\)\?, envelope\.as_bytes\(\)\)/
+    );
+    expect(RUST_SRC).toMatch(/fn agent_store_key\([^)]*\)[^{]*\{\s*StoreKey::agent\(encode_identifier\(provider\)\)/);
+    expect(KEYRING_STORE_SRC).toMatch(/StoreKey::Agent\(provider\)\s*=>\s*\(AGENT_SERVICE,/);
+    expect(KEYRING_STORE_SRC).toContain(`const AGENT_SERVICE: &str = "${CONTRACT.keychainService}";`);
   });
 
-  it('emits the `{kind,value}` envelope', () => {
-    expect(RUST_SRC).toContain('serde_json::json!({ "kind": kind, "value": value })');
+  it('emits the ordered `{kind,value}` envelope once', () => {
+    expect(RUST_SRC).toContain("struct AgentCredentialEnvelope<'a>");
+    expect(RUST_SRC).toContain('serde_json::to_string(&AgentCredentialEnvelope { kind, value })');
   });
 
   it('maps every agent type to its provider store key', () => {
@@ -171,8 +183,10 @@ describe('Rust producer parity (packages/desktop/src-tauri/src/lib.rs)', () => {
     expect(RUST_SRC).toContain('"codex" => Some("openai")');
   });
 
-  it('uses the per-provider off-macOS store file', () => {
-    expect(RUST_SRC).toContain('.join(format!("{provider}-cred"))');
+  it('encodes the provider at the typed store boundary without duplicate platform stores', () => {
+    expect(RUST_SRC).toContain('StoreKey::agent(encode_identifier(provider))');
+    expect(RUST_SRC).not.toContain('/usr/bin/security');
+    expect(RUST_SRC).not.toContain('.join(format!("{provider}-cred"))');
   });
 
   it('accepts all contract kinds when parsing', () => {
@@ -181,12 +195,14 @@ describe('Rust producer parity (packages/desktop/src-tauri/src/lib.rs)', () => {
 });
 
 describe('TS producer/parser parity (packages/cli/src/utils/agent.ts)', () => {
-  it('declares the canonical Keychain service', () => {
-    expect(CLI_SRC).toContain(`const AGENT_KEYCHAIN_SERVICE = '${CONTRACT.keychainService}';`);
+  it('uses the central store that declares the canonical service', () => {
+    expect(CLI_SRC).toContain("from './credential-store.js'");
+    expect(CREDENTIAL_STORE_SRC).toContain(`export const AGENT_KEYCHAIN_SERVICE = '${CONTRACT.keychainService}';`);
   });
 
-  it('writes the `{kind,value}` envelope', () => {
-    expect(CLI_SRC).toContain('JSON.stringify({ kind, value: secret }');
+  it('delegates the `{kind,value}` envelope to the central encoder', () => {
+    expect(CLI_SRC).toContain('writeAgentCredential(provider, { kind, value: secret }, options)');
+    expect(CREDENTIAL_STORE_SRC).toContain('JSON.stringify({ kind: credential.kind, value: credential.value })');
   });
 
   it('declares exactly the contract kinds', () => {
@@ -194,11 +210,16 @@ describe('TS producer/parser parity (packages/cli/src/utils/agent.ts)', () => {
   });
 
   it('accepts all contract kinds when parsing', () => {
-    expect(CLI_SRC).toContain(`(kind === 'api-key' || kind === 'oauth' || kind === 'pat') && value`);
+    expect(CREDENTIAL_STORE_SRC).toContain(
+      "parsed.kind === 'api-key' || parsed.kind === 'oauth' || parsed.kind === 'pat'"
+    );
   });
 
-  it('uses the per-provider off-macOS store file', () => {
-    expect(CLI_SRC).toContain('`${provider}-cred`');
+  it('encodes providers at one boundary and keeps Linux file policy private', () => {
+    expect(CREDENTIAL_STORE_SRC).toContain("encodedTarget('agent', provider)");
+    expect(CREDENTIAL_STORE_SRC).toContain('`${target.identifier}-cred`');
+    expect(CLI_SRC).not.toContain('/usr/bin/security');
+    expect(CLI_SRC).not.toContain('`${provider}-cred`');
   });
 
   it('maps every agent type to its provider store key', () => {

@@ -26,7 +26,7 @@ mod file;
 mod keyring_store;
 
 #[cfg(feature = "file")]
-pub use file::AclFileStore;
+pub use file::{restrict_to_current_user, AclFileStore};
 #[cfg(feature = "keyring")]
 pub use keyring_store::KeyringStore;
 

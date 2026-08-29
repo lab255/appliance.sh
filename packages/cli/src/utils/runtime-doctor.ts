@@ -5,12 +5,12 @@ import { createApplianceClient, VERSION } from '@appliance.sh/sdk';
 import { apiServerUrlForHostPort, IN_CLUSTER_API_SERVER_HOSTNAME, mintApiKey } from '@appliance.sh/helper';
 import { readProfiles, removeProfile, upsertProfile, type Profile } from './profile-store.js';
 import {
+  type CredentialMigrationConflict,
+  type ProfileCredentialProbe,
+  probeProfileCredential,
+  readCredentialMigrationConflicts,
   resolveProfileSecret,
-  keychainAccountFor,
-  probeKeychainApiKey,
-  writeKeychainApiKey,
-  deleteKeychainApiKey,
-} from './keychain.js';
+} from './credential-store.js';
 import { DEFAULT_VM_NAME, LEGACY_MICROVM_PROFILE, profileForVm, resolveVmBinary, vmDir } from './microvm-up.js';
 import { guestAssetsDir } from './api-server-artifact.js';
 
@@ -491,46 +491,76 @@ export function compareVersionStamp(
 
 // ---- (f) profiles ↔ Keychain coherence (pure) -------------------------------
 
-export type KeychainProbe =
-  | { kind: 'not-applicable' }
-  | { kind: 'missing' }
-  | { kind: 'unreadable' }
-  | { kind: 'found'; keyId: string };
+export type KeychainProbe = ProfileCredentialProbe;
 
 /**
- * Coherence between profiles.json metadata and the macOS Keychain for a
- * desktop-managed profile (check f). Policy (docs at keychain.ts /
- * desktop lib.rs): desktop-managed ⇒ Keychain canonical + EMPTY secret
- * on disk; CLI-managed ⇒ profiles.json canonical. Returns null when the
- * check doesn't apply (non-mac, CLI-managed).
+ * Coherence between profiles.json metadata and the platform credential store
+ * (check f). Windows applies this to every profile; macOS applies it only to
+ * desktop-managed profiles. Linux and macOS CLI-managed profiles return null.
  */
 export function classifyKeychainCoherence(
   profileName: string,
   profile: Pick<Profile, 'keyId' | 'secret'>,
   probe: KeychainProbe
 ): RuntimeFinding | null {
-  if (probe.kind === 'not-applicable') return null;
+  if (probe.state === 'not-applicable') return null;
   const id = `keychain:${profileName}`;
-  const title = `Keychain ↔ profiles.json ('${profileName}')`;
+  const title = `Credential store ↔ profiles.json ('${profileName}')`;
   const fileSecret = profile.secret.length > 0;
-  if (probe.kind === 'unreadable') {
+  if (probe.state === 'denied') {
     return {
       id,
       title,
       severity: 'info',
-      detail: 'Keychain entry unreadable (macOS denied access — common for dev-signed binaries); coherence unknown',
+      detail: 'denied: the OS credential store could not be read; coherence is unknown',
     };
   }
-  if (probe.kind === 'missing') {
+  if (probe.state === 'helper-missing') {
+    return {
+      id,
+      title,
+      severity: 'fail',
+      detail: 'helper-missing: the packaged Windows credential helper is not installed beside the CLI',
+      remediation:
+        'Reinstall the packaged Appliance CLI; credential access is supported only in the packaged sibling layout.',
+    };
+  }
+  if (probe.state === 'malformed') {
+    return {
+      id,
+      title,
+      severity: 'fail',
+      detail: 'malformed: the OS credential-store value is not a valid Appliance cluster credential',
+      remediation: 'Re-login to replace it; Windows will not fall back to a cleartext file.',
+    };
+  }
+  if (probe.state === 'conflict') {
+    return {
+      id,
+      title,
+      severity: 'fail',
+      detail: `conflict: the OS store holds key ${probe.keyId}, but the legacy file holds different bytes`,
+      remediation:
+        'Re-login to choose the canonical credential; both copies were preserved and neither was overwritten.',
+    };
+  }
+  if (probe.state === 'legacy-name') {
+    return {
+      id,
+      title,
+      severity: 'warn',
+      detail: `legacy-name: the Keychain credential for key ${probe.keyId} still uses the unencoded profile name`,
+      remediation: 'Run an authenticated command to migrate it to the canonical encoded Keychain account.',
+    };
+  }
+  if (probe.state === 'missing') {
     if (fileSecret) {
       return {
         id,
         title,
         severity: 'warn',
-        detail:
-          'desktop-managed profile has no Keychain entry, but profiles.json still carries a secret (a CLI write that could not reach the Keychain)',
-        remediation:
-          'Run `appliance doctor --fix` to write the secret back to the Keychain (the desktop converges on its next sync).',
+        detail: 'missing: the OS credential entry is absent while profiles.json still carries a legacy secret',
+        remediation: 'Run `appliance doctor --fix` to retry verified migration, or re-login if migration fails.',
         fix: { kind: 'keychain-writeback' },
       };
     }
@@ -538,13 +568,12 @@ export function classifyKeychainCoherence(
       id,
       title,
       severity: 'fail',
-      detail:
-        'desktop-managed profile: Keychain entry missing AND the on-disk secret is empty — this device holds no usable secret',
+      detail: 'missing: the OS credential entry and the on-disk secret are both absent; no usable secret remains',
       remediation:
         'Open the desktop app (its cluster sync re-writes the Keychain), or re-mint: `appliance doctor --fix` / `appliance vm up`.',
     };
   }
-  // Keychain entry found.
+  // OS credential entry found and structurally valid (`migrated`).
   if (fileSecret) {
     if (probe.keyId !== profile.keyId) {
       // File fresher (chooseCredential's rule): a CLI rotate that
@@ -562,9 +591,8 @@ export function classifyKeychainCoherence(
       id,
       title,
       severity: 'warn',
-      detail:
-        'desktop-managed profile carries a cleartext secret in profiles.json (policy: Keychain canonical + empty file secret on macOS)',
-      remediation: 'Harmless but non-canonical; the desktop clears it on its next sync.',
+      detail: 'migrated: the OS store and profiles.json agree, but the verified cleartext scrub has not completed yet',
+      remediation: 'Run an authenticated command to retry the idempotent scrub migration.',
     };
   }
   if (probe.keyId !== profile.keyId) {
@@ -577,7 +605,18 @@ export function classifyKeychainCoherence(
         'Usually self-heals via the desktop sync; if the CLI misbehaves, re-select the cluster in the desktop app.',
     };
   }
-  return { id, title, severity: 'ok', detail: `Keychain entry present and matches keyId ${profile.keyId}` };
+  return { id, title, severity: 'ok', detail: `migrated: OS credential entry matches keyId ${profile.keyId}` };
+}
+
+export function classifyCredentialMigrationConflict(conflict: CredentialMigrationConflict): RuntimeFinding {
+  const fileList = conflict.files.map((file) => `'${file}'`).join(' or ');
+  return {
+    id: `credential-migration:${conflict.key}`,
+    title: `Credential migration conflict (${conflict.key})`,
+    severity: 'fail',
+    detail: `Credential Manager and the legacy owner-only file differ; both copies were preserved at ${fileList}`,
+    remediation: `Choose the authoritative credential. To keep Credential Manager, remove the conflicting legacy file exactly at ${fileList}, then re-run \`appliance doctor\`.`,
+  };
 }
 
 // ---- bootstrap token ---------------------------------------------------------
@@ -641,17 +680,7 @@ function readGuestStamp(): string | null {
 }
 
 function probeKeychain(profileName: string, profile: Profile): KeychainProbe {
-  const account = keychainAccountFor(profileName, profile);
-  if (!account) return { kind: 'not-applicable' };
-  // probeKeychainApiKey splits the failure modes on the `security` exit
-  // code: 44 (errSecItemNotFound) = the entry really is missing; any
-  // other failure (ACL denial on dev-signed binaries, auth failure) =
-  // unreadable, which the classifier downgrades to info — a healthy
-  // desktop-managed profile must not FAIL doctor just because macOS
-  // declined to answer.
-  const probe = probeKeychainApiKey(account);
-  if (probe.state === 'present') return { kind: 'found', keyId: probe.key.keyId };
-  return probe.state === 'missing' ? { kind: 'missing' } : { kind: 'unreadable' };
+  return probeProfileCredential(profileName, profile);
 }
 
 interface IngressProbe {
@@ -732,8 +761,7 @@ export function softenMissingDefaultVm(
 /** Resolve the credential profile the target VM's clients use: the VM's
  *  own profile, falling back (default VM only) to the legacy `microvm`
  *  profile pre-cutover installs still carry. */
-export function resolveVmProfile(vm: string): { name: string; profile: Profile } | null {
-  const file = readProfiles();
+export function resolveVmProfile(vm: string, file = readProfiles()): { name: string; profile: Profile } | null {
   const primary = profileForVm(vm);
   if (file.profiles[primary]) return { name: primary, profile: file.profiles[primary] };
   if (vm === DEFAULT_VM_NAME && file.profiles[LEGACY_MICROVM_PROFILE]) {
@@ -770,7 +798,10 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   //    fixes (orphan removal, stale-port rewrite) mutate the profile
   //    store and the Keychain, so they run ONLY under --fix.
   const listing = engineList();
-  const profilesFile = readProfiles();
+  // A plain doctor is read-only. Keep legacy fields visible so the coherence
+  // probe can report missing/conflict/migrated before any scrub occurs.
+  const profilesFile = readProfiles({ migrateCredentials: false });
+  findings.push(...readCredentialMigrationConflicts().map(classifyCredentialMigrationConflict));
   for (const [name, profile] of Object.entries(profilesFile.profiles)) {
     const binding = classifyProfileBinding(name, profile.apiUrl, listing);
     const bindingFinding = await renderBindingFinding(name, profile, binding, {
@@ -781,7 +812,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   }
 
   // 3. Key liveness for the target VM's profile (check b).
-  const resolved = resolveVmProfile(vm);
+  const resolved = resolveVmProfile(vm, profilesFile);
   const tokenPresent = fs.existsSync(bootstrapTokenPath(vm));
   let serverVersion: string | null = null;
   if (!resolved) {
@@ -796,16 +827,31 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
       remediation: 'Run `appliance vm up` — it adopts or mints the VM credential profile.',
     });
   } else {
-    const { keyId, secret } = resolveProfileSecret(resolved.name, resolved.profile);
-    if (!keyId || !secret) {
+    let credential: { keyId: string; secret: string } | null = null;
+    let credentialError: unknown;
+    try {
+      credential = resolveProfileSecret(resolved.name, resolved.profile);
+    } catch (cause) {
+      credentialError = cause;
+    }
+    if (credentialError) {
+      findings.push({
+        id: 'runtime:api-key',
+        title: 'API key accepted by the api-server',
+        severity: 'fail',
+        detail: `credential store unavailable: ${credentialError instanceof Error ? credentialError.message : String(credentialError)}`,
+        remediation: 'Restore the bundled credential helper/store access, then re-run `appliance doctor`.',
+      });
+    } else if (!credential?.keyId || !credential.secret) {
       findings.push({
         id: 'runtime:api-key',
         title: 'API key accepted by the api-server',
         severity: 'warn',
-        detail: `profile '${resolved.name}' has no usable credential (keyId/secret empty or Keychain unavailable)`,
+        detail: `profile '${resolved.name}' has no usable credential (keyId/secret empty or credential store unavailable)`,
         remediation: 'Run `appliance vm up` to re-adopt or mint credentials.',
       });
     } else {
+      const { keyId, secret } = credential;
       const apiUrl = resolved.profile.apiUrl;
       const bootstrapReachable = await probeBootstrapReachable(apiUrl);
       const signed = bootstrapReachable
@@ -921,13 +967,11 @@ export async function renderBindingFinding(
       if (ctx.autoFix) {
         const label = `remove orphan profile '${profileName}'`;
         try {
-          const account = keychainAccountFor(profileName, profile);
           if (removeProfile(profileName)) {
-            const keychainNote = account && deleteKeychainApiKey(account) ? ' + its Keychain entry' : '';
             ctx.fixes.push({
               label,
               status: 'fixed',
-              detail: `VM '${binding.vmName}' no longer exists — pruned the profile${keychainNote} (the desktop converges via its own sync)`,
+              detail: `VM '${binding.vmName}' no longer exists — pruned the profile and its typed credential entry`,
             });
             return {
               id,
@@ -1067,35 +1111,40 @@ async function applyRemintFix(
   }
 }
 
-/** `--fix` for Keychain desync where profiles.json holds the fresher
- *  secret: write it back to the desktop's Keychain entry. The file copy
- *  is left in place — clearing it is the desktop's own convergence. */
+/** `--fix` for credential-store desync where profiles.json holds the fresher
+ * secret: write, verify, and let the central profile store scrub where the OS
+ * credential store is canonical. */
 function applyKeychainWriteback(
   profileName: string,
   profile: Profile,
   finding: RuntimeFinding,
   fixes: RuntimeFixOutcome[]
 ): RuntimeFinding {
-  const label = `write '${profileName}' secret back to the Keychain`;
-  const account = keychainAccountFor(profileName, profile);
-  if (!account || !profile.keyId || !profile.secret) {
-    fixes.push({ label, status: 'skipped', detail: 'no Keychain account or no on-disk secret to write' });
+  const label = `write '${profileName}' secret back to the credential store`;
+  if (!profile.keyId || !profile.secret) {
+    fixes.push({ label, status: 'skipped', detail: 'no on-disk secret to migrate' });
     return finding;
   }
-  if (writeKeychainApiKey(account, { keyId: profile.keyId, secret: profile.secret })) {
-    fixes.push({ label, status: 'fixed', detail: `Keychain account ${account} now carries key ${profile.keyId}` });
-    return {
-      ...finding,
-      severity: 'ok',
-      detail: `Keychain entry rewritten from the fresher profiles.json copy (key ${profile.keyId})`,
-      remediation: undefined,
-      fix: { kind: 'keychain-writeback', applied: true },
-    };
+  try {
+    const result = upsertProfile(profileName, profile, { makeActive: false });
+    if (!result.credentialWriteFailed) {
+      fixes.push({ label, status: 'fixed', detail: `OS credential store now carries key ${profile.keyId}` });
+      return {
+        ...finding,
+        severity: 'ok',
+        detail: `Credential-store entry rewritten and verified from profiles.json (key ${profile.keyId})`,
+        remediation: undefined,
+        fix: { kind: 'keychain-writeback', applied: true },
+      };
+    }
+  } catch (cause) {
+    fixes.push({ label, status: 'failed', detail: cause instanceof Error ? cause.message : String(cause) });
+    return finding;
   }
   fixes.push({
     label,
     status: 'failed',
-    detail: '`security add-generic-password -U` failed (macOS may have denied access)',
+    detail: 'the OS credential store denied the write',
   });
   return finding;
 }

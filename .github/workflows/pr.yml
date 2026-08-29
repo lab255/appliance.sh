@@ -38,8 +38,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Test credential store Rust (Linux file backend)
+        run: cargo test --manifest-path packages/credential-store/Cargo.toml
       # The TypeScript half of the `pnpm verify` green bar. The Rust half
       # runs on macOS in verify-rust below, where packages/vm is developed
       # and the Virtualization.framework backend compiles.
@@ -193,8 +197,8 @@ jobs:
           New-Item -ItemType File -Force packages/desktop/src-tauri/binaries/appliance-x86_64-pc-windows-msvc.exe | Out-Null
           New-Item -ItemType File -Force packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe | Out-Null
           New-Item -ItemType File -Force packages/desktop/src-tauri/vm-bin/appliance-vm.exe | Out-Null
-      - name: Check desktop Rust
-        run: cargo check --manifest-path packages/desktop/src-tauri/Cargo.toml
+      - name: Test desktop Rust
+        run: cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml --lib -- credential
       - name: Test credential store Rust
         run: >-
           cargo test --manifest-path packages/credential-store/Cargo.toml

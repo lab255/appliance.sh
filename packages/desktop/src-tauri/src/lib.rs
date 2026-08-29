@@ -1,5 +1,10 @@
 mod terminal;
 
+#[cfg(not(any(windows, target_os = "macos")))]
+use appliance_credential_store::AclFileStore;
+#[cfg(any(windows, target_os = "macos"))]
+use appliance_credential_store::KeyringStore;
+use appliance_credential_store::{encode_identifier, CredentialStore, StoreError, StoreKey};
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead as _, Write as _};
@@ -18,11 +23,14 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 // Keychain service is shared across all Appliance Desktop installs on
-// the machine. Each cluster's API key lives at account
-// `cluster:<uuid>`. The legacy single-cluster account (`api-key`) is
-// migrated to the new layout on first launch and then removed.
+// the machine. Desktop-managed keys use `cluster:<uuid>`; adopted CLI keys use
+// `cluster:<profile-name>`. Free-form identifiers are encoded by the neutral
+// store boundary. The legacy single-cluster account (`api-key`) is migrated to
+// the typed layout on first launch and then removed.
 const KEYCHAIN_SERVICE: &str = "sh.appliance.desktop";
 const LEGACY_KEYCHAIN_ACCOUNT: &str = "api-key";
+#[cfg(windows)]
+const CREDENTIAL_STORE_SCHEMA: &str = "appliance.credential-store/v1";
 const CONFIG_FILE: &str = "config.json";
 
 #[tauri::command]
@@ -46,8 +54,8 @@ enum HostError {
     Io(#[from] std::io::Error),
     #[error("config serialize: {0}")]
     Serde(#[from] serde_json::Error),
-    #[error("keychain: {0}")]
-    Keyring(#[from] keyring::Error),
+    #[error("credential store: {0}")]
+    CredentialStore(#[from] StoreError),
     #[error("tauri: {0}")]
     Tauri(#[from] tauri::Error),
     #[error("cluster not found: {0}")]
@@ -60,7 +68,7 @@ impl serde::Serialize for HostError {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 struct ApiKey {
     id: String,
     secret: String,
@@ -169,25 +177,24 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, HostError> {
 // ============================================================
 // Shared profile store: ~/.appliance/profiles.json
 //
-// CREDENTIAL MODEL (E4.4, Keychain-first — see docs/control-plane.md §5):
+// CREDENTIAL MODEL (see docs/rfc/windows-credential-posture.md):
 //   * macOS: the OS Keychain (account `cluster:<id>`) is the CANONICAL
 //     store for each desktop-managed cluster's secret. profiles.json
 //     carries only metadata (apiUrl, keyId, name, …) with an EMPTY
 //     secret, and the CLI reads the secret back from the Keychain. The
 //     secret is therefore never duplicated to cleartext on disk.
-//   * non-macOS (Linux/cloud/CI): profiles.json (mode 0600) is the
-//     canonical store, since the CLI cannot read libsecret/DPAPI. The
-//     desktop dual-writes the secret to the file there, as before.
+//   * Windows: Credential Manager is canonical for every profile; file
+//     entries retain metadata and an empty secret after verified migration.
+//   * Linux/cloud/CI: profiles.json (mode 0600) remains canonical.
 //
 // The desktop runs in DUAL-MODE persistence:
-//   1. The OS keychain holds each cluster's API key secret (account
-//      `cluster:<id>`). The canonical secret store on macOS.
+//   1. The OS credential store holds each desktop cluster's API key secret
+//      (account `cluster:<id>`). It is canonical on macOS and Windows.
 //   2. The legacy <app-config>/config.json holds cluster metadata
 //      (name, URL, createdAt, etc.) — kept as a mirror so a downgrade
 //      to the previous desktop binary remains non-destructive.
-//   3. ~/.appliance/profiles.json mirrors metadata (and, on non-macOS,
-//      the secret) in a format the CLI reads directly. Updated on every
-//      persisted write so the CLI sees the same clusters the desktop sees.
+//   3. ~/.appliance/profiles.json mirrors metadata (and the secret only where
+//      the file remains canonical) in a format the CLI reads directly.
 //
 // Reads prefer the legacy file when it has clusters; otherwise the
 // shared file is ingested into the legacy stores so the rest of the
@@ -231,6 +238,14 @@ struct SharedProfileEntry {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct CredentialStoreHint {
+    schema: String,
+    #[serde(default)]
+    profiles: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct SharedProfilesFile {
     #[serde(default = "shared_profiles_version")]
     version: u32,
@@ -238,6 +253,9 @@ struct SharedProfilesFile {
     active_profile: Option<String>,
     #[serde(default)]
     profiles: BTreeMap<String, SharedProfileEntry>,
+    /// Non-secret migration hint. Reconciliation never trusts this marker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    credential_store: Option<CredentialStoreHint>,
 }
 
 fn shared_profiles_version() -> u32 {
@@ -250,6 +268,7 @@ impl Default for SharedProfilesFile {
             version: 1,
             active_profile: None,
             profiles: BTreeMap::new(),
+            credential_store: None,
         }
     }
 }
@@ -1165,27 +1184,90 @@ fn write_shared_profiles(file: &SharedProfilesFile) -> Result<(), HostError> {
     Ok(())
 }
 
+#[cfg(windows)]
+struct CredentialMigrationLock {
+    path: PathBuf,
+}
+
+#[cfg(windows)]
+impl CredentialMigrationLock {
+    fn acquire() -> Result<Self, HostError> {
+        let home = home_dir().ok_or_else(|| {
+            StoreError::Internal("cannot resolve the current user's home directory".to_string())
+        })?;
+        let directory = home.join(SHARED_PROFILES_DIR);
+        fs::create_dir_all(&directory)?;
+        let path = directory.join("credential-store.lock");
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            match fs::create_dir(&path) {
+                Ok(()) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let stale = fs::metadata(&path)
+                        .and_then(|metadata| metadata.modified())
+                        .ok()
+                        .and_then(|modified| modified.elapsed().ok())
+                        .is_some_and(|age| age > Duration::from_secs(30));
+                    if stale && fs::remove_dir(&path).is_ok() {
+                        continue;
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        return Err(StoreError::Denied(
+                            "timed out acquiring the credential-store lock".to_string(),
+                        )
+                        .into());
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if let Err(error) = restrict_to_current_user(&path) {
+            let _ = fs::remove_dir(&path);
+            return Err(StoreError::Denied(error).into());
+        }
+        Ok(Self { path })
+    }
+}
+
+#[cfg(windows)]
+impl Drop for CredentialMigrationLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir(&self.path);
+    }
+}
+
 /// The secret to persist into the shared profiles.json for a
 /// desktop-managed cluster. On macOS the Keychain is canonical, so the
 /// file gets an EMPTY secret (the CLI reads it back from the Keychain) —
 /// the secret is never written to cleartext on disk. Elsewhere the file
 /// is canonical, so the secret is written through. Pure so the policy is
 /// unit-testable on any host.
-fn shared_secret_for_platform(secret: String, is_macos: bool) -> String {
-    if is_macos {
+fn shared_secret_for_platform(secret: String, uses_os_store: bool) -> String {
+    if uses_os_store {
         String::new()
     } else {
         secret
     }
 }
 
+fn vm_profile_uses_os_store(managed: Option<&str>) -> bool {
+    cfg!(windows) || (cfg!(target_os = "macos") && managed == Some("desktop"))
+}
+
+fn effective_vm_profile_managed(managed: Option<String>) -> String {
+    managed.unwrap_or_else(|| "desktop".to_string())
+}
+
 /// Reflect the current desktop-side state into the shared file. Reads
-/// each cluster's secret out of the keychain (for the key_id metadata,
-/// and the secret itself on non-macOS); clusters without a keychain
+/// each cluster's secret out of the OS store (for key_id metadata, and the
+/// secret itself on Linux); clusters without an OS-store
 /// secret get the entry left as-is from any prior write (defensive —
 /// partial state is more useful than a missing entry). CLI-managed
 /// entries (managed != "desktop") are preserved untouched.
 fn mirror_to_shared_profiles(cfg: &PersistedConfig) -> Result<(), HostError> {
+    #[cfg(windows)]
+    let _migration_lock = CredentialMigrationLock::acquire()?;
     let mut file = read_shared_profiles().unwrap_or_default();
     file.profiles
         .retain(|_, entry| entry.managed.as_deref() != Some("desktop"));
@@ -1215,7 +1297,10 @@ fn mirror_to_shared_profiles(cfg: &PersistedConfig) -> Result<(), HostError> {
             SharedProfileEntry {
                 api_url: cluster.api_server_url.clone(),
                 key_id,
-                secret: shared_secret_for_platform(secret_value, cfg!(target_os = "macos")),
+                secret: shared_secret_for_platform(
+                    secret_value,
+                    cfg!(any(target_os = "macos", target_os = "windows")),
+                ),
                 created_at: Some(cluster.created_at.clone()),
                 state_backend_url: cluster.state_backend_url.clone(),
                 last_bootstrap_input: cluster.last_bootstrap_input.clone(),
@@ -1233,28 +1318,26 @@ fn mirror_to_shared_profiles(cfg: &PersistedConfig) -> Result<(), HostError> {
 }
 
 // ============================================================
-// Non-macOS profile seed (non-destructive)
+// Legacy profile credential migration
 //
 // E4.4 settled the canonical store split (control-plane.md §5):
 //   * macOS  → the Keychain is canonical; the CLI reads it directly and
 //     the secret is NEVER copied to cleartext. The seed below is a no-op
 //     on macOS (see seed_profiles_from_keychain).
-//   * non-macOS → profiles.json (0600) is canonical, because the CLI
-//     cannot read libsecret/DPAPI. So on those platforms every secret
+//   * Linux → profiles.json (0600) is canonical. Every secret
 //     that currently lives ONLY in the keychain (desktop-managed
 //     clusters created before this change, where mirror_to_shared_profiles
 //     wrote metadata but an older build never copied the secret, or where
 //     the shared entry's secret was cleared) must be copied into
 //     profiles.json — otherwise the CLI would surface an empty secret and
 //     silently break the cluster.
+//   * Windows → Credential Manager is canonical for every profile. Existing
+//     file values are imported under the user-global migration lock, verified,
+//     and scrubbed; conflicts preserve both copies and require re-login.
 //
-// This is the SEED step. It is:
-//   * non-destructive — it only ever WRITES into profiles.json; it
-//     never deletes or overwrites a keychain entry, and never clears
-//     a secret;
-//   * authoritative-preserving — it refuses to overwrite a non-empty
-//     secret already in profiles.json;
-//   * idempotent — re-running it once everything is seeded is a no-op.
+// This step is authoritative-preserving and idempotent: Linux never
+// overwrites a non-empty file secret; Windows never overwrites an existing
+// store value and clears a file secret only after a verified match.
 // ============================================================
 
 /// Outcome of evaluating one cluster for the keychain→profiles.json
@@ -1346,62 +1429,124 @@ fn decide_seed(
     }
 }
 
-/// Stage-1 seed: for every desktop cluster whose secret currently
-/// exists ONLY in the keychain, copy it into profiles.json once. Reads
-/// each cluster's secret from the keychain and applies `decide_seed`.
+/// Reconcile legacy profile credentials with the platform's canonical store.
+/// Linux fills a missing file secret from the legacy keychain. Windows imports
+/// every shared profile into Credential Manager and scrubs verified file
+/// copies; the shared-map key is the cluster UUID for desktop-managed entries
+/// and the profile name otherwise.
 ///
 /// Returns the number of entries newly seeded (0 ⇒ nothing changed, so
 /// no write is needed). The shared file is only rewritten when at least
 /// one entry was seeded, keeping the steady-state path write-free.
 ///
-/// SAFETY: this only ADDS secrets to profiles.json — it never removes
-/// a keychain entry and never overwrites an existing non-empty shared
-/// secret, so no secret can be lost by running it. Hold `config_lock`
-/// across the call (as the sync path does) so the read-modify-write of
-/// profiles.json doesn't interleave with another desktop write.
+/// Hold `config_lock` across the call. On Windows the caller must additionally
+/// hold `CredentialMigrationLock` across the preceding profile ingestion and
+/// this import/verify/scrub operation.
 fn seed_profiles_from_keychain(cfg: &PersistedConfig) -> Result<usize, HostError> {
     // macOS keeps the Keychain canonical and the CLI reads it directly,
     // so there is nothing to seed into profiles.json — and seeding would
     // copy the secret to cleartext, the exact leak the Keychain-first
-    // model avoids. The seed stays active on non-macOS, where
-    // profiles.json is the canonical store (E4.4 / control-plane.md §5).
+    // model avoids. Linux keeps the old keychain-to-file seed; Windows uses
+    // the inverse import-and-scrub path below.
     if cfg!(target_os = "macos") {
         return Ok(0);
     }
-    let mut file = read_shared_profiles().unwrap_or_default();
-    let mut seeded = 0usize;
-    for cluster in &cfg.clusters {
-        let keychain_key = read_api_key(&cluster_keychain_account(&cluster.id));
-        let existing = file.profiles.get(&cluster.id);
-        match decide_seed(cluster, keychain_key.as_ref(), existing) {
-            SeedDecision::Seed { cluster_id, entry } => {
-                file.profiles.insert(cluster_id, entry);
-                seeded += 1;
+    #[cfg(windows)]
+    {
+        // Windows reverses the old non-macOS seed direction: Credential
+        // Manager is canonical for every profile. Import desktop entries,
+        // re-read exact logical values, and only then blank profiles.json.
+        let mut file = read_shared_profiles().unwrap_or_default();
+        let mut scrubbed = 0usize;
+        let _ = cfg;
+        let mut migration_states = BTreeMap::new();
+        for (profile_name, entry) in &mut file.profiles {
+            if entry.key_id.is_empty() || entry.secret.is_empty() {
+                continue;
             }
-            SeedDecision::AlreadySeeded | SeedDecision::NothingToSeed => {}
+            let legacy = ApiKey {
+                id: entry.key_id.clone(),
+                secret: entry.secret.clone(),
+            };
+            match read_api_key(&cluster_keychain_account(profile_name)) {
+                Some(canonical) if canonical != legacy => {
+                    eprintln!(
+                        "warn: credential migration conflict for profile '{}' — re-login required; both copies preserved",
+                        profile_name
+                    );
+                    migration_states.insert(profile_name.clone(), "conflict".to_string());
+                    continue;
+                }
+                Some(_) => {}
+                None => {
+                    write_api_key(&cluster_keychain_account(profile_name), &legacy)?;
+                    let verified = read_api_key(&cluster_keychain_account(profile_name));
+                    if verified.as_ref() != Some(&legacy) {
+                        return Err(StoreError::Internal(format!(
+                            "credential migration verification failed for profile {}",
+                            profile_name
+                        ))
+                        .into());
+                    }
+                }
+            }
+            entry.secret.clear();
+            migration_states.insert(profile_name.clone(), "migrated".to_string());
+            scrubbed += 1;
         }
+        if !migration_states.is_empty() {
+            let marker = file
+                .credential_store
+                .get_or_insert_with(|| CredentialStoreHint {
+                    schema: CREDENTIAL_STORE_SCHEMA.to_string(),
+                    profiles: BTreeMap::new(),
+                });
+            if marker.schema != CREDENTIAL_STORE_SCHEMA {
+                marker.schema = CREDENTIAL_STORE_SCHEMA.to_string();
+                marker.profiles.clear();
+            }
+            marker.profiles.extend(migration_states);
+            write_shared_profiles(&file)?;
+        }
+        return Ok(scrubbed);
     }
-    if seeded > 0 {
-        write_shared_profiles(&file)?;
+    #[cfg(not(windows))]
+    {
+        let mut file = read_shared_profiles().unwrap_or_default();
+        let mut seeded = 0usize;
+        for cluster in &cfg.clusters {
+            let keychain_key = read_api_key(&cluster_keychain_account(&cluster.id));
+            let existing = file.profiles.get(&cluster.id);
+            match decide_seed(cluster, keychain_key.as_ref(), existing) {
+                SeedDecision::Seed { cluster_id, entry } => {
+                    file.profiles.insert(cluster_id, entry);
+                    seeded += 1;
+                }
+                SeedDecision::AlreadySeeded | SeedDecision::NothingToSeed => {}
+            }
+        }
+        if seeded > 0 {
+            write_shared_profiles(&file)?;
+        }
+        Ok(seeded)
     }
-    Ok(seeded)
 }
 
-/// Launch-time entry point for the stage-1 seed. Reads the desktop's
-/// persisted clusters and folds any keychain-only secret into
-/// profiles.json. Takes `config_lock` for the read-modify-write so it
-/// can't interleave with a concurrent desktop write (e.g. the microVM
-/// sync that runs right after). Cross-PROCESS interleaving with the
-/// CLI is still possible — see the concurrency note on `config_lock`.
+/// Launch-time entry point. Takes the process config lock and, on Windows, the
+/// cross-process credential migration lock before profile ingestion so no
+/// canonical value is overwritten before conflict detection.
 fn seed_desktop_profiles(app: &AppHandle) -> Result<usize, HostError> {
     let _guard = config_lock();
+    #[cfg(windows)]
+    let _migration_lock = CredentialMigrationLock::acquire()?;
     let persisted = read_persisted_config(app)?;
     seed_profiles_from_keychain(&persisted)
 }
 
 /// Convert a SharedProfilesFile into a PersistedConfig (the desktop's
-/// in-memory shape) and write the secrets back into the OS keychain so
-/// subsequent calls see them through the existing keychain path.
+/// in-memory shape). On non-Windows platforms, also write non-empty secrets
+/// into the legacy OS-keychain path. Windows defers all imports to the locked,
+/// conflict-aware migration above.
 /// Also writes the legacy config.json so the next read short-circuits.
 fn ingest_shared_into_legacy(
     app: &AppHandle,
@@ -1414,7 +1559,10 @@ fn ingest_shared_into_legacy(
         // secret. A macOS desktop-managed entry has an EMPTY secret (the
         // Keychain is canonical), so writing it here would clobber the
         // real Keychain copy with an empty value — never do that.
-        if !entry.secret.is_empty() {
+        // Windows migration reads Credential Manager first and handles a
+        // differing file value as a conflict. Writing here would overwrite
+        // that canonical winner before the migration can compare it.
+        if !entry.secret.is_empty() && !cfg!(windows) {
             let _ = write_api_key(
                 &cluster_keychain_account(id),
                 &ApiKey {
@@ -1527,26 +1675,58 @@ fn write_persisted_config(app: &AppHandle, cfg: &PersistedConfig) -> Result<(), 
     Ok(())
 }
 
-fn keychain_entry(account: &str) -> Result<keyring::Entry, HostError> {
-    Ok(keyring::Entry::new(KEYCHAIN_SERVICE, account)?)
+fn cluster_store_key(account: &str) -> Result<StoreKey, HostError> {
+    let cluster_id = account
+        .strip_prefix("cluster:")
+        .ok_or_else(|| StoreError::Internal(format!("invalid typed cluster account: {account}")))?;
+    Ok(StoreKey::cluster(encode_identifier(cluster_id))?)
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn desktop_credential_store() -> impl CredentialStore {
+    KeyringStore::new()
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn desktop_credential_store() -> impl CredentialStore {
+    let root = home_dir()
+        .map(|home| home.join(SHARED_PROFILES_DIR))
+        .unwrap_or_else(|| PathBuf::from(SHARED_PROFILES_DIR));
+    AclFileStore::new(root)
 }
 
 fn read_api_key(account: &str) -> Option<ApiKey> {
-    keychain_entry(account)
+    let key = cluster_store_key(account).ok()?;
+    desktop_credential_store()
+        .get(&key)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_slice::<ApiKey>(&raw).ok())
+}
+
+fn write_api_key(account: &str, key: &ApiKey) -> Result<(), HostError> {
+    let payload = serde_json::to_string(key)?;
+    desktop_credential_store().put(&cluster_store_key(account)?, payload.as_bytes())?;
+    Ok(())
+}
+
+fn delete_api_key(account: &str) {
+    if let Ok(key) = cluster_store_key(account) {
+        let _ = desktop_credential_store().delete(&key);
+    }
+}
+
+// The neutral store deliberately has no untyped legacy account. Keep this
+// read/delete-only bridge isolated to the one-time `api-key` migration.
+fn read_legacy_api_key() -> Option<ApiKey> {
+    keyring::Entry::new(KEYCHAIN_SERVICE, LEGACY_KEYCHAIN_ACCOUNT)
         .ok()
         .and_then(|entry| entry.get_password().ok())
         .and_then(|raw| serde_json::from_str::<ApiKey>(&raw).ok())
 }
 
-fn write_api_key(account: &str, key: &ApiKey) -> Result<(), HostError> {
-    let entry = keychain_entry(account)?;
-    let payload = serde_json::to_string(key)?;
-    entry.set_password(&payload)?;
-    Ok(())
-}
-
-fn delete_api_key(account: &str) {
-    if let Ok(entry) = keychain_entry(account) {
+fn delete_legacy_api_key() {
+    if let Ok(entry) = keyring::Entry::new(KEYCHAIN_SERVICE, LEGACY_KEYCHAIN_ACCOUNT) {
         match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(_) => {
@@ -1580,7 +1760,7 @@ fn migrate_legacy_top_level_url(cfg: &mut PersistedConfig) -> Result<bool, HostE
     let Some(legacy_url) = cfg.api_server_url.take() else {
         return Ok(false);
     };
-    let Some(legacy_key) = read_api_key(LEGACY_KEYCHAIN_ACCOUNT) else {
+    let Some(legacy_key) = read_legacy_api_key() else {
         // URL but no key — drop the orphan URL silently.
         return Ok(true);
     };
@@ -1601,7 +1781,7 @@ fn migrate_legacy_top_level_url(cfg: &mut PersistedConfig) -> Result<bool, HostE
     };
 
     write_api_key(&cluster_keychain_account(&id), &legacy_key)?;
-    delete_api_key(LEGACY_KEYCHAIN_ACCOUNT);
+    delete_legacy_api_key();
     cfg.clusters.push(cluster);
     cfg.selected_cluster_id = Some(id);
     Ok(true)
@@ -3862,7 +4042,7 @@ fn sync_microvm_cluster(app: &AppHandle, name: &str) -> Result<(), HostError> {
     let Some(entry) = shared.profiles.get(&cluster_id) else {
         return Ok(());
     };
-    if entry.api_url.is_empty() || entry.key_id.is_empty() || entry.secret.is_empty() {
+    if entry.api_url.is_empty() || entry.key_id.is_empty() {
         return Ok(());
     }
 
@@ -3874,9 +4054,19 @@ fn sync_microvm_cluster(app: &AppHandle, name: &str) -> Result<(), HostError> {
     // this runs on every status poll, and a keychain read can block on
     // a macOS access prompt. The keychain is written only when the
     // CLI actually re-keyed.
-    let api_key = ApiKey {
-        id: entry.key_id.clone(),
-        secret: entry.secret.clone(),
+    let api_key = if cfg!(target_os = "windows") && entry.secret.is_empty() {
+        let Some(key) = read_api_key(&cluster_keychain_account(&cluster_id)) else {
+            return Ok(());
+        };
+        key
+    } else {
+        if entry.secret.is_empty() {
+            return Ok(());
+        }
+        ApiKey {
+            id: entry.key_id.clone(),
+            secret: entry.secret.clone(),
+        }
     };
     let changed = match persisted.clusters.iter_mut().find(|c| c.id == cluster_id) {
         Some(cluster) => {
@@ -4462,12 +4652,17 @@ fn persist_vm_profile_entry(
     };
     for id in ids {
         let prev = file.profiles.get(id).cloned().unwrap_or_default();
+        let managed = effective_vm_profile_managed(prev.managed.clone());
+        let uses_os_store = vm_profile_uses_os_store(Some(&managed));
+        if uses_os_store {
+            write_api_key(&cluster_keychain_account(id), key)?;
+        }
         file.profiles.insert(
             id.to_string(),
             SharedProfileEntry {
                 api_url: api_url.to_string(),
                 key_id: key.id.clone(),
-                secret: key.secret.clone(),
+                secret: shared_secret_for_platform(key.secret.clone(), uses_os_store),
                 created_at: Some(chrono::Utc::now().to_rfc3339()),
                 state_backend_url: prev.state_backend_url,
                 last_bootstrap_input: prev.last_bootstrap_input,
@@ -4475,7 +4670,7 @@ fn persist_vm_profile_entry(
                 cloud_formation_stack_name: prev.cloud_formation_stack_name,
                 aws_account_id: prev.aws_account_id,
                 aws_region: prev.aws_region,
-                managed: prev.managed.or_else(|| Some("desktop".to_string())),
+                managed: Some(managed),
                 name: prev.name,
             },
         );
@@ -5878,8 +6073,8 @@ async fn microvm_agent_stop(
 // on the outbound request (the VM holds at most an inert placeholder). This
 // mirrors the CLI's host store (`packages/cli/src/utils/agent.ts`
 // writeAgentKey(provider, value, kind) / parseStoredCred / readAgentKey): the
-// SAME Keychain item (`sh.appliance.agent`, account = the agent's provider) /
-// `<provider>-cred` 0600 file and the SAME kind-tagged JSON envelope
+// SAME typed store item (`sh.appliance.agent`, account = the encoded provider)
+// and the SAME kind-tagged JSON envelope
 // `{"kind":"…","value":"…"}`, so the broker's `print-key --type <agent>` (run
 // at inject time) reads it back unchanged.
 //
@@ -5887,16 +6082,11 @@ async fn microvm_agent_stop(
 // with utils/agent.ts — a drift fails the broker CLOSED.
 // ============================================================
 
-// Only the macOS `security`-backed store paths reference the service
-// name; off-macOS the per-provider 0600 cred files carry the envelope.
-#[cfg(target_os = "macos")]
-const AGENT_KEYCHAIN_SERVICE: &str = "sh.appliance.agent";
-
 /// Map an agent `--type` to its per-provider host cred-store key, mirroring the
 /// CLI registry (utils/agent.ts adapters): claude-code→anthropic,
 /// copilot→github-copilot, codex→openai. The provider is the Keychain account
-/// on macOS and the `<provider>-cred` 0600 filename off-macOS. None for an
-/// unknown type (the caller errors actionably).
+/// in the host credential store. None for an unknown type (the caller errors
+/// actionably).
 fn provider_for_agent_type(agent_type: &str) -> Option<&'static str> {
     match agent_type {
         "claude-code" => Some("anthropic"),
@@ -5918,29 +6108,8 @@ fn provider_accepts_kind(provider: &str, kind: &str) -> bool {
     }
 }
 
-/// The off-macOS host store path (`~/.appliance/agent/<provider>-cred`).
-/// Mirrors `agentKeyFile(provider)` in the CLI.
-#[cfg(not(target_os = "macos"))]
-fn agent_key_file(provider: &str) -> Option<PathBuf> {
-    Some(
-        home_dir()?
-            .join(".appliance")
-            .join("agent")
-            .join(format!("{provider}-cred")),
-    )
-}
-
-/// The legacy pre-multi-agent Anthropic 0600 file (`anthropic-key`), read as a
-/// fallback so a non-macOS user who logged in before the per-provider rename
-/// keeps working until they next sign in. Mirrors `legacyAnthropicKeyFile()`.
-#[cfg(not(target_os = "macos"))]
-fn legacy_anthropic_key_file() -> Option<PathBuf> {
-    Some(
-        home_dir()?
-            .join(".appliance")
-            .join("agent")
-            .join("anthropic-key"),
-    )
+fn agent_store_key(provider: &str) -> Result<StoreKey, String> {
+    StoreKey::agent(encode_identifier(provider)).map_err(|error| error.to_string())
 }
 
 // Copy of the appliance-vm ACL helper: the desktop drives appliance-vm as a
@@ -5951,7 +6120,7 @@ fn current_user_sid_string() -> Result<String, String> {
     use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
     use windows_sys::Win32::Security::{
-        GetTokenInformation, IsValidSid, TOKEN_QUERY, TOKEN_USER, TokenUser,
+        GetTokenInformation, IsValidSid, TokenUser, TOKEN_QUERY, TOKEN_USER,
     };
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -5982,8 +6151,7 @@ fn current_user_sid_string() -> Result<String, String> {
             std::io::Error::last_os_error()
         ));
     }
-    let words = (needed as usize + std::mem::size_of::<usize>() - 1)
-        / std::mem::size_of::<usize>();
+    let words = (needed as usize + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
     let mut buffer = vec![0usize; words];
     if unsafe {
         GetTokenInformation(
@@ -6147,56 +6315,21 @@ fn restrict_to_current_user(path: &std::path::Path) -> Result<(), String> {
 #[derive(Serialize)]
 struct AgentAuthStatus {
     configured: bool,
-    /// `api-key` | `oauth` | `pat` when known; null on macOS (we do NOT read
-    /// the secret just to render a label — that would trigger a Keychain access
-    /// prompt) or when nothing is stored.
+    /// `api-key` | `oauth` | `pat` when the typed envelope is valid; null when
+    /// nothing is stored. A malformed envelope is fail-closed as unconfigured.
     kind: Option<String>,
 }
 
-/// Write the kind-tagged credential envelope to the host Keychain (macOS),
-/// under `provider`'s account. `security add-generic-password -U` upserts. The
-/// secret is briefly on `security`'s argv — the SAME documented tradeoff as the
-/// CLI's writeAgentKey (there's no stdin form); it is passed via execvp (no
-/// shell), so it cannot be word-split or interpreted. NEVER logged.
-#[cfg(target_os = "macos")]
-fn store_agent_cred_envelope(provider: &str, envelope: &str) -> Result<(), String> {
-    let out = std::process::Command::new("/usr/bin/security")
-        .args([
-            "add-generic-password",
-            "-U",
-            "-s",
-            AGENT_KEYCHAIN_SERVICE,
-            "-a",
-            provider,
-            "-w",
-            envelope,
-        ])
-        .output()
-        .map_err(|e| format!("could not run `security`: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "failed to store the credential in the Keychain: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    Ok(())
+#[derive(Serialize)]
+struct AgentCredentialEnvelope<'a> {
+    kind: &'a str,
+    value: &'a str,
 }
 
-/// Write the kind-tagged credential envelope to a 0600 file off-macOS, under
-/// `<provider>-cred`. Mirrors the CLI's writeAgentKey fallback. NEVER logged.
-#[cfg(not(target_os = "macos"))]
 fn store_agent_cred_envelope(provider: &str, envelope: &str) -> Result<(), String> {
-    let file = agent_key_file(provider).ok_or("cannot resolve the home directory")?;
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("could not create the agent store dir: {e}"))?;
-    }
-    std::fs::write(&file, envelope).map_err(|e| format!("could not write the agent store: {e}"))?;
-    if let Err(error) = restrict_to_current_user(&file) {
-        let _ = std::fs::remove_file(&file);
-        return Err(error);
-    }
-    Ok(())
+    desktop_credential_store()
+        .put(&agent_store_key(provider)?, envelope.as_bytes())
+        .map_err(|error| error.to_string())
 }
 
 /// Store an agent credential host-side under `agent_type`'s provider store,
@@ -6242,17 +6375,17 @@ async fn microvm_agent_login(
             );
         }
     }
-    // serde_json escapes the value safely; parseStoredCred reads the envelope
-    // order-independently, so this matches the CLI's JSON.stringify shape.
-    let envelope = serde_json::json!({ "kind": kind, "value": value }).to_string();
+    // A struct fixes field order (`kind`, then `value`) so the bytes match the
+    // shared TS/Rust golden vectors exactly.
+    let envelope = serde_json::to_string(&AgentCredentialEnvelope { kind, value })
+        .map_err(|error| format!("could not encode the agent credential: {error}"))?;
     store_agent_cred_envelope(provider, &envelope)
 }
 
-/// Parse ONLY the kind out of a stored envelope (off-macOS), mirroring
-/// parseStoredCred: a legacy bare string is `api-key`; an
+/// Parse ONLY the kind out of a stored envelope, mirroring parseStoredCred: a
+/// legacy bare string is `api-key`; an
 /// unparseable/truncated/empty-value envelope is `None` (→ not configured).
 /// NEVER returns the secret value.
-#[cfg(not(target_os = "macos"))]
 fn parse_cred_kind(raw: &str) -> Option<String> {
     let s = raw.trim();
     if s.is_empty() {
@@ -6273,47 +6406,18 @@ fn parse_cred_kind(raw: &str) -> Option<String> {
     Some("api-key".to_string()) // legacy bare string → api-key
 }
 
-/// macOS: does `provider`'s Keychain item EXIST? Attribute lookup (no `-w`),
-/// which does NOT decrypt the secret and so does NOT trigger an access prompt.
-/// We deliberately don't read the secret just to label it, so `kind` is null.
-#[cfg(target_os = "macos")]
-fn read_agent_cred_status(provider: &str) -> AgentAuthStatus {
-    let configured = std::process::Command::new("/usr/bin/security")
-        .args([
-            "find-generic-password",
-            "-s",
-            AGENT_KEYCHAIN_SERVICE,
-            "-a",
-            provider,
-        ])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    AgentAuthStatus {
-        configured,
-        kind: None,
-    }
-}
-
-/// Off-macOS: the 0600 file is plain-readable, so report the parsed kind.
-/// Reads `<provider>-cred`, falling back to the legacy `anthropic-key` for the
-/// anthropic provider (mirrors readAgentKey's legacy fallback).
-#[cfg(not(target_os = "macos"))]
-fn read_agent_cred_status(provider: &str) -> AgentAuthStatus {
-    let raw = agent_key_file(provider)
-        .and_then(|f| std::fs::read_to_string(f).ok())
-        .or_else(|| {
-            if provider == "anthropic" {
-                legacy_anthropic_key_file().and_then(|f| std::fs::read_to_string(f).ok())
-            } else {
-                None
-            }
-        });
-    let kind = raw.and_then(|raw| parse_cred_kind(&raw));
-    AgentAuthStatus {
+fn read_agent_cred_status(provider: &str) -> Result<AgentAuthStatus, String> {
+    let raw = desktop_credential_store()
+        .get(&agent_store_key(provider)?)
+        .map_err(|error| error.to_string())?;
+    let kind = raw
+        .as_deref()
+        .and_then(|raw| std::str::from_utf8(raw).ok())
+        .and_then(parse_cred_kind);
+    Ok(AgentAuthStatus {
         configured: kind.is_some(),
         kind,
-    }
+    })
 }
 
 /// Report whether `agent_type`'s host credential is stored (+ best-effort
@@ -6325,34 +6429,13 @@ async fn microvm_agent_login_status(agent_type: String) -> Result<AgentAuthStatu
     let Some(provider) = provider_for_agent_type(agent_type) else {
         return Err(format!("unknown agent type '{agent_type}'"));
     };
-    Ok(read_agent_cred_status(provider))
+    read_agent_cred_status(provider)
 }
 
-/// Forget `provider`'s stored host credential (macOS Keychain item / 0600
-/// file). Off-macOS also drops the legacy `anthropic-key` for anthropic.
-#[cfg(target_os = "macos")]
-fn forget_agent_cred(provider: &str) {
-    let _ = std::process::Command::new("/usr/bin/security")
-        .args([
-            "delete-generic-password",
-            "-s",
-            AGENT_KEYCHAIN_SERVICE,
-            "-a",
-            provider,
-        ])
-        .output();
-}
-
-#[cfg(not(target_os = "macos"))]
-fn forget_agent_cred(provider: &str) {
-    if let Some(f) = agent_key_file(provider) {
-        let _ = std::fs::remove_file(f);
-    }
-    if provider == "anthropic" {
-        if let Some(f) = legacy_anthropic_key_file() {
-            let _ = std::fs::remove_file(f);
-        }
-    }
+fn forget_agent_cred(provider: &str) -> Result<(), String> {
+    desktop_credential_store()
+        .delete(&agent_store_key(provider)?)
+        .map_err(|error| error.to_string())
 }
 
 /// Forget `agent_type`'s stored host credential (the desktop "sign out").
@@ -6362,8 +6445,7 @@ async fn microvm_agent_logout(agent_type: String) -> Result<(), String> {
     let Some(provider) = provider_for_agent_type(agent_type) else {
         return Err(format!("unknown agent type '{agent_type}'"));
     };
-    forget_agent_cred(provider);
-    Ok(())
+    forget_agent_cred(provider)
 }
 
 /// Is `claude` present + runnable on this HOST? "Sign in with Claude" runs
@@ -7193,11 +7275,10 @@ pub fn run() {
             // shouldn't block.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // Stage-1 single-source-of-truth seed: fold any
-                // keychain-only secret into profiles.json before
-                // anything else reads it, so the shared store is the
-                // complete, authoritative copy. Non-destructive and
-                // idempotent — see seed_profiles_from_keychain.
+                // Reconcile legacy credentials with the platform's canonical
+                // store before anything else reads shared profiles. On
+                // Windows this imports, verifies, and scrubs under the
+                // user-global migration lock.
                 if let Err(e) = seed_desktop_profiles(&handle) {
                     eprintln!("warn: credential seed at launch failed: {e}");
                 }
@@ -7600,6 +7681,39 @@ mod tests {
         assert_eq!(ingested.clusters.len(), 1);
     }
 
+    #[test]
+    fn shared_profiles_preserve_the_non_secret_credential_store_hint() {
+        let raw = r#"{
+            "version": 1,
+            "activeProfile": null,
+            "profiles": {},
+            "credentialStore": {
+                "schema": "appliance.credential-store/v1",
+                "profiles": {"dev profile": "conflict"}
+            }
+        }"#;
+        let parsed: SharedProfilesFile = serde_json::from_str(raw).unwrap();
+        let encoded = serde_json::to_value(parsed).unwrap();
+        assert_eq!(
+            encoded["credentialStore"]["profiles"]["dev profile"],
+            "conflict"
+        );
+    }
+
+    #[test]
+    fn desktop_store_boundaries_encode_free_form_identifiers() {
+        assert_eq!(
+            cluster_store_key("cluster:dev profile")
+                .unwrap()
+                .canonical_name(),
+            "cluster:dev%20profile"
+        );
+        assert_eq!(
+            agent_store_key("provider/name").unwrap().canonical_name(),
+            "agent:provider%2Fname"
+        );
+    }
+
     // ---- stage-1 credential seed (decide_seed) -------------------
 
     fn test_cluster(id: &str) -> Cluster {
@@ -7734,13 +7848,79 @@ mod tests {
     }
 
     #[test]
-    fn non_macos_writes_the_secret_through_to_the_file() {
-        // Linux/cloud/CI: profiles.json (0600) is the canonical store
-        // because the CLI cannot read libsecret/DPAPI.
+    fn linux_writes_the_secret_through_to_the_file() {
+        // Linux/cloud/CI keeps the owner-only file backend.
         assert_eq!(
             shared_secret_for_platform("s3cr3t".to_string(), false),
             "s3cr3t"
         );
+    }
+
+    #[test]
+    fn windows_keeps_the_secret_out_of_the_shared_file() {
+        assert_eq!(shared_secret_for_platform("s3cr3t".to_string(), true), "");
+    }
+
+    #[test]
+    fn credential_vm_profiles_only_use_the_platform_store_when_the_cli_can_read_it() {
+        assert_eq!(
+            vm_profile_uses_os_store(Some("cli")),
+            cfg!(windows),
+            "macOS CLI-managed profiles stay file-backed"
+        );
+        assert_eq!(
+            vm_profile_uses_os_store(Some("desktop")),
+            cfg!(any(windows, target_os = "macos"))
+        );
+    }
+
+    #[test]
+    fn credential_profile_store_uses_the_effective_managed_value_for_first_mint() {
+        let fresh_managed = effective_vm_profile_managed(None);
+        assert_eq!(fresh_managed, "desktop");
+        let fresh_uses_os_store = vm_profile_uses_os_store(Some(&fresh_managed));
+        assert_eq!(
+            fresh_uses_os_store,
+            cfg!(any(windows, target_os = "macos")),
+            "a fresh desktop-stamped profile uses the platform store where the CLI can read it"
+        );
+        assert_eq!(
+            shared_secret_for_platform("s3cr3t".to_string(), fresh_uses_os_store),
+            if cfg!(any(windows, target_os = "macos")) {
+                ""
+            } else {
+                "s3cr3t"
+            }
+        );
+
+        let cli_managed = effective_vm_profile_managed(Some("cli".to_string()));
+        assert_eq!(cli_managed, "cli");
+        assert_eq!(vm_profile_uses_os_store(Some(&cli_managed)), cfg!(windows));
+    }
+
+    #[test]
+    fn desktop_agent_envelopes_match_the_shared_golden_vectors() {
+        #[derive(Deserialize)]
+        struct Vector {
+            kind: String,
+            value: String,
+            encoded: String,
+        }
+        let vectors: Vec<Vector> = serde_json::from_str(include_str!(
+            "../../../credential-store/testdata/envelope-vectors.json"
+        ))
+        .unwrap();
+        for vector in vectors {
+            assert_eq!(
+                serde_json::to_string(&AgentCredentialEnvelope {
+                    kind: &vector.kind,
+                    value: &vector.value,
+                })
+                .unwrap()
+                .as_bytes(),
+                vector.encoded.as_bytes()
+            );
+        }
     }
 
     #[test]

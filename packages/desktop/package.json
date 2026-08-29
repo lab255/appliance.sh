@@ -39,8 +39,11 @@
         "inputs": [
           "default",
           "{workspaceRoot}/packages/cli/src/utils/agent.ts",
+          "{workspaceRoot}/packages/cli/src/utils/credential-store.ts",
           "{workspaceRoot}/packages/app/src/lib/agents.ts",
-          "{workspaceRoot}/packages/desktop/src-tauri/src/lib.rs"
+          "{workspaceRoot}/packages/desktop/src-tauri/src/lib.rs",
+          "{workspaceRoot}/packages/credential-store/src/keyring_store.rs",
+          "{workspaceRoot}/packages/credential-store/testdata/envelope-vectors.json"
         ]
       }
     }

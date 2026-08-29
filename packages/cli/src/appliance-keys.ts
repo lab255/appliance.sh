@@ -4,7 +4,6 @@ import { createApplianceClient } from '@appliance.sh/sdk';
 import { loadCredentials, getActiveProfileOverride } from './utils/credentials.js';
 import { attachProfileOption } from './utils/profile-flag.js';
 import { type Profile, readProfiles, resolveProfile, upsertProfile } from './utils/profile-store.js';
-import { keychainAccountFor, writeKeychainApiKey } from './utils/keychain.js';
 
 // Persist a freshly-rotated credential. On macOS a desktop-managed
 // cluster's secret is canonical in the Keychain, so push the new key
@@ -26,19 +25,8 @@ function persistRotatedCredential(
   profile: Profile,
   next: { id: string; secret: string }
 ): { keychainWriteFailed: boolean } {
-  const account = keychainAccountFor(profileName, profile);
-  if (account) {
-    if (writeKeychainApiKey(account, { keyId: next.id, secret: next.secret })) {
-      upsertProfile(profileName, { ...profile, keyId: next.id, secret: '' }, { makeActive: false });
-      return { keychainWriteFailed: false };
-    }
-    // Canonical store unreachable: keep the secret in profiles.json so the
-    // CLI still works, and signal the degraded write to the caller.
-    upsertProfile(profileName, { ...profile, keyId: next.id, secret: next.secret }, { makeActive: false });
-    return { keychainWriteFailed: true };
-  }
-  upsertProfile(profileName, { ...profile, keyId: next.id, secret: next.secret }, { makeActive: false });
-  return { keychainWriteFailed: false };
+  const result = upsertProfile(profileName, { ...profile, keyId: next.id, secret: next.secret }, { makeActive: false });
+  return { keychainWriteFailed: result.credentialWriteFailed };
 }
 
 // `appliance keys` — lifecycle for the cluster's API credentials.

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PINNED_CATALOGUE_TRUST,
   type CatalogueBlacklist,
@@ -31,6 +31,11 @@ import {
 } from './utils/installed-apps';
 import { tinyOciTar } from './utils/bundle-oci-fixture';
 import { writeBundle } from './utils/bundle-write';
+
+vi.mock('./utils/fs-acl.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./utils/fs-acl.js')>();
+  return { ...original, restrictWindowsAcl: vi.fn() };
+});
 
 const roots: string[] = [];
 
@@ -236,6 +241,100 @@ describe('runtime install', () => {
     ).rejects.toBeInstanceOf(EntitlementGrantRequiredError);
     expect(readInstalledApps('local', root)).toEqual([]);
     expect(fs.existsSync(immutableBundlePath(bundle.digest, root))).toBe(false);
+  });
+
+  it('uses an isolated runtime home for Windows install validation without a credential helper', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'appliance-install-win32-'));
+    roots.push(directory);
+    const root = path.join(directory, 'runtime');
+    const unsigned = await unsignedBundle(directory);
+    const controlled = await controlledBundle(directory, '1.0.0', ['api.example.test']);
+    // Seed the key while the host platform is still active so this regression
+    // can mock backend selection without invoking host-incompatible ACL tools.
+    readEntitlementStore({ home: root });
+
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const keyFile = path.join(directory, 'publisher-win32.pem');
+    fs.writeFileSync(keyFile, privateKey.export({ type: 'pkcs8', format: 'pem' }));
+    const key = readDevSigningKey(keyFile);
+    const signed = await writeBundle({
+      outputPath: path.join(directory, 'signed-win32.appliance.zip'),
+      manifest: unsigned.manifest,
+      files: [
+        {
+          path: 'payload/image.tar',
+          data: tinyOciTar(process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64'),
+        },
+      ],
+      signingKeyPath: keyFile,
+    });
+    const policy = {
+      ...PINNED_CATALOGUE_TRUST,
+      keys: { ...PINNED_CATALOGUE_TRUST.keys, [key.keyId]: key.publicKeyWire },
+    };
+    const url = 'https://journal.appliance.zip/';
+    const index: VerifiedCatalogue<CatalogueIndex> = {
+      payload: {
+        schema: 'appliance.catalogue-index/v1',
+        generation: 8,
+        issuedAt: '2026-08-27T00:00:00.000Z',
+        expiresAt: '2026-09-03T00:00:00.000Z',
+        entries: [
+          {
+            id: 'journal',
+            name: 'Journal',
+            version: '1.2.0',
+            description: 'Private daily notes.',
+            license: 'MIT',
+            publisher: { name: 'Local developer' },
+            tier: 'known-publisher',
+            url,
+            digest: `sha256:${'9'.repeat(64)}`,
+          },
+        ],
+      },
+      envelope: { alg: 'ed25519', keyId: `ed25519:sha256:${'1'.repeat(64)}`, role: 'index', sig: 'x' },
+      stale: false,
+      verifiedAt: '2026-08-28T00:00:00.000Z',
+    };
+    const bytes = fs.readFileSync(unsigned.outputPath);
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      await expect(installBundle(unsigned.outputPath, { root, verifiedBlacklist: null })).rejects.toBeInstanceOf(
+        UnknownPublisherError
+      );
+      await expect(
+        installBundle(unsigned.outputPath, {
+          root,
+          acceptUnknownPublisher: true,
+          verifiedBlacklist: blacklist('journal'),
+        })
+      ).rejects.toBeInstanceOf(BlacklistedBundleError);
+      await expect(installBundle(signed.outputPath, { root, verifiedBlacklist: null, policy })).rejects.toBeInstanceOf(
+        UnknownPublisherError
+      );
+      await expect(installBundle('http://journal.appliance.zip', { root, verifiedBlacklist: null })).rejects.toThrow(
+        'must use HTTPS'
+      );
+      await expect(
+        installBundle(url, {
+          root,
+          verifiedIndex: index,
+          verifiedBlacklist: null,
+          fetcher: async () => new Response(bytes, { status: 200 }),
+        })
+      ).rejects.toThrow('Catalogue digest mismatch');
+      await expect(
+        installBundle(controlled.outputPath, {
+          root,
+          acceptUnknownPublisher: true,
+          verifiedBlacklist: null,
+        })
+      ).rejects.toBeInstanceOf(EntitlementGrantRequiredError);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform });
+    }
   });
 
   it('prompts only for an upgrade delta and preserves unchanged approval times', async () => {

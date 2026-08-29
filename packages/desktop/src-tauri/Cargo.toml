@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-appliance-credential-store = { path = "../../credential-store", default-features = false, features = ["keyring"] }
+appliance-credential-store = { path = "../../credential-store", default-features = false, features = ["keyring", "file"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-notification = "2"

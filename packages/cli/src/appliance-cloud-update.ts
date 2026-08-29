@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { createAwsCloudInstallDependencies, defaultSourceImage, runCloudSystemUpdate } from '@appliance.sh/install-aws';
 import { getActiveProfileOverride } from './utils/credentials.js';
-import { resolveProfileSecret } from './utils/keychain.js';
+import { resolveProfileSecret } from './utils/credential-store.js';
 import { readProfiles, resolveProfile } from './utils/profile-store.js';
 
 const program = new Command();

@@ -2,6 +2,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
+import {
+  CREDENTIAL_STORE_SCHEMA,
+  deleteProfileCredential,
+  migrateWindowsCredentialFiles,
+  persistProfileCredential,
+} from './credential-store.js';
+import { withProfilesLock as withProfilesFileLock } from './profiles-lock.js';
 
 export { restrictWindowsAcl } from './fs-acl.js';
 
@@ -50,6 +57,11 @@ export interface ProfilesFile {
   version: 1;
   activeProfile: string | null;
   profiles: Record<string, Profile>;
+  /** Non-secret migration hint only. Store/file reconciliation never trusts it. */
+  credentialStore?: {
+    schema: typeof CREDENTIAL_STORE_SCHEMA;
+    profiles?: Record<string, 'migrated' | 'conflict' | 'missing'>;
+  };
 }
 
 interface LegacyCredentials {
@@ -58,30 +70,26 @@ interface LegacyCredentials {
   secret: string;
 }
 
-const APPLIANCE_DIR = path.join(os.homedir(), '.appliance');
-const PROFILES_PATH = path.join(APPLIANCE_DIR, 'profiles.json');
-const LEGACY_PATH = path.join(APPLIANCE_DIR, 'credentials.json');
-const LOCK_PATH = path.join(APPLIANCE_DIR, 'profiles.json.lock');
+function defaultApplianceHome(): string {
+  return path.join(os.homedir(), '.appliance');
+}
 
-// A lock held longer than this is presumed orphaned (a crashed process)
-// and may be stolen, so a stale lock never wedges the CLI permanently.
-const LOCK_STALE_MS = 10_000;
-// Total time to wait for a contended lock before proceeding anyway. The
-// lock is advisory and best-effort: blocking the user is worse than the
-// small last-writer-wins window it guards.
-const LOCK_TIMEOUT_MS = 2_000;
+function profilePaths(home = defaultApplianceHome()) {
+  return {
+    home,
+    profilesFile: path.join(home, 'profiles.json'),
+    legacyCredentialsFile: path.join(home, 'credentials.json'),
+    lockFile: path.join(home, 'profiles.json.lock'),
+  };
+}
+
+const DEFAULT_PROFILE_PATHS = profilePaths();
 
 /** Default profile name used when migrating a legacy single-credentials file. */
 export const DEFAULT_PROFILE_NAME = 'default';
 
 function ensureDir(): void {
-  ensurePrivateDirectory(APPLIANCE_DIR);
-}
-
-/** Synchronous sleep (the store API is sync). Uses Atomics.wait so it
- * doesn't busy-spin a CPU while waiting for the lock. */
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  ensurePrivateDirectory(DEFAULT_PROFILE_PATHS.home);
 }
 
 /**
@@ -91,55 +99,15 @@ function sleepSync(ms: number): void {
  *
  * Implemented as an O_EXCL lockfile (the portable primitive Node exposes
  * without a native flock binding): create-exclusive wins the lock; on
- * contention we retry, steal a stale lock (crashed holder), and after
- * LOCK_TIMEOUT_MS give up and proceed unlocked rather than block the user.
+ * contention the shared helper retries, steals a stale lock (crashed holder),
+ * and eventually proceeds unlocked rather than block the user.
  *
- * SCOPE: this serializes `appliance` processes against each other. The
- * desktop (Rust) currently uses an in-process mutex + atomic temp-rename
- * writes and does NOT yet take this lockfile, so a desktop↔CLI interleave
- * is still last-writer-wins (both sides write atomically, so neither can
- * read a half-written file). Having the desktop adopt the same lockfile
- * is the remaining piece — see docs/control-plane.md §5.
+ * SCOPE: this serializes CLI profile RMWs and the nested Windows credential
+ * migration. The helper is module-reentrant so lock order stays
+ * profiles.json → credential-store without self-deadlocking.
  */
 function withProfilesLock<T>(fn: () => T): T {
-  ensureDir();
-  const deadline = Date.now() + LOCK_TIMEOUT_MS;
-  let fd: number | undefined;
-  for (;;) {
-    try {
-      fd = fs.openSync(LOCK_PATH, 'wx', 0o600);
-      break;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
-        // Can't even attempt to lock (e.g. unwritable dir) — don't block
-        // the operation; fall through and run without the lock.
-        return fn();
-      }
-      try {
-        if (Date.now() - fs.statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) {
-          fs.unlinkSync(LOCK_PATH);
-          continue;
-        }
-      } catch {
-        // Lock vanished between open and stat — retry immediately.
-        continue;
-      }
-      if (Date.now() > deadline) {
-        return fn();
-      }
-      sleepSync(50);
-    }
-  }
-  try {
-    return fn();
-  } finally {
-    try {
-      fs.closeSync(fd);
-      fs.unlinkSync(LOCK_PATH);
-    } catch {
-      // Best-effort release; a leftover lock is reaped as stale.
-    }
-  }
+  return withProfilesFileLock(DEFAULT_PROFILE_PATHS.lockFile, fn);
 }
 
 function readJson<T>(p: string): T | null {
@@ -171,12 +139,20 @@ function migrateFromLegacy(legacy: LegacyCredentials): ProfilesFile {
  * otherwise falls back to the legacy credentials.json (folded in as the
  * "default" profile). Returns an empty store when neither file exists.
  */
-export function readProfiles(): ProfilesFile {
-  const parsed = readJson<ProfilesFile>(PROFILES_PATH);
+export function readProfiles(options: { migrateCredentials?: boolean; home?: string } = {}): ProfilesFile {
+  const paths = profilePaths(options.home);
+  if (options.migrateCredentials !== false) {
+    migrateWindowsCredentialFiles({
+      home: paths.home,
+      profilesFile: paths.profilesFile,
+      legacyCredentialsFile: paths.legacyCredentialsFile,
+    });
+  }
+  const parsed = readJson<ProfilesFile>(paths.profilesFile);
   if (parsed && parsed.profiles) {
     return parsed;
   }
-  const legacy = readJson<LegacyCredentials>(LEGACY_PATH);
+  const legacy = readJson<LegacyCredentials>(paths.legacyCredentialsFile);
   if (legacy && legacy.apiUrl && legacy.keyId && legacy.secret) {
     return migrateFromLegacy(legacy);
   }
@@ -202,7 +178,7 @@ function atomicWriteJson(p: string, value: unknown, mode: number): void {
  */
 export function writeProfiles(file: ProfilesFile): void {
   ensureDir();
-  atomicWriteJson(PROFILES_PATH, file, 0o600);
+  atomicWriteJson(DEFAULT_PROFILE_PATHS.profilesFile, file, 0o600);
 
   const active = file.activeProfile ? file.profiles[file.activeProfile] : undefined;
   if (active) {
@@ -211,12 +187,12 @@ export function writeProfiles(file: ProfilesFile): void {
       keyId: active.keyId,
       secret: active.secret,
     };
-    atomicWriteJson(LEGACY_PATH, legacy, 0o600);
-  } else if (fs.existsSync(LEGACY_PATH)) {
+    atomicWriteJson(DEFAULT_PROFILE_PATHS.legacyCredentialsFile, legacy, 0o600);
+  } else if (fs.existsSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile)) {
     // No active profile any more — clear the legacy file so a downgraded
     // CLI doesn't keep using stale creds. Best-effort.
     try {
-      fs.unlinkSync(LEGACY_PATH);
+      fs.unlinkSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile);
     } catch {
       // ignore
     }
@@ -250,19 +226,26 @@ export function resolveProfile(file: ProfilesFile, opts: ResolveOptions = {}): R
  * Upsert a profile and (optionally) make it active. The legacy credentials.json
  * is updated if the saved profile is now active.
  */
-export function upsertProfile(name: string, profile: Profile, opts: { makeActive?: boolean } = {}): void {
-  withProfilesLock(() => {
+export function upsertProfile(
+  name: string,
+  profile: Profile,
+  opts: { makeActive?: boolean } = {}
+): { credentialWriteFailed: boolean } {
+  return withProfilesLock(() => {
     const file = readProfiles();
     const existing = file.profiles[name];
-    file.profiles[name] = {
+    const merged: Profile = {
       ...existing,
       ...profile,
       createdAt: existing?.createdAt ?? profile.createdAt ?? new Date().toISOString(),
     };
+    const persisted = persistProfileCredential(name, merged);
+    file.profiles[name] = persisted.profile;
     if (opts.makeActive || file.activeProfile === null) {
       file.activeProfile = name;
     }
     writeProfiles(file);
+    return { credentialWriteFailed: persisted.credentialWriteFailed };
   });
 }
 
@@ -273,7 +256,9 @@ export function upsertProfile(name: string, profile: Profile, opts: { makeActive
 export function removeProfile(name: string): boolean {
   return withProfilesLock(() => {
     const file = readProfiles();
-    if (!file.profiles[name]) return false;
+    const profile = file.profiles[name];
+    if (!profile) return false;
+    deleteProfileCredential(name, profile);
     delete file.profiles[name];
     if (file.activeProfile === name) {
       const next = Object.keys(file.profiles)[0] ?? null;
@@ -295,5 +280,5 @@ export function setActiveProfile(name: string): boolean {
   });
 }
 
-export const PROFILES_FILE = PROFILES_PATH;
-export const LEGACY_CREDENTIALS_FILE = LEGACY_PATH;
+export const PROFILES_FILE = DEFAULT_PROFILE_PATHS.profilesFile;
+export const LEGACY_CREDENTIALS_FILE = DEFAULT_PROFILE_PATHS.legacyCredentialsFile;

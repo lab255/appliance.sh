@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +14,13 @@ import {
   vmRunScript,
 } from './sandbox.js';
 import { readSandboxVm } from './link.js';
-import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
+import {
+  type CredentialStoreOptions,
+  deleteAgentCredential,
+  parseStoredAgentCredential,
+  readAgentCredential,
+  writeAgentCredential,
+} from './credential-store.js';
 
 // Agent runner + the pluggable agent-type adapter seam (Phase 5, A1).
 //
@@ -135,9 +140,8 @@ export interface AuthMode {
  *  (docs/agent-sandbox.md §8b, docs/multi-agent-adapters.md §1). */
 export interface AgentAdapter {
   type: string;
-  /** The per-agent host cred-store key (Keychain account / 0600 filename) —
-   *  docs/multi-agent-adapters.md §4. Distinct stores so three agents'
-   *  credentials never collide. */
+  /** The per-agent typed host-store key. Distinct providers ensure three
+   * agents' credentials never collide (docs/multi-agent-adapters.md §4). */
   provider: string;
   /** Pinned install-on-first-use descriptor (docs §6). */
   install: AgentInstall;
@@ -467,34 +471,6 @@ export function supportedAgentTypes(): string[] {
   return [claudeCodeAdapter, copilotAdapter, codexAdapter].map((a) => a.type);
 }
 
-// ---- host key store (A2 — the broker's host side) ----------------------
-//
-// Each agent's credential lives host-side ONLY, in a PER-PROVIDER store so
-// three agents' credentials never collide (docs/multi-agent-adapters.md §4):
-// macOS Keychain (`sh.appliance.agent` / account = the adapter's `provider`),
-// or a 0600 file off-macOS (`~/.appliance/agent/<provider>-cred`). It is never
-// written into any per-VM file and never into the VM. The proxy fetches it via
-// the `print-key --type <agent>` helper (a HOST process) at inject time.
-
-const AGENT_KEYCHAIN_SERVICE = 'sh.appliance.agent';
-const SECURITY_BIN = '/usr/bin/security';
-
-function isMacOS(): boolean {
-  return process.platform === 'darwin';
-}
-
-/** The 0600 cred file for a provider (off-macOS store). */
-function agentKeyFile(provider: string): string {
-  return path.join(os.homedir(), '.appliance', 'agent', `${provider}-cred`);
-}
-
-/** The legacy pre-multi-agent Anthropic 0600 file (`anthropic-key`). Read as a
- *  fallback so a non-macOS user who logged in before the per-provider rename
- *  keeps working until they next `agent login`. */
-function legacyAnthropicKeyFile(): string {
-  return path.join(os.homedir(), '.appliance', 'agent', 'anthropic-key');
-}
-
 /**
  * Parse a stored host secret into a tagged credential, or null (fail-closed).
  *
@@ -508,94 +484,32 @@ function legacyAnthropicKeyFile(): string {
  *     an api-key value — a `null` makes `print-key` exit 1 → the proxy fails
  *     CLOSED (docs/agent-login.md §5).
  */
-export function parseStoredCred(raw: string): StoredCred | null {
-  const s = raw.trim();
-  if (!s) return null;
-  if (s.startsWith('{')) {
-    try {
-      const o = JSON.parse(s) as { kind?: unknown; value?: unknown };
-      const kind = o.kind;
-      const value = typeof o.value === 'string' ? o.value.trim() : '';
-      if ((kind === 'api-key' || kind === 'oauth' || kind === 'pat') && value) return { kind, value };
-      return null; // truncated/unknown-kind/empty-value envelope → fail closed
-    } catch {
-      return null; // unparseable envelope → fail closed (never treat as a key)
-    }
-  }
-  // Legacy bare string → api-key, so pre-envelope logins keep working.
-  return { kind: 'api-key', value: s };
+export const parseStoredCred = parseStoredAgentCredential;
+
+/**
+ * Read the host credential through the central typed store. Returns null when
+ * absent or unparseable; hard backend failures propagate so Windows never
+ * falls back to cleartext. This is the value `print-key --type <agent>` renders
+ * for the proxy. NEVER logs the secret.
+ */
+export function readAgentKey(provider: string, options?: CredentialStoreOptions): StoredCred | null {
+  return readAgentCredential(provider, options);
 }
 
 /**
- * Read the host credential for a provider, Keychain-first on macOS (account =
- * provider), 0600-file elsewhere (`<provider>-cred`, with the legacy
- * `anthropic-key` as a read fallback), decoding the kind-tagged envelope
- * (back-compat: a bare string is an api-key). Returns null when
- * unset/locked/denied/unparseable. NEVER logs the secret. This is the
- * resolution the `print-key --type <agent>` helper renders for the proxy.
+ * Store a provider credential as a kind-tagged envelope. Storage,
+ * verification, migration, and platform policy belong to credential-store.ts;
+ * this module retains login validation and UX. NEVER logs the secret.
  */
-export function readAgentKey(provider: string): StoredCred | null {
-  let raw: string;
-  if (isMacOS()) {
-    try {
-      raw = execFileSync(SECURITY_BIN, ['find-generic-password', '-s', AGENT_KEYCHAIN_SERVICE, '-a', provider, '-w'], {
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-    } catch {
-      return null;
-    }
-  } else {
-    try {
-      raw = fs.readFileSync(agentKeyFile(provider), 'utf-8');
-    } catch {
-      // Legacy anthropic file fallback (pre per-provider rename).
-      if (provider === 'anthropic') {
-        try {
-          raw = fs.readFileSync(legacyAnthropicKeyFile(), 'utf-8');
-        } catch {
-          return null;
-        }
-      } else {
-        return null;
-      }
-    }
-  }
-  return parseStoredCred(raw);
-}
-
-/**
- * Store a provider's host credential as a kind-tagged JSON envelope. macOS
- * Keychain `-U` upsert (account = provider); 0600 file elsewhere
- * (`<provider>-cred`). On macOS the secret is briefly on argv to `security` (no
- * stdin option for add-generic-password) — the documented, accepted tradeoff
- * (same as utils/keychain.ts writeKeychainApiKey), gated to this rare login
- * path. NEVER logs the secret.
- */
-export function writeAgentKey(provider: string, value: string, kind: AgentAuthKind): void {
+export function writeAgentKey(
+  provider: string,
+  value: string,
+  kind: AgentAuthKind,
+  options?: CredentialStoreOptions
+): void {
   const secret = value.trim();
   if (!secret) throw new Error(`refusing to store an empty ${provider} credential`);
-  const envelope = JSON.stringify({ kind, value: secret } satisfies StoredCred);
-  if (isMacOS()) {
-    execFileSync(
-      SECURITY_BIN,
-      ['add-generic-password', '-U', '-s', AGENT_KEYCHAIN_SERVICE, '-a', provider, '-w', envelope],
-      { stdio: ['ignore', 'ignore', 'ignore'] }
-    );
-    return;
-  }
-  const file = agentKeyFile(provider);
-  const applianceDir = path.dirname(path.dirname(file));
-  ensurePrivateDirectory(applianceDir);
-  ensurePrivateDirectory(path.dirname(file));
-  fs.writeFileSync(file, envelope, { mode: 0o600 });
-  fs.chmodSync(file, 0o600);
-  try {
-    restrictWindowsAcl(file);
-  } catch (cause) {
-    fs.rmSync(file, { force: true });
-    throw cause;
-  }
+  writeAgentCredential(provider, { kind, value: secret }, options);
 }
 
 /** The wire-ready header VALUE the proxy injects: `<scheme> <secret>` when the
@@ -713,23 +627,8 @@ export function runSetupTokenInteractive(): number {
 
 /** Forget a provider's stored host credential (`appliance agent logout
  *  --type <agent>`). */
-export function forgetAgentKey(provider: string): void {
-  if (isMacOS()) {
-    try {
-      execFileSync(SECURITY_BIN, ['delete-generic-password', '-s', AGENT_KEYCHAIN_SERVICE, '-a', provider], {
-        stdio: ['ignore', 'ignore', 'ignore'],
-      });
-    } catch {
-      // not present — nothing to forget
-    }
-    return;
-  }
-  try {
-    fs.rmSync(agentKeyFile(provider), { force: true });
-    if (provider === 'anthropic') fs.rmSync(legacyAnthropicKeyFile(), { force: true });
-  } catch {
-    // ignore
-  }
+export function forgetAgentKey(provider: string, options?: CredentialStoreOptions): void {
+  deleteAgentCredential(provider, options);
 }
 
 // ---- runner ------------------------------------------------------------
