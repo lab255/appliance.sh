@@ -112,8 +112,8 @@ impl VmBackend for WslBackend {
             Ok(out) if !out.status.success() => {
                 let detail = combined_output(&out);
                 let detail = detail.trim();
-                match explain_wsl_failure(detail) {
-                    Some(fix) => bail!("WSL is not ready: {detail}\n{fix}"),
+                match classify_wsl_failure(detail) {
+                    Some((_, fix)) => bail!("WSL is not ready: {detail}\n{fix}"),
                     None => bail!(
                         "WSL is not ready: {detail}\nInstall or repair it with `wsl --install` \
                          (elevated), reboot, then retry."
@@ -423,46 +423,8 @@ fn wait_watching_for_wake(total: Duration, tick: Duration, stop: &AtomicBool) ->
 /// is UTF-8. Interior NULs in the head are the UTF-16 tell. pub(crate)
 /// so `shell.rs`'s Windows capture path decodes wsl.exe-level errors
 /// the same way.
+use crate::wsl_config::classify_wsl_failure;
 pub(crate) use crate::wsl_config::decode_wsl;
-
-/// Targeted guidance for the WSL failure classes a fresh machine
-/// actually hits, keyed on the error text wsl.exe prints. The raw HCS
-/// codes are opaque ("0x80370102") — name the real cause and the exact
-/// fix. Kept in sync with `classifyWslFailure` in
-/// packages/cli/src/utils/preflight.ts — specifically the shared
-/// signature keys: 0x80370102/0x80370114/"virtual machine platform"/
-/// "hypervisor" (virtualization), 0x800701bc/"kernel" (kernel update),
-/// and "wsl --install"/"not installed" (not set up). The surrounding
-/// prose may differ; the keys must not.
-fn explain_wsl_failure(text: &str) -> Option<&'static str> {
-    let lower = text.to_lowercase();
-    if lower.contains("0x80370102")
-        || lower.contains("0x80370114")
-        || lower.contains("virtual machine platform")
-        || lower.contains("hypervisor")
-        || (lower.contains("virtualization") && (lower.contains("enable") || lower.contains("not")))
-    {
-        return Some(
-            "virtualization is not available to WSL2. Enable it in your BIOS/UEFI \
-             (\"Intel VT-x\", \"AMD-V\", or \"SVM\"), then enable the Windows feature from an \
-             elevated PowerShell: `Enable-WindowsOptionalFeature -Online -FeatureName \
-             VirtualMachinePlatform`, and reboot.",
-        );
-    }
-    if lower.contains("wsl --update") || lower.contains("kernel") || lower.contains("0x800701bc") {
-        return Some("the WSL2 kernel is missing or outdated — run `wsl --update`, then retry.");
-    }
-    if lower.contains("wsl --install")
-        || lower.contains("not installed")
-        || lower.contains("no installed distributions")
-    {
-        return Some(
-            "WSL is not set up on this machine — open PowerShell as Administrator, run \
-             `wsl --install`, reboot, then retry.",
-        );
-    }
-    None
-}
 
 /// Both streams of a finished command, decoded — wsl.exe splits its
 /// diagnostics between the two inconsistently.
@@ -538,8 +500,8 @@ fn ensure_distro(distro: &str, paths: &VmPaths) -> Result<()> {
     if !out.status.success() {
         let detail = combined_output(&out);
         let detail = detail.trim();
-        match explain_wsl_failure(detail) {
-            Some(fix) => bail!("could not import WSL distro '{distro}': {detail}\n{fix}"),
+        match classify_wsl_failure(detail) {
+            Some((_, fix)) => bail!("could not import WSL distro '{distro}': {detail}\n{fix}"),
             None => bail!(
                 "could not import WSL distro '{distro}': {detail}\n\
                  (if this mentions the WSL2 kernel, run `wsl --update` and retry)"

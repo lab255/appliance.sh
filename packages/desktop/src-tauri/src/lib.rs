@@ -2714,20 +2714,24 @@ async fn local_preflight() -> Vec<PreflightCheck> {
     out
 }
 
-/// Decode wsl.exe output: its own diagnostics are UTF-16LE (guest
-/// output is UTF-8) — interior NULs in the head are the UTF-16 tell.
-/// Copy of `decode_wsl` in packages/vm/src/backend/wsl.rs (this crate
-/// drives appliance-vm as a sidecar binary, not a Cargo dependency, so
-/// the 10 lines can't be shared). Note the TS analogue
-/// (`decodeWindowsToolOutput` in the CLI's preflight) uses a stricter
-/// even-offset-NUL sniff; this any-NUL form is adequate for wsl.exe
-/// diagnostics, which are pure ASCII UTF-16LE.
-#[cfg(windows)]
+/// Decode wsl.exe output: BOM means UTF-16LE; otherwise a NUL in byte
+/// positions 2, 4, 6, ... of the first 64 bytes is the UTF-16LE tell.
+/// This crate drives appliance-vm as a sidecar binary, so the small
+/// platform-neutral decoder is fixture-locked instead of code-shared.
+#[cfg_attr(not(windows), allow(dead_code))]
 // Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
 #[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wsl_text(bytes: &[u8]) -> String {
-    if bytes.iter().take(64).any(|&b| b == 0) {
-        let units: Vec<u16> = bytes
+    let has_bom = bytes.starts_with(&[0xff, 0xfe]);
+    let has_utf16_nul = bytes
+        .iter()
+        .take(64)
+        .skip(1)
+        .step_by(2)
+        .any(|&byte| byte == 0);
+    if has_bom || has_utf16_nul {
+        let payload = if has_bom { &bytes[2..] } else { bytes };
+        let units: Vec<u16> = payload
             .chunks_exact(2)
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect();
@@ -2769,18 +2773,8 @@ fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
 }
 
 #[cfg(any(windows, test))]
-// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
-#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wslconfig(bytes: &[u8]) -> String {
-    if bytes.starts_with(&[0xff, 0xfe]) {
-        let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
-        String::from_utf16_lossy(&units)
-    } else {
-        String::from_utf8_lossy(bytes).into_owned()
-    }
+    decode_wsl_text(bytes)
 }
 
 /// Probe WSL2 readiness for the doctor view. Reports "installed but
@@ -7412,6 +7406,22 @@ pub fn run() {
 mod tests {
     use super::*;
 
+    fn wsl_output_fixture_bytes(name: &str) -> &'static [u8] {
+        match name {
+            "utf16le-bom.bin" => {
+                include_bytes!("../../../vm/tests/fixtures/wsl-output/utf16le-bom.bin")
+            }
+            "utf16le-no-bom.bin" => {
+                include_bytes!("../../../vm/tests/fixtures/wsl-output/utf16le-no-bom.bin")
+            }
+            "utf8.bin" => include_bytes!("../../../vm/tests/fixtures/wsl-output/utf8.bin"),
+            "mixed-utf16le-utf8.bin" => {
+                include_bytes!("../../../vm/tests/fixtures/wsl-output/mixed-utf16le-utf8.bin")
+            }
+            other => panic!("unknown WSL output fixture: {other}"),
+        }
+    }
+
     #[test]
     fn home_resolution_keeps_home_before_userprofile() {
         assert_eq!(
@@ -7522,6 +7532,19 @@ mod tests {
             assert!(wslconfig_uses_mirrored_networking(&decode_wslconfig(
                 fixture
             )));
+        }
+    }
+
+    #[test]
+    fn decodes_every_shared_wsl_output_fixture() {
+        let manifest: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../vm/tests/fixtures/wsl-output/expected.json"
+        ))
+        .expect("valid WSL output fixture manifest");
+        for fixture in manifest["fixtures"].as_array().unwrap() {
+            let bytes = wsl_output_fixture_bytes(fixture["file"].as_str().unwrap());
+            assert_eq!(decode_wsl_text(bytes), fixture["decoded"]);
+            assert_eq!(decode_wslconfig(bytes), fixture["decoded"]);
         }
     }
 

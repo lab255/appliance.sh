@@ -255,66 +255,72 @@ export async function checkPorts(): Promise<CheckResult[]> {
  * second byte — and decode accordingly.
  */
 export function decodeWindowsToolOutput(buf: Buffer): string {
-  if (buf.length >= 2) {
-    // BOM, or the even-index-NUL pattern of UTF-16LE ASCII.
-    const hasBom = buf[0] === 0xff && buf[1] === 0xfe;
-    let nulEven = 0;
-    const probe = Math.min(buf.length, 64);
-    for (let i = 1; i < probe; i += 2) if (buf[i] === 0) nulEven++;
-    if (hasBom || nulEven > probe / 4) {
-      return buf.toString('utf16le').replace(/^\uFEFF/, '');
+  const hasBom = buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe;
+  let hasUtf16Nul = false;
+  for (let i = 1; i < Math.min(buf.length, 64); i += 2) {
+    if (buf[i] === 0) {
+      hasUtf16Nul = true;
+      break;
     }
+  }
+  if (hasBom || hasUtf16Nul) {
+    return (hasBom ? buf.subarray(2) : buf).toString('utf16le');
   }
   return buf.toString('utf8');
 }
 
+const VIRTUALIZATION_REMEDIATION =
+  'Enable virtualization in your BIOS/UEFI (often called "Intel VT-x", "AMD-V", or "SVM"), then enable the Windows feature: open PowerShell as Administrator, run `Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform`, and reboot.';
+const KERNEL_REMEDIATION = 'Update WSL: open PowerShell and run `wsl --update`, then retry.';
+const NOT_INSTALLED_REMEDIATION =
+  'Open PowerShell as Administrator, run `wsl --install`, reboot, then re-run `appliance init`.';
+export const WSL_MIRRORED_REMEDIATION =
+  'Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` (or remove the setting), run `wsl --shutdown`, then retry.';
+
+const WSL_FAILURE_RULES = [
+  {
+    signatures: ['0x80370102', '0x80370114', 'virtual machine platform', 'hypervisor', 'virtualization', 'hcs'],
+    key: 'virtualization-disabled',
+    detail: 'virtualization is not available to WSL2',
+    remediation: VIRTUALIZATION_REMEDIATION,
+  },
+  {
+    signatures: ['wsl --update', 'kernel', '0x800701bc'],
+    key: 'kernel-outdated',
+    detail: 'the WSL2 kernel is missing or outdated',
+    remediation: KERNEL_REMEDIATION,
+  },
+  {
+    signatures: ['wsl --install', 'not installed', 'no installed distributions'],
+    key: 'not-installed',
+    detail: 'WSL is not set up on this machine',
+    remediation: NOT_INSTALLED_REMEDIATION,
+  },
+  {
+    signatures: ['mirrored networking', 'networkingmode=mirrored'],
+    key: 'mirrored-networking',
+    detail: 'WSL mirrored networking is not supported by the managed VM',
+    remediation: WSL_MIRRORED_REMEDIATION,
+  },
+] as const;
+
 /**
- * Map a `wsl.exe` failure to what actually went wrong + the fix. The
- * two big classes a fresh machine hits:
- *   - virtualization disabled (BIOS/UEFI, or the "Virtual Machine
- *     Platform" Windows feature off) — HCS error 0x80370102 et al.
- *   - the WSL2 kernel missing/outdated — fixed by `wsl --update`.
- * Exported for tests; keep the signature list in sync with
- * packages/vm/src/backend/wsl.rs's boot-time classification.
+ * Map a `wsl.exe` failure to a stable key, what went wrong, and the fix.
+ * The cross-language fixture manifest locks every signature and remediation.
  */
-export function classifyWslFailure(output: string): { detail: string; remediation: string } {
+export function classifyWslFailure(output: string): { key: string; detail: string; remediation: string } {
   const text = output.toLowerCase();
-  if (
-    text.includes('0x80370102') ||
-    text.includes('0x80370114') ||
-    text.includes('virtual machine platform') ||
-    text.includes('hypervisor') ||
-    (text.includes('virtualization') && (text.includes('enable') || text.includes('not'))) ||
-    text.includes('hcs')
-  ) {
-    return {
-      detail: 'virtualization is not available to WSL2',
-      remediation:
-        'Enable virtualization in your BIOS/UEFI (often called "Intel VT-x", "AMD-V", or "SVM"), then enable the ' +
-        'Windows feature: open PowerShell as Administrator, run ' +
-        '`Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform`, and reboot.',
-    };
-  }
-  if (text.includes('wsl --update') || text.includes('kernel') || text.includes('0x800701bc')) {
-    return {
-      detail: 'the WSL2 kernel is missing or outdated',
-      remediation: 'Update WSL: open PowerShell and run `wsl --update`, then retry.',
-    };
-  }
-  if (text.includes('wsl --install') || text.includes('not installed') || text.includes('no installed distributions')) {
-    return {
-      detail: 'WSL is not set up on this machine',
-      remediation: 'Open PowerShell as Administrator, run `wsl --install`, reboot, then re-run `appliance init`.',
-    };
+  for (const rule of WSL_FAILURE_RULES) {
+    if (rule.signatures.some((signature) => text.includes(signature))) {
+      return { key: rule.key, detail: rule.detail, remediation: rule.remediation };
+    }
   }
   return {
+    key: 'unknown',
     detail: `wsl.exe is not working: ${output.trim().split('\n')[0] || 'unknown error'}`,
     remediation: 'Run `wsl --status` in PowerShell to see the underlying error; `wsl --update` fixes most of them.',
   };
 }
-
-export const WSL_MIRRORED_REMEDIATION =
-  'Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` (or remove the setting), run `wsl --shutdown`, then retry.';
 
 /** Parse the one WSL setting the managed VM cannot support. The last
  * networkingMode assignment under [wsl2] wins; comments and other
@@ -344,9 +350,7 @@ export function wslConfigUsesMirroredNetworking(text: string): boolean {
 /** Decode a `.wslconfig` at the filesystem boundary. Windows PowerShell 5.1
  * and Notepad commonly write this file as BOM-marked UTF-16LE. */
 export function decodeWslConfig(bytes: Buffer): string {
-  return bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe
-    ? bytes.toString('utf16le')
-    : bytes.toString('utf8');
+  return decodeWindowsToolOutput(bytes);
 }
 
 /**

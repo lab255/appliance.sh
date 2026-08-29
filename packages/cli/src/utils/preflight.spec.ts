@@ -15,6 +15,16 @@ import {
 } from './preflight.js';
 import type { PreflightReport } from './preflight.js';
 
+interface WslOutputManifest {
+  classifications: Array<{ key: string; signatures: string[]; remediation: string }>;
+  fixtures: Array<{ file: string; decoded: string; classification: string }>;
+}
+
+const wslOutputFixtureRoot = new URL('../../../vm/tests/fixtures/wsl-output/', import.meta.url);
+const wslOutputManifest = JSON.parse(
+  fs.readFileSync(new URL('expected.json', wslOutputFixtureRoot), 'utf8')
+) as WslOutputManifest;
+
 // These tests cover the deterministic decision logic in the preflight
 // suite — the bits that don't depend on what's installed on the test
 // machine. Docker is deliberately absent from the suite: nothing in the
@@ -71,20 +81,30 @@ describe('checkWsl', () => {
 });
 
 describe('decodeWindowsToolOutput', () => {
-  it('decodes UTF-16LE output (the wsl.exe encoding) without NUL garbage', () => {
-    const text = 'WSL version: 2.0.0\r\n';
-    expect(decodeWindowsToolOutput(Buffer.from(text, 'utf16le'))).toBe(text);
-    expect(decodeWindowsToolOutput(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]))).toBe(
-      text
-    );
-  });
-
-  it('leaves UTF-8 output alone', () => {
-    expect(decodeWindowsToolOutput(Buffer.from('plain utf-8 ✓', 'utf8'))).toBe('plain utf-8 ✓');
+  it('decodes every shared WSL output fixture', () => {
+    for (const fixture of wslOutputManifest.fixtures) {
+      const bytes = fs.readFileSync(new URL(fixture.file, wslOutputFixtureRoot));
+      expect(decodeWindowsToolOutput(bytes), fixture.file).toBe(fixture.decoded);
+      expect(decodeWslConfig(bytes), fixture.file).toBe(fixture.decoded);
+    }
   });
 });
 
 describe('classifyWslFailure', () => {
+  it('maps every shared fixture and signature to its shared key and remediation', () => {
+    for (const fixture of wslOutputManifest.fixtures) {
+      const bytes = fs.readFileSync(new URL(fixture.file, wslOutputFixtureRoot));
+      expect(classifyWslFailure(decodeWindowsToolOutput(bytes)).key, fixture.file).toBe(fixture.classification);
+    }
+    for (const rule of wslOutputManifest.classifications) {
+      for (const signature of rule.signatures) {
+        const classification = classifyWslFailure(signature);
+        expect(classification.key, signature).toBe(rule.key);
+        expect(classification.remediation, signature).toBe(rule.remediation);
+      }
+    }
+  });
+
   it('maps the HCS virtualization-disabled error to the BIOS/feature fix', () => {
     const { detail, remediation } = classifyWslFailure(
       'WslRegisterDistribution failed with error: 0x80370102\nPlease enable the Virtual Machine Platform Windows feature and ensure virtualization is enabled in the BIOS.'
