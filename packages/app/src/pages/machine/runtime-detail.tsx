@@ -684,7 +684,13 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
 
       {activeTab === 'egress' ? (
         <div id="machine-panel-egress" role="tabpanel" aria-labelledby="machine-tab-egress">
-          <EgressPanel vm={vm} name={name} policy={policyQuery.data} policyError={policyQuery.error} />
+          <EgressPanel
+            vm={vm}
+            name={name}
+            policy={policyQuery.data}
+            policyError={policyQuery.error}
+            platform={host.platform}
+          />
         </div>
       ) : null}
 

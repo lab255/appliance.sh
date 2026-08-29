@@ -5013,6 +5013,10 @@ struct EgressPolicy {
     /// Engine-owned boundary contract: `"enforced"` or `"cooperative"`.
     #[serde(default)]
     boundary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    enforcement: Option<EgressEnforcement>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wsl_mode: Option<String>,
     /// CA cert path, populated for the UI when interception is on and
     /// the cert exists — the user injects this into clients to trust
     /// the interceptor.
@@ -5030,6 +5034,14 @@ struct EgressPolicy {
     /// effective default.
     #[serde(default)]
     net_link: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EgressEnforcement {
+    backend: String,
+    bypassable: bool,
+    scope: Vec<String>,
 }
 
 /// Resolve a VM's effective network link by reading the engine's
@@ -5105,6 +5117,22 @@ async fn microvm_egress_get(name: Option<String>) -> Result<EgressPolicy, String
         "nat".into()
     };
     Ok(policy)
+}
+
+#[tauri::command]
+async fn microvm_egress_wsl_mode(name: Option<String>, mode: String) -> Result<(), String> {
+    let name = vm_name(name);
+    if mode != "strict" && mode != "cooperative" {
+        return Err("wsl-mode must be strict or cooperative".into());
+    }
+    let bin = vm_binary().ok_or("appliance-vm is not installed")?;
+    let bin = bin.to_string_lossy().to_string();
+    let (ok, _stdout, stderr) =
+        run_status_command(&[&bin, "egress", "wsl-mode", &mode, "--name", &name]).await?;
+    if !ok {
+        return Err(format!("set wsl-mode failed: {}", stderr.trim()));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -7356,6 +7384,7 @@ pub fn run() {
             microvm_stop,
             microvm_delete,
             microvm_egress_get,
+            microvm_egress_wsl_mode,
             microvm_egress_default,
             microvm_egress_rule,
             microvm_egress_remove,

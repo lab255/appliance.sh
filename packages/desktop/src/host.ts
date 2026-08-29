@@ -427,6 +427,9 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
           get() {
             return invoke<EgressPolicy>('microvm_egress_get', { name: vm });
           },
+          async setWslMode(mode: 'strict' | 'cooperative') {
+            await invoke('microvm_egress_wsl_mode', { name: vm, mode });
+          },
           async setDefault(action: 'allow' | 'deny') {
             await invoke('microvm_egress_default', { name: vm, action });
           },

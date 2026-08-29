@@ -31,19 +31,42 @@ wins over an allow rule. `remove` deletes one exact operator rule, while `reset`
 clears all operator rules.
 
 The policy JSON contract keeps policy fields flattened at the top level, with
-`boundary` as the stable scalar. Future work may add a sibling
-`enforcement {backend, bypassable, scope}` object; it will never re-nest the
-policy fields under `policy`.
+`boundary` as the stable scalar. The sibling
+`enforcement {backend, bypassable, scope}` object describes the effective
+backend capability; policy fields are never re-nested under `policy`.
 
 ## Windows (WSL backend)
 
 WSL VMs use `netLink: "nat"`, and `appliance vm egress policy` reports
-`boundary: "cooperative"`. Their rules are enforced by the WSL proxy, not by a
-host-owned network route, so software in the guest can bypass the proxy. The F4
-flip does not change Windows: WSL VMs stay `nat` and their proxy default stays
-`allow` until you run `appliance vm egress default deny`, which is still
-cooperative. Here, F4 refers to the Netstack-default rollout for supported
-non-WSL backends.
+`boundary: "cooperative"` plus
+`enforcement: {"backend":"wsl","bypassable":true,"scope":["http","https"]}`.
+Never interpret this as a host-enforced boundary.
+
+Runtime defaults to strict mode:
+
+```sh
+appliance vm egress wsl-mode strict
+appliance vm egress wsl-mode cooperative
+```
+
+Strict refuses Runtime apps whose manifests request any egress grant. Apps
+without egress grants may run; the WSL guest chain drops their outbound
+traffic. Cooperative is an explicit opt-in: Runtime tasks receive the VM proxy
+and CA environment, and granted hosts are unioned across apps in the v1
+VM-wide host-only policy; this union drops each grant's port restriction. It is
+bypassable: an app can ignore the proxy and use direct TCP, UDP other than DNS,
+or raw IP. DNS must go through the proxy using CONNECT by hostname; direct UDP
+53 is dropped. `egress list` states the bypass limitation in its header.
+
+The per-VM value is persisted as `wslMode` in `vm.json`. New VMs capture the
+optional global default from `~/.appliance/settings.json`:
+
+```json
+{ "wslMode": "strict" }
+```
+
+Missing or invalid values resolve to strict. Changing the global value never
+silently widens an existing VM.
 
 For a blocked request, inspect recent denials and allow only the required host:
 
@@ -79,7 +102,9 @@ appliance vm egress gateway
 
 `ca` prints the generated CA certificate path. `gateway` prints the
 `HTTPS_PROXY` and CA values used by guest workloads. Credential capture and
-injection rules are separate from packaged-app inspection.
+injection rules are separate from packaged-app inspection. Brokered credential
+injection is disabled on WSL v1 because exact-lease attribution cannot survive
+Runtime SNAT.
 
 ## Development-VM traffic log
 

@@ -210,7 +210,7 @@ AP-190 removes `backend::ensure_runtime_supported`'s WSL bail and extends
 AP-193's `EgressPolicyOutput` rather than re-nesting it; `boundary` stays the
 stable scalar key and is `"enforced"` or `"cooperative"`.
 
-The human `egress list` header must say `WSL NAT — cooperative proxy,
+The human `egress list` header must say `WSL NAT - cooperative proxy,
 bypassable; direct TCP/UDP is not blocked`. macOS Netstack continues to say
 `host-enforced boundary`. Today the display keys only on the requested link and
 would incorrectly call a WSL Runtime host-enforced

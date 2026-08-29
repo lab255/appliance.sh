@@ -18,6 +18,7 @@ import {
   type EngineVmStatus,
 } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
+import { wslModeCommandArgs } from './utils/runtime-wsl-egress.js';
 
 // `appliance vm` — the microVM runtime engine (appliance-vm), the sole
 // local runtime now that bare k3d has been removed. Workloads run inside
@@ -684,6 +685,14 @@ egress
   .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
   .action((opts: { name: string }) => {
     process.exit(runVm(['egress', 'list', opts.name]));
+  });
+
+egress
+  .command('wsl-mode [mode]')
+  .description('read or set WSL Runtime egress posture (strict | cooperative; default strict)')
+  .option('--name <name>', 'VM name', 'appliance-runtime')
+  .action((mode: string | undefined, opts: { name: string }) => {
+    process.exit(runVm(wslModeCommandArgs(mode as 'strict' | 'cooperative' | undefined, opts.name)));
   });
 
 egress

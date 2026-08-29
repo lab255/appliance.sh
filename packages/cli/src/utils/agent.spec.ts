@@ -24,6 +24,7 @@ import {
   OPENAI_PLACEHOLDER_KEY,
   adapterForType,
   agentResultPaths,
+  assertAgentBrokerBackendSupported,
   classifyAutonomousResult,
   claudeCodeAdapter,
   codexAdapter,
@@ -307,7 +308,7 @@ describe('printKeyHelperCommand', () => {
 
   it('round-trips the argv array through configureBroker JSON without shell quoting', () => {
     runVmMock.mockReset().mockReturnValue(0);
-    configureBroker('ap-194-test', claudeCodeAdapter, apiKeyMode);
+    configureBroker('ap-194-test', claudeCodeAdapter, apiKeyMode, 'vz');
 
     expect(runVmMock).toHaveBeenCalledTimes(2);
     const credsArgs = runVmMock.mock.calls[0][0];
@@ -321,6 +322,30 @@ describe('printKeyHelperCommand', () => {
 });
 
 describe('resolveAuthMode (per stored kind)', () => {
+  it('disables brokered credential injection on WSL v1 before writing a rule', () => {
+    expect(() => assertAgentBrokerBackendSupported('wsl')).toThrow(
+      'use an in-guest API key; brokered injection returns in WSL v2'
+    );
+    expect(() => assertAgentBrokerBackendSupported('vz')).not.toThrow();
+    runVmMock.mockReset();
+    expect(() => configureBroker('wsl-test', claudeCodeAdapter, apiKeyMode, 'wsl')).toThrow(
+      'exact-lease re-attribution cannot survive SNAT'
+    );
+    expect(runVmMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses broker rule writes when Windows cannot resolve the VM backend', () => {
+    expect(() => assertAgentBrokerBackendSupported(undefined, 'win32')).toThrow(
+      'VM backend could not be resolved on Windows; use an in-guest API key; brokered injection returns in WSL v2'
+    );
+    expect(() => assertAgentBrokerBackendSupported(undefined, 'darwin')).not.toThrow();
+    runVmMock.mockReset();
+    expect(() => configureBroker('unknown-backend', claudeCodeAdapter, apiKeyMode, undefined, 'win32')).toThrow(
+      'VM backend could not be resolved on Windows'
+    );
+    expect(runVmMock).not.toHaveBeenCalled();
+  });
+
   it('selects the api-key mode for an api-key credential', () => {
     const m = resolveAuthMode(claudeCodeAdapter, 'api-key');
     expect(m.header).toBe('x-api-key');

@@ -16,6 +16,8 @@ import {
 } from './utils/runtime-reconcile.js';
 import { resolveVmBinary } from './utils/microvm-up.js';
 import { openExternalUrl } from './utils/open-external-url.js';
+import { decideRuntimeWslEgress, runtimeEgressCapability } from './utils/runtime-wsl-egress.js';
+import { requestedGrantsForManifest } from './utils/entitlements.js';
 
 export interface RuntimeOpenDescriptor {
   appId: string;
@@ -190,6 +192,18 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
       `'${descriptor.name}' has no web UI. View its logs with: appliance runtime logs ${descriptor.appId}`
     );
   }
+  const installed = resolveInstalledApp(selector, target);
+  if (!installed) throw new Error(`installed app '${selector}' was not found in workspace '${target}'`);
+  const opened = readBundleManifest(installed.bundlePath);
+  if (opened.classification !== 'runnable') throw new Error(`installed app '${installed.name}' is not runnable`);
+  const manifest = applianceV2Input.parse(opened.manifest);
+  const wslDecision = decideRuntimeWslEgress(
+    descriptor.appId,
+    runtimeEgressCapability(),
+    runtimeManifestRequestsEgress(manifest)
+  );
+  if (wslDecision.action === 'refuse') throw new Error(wslDecision.message);
+  if (wslDecision.warning) console.error(chalk.yellow(wslDecision.warning));
   const prepared = await reconcileAndStartRuntimeOpen(
     selector,
     target,
@@ -217,6 +231,10 @@ export async function runRuntimeOpen(args: string[]): Promise<void> {
   console.log(
     chalk.dim(routed === 'desktop' ? `Opened ${descriptor.name} in Appliance Desktop` : `Opening ${descriptor.url}`)
   );
+}
+
+export function runtimeManifestRequestsEgress(manifest: ApplianceV2): boolean {
+  return requestedGrantsForManifest(manifest).some((grant) => grant.control === 'egress-host');
 }
 
 export async function reconcileAndStartRuntimeOpen(

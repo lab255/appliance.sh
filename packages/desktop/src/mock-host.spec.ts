@@ -78,6 +78,20 @@ describe('mock host platform', () => {
     await expect(createMockHost().agentAuth?.hasHostClaude()).resolves.toBe(false);
   });
 
+  it('round-trips WSL mode through the mock egress host', async () => {
+    vi.stubGlobal('window', { location: { search: '?mock-host&platform=windows' } });
+    expect(mockHostEnabled()).toBe(true);
+    const egress = createMockHost().vm!.instance('appliance').egress;
+    expect(await egress.get()).toMatchObject({
+      boundary: 'cooperative',
+      wslMode: 'strict',
+      enforcement: { backend: 'wsl', bypassable: true, scope: ['http', 'https'] },
+    });
+    await egress.setWslMode('cooperative');
+    expect(await egress.get()).toMatchObject({ wslMode: 'cooperative' });
+    await egress.setWslMode('strict');
+  });
+
   it('renders the exact WSL mirrored-networking remediation scenario', async () => {
     vi.stubGlobal('window', {
       location: { search: '?mock-host&platform=windows&scenario=wsl-mirrored' },

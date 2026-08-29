@@ -97,6 +97,11 @@ export function mockHostEnabled(): boolean {
       PLATFORM_KEY,
       platform === 'windows' || platform === 'linux' || platform === 'macos' ? platform : 'macos'
     );
+    const wslMode = params.get('wsl-mode');
+    if (wslMode === 'strict' || wslMode === 'cooperative') {
+      mockVm('appliance').egress.wslMode = wslMode;
+      mockVm('appliance-runtime').egress.wslMode = wslMode;
+    }
     const scenario = params.get('scenario');
     if (scenario) {
       sessionStorage.setItem(SCENARIO_KEY, scenario);
@@ -1170,9 +1175,25 @@ export function createMockHost(): ConsoleHost {
           egress: {
             async get() {
               await sleep(100);
-              const netLink = vm.egress.netLink ?? 'nat';
-              const boundary = netLink === 'netstack' ? 'enforced' : 'cooperative';
-              return { ...vm.egress, boundary, netLink, enforced: boundary === 'enforced' };
+              const wsl = mockPlatform() === 'windows';
+              const netLink = wsl ? 'nat' : (vm.egress.netLink ?? 'nat');
+              const boundary = !wsl && netLink === 'netstack' ? 'enforced' : 'cooperative';
+              return {
+                ...vm.egress,
+                boundary,
+                netLink,
+                enforced: boundary === 'enforced',
+                enforcement: {
+                  backend: wsl ? 'wsl' : mockPlatform() === 'macos' ? 'vz' : 'kvm',
+                  bypassable: boundary !== 'enforced',
+                  scope: boundary === 'enforced' ? ['tcp', 'udp', 'dns'] : ['http', 'https'],
+                },
+                ...(wsl ? { wslMode: vm.egress.wslMode ?? 'strict' } : {}),
+              };
+            },
+            async setWslMode(mode: 'strict' | 'cooperative') {
+              await sleep(150);
+              vm.egress.wslMode = mode;
             },
             async setDefault(action: 'allow' | 'deny') {
               await sleep(150);
@@ -1205,6 +1226,7 @@ export function createMockHost(): ConsoleHost {
                 mitm: false,
                 boundary: vm.egress.boundary,
                 netLink: vm.egress.netLink,
+                wslMode: vm.egress.wslMode,
               };
             },
             async log(tail?: number) {
@@ -1379,6 +1401,7 @@ interface MockVm {
     mitm: boolean;
     caPath?: string;
     boundary?: 'enforced' | 'cooperative';
+    wslMode?: 'strict' | 'cooperative';
     /** Mirrors the VM's resolved net link; drives the enforced-boundary UI. */
     netLink?: 'netstack' | 'nat';
   };

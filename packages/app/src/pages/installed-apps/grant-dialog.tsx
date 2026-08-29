@@ -1,22 +1,31 @@
 import * as React from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Banner } from '@/components/ui/banner';
 import type { EntitlementGrantPrompt } from '@/lib/host';
 
 export function GrantDialog({
   prompt,
   busy = false,
+  platform,
+  wslMode = 'strict',
   onCancel,
   onGrant,
 }: {
   prompt: EntitlementGrantPrompt;
   busy?: boolean;
+  platform?: 'macos' | 'windows' | 'linux';
+  wslMode?: 'strict' | 'cooperative';
   onCancel: () => void;
   onGrant: (grantIds: string[]) => void;
 }) {
   const required = React.useMemo(() => new Set(prompt.requiredGrantIds), [prompt.requiredGrantIds]);
   const requiredGrants = prompt.grants.filter((grant) => required.has(grant.id));
   const mounts = prompt.grants.filter((grant) => grant.control === 'mount' && !required.has(grant.id));
+  const wslEgressWarning =
+    platform === 'windows' &&
+    wslMode === 'cooperative' &&
+    prompt.grants.some((grant) => grant.control === 'egress-host');
   const [selected, setSelected] = React.useState(() => new Set(prompt.grants.map((grant) => grant.id)));
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const dialogRef = React.useRef<HTMLDivElement>(null);
@@ -69,7 +78,7 @@ export function GrantDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="grant-dialog-title"
-        aria-describedby="grant-dialog-description"
+        aria-describedby={`grant-dialog-description${wslEgressWarning ? ' grant-wsl-egress-warning' : ''}`}
         className="w-full max-w-xl rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-5 shadow-xl"
         onKeyDown={handleKeyDown}
       >
@@ -89,6 +98,13 @@ export function GrantDialog({
         </div>
 
         <div className="mt-4 space-y-4">
+          {wslEgressWarning ? (
+            <Banner id="grant-wsl-egress-warning" tone="warning" title="WSL cooperative mode is bypassable">
+              Runtime apps can ignore HTTP(S)_PROXY and use direct TCP, UDP (except DNS), or raw IP. DNS must go through
+              proxy CONNECT by hostname; direct UDP 53 is dropped. Grants are unioned into a host-only allowlist across
+              apps, dropping per-grant ports.
+            </Banner>
+          ) : null}
           {requiredGrants.length ? (
             <section aria-labelledby="grant-required-heading">
               <h3 id="grant-required-heading" className="mb-2 text-xs font-semibold tracking-wide uppercase">
