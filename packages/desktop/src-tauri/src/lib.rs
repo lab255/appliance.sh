@@ -2547,6 +2547,8 @@ async fn local_preflight() -> Vec<PreflightCheck> {
 /// even-offset-NUL sniff; this any-NUL form is adequate for wsl.exe
 /// diagnostics, which are pure ASCII UTF-16LE.
 #[cfg(windows)]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn decode_wsl_text(bytes: &[u8]) -> String {
     if bytes.iter().take(64).any(|&b| b == 0) {
         let units: Vec<u16> = bytes
@@ -2559,11 +2561,73 @@ fn decode_wsl_text(bytes: &[u8]) -> String {
     }
 }
 
+#[cfg(windows)]
+const WSL_MIRRORED_REMEDIATION: &str =
+    "Set `networkingMode=NAT` under `[wsl2]` in `%USERPROFILE%\\.wslconfig` \
+     (or remove the setting), run `wsl --shutdown`, then retry.";
+
+#[cfg(any(windows, test))]
+fn wslconfig_uses_mirrored_networking(text: &str) -> bool {
+    let mut in_wsl2 = false;
+    let mut mode: Option<&str> = None;
+    for raw in text.lines() {
+        let line = raw.trim().trim_start_matches('\u{feff}');
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_wsl2 = line[1..line.len() - 1].trim().eq_ignore_ascii_case("wsl2");
+            continue;
+        }
+        if !in_wsl2 {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.trim().eq_ignore_ascii_case("networkingMode") {
+            mode = Some(value.split(['#', ';']).next().unwrap_or_default().trim());
+        }
+    }
+    mode.is_some_and(|value| value.eq_ignore_ascii_case("mirrored"))
+}
+
+#[cfg(any(windows, test))]
+// Keep `chunks_exact` until the crate MSRV reaches Rust 1.88 (`slice::as_chunks`).
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
+fn decode_wslconfig(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xff, 0xfe]) {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 /// Probe WSL2 readiness for the doctor view. Reports "installed but
 /// broken" with wsl.exe's own first diagnostic line (virtualization
 /// disabled, kernel outdated, …) rather than a bare boolean.
 #[cfg(windows)]
 async fn wsl_preflight_check() -> PreflightCheck {
+    let mirrored = std::env::var_os("USERPROFILE")
+        .and_then(|home| std::fs::read(std::path::PathBuf::from(home).join(".wslconfig")).ok())
+        .is_some_and(|bytes| wslconfig_uses_mirrored_networking(&decode_wslconfig(&bytes)));
+    if mirrored {
+        return PreflightCheck {
+            tool: "wsl".to_string(),
+            installed: false,
+            version: None,
+            purpose: "Windows Subsystem for Linux 2 — mirrored networking is unsupported by the Dev Machine.".to_string(),
+            install_hint: WSL_MIRRORED_REMEDIATION.to_string(),
+            auto_installable: false,
+            error: Some("WSL mirrored networking is enabled.".to_string()),
+            daemon_running: None,
+            daemon_startable: None,
+        };
+    }
     let probe = quiet_command("wsl.exe").arg("--status").output().await;
     let (installed, version, error) = match probe {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
@@ -7032,6 +7096,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wslconfig_reader_detects_shared_utf8_and_utf16le_fixtures() {
+        for fixture in [
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored.ini").as_slice(),
+            include_bytes!("../../../vm/tests/fixtures/wslconfig-mirrored-utf16le.ini").as_slice(),
+        ] {
+            assert!(wslconfig_uses_mirrored_networking(&decode_wslconfig(
+                fixture
+            )));
+        }
+    }
 
     #[test]
     fn credential_helper_argv_stays_an_array_across_desktop_vm_boundary() {

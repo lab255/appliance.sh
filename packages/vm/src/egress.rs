@@ -1132,7 +1132,7 @@ fn target_path(target: &str) -> String {
 /// the guest otherwise. This is the coarse open-proxy admission gate, NOT
 /// the brokered-injection gate: once this VM's leased guest IP is known we
 /// pin to the EXACT address, but until then (very early boot) we fall back
-/// to the /24 subnet match — tight enough to keep the wider LAN out of a
+/// to the backend-recorded subnet (WSL /20, vz /24) — tight enough to keep the wider LAN out of a
 /// gateway/0.0.0.0-bound open proxy, while still admitting the guest before
 /// its lease file lands so early-boot egress isn't refused.
 ///
@@ -1152,11 +1152,10 @@ fn peer_allowed(peer: std::net::IpAddr, name: &str) -> bool {
     match guest_ip_v4(name) {
         // Steady state: only this VM's own guest IP.
         Some(ip) => peer == ip,
-        // Pre-lease window only: coarse /24 match.
+        // Pre-lease window only: the backend's last recorded NAT range.
         None => {
-            let subnet = guest_subnet_v3(name);
-            let o = peer.octets();
-            [o[0], o[1], o[2]] == subnet
+            let (anchor, prefix_len) = guest_admission_prefix(name);
+            crate::network_lease::same_prefix(anchor, peer, prefix_len)
         }
     }
 }
@@ -1218,15 +1217,28 @@ fn guest_ip_v4(name: &str) -> Option<std::net::Ipv4Addr> {
         .and_then(|raw| raw.trim().parse::<std::net::Ipv4Addr>().ok())
 }
 
-/// First three octets of the VM's subnet, from the guest's leased IP
-/// (defaults to vz's 192.168.64.x when not yet known).
-fn guest_subnet_v3(name: &str) -> [u8; 3] {
-    guest_ip_v4(name)
-        .map(|ip| {
-            let o = ip.octets();
-            [o[0], o[1], o[2]]
-        })
-        .unwrap_or([192, 168, 64])
+/// Backend-recorded admission range retained across boots. WSL records
+/// its gateway and dynamic prefix (normally /20); vz needs no files and
+/// falls back to its stable 192.168.64.0/24 NAT.
+fn guest_admission_prefix(name: &str) -> (std::net::Ipv4Addr, u8) {
+    let paths = VmPaths::for_name(name);
+    let gateway = std::fs::read_to_string(paths.gateway_ip())
+        .ok()
+        .and_then(|raw| raw.trim().parse().ok());
+    let prefix_len = std::fs::read_to_string(paths.guest_prefix_len())
+        .ok()
+        .and_then(|raw| parse_guest_prefix_len(&raw));
+    match (gateway, prefix_len) {
+        (Some(gateway), Some(prefix_len)) => (gateway, prefix_len),
+        _ => (std::net::Ipv4Addr::new(192, 168, 64, 1), 24),
+    }
+}
+
+fn parse_guest_prefix_len(raw: &str) -> Option<u8> {
+    raw.trim()
+        .parse::<u8>()
+        .ok()
+        .filter(|prefix| (8..=32).contains(prefix))
 }
 
 /// The proxy URL a guest workload should point `HTTPS_PROXY` at,
@@ -1452,6 +1464,31 @@ mod tests {
         assert!(!peer_allowed("10.0.0.5".parse().unwrap(), name));
         // Non-loopback IPv6 isn't on the vz NAT.
         assert!(!peer_allowed("fd00::1".parse().unwrap(), name));
+    }
+
+    #[test]
+    fn peer_guard_uses_recorded_wsl_prefix_before_exact_lease() {
+        let name = "egress-peer-test-wsl-prefix";
+        let paths = VmPaths::for_name(name);
+        let _ = std::fs::remove_dir_all(&paths.dir);
+        std::fs::create_dir_all(&paths.dir).unwrap();
+        std::fs::write(paths.gateway_ip(), "172.25.64.1\n").unwrap();
+        std::fs::write(paths.guest_prefix_len(), "20\n").unwrap();
+
+        assert!(peer_allowed("172.25.66.42".parse().unwrap(), name));
+        assert!(peer_allowed("172.25.79.254".parse().unwrap(), name));
+        assert!(!peer_allowed("172.25.80.1".parse().unwrap(), name));
+
+        let _ = std::fs::remove_dir_all(&paths.dir);
+    }
+
+    #[test]
+    fn peer_guard_rejects_corrupt_overbroad_prefixes() {
+        for prefix in ["0", "2", "7", "33"] {
+            assert_eq!(parse_guest_prefix_len(prefix), None);
+        }
+        assert_eq!(parse_guest_prefix_len("8\n"), Some(8));
+        assert_eq!(parse_guest_prefix_len("32"), Some(32));
     }
 
     #[test]

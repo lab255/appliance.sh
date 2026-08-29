@@ -548,6 +548,12 @@ impl VmPaths {
     pub fn gateway_ip(&self) -> PathBuf {
         self.dir.join("gateway-ip")
     }
+    /// Prefix length paired with the WSL lease. Kept across boots with
+    /// `gateway-ip` so the egress proxy can admit the new guest from the
+    /// real WSL /20 during the short window before its exact lease lands.
+    pub fn guest_prefix_len(&self) -> PathBuf {
+        self.dir.join("guest-prefix-len")
+    }
     pub fn host_log(&self) -> PathBuf {
         self.dir.join("host.log")
     }
