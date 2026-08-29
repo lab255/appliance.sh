@@ -168,10 +168,9 @@ const MOCK_CURRENT_VERSION = '1.48.0';
 
 // Agent-login mock (Phase 5, L3 / multi-agent G3): the host-side credential
 // store, in memory, keyed PER AGENT TYPE (each agent has its own provider
-// store). Flip `MOCK_HAS_HOST_CLAUDE` to false to QA the "Sign in with Claude"
-// gate (no host `claude` → install guidance / use an API key).
+// store). The Windows mock deliberately reports Claude missing so
+// `?mock-host&platform=windows` exercises its WinGet/npm install guidance.
 const mockAgentCreds = new Map<string, AgentAuthKind>();
-const MOCK_HAS_HOST_CLAUDE = true;
 
 function base64url(bytes: Uint8Array): string {
   let binary = '';
@@ -922,7 +921,7 @@ export function createMockHost(): ConsoleHost {
       },
       async hasHostClaude() {
         await sleep(60);
-        return MOCK_HAS_HOST_CLAUDE;
+        return mockPlatform() !== 'windows';
       },
       async runSetupToken() {
         await sleep(80);

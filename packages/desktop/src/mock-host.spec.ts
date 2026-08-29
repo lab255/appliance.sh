@@ -71,6 +71,13 @@ describe('mock host platform', () => {
     expect(createMockHost().platform).toBe('macos');
   });
 
+  it('exposes the Windows Claude install-copy fixture', async () => {
+    vi.stubGlobal('window', { location: { search: '?mock-host&platform=windows' } });
+    expect(mockHostEnabled()).toBe(true);
+
+    await expect(createMockHost().agentAuth?.hasHostClaude()).resolves.toBe(false);
+  });
+
   it('renders the exact WSL mirrored-networking remediation scenario', async () => {
     vi.stubGlobal('window', {
       location: { search: '?mock-host&platform=windows&scenario=wsl-mirrored' },

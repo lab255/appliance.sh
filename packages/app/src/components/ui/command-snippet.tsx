@@ -8,7 +8,15 @@ import { cn } from '@/lib/utils';
  * hints) — if we're going to tell someone to run a command, the least
  * we can do is let them copy it without selecting text.
  */
-export function CommandSnippet({ command, className }: { command: string; className?: string }) {
+export function CommandSnippet({
+  command,
+  className,
+  copyButtonAriaLabel = 'Copy command',
+}: {
+  command: string;
+  className?: string;
+  copyButtonAriaLabel?: string;
+}) {
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,7 +49,7 @@ export function CommandSnippet({ command, className }: { command: string; classN
       <button
         type="button"
         onClick={onCopy}
-        aria-label={copied ? 'Copied' : 'Copy command'}
+        aria-label={copied ? 'Copied' : copyButtonAriaLabel}
         className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
       >
         {copied ? (

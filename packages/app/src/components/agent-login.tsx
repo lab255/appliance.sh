@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Banner } from '@/components/ui/banner';
 import { CommandSnippet } from '@/components/ui/command-snippet';
 import { Input } from '@/components/ui/input';
-import type { AgentAuthKind, AgentAuthStatus } from '@/lib/host';
+import {
+  localMachineLabel,
+  localMachineLabelInline,
+  type AgentAuthKind,
+  type AgentAuthStatus,
+  type HostPlatform,
+} from '@/lib/host';
 import {
   AGENT_ADAPTERS,
   agentAdapter,
@@ -233,7 +239,7 @@ export function AgentLoginPanel({
 
       {!status?.configured || showForm ? (
         adapter.login === 'claude' ? (
-          <ClaudeLogin auth={auth} busy={busy} setErr={setErr} store={store} />
+          <ClaudeLogin platform={host.platform} auth={auth} busy={busy} setErr={setErr} store={store} />
         ) : adapter.login === 'github-pat' ? (
           <CopilotPatLogin busy={busy} setErr={setErr} store={store} />
         ) : (
@@ -265,16 +271,20 @@ export function AgentLoginPanel({
 type StoreFn = (kind: AgentAuthKind, value: string, after?: () => void) => Promise<void>;
 
 function ClaudeLogin({
+  platform,
   auth,
   busy,
   setErr,
   store,
 }: {
+  platform: HostPlatform;
   auth: NonNullable<ReturnType<typeof useHost>['agentAuth']>;
   busy: boolean;
   setErr: (e: string | null) => void;
   store: StoreFn;
 }) {
+  const machineLabel = localMachineLabel(platform);
+  const machineLabelInline = localMachineLabelInline(platform);
   const [mode, setMode] = React.useState<'oauth' | 'api-key'>('oauth');
   const [apiKey, setApiKey] = React.useState('');
   const [paste, setPaste] = React.useState('');
@@ -384,10 +394,31 @@ function ClaudeLogin({
           // runSetupToken) — until it does, offer the copyable command.
           <div className="space-y-2 rounded-md border border-dashed border-[var(--color-border)] p-3 text-[var(--color-muted-foreground)]">
             <p>
-              Signing in with a Claude subscription needs the Claude Code app, which isn&rsquo;t on this computer yet.
-              Copy this command and run it in a terminal to install it — or use an API key instead.
+              {machineLabel} needs Claude Code before you can sign in with a Claude subscription.
+              {platform === 'windows'
+                ? ' Copy one of these commands and run it in a terminal — or use an API key instead.'
+                : ' Copy this command and run it in a terminal to install it — or use an API key instead.'}
             </p>
-            <CommandSnippet command="npm install -g @anthropic-ai/claude-code" />
+            {platform === 'windows' ? (
+              <>
+                <div className="space-y-1" role="group" aria-labelledby="winget-install-label">
+                  <span id="winget-install-label">Install with WinGet:</span>
+                  <CommandSnippet
+                    command="winget install Anthropic.ClaudeCode"
+                    copyButtonAriaLabel="Copy the WinGet command"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span>Or, if Node.js is installed:</span>
+                  <CommandSnippet
+                    command="npm install -g @anthropic-ai/claude-code"
+                    copyButtonAriaLabel="Copy the npm command"
+                  />
+                </div>
+              </>
+            ) : (
+              <CommandSnippet command="npm install -g @anthropic-ai/claude-code" />
+            )}
             <Button variant="outline" size="sm" onClick={() => setMode('api-key')}>
               <KeyRound className="h-3.5 w-3.5" /> Use an API key
             </Button>
@@ -395,8 +426,9 @@ function ClaudeLogin({
         ) : (
           <div className="space-y-2">
             <p className="text-[var(--color-muted-foreground)]">
-              Sign in with your Claude Pro/Max/Team subscription — no API key needed. A terminal window starts the
-              sign-in, your browser opens to approve it, and the terminal then shows a token to paste below.
+              Sign in with your Claude Pro/Max/Team subscription — no API key needed. A sign-in terminal opens on{' '}
+              {machineLabelInline}, your browser asks you to approve, and the terminal then shows a token to paste
+              below.
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -414,16 +446,15 @@ function ClaudeLogin({
             </div>
             {terminalLaunched ? (
               <p role="status" aria-live="polite" aria-atomic="true">
-                Terminal opened
+                Sign-in terminal opened
               </p>
             ) : null}
-            {/* Auto-open only exists on macOS today (the host's runSetupToken
-                resolves false elsewhere) — surface the manual command instead
-                of a silent no-op. */}
+            {/* Linux still uses the manual fallback; Windows and macOS hosts
+                auto-launch a visible terminal. */}
             {terminalAutoOpenFailed ? (
               <p className="text-[var(--color-muted-foreground)]">
-                A terminal couldn&rsquo;t be opened automatically on this computer — copy the command below and run it
-                in any terminal instead.
+                A terminal couldn&rsquo;t be opened automatically on {machineLabelInline} — copy the command below and
+                run it in any terminal instead.
               </p>
             ) : null}
             <div className="space-y-1">

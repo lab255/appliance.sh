@@ -22,16 +22,16 @@ knowing when touching the Rust shell:
   match macOS.
 - **PTY spawns don't inherit the process PATH.** portable-pty on Windows
   rebuilds the child environment from the registry (system + user
-  `Environment` keys), which discards the helper bin dir this process
-  prepends to PATH at startup. `terminal.rs` re-asserts the live process
-  PATH on every `CommandBuilder` — keep that when adding spawn sites, or
-  `kubectl` silently stops resolving in terminals while working everywhere
-  else.
-- **Two managed bin dirs.** The microVM engine installs to
-  `~/.appliance/bin/appliance-vm.exe` (shared with the CLI); helper-installed
-  tools (kubectl, crane, buildctl) live in `%LOCALAPPDATA%\Appliance\bin`
-  (mirrors `helperBinDir()` in `@appliance.sh/helper`). Both are put on the
-  desktop's PATH at startup.
+  `Environment` keys), which discards Desktop's startup PATH composition.
+  `terminal.rs` re-asserts that complete live PATH on every `CommandBuilder` —
+  keep that when adding spawn sites, or `kubectl` silently stops resolving in
+  terminals while working everywhere else.
+- **Windows PATH composition.** Desktop prepends both managed locations:
+  `%LOCALAPPDATA%\Appliance\bin` for helper-installed tools (kubectl, crane,
+  buildctl), and `~/.appliance/bin` for `appliance-vm.exe`, shared with the CLI.
+  It also prepends existing WinGet links, Scoop shims, and Docker Desktop's bin
+  directory. `~` deliberately resolves `HOME` before `USERPROFILE`, matching
+  the CLI for Git Bash launches.
 
 ## Icons
 
