@@ -731,8 +731,11 @@ export interface MicroVmCredsHost {
     capture: boolean;
     inject: boolean;
     header?: string;
-    helper?: string | string[];
+    /** New and updated rules are argv-only. Strings remain readable for legacy migration. */
+    helper?: string[];
   }): Promise<void>;
+  /** Desktop-native executable picker; absent in hosts without a dialog surface. */
+  pickHelperProgram?(): Promise<string | null>;
   remove(host: string): Promise<void>;
   /** Manually store a secret (e.g. paste an API key). */
   setSecret(host: string, value: string, header?: string): Promise<void>;

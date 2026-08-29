@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
 import { Tag } from '@/components/ui/tag';
 import { FriendlyError } from '@/components/friendly-error';
-import type { MicroVmInstanceHost } from '@/lib/host';
+import type { HostPlatform, MicroVmInstanceHost } from '@/lib/host';
+import { CredentialHelperEditor, splitLegacyHelper, validateHelperArgv } from './credential-helper-editor';
 
 // Per-host credential capture/injection (apiKeyHelper): the proxy can
 // lift a credential header off a workload's request into a host-side
@@ -21,7 +22,17 @@ import type { MicroVmInstanceHost } from '@/lib/host';
 // run its own `['microvm', name, 'egress']` 15 s poll only to read
 // `policy.mitm`, doubling the egress fetch. It no longer fetches the policy;
 // the credentials list (a separate key) stays local.
-export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost; name: string; mitmOn: boolean }) {
+export function CredentialsPanel({
+  vm,
+  name,
+  mitmOn,
+  platform,
+}: {
+  vm: MicroVmInstanceHost;
+  name: string;
+  mitmOn: boolean;
+  platform: HostPlatform;
+}) {
   const queryClient = useQueryClient();
   const creds = vm.creds;
   const [busy, setBusy] = React.useState(false);
@@ -32,7 +43,11 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
   const [capture, setCapture] = React.useState(true);
   const [inject, setInject] = React.useState(true);
   const [header, setHeader] = React.useState('authorization');
-  const [helper, setHelper] = React.useState('');
+  const [helperProgram, setHelperProgram] = React.useState('');
+  const [helperArgs, setHelperArgs] = React.useState<string[]>([]);
+  const [showHelperErrors, setShowHelperErrors] = React.useState(false);
+  const [editingLegacyHost, setEditingLegacyHost] = React.useState<string | null>(null);
+  const [conversionError, setConversionError] = React.useState<{ host: string; message: string } | null>(null);
   const [formOpen, setFormOpen] = React.useState(false);
   const [forgetConfirm, setForgetConfirm] = React.useState(false);
   const [pendingRemoval, setPendingRemoval] = React.useState<string | null>(null);
@@ -71,14 +86,51 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
   const addRule = async () => {
     const h = ruleHost.trim();
     if (!h) return;
-    const helperCmd = helper.trim();
+    const helperValidation = validateHelperArgv(helperProgram, helperArgs, platform);
+    const invalidHelper = Boolean(helperValidation.program) || helperValidation.args.some(Boolean);
+    setShowHelperErrors(true);
+    if (invalidHelper) return;
+    const program = helperProgram.trim();
+    const helper = program ? [program, ...helperArgs.map((arg) => arg.trim())] : undefined;
     const added = await act(() =>
-      creds.add({ host: h, capture, inject, header: header.trim() || 'authorization', helper: helperCmd || undefined })
+      creds.add({ host: h, capture, inject, header: header.trim() || 'authorization', helper })
     );
     if (added) {
       setRuleHost('');
-      setHelper('');
+      setHelperProgram('');
+      setHelperArgs([]);
+      setShowHelperErrors(false);
+      setEditingLegacyHost(null);
       setFormOpen(false);
+    }
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingLegacyHost(null);
+    setShowHelperErrors(false);
+    setRuleHost('');
+    setHelperProgram('');
+    setHelperArgs([]);
+  };
+
+  const convertLegacyRule = (rule: NonNullable<typeof data>['rules'][number]) => {
+    if (typeof rule.helper !== 'string') return;
+    try {
+      const argv = splitLegacyHelper(rule.helper);
+      if (!argv.length) throw new Error('The legacy helper command is empty.');
+      setConversionError(null);
+      setRuleHost(rule.host);
+      setCapture(rule.capture);
+      setInject(rule.inject);
+      setHeader(rule.header || 'authorization');
+      setHelperProgram(argv[0]);
+      setHelperArgs(argv.slice(1));
+      setShowHelperErrors(false);
+      setEditingLegacyHost(rule.host);
+      setFormOpen(true);
+    } catch (error) {
+      setConversionError({ host: rule.host, message: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -149,10 +201,19 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
               mono
               value={ruleHost}
               onChange={(e) => setRuleHost(e.target.value)}
+              readOnly={editingLegacyHost !== null}
               aria-describedby={!mitmOn ? 'credential-tls-note' : undefined}
             />
           </Field>
-          <details className="rounded-md border border-[var(--color-border)] p-3">
+          {editingLegacyHost ? (
+            <Banner>
+              Review the converted program and arguments, then save. The legacy shell string will not be reused.
+            </Banner>
+          ) : null}
+          <details
+            className="rounded-md border border-[var(--color-border)] p-3"
+            {...(editingLegacyHost ? { open: true } : {})}
+          >
             <summary className="cursor-pointer text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
               Technical details
             </summary>
@@ -164,13 +225,15 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
               >
                 <Input id="credential-header" mono value={header} onChange={(e) => setHeader(e.target.value)} />
               </Field>
-              <Field
-                label="Helper command"
-                htmlFor="credential-helper"
-                hint="Optional. Its standard output becomes the credential."
-              >
-                <Input id="credential-helper" mono value={helper} onChange={(e) => setHelper(e.target.value)} />
-              </Field>
+              <CredentialHelperEditor
+                program={helperProgram}
+                args={helperArgs}
+                platform={platform}
+                showErrors={showHelperErrors}
+                onProgramChange={setHelperProgram}
+                onArgsChange={setHelperArgs}
+                onPickProgram={creds.pickHelperProgram}
+              />
               <div className="flex flex-wrap gap-4">
                 <label className="inline-flex items-center gap-2 text-xs">
                   <input type="checkbox" checked={capture} onChange={(e) => setCapture(e.target.checked)} />
@@ -189,11 +252,11 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
             </div>
           </details>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setFormOpen(false)}>
+            <Button type="button" variant="ghost" size="sm" onClick={closeForm}>
               Cancel
             </Button>
             <Button type="submit" size="sm" disabled={busy || !ruleHost.trim()}>
-              Add rule
+              {editingLegacyHost ? 'Save converted rule' : 'Add rule'}
             </Button>
           </div>
         </form>
@@ -206,24 +269,61 @@ export function CredentialsPanel({ vm, name, mitmOn }: { vm: MicroVmInstanceHost
             {data.rules
               .filter((r) => r.host !== pendingRemoval)
               .map((r) => (
-                <li
-                  key={r.host}
-                  className="flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2 py-1 text-micro"
-                >
-                  <span className="min-w-0 flex-1 truncate font-mono">{r.host}</span>
-                  <span className="shrink-0 font-mono text-micro text-[var(--color-muted-foreground)]">{r.header}</span>
-                  {r.capture ? <Tag>save</Tag> : null}
-                  {r.inject ? <Tag>add to requests</Tag> : null}
-                  {r.helper ? <Tag>helper</Tag> : null}
-                  <button
-                    type="button"
-                    aria-label={`Remove ${r.host}`}
-                    disabled={busy}
-                    onClick={() => scheduleRemoval(r.host)}
-                    className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                <li key={r.host} className="rounded-md border border-[var(--color-border)] px-2 py-1.5 text-micro">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate font-mono">{r.host}</span>
+                    <span className="shrink-0 font-mono text-micro text-[var(--color-muted-foreground)]">
+                      {r.header}
+                    </span>
+                    {r.capture ? <Tag>save</Tag> : null}
+                    {r.inject ? <Tag>add to requests</Tag> : null}
+                    {Array.isArray(r.helper) ? <Tag>argv helper</Tag> : null}
+                    {typeof r.helper === 'string' ? <Tag>legacy helper</Tag> : null}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${r.host}`}
+                      disabled={busy}
+                      onClick={() => scheduleRemoval(r.host)}
+                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    >
+                      <X className="h-3 w-3" aria-hidden />
+                    </button>
+                  </div>
+                  {typeof r.helper === 'string' ? (
+                    <Banner
+                      className="mt-1.5"
+                      tone="warning"
+                      title="Legacy shell helper — read only"
+                      action={
+                        <Button size="sm" variant="outline" onClick={() => convertLegacyRule(r)}>
+                          Convert to argv
+                        </Button>
+                      }
+                    >
+                      <code className="block overflow-x-auto whitespace-pre font-mono text-xs">{r.helper}</code>
+                      <p className="mt-1">
+                        Conversion splits on whitespace; matching single or double quotes keep text together.
+                        Backslashes stay literal on conversion.
+                      </p>
+                      <p className="mt-1">Not used on Windows until you convert it.</p>
+                      {conversionError?.host === r.host ? (
+                        <p role="alert" className="mt-1 text-xs leading-4 text-[var(--color-destructive-foreground)]">
+                          {conversionError.message}
+                        </p>
+                      ) : null}
+                    </Banner>
+                  ) : Array.isArray(r.helper) ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Helper arguments">
+                      {r.helper.map((value, index) => (
+                        <code
+                          key={index}
+                          className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-xs text-[var(--color-muted-foreground)]"
+                        >
+                          {value}
+                        </code>
+                      ))}
+                    </div>
+                  ) : null}
                 </li>
               ))}
           </ul>

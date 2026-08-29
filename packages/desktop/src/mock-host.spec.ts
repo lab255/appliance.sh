@@ -78,6 +78,19 @@ describe('mock host platform', () => {
     await expect(createMockHost().agentAuth?.hasHostClaude()).resolves.toBe(false);
   });
 
+  it('exposes legacy and argv credential rules for the Windows editor scenario', async () => {
+    vi.stubGlobal('window', { location: { search: '?mock-host&platform=windows' } });
+    expect(mockHostEnabled()).toBe(true);
+
+    const creds = createMockHost().vm!.instance('appliance').creds;
+    const state = await creds.list();
+    expect(state.rules.map((rule) => rule.helper)).toEqual([
+      "'C:\\a b\\x.exe' --type claude-code",
+      ['C:\\Program Files\\Appliance\\appliance-credhelper.exe', 'agent', 'print-key', '--type', 'codex'],
+    ]);
+    await expect(creds.pickHelperProgram?.()).resolves.toBe('C:\\Program Files\\Appliance\\credential-helper.exe');
+  });
+
   it('round-trips WSL mode through the mock egress host', async () => {
     vi.stubGlobal('window', { location: { search: '?mock-host&platform=windows' } });
     expect(mockHostEnabled()).toBe(true);

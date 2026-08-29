@@ -696,7 +696,7 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
 
       {activeTab === 'credentials' ? (
         <div id="machine-panel-credentials" role="tabpanel" aria-labelledby="machine-tab-credentials">
-          <CredentialsPanel vm={vm} name={name} mitmOn={policyQuery.data?.mitm ?? false} />
+          <CredentialsPanel vm={vm} name={name} mitmOn={policyQuery.data?.mitm ?? false} platform={host.platform} />
         </div>
       ) : null}
 
