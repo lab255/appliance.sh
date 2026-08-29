@@ -59,7 +59,7 @@ const K3S_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/k3s";
 const APISERVER_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server";
 const CONSOLE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-console.tar.gz";
 
-const WSL_CONF: &str = r#"[automount]
+pub(crate) const WSL_CONF: &str = r#"[automount]
 enabled=false
 mountFsTab=false
 
@@ -156,11 +156,6 @@ impl VmBackend for WslBackend {
         let _ = wsl_cmd().args(["--terminate", &distro]).output();
         push_wsl_conf(&distro)?;
         terminate_distro(&distro).context("apply hardened WSL configuration")?;
-        crate::bringup::set(
-            &paths.dir,
-            crate::bringup::Phase::Media,
-            Some("skipped (WSL)".to_string()),
-        );
 
         // A short WSL command starts the utility VM and gives us the exact
         // Windows-host gateway before the strict Runtime nft rules are baked.
@@ -209,12 +204,22 @@ impl VmBackend for WslBackend {
         )?;
         // Build first so all pure validation (including repository names and
         // mount rendering) succeeds before the distro artifact stage changes.
+        crate::bringup::set(
+            &paths.dir,
+            crate::bringup::Phase::Media,
+            Some("streaming artifacts (WSL)".to_string()),
+        );
         stream_boot_artifacts(
             &distro,
             k3s.as_ref().map(|(path, sha)| (path.as_path(), *sha)),
             apiserver.as_ref(),
             &runtime_repositories,
         )?;
+        crate::bringup::set(
+            &paths.dir,
+            crate::bringup::Phase::Media,
+            Some("skipped (WSL)".to_string()),
+        );
         push_bootstrap(&distro, &script)?;
 
         // Fresh boot state: truncate the console log (the primary
@@ -555,19 +560,19 @@ fn push_wsl_conf(distro: &str) -> Result<()> {
             "--",
             "sh",
             "-c",
-            "cat > /etc/wsl.conf && chmod 0644 /etc/wsl.conf",
+            "rm -f /etc/wsl.conf && cat > /etc/wsl.conf && chmod 0644 /etc/wsl.conf",
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .context("provision /etc/wsl.conf")?;
-    child
+    let stream_result = child
         .stdin
         .take()
         .expect("piped stdin")
         .write_all(WSL_CONF.as_bytes())
-        .context("stream /etc/wsl.conf")?;
+        .context("stream /etc/wsl.conf");
     let out = child.wait_with_output()?;
     if !out.status.success() {
         bail!(
@@ -575,6 +580,7 @@ fn push_wsl_conf(distro: &str) -> Result<()> {
             combined_output(&out).trim()
         );
     }
+    stream_result?;
     Ok(())
 }
 
@@ -612,6 +618,8 @@ fn digest_open_file(file: &mut std::fs::File) -> Result<String> {
 
 /// Stream the bytes from the same open file handle used to compute the host
 /// digest, then require the guest to verify size + sha256 before installation.
+/// Api-server and console callers use this as integrity-only transport: those
+/// artifacts are not pinned to a separately authenticated release identity.
 fn stream_guest_artifact(
     distro: &str,
     source: &Path,
@@ -1416,10 +1424,23 @@ mod tests {
 
     #[test]
     fn wsl_conf_disables_drive_automount_and_interop() {
-        assert_eq!(
-            WSL_CONF,
-            "[automount]\nenabled=false\nmountFsTab=false\n\n[interop]\nenabled=false\nappendWindowsPath=false\n"
-        );
+        let mut section = "";
+        let mut values = std::collections::BTreeMap::new();
+        for raw in WSL_CONF.lines() {
+            let line = raw.trim();
+            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+                continue;
+            }
+            if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                section = name;
+                continue;
+            }
+            let (key, value) = line.split_once('=').expect("valid INI assignment");
+            values.insert((section, key.trim()), value.trim());
+        }
+        assert_eq!(values.get(&("automount", "enabled")), Some(&"false"));
+        assert_eq!(values.get(&("interop", "enabled")), Some(&"false"));
+        assert_eq!(values.get(&("interop", "appendWindowsPath")), Some(&"false"));
     }
 
     #[test]
@@ -1735,6 +1756,12 @@ mod tests {
         assert!(!script.contains(r"C:\Users\Avery"));
         assert!(!script.contains("wslpath"));
         assert!(!script.contains("/mnt/c"));
+
+        let mut assets = assets;
+        assets.console = None;
+        let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
+        assert!(!script.contains("__CONSOLE_PROVISION__"));
+        assert!(!script.contains("CONSOLE_SRC="));
     }
 
     #[test]
