@@ -244,6 +244,37 @@ pub struct ApiServerReleaseEvidence {
     pub envelope: PathBuf,
 }
 
+/// Release state needed while composing a guest seed gate. The full assets
+/// remain owned by the backend's media/streaming path; this view keeps the
+/// independently rendered trust pin beside the evidence state it governs.
+#[derive(Clone, Copy)]
+pub(crate) struct ReleaseGate<'a> {
+    pub pinned_key_id: &'a str,
+    pub evidence: Option<&'a ApiServerReleaseEvidence>,
+    pub poison: bool,
+}
+
+impl<'a> ReleaseGate<'a> {
+    pub(crate) fn from_assets(
+        pinned_key_id: &'a str,
+        assets: Option<&'a ApiServerAssets>,
+    ) -> Option<Self> {
+        assets.map(|assets| Self {
+            pinned_key_id,
+            evidence: assets.release_evidence.as_ref(),
+            poison: assets.evidence_poisoned,
+        })
+    }
+
+    pub(crate) fn validate(self) -> Result<()> {
+        validate_pinned_release_key_id(self.pinned_key_id)?;
+        if self.evidence.is_some() && self.poison {
+            bail!("api-server release evidence cannot be both verified and poisoned");
+        }
+        Ok(())
+    }
+}
+
 pub(crate) const PINNED_RELEASE_KEY_ID_ENV: &str = "APPLIANCE_PINNED_RELEASE_KEY_ID";
 
 pub(crate) fn validate_pinned_release_key_id(value: &str) -> Result<()> {
@@ -2618,6 +2649,11 @@ fn build_apkovl(
     // provision block is only injected when it does.
     apiserver: bool,
 ) -> Result<Vec<u8>> {
+    let release_gate = apiserver.then_some(ReleaseGate {
+        pinned_key_id: "",
+        evidence: None,
+        poison: false,
+    });
     build_apkovl_for_readiness(
         registry_host_port,
         egress_ca_pem,
@@ -2629,8 +2665,7 @@ fn build_apkovl(
         project_id,
         host_port,
         bootstrap_token,
-        apiserver,
-        "",
+        release_gate,
     )
 }
 
@@ -2646,9 +2681,11 @@ fn build_apkovl_for_readiness(
     project_id: &str,
     host_port: u16,
     bootstrap_token: &str,
-    apiserver: bool,
-    pinned_release_key_id: &str,
+    release_gate: Option<ReleaseGate<'_>>,
 ) -> Result<Vec<u8>> {
+    if let Some(gate) = release_gate {
+        gate.validate()?;
+    }
     let agent_only = readiness == HostReadiness::Agent;
     let runtime = readiness == HostReadiness::Runtime;
     let cluster = readiness == HostReadiness::K3s;
@@ -2757,7 +2794,7 @@ fn build_apkovl_for_readiness(
             // (Quinn gap #1, same as the k3s branch).
             .replace(
                 "__APISERVER_PROVISION__",
-                &if !cluster || !apiserver {
+                &if !cluster || release_gate.is_none() {
                     String::new()
                 } else {
                     format!(
@@ -2772,7 +2809,10 @@ fn build_apkovl_for_readiness(
             // network); the WSL bootstrap substitutes this to empty.
             .replace("__K3S_AIRGAP_PREAMBLE__", "APPLIANCE_AIRGAP_PROBE=1")
             .replace("__APISERVER_GUEST_PORT__", &API_SERVER_GUEST_PORT.to_string())
-            .replace("__PINNED_RELEASE_KEY_ID__", pinned_release_key_id)
+            .replace(
+                "__PINNED_RELEASE_KEY_ID__",
+                release_gate.map_or("", |gate| gate.pinned_key_id),
+            )
             // Writer-version stamp on the guest's base config, logged by
             // the api-server on parse — makes engine/guest schema drift
             // visible in the server log (incident B follow-up).
@@ -2846,7 +2886,7 @@ fn build_apkovl_for_readiness(
     // requests against. Root-only, exactly like the host-side copy.
     // Gated like the provision block itself — agent-only VMs carry no
     // control plane and therefore no secret.
-    if cluster && apiserver && !bootstrap_token.is_empty() {
+    if cluster && release_gate.is_some() && !bootstrap_token.is_empty() {
         file("etc/appliance/bootstrap-token", 0o600, bootstrap_token.as_bytes())?;
     }
 
@@ -2933,6 +2973,7 @@ pub fn build_boot_media(
     // and an engine invoked without the CLI simply boots without a
     // control plane (the guest logs that honestly).
     let apiserver = if readiness == HostReadiness::K3s { apiserver_assets() } else { None };
+    let release_gate = ReleaseGate::from_assets(pinned_release_key_id, apiserver.as_ref());
     let bootstrap_token = if apiserver.is_some() {
         ensure_bootstrap_token(vm_dir)?
     } else {
@@ -2963,8 +3004,7 @@ pub fn build_boot_media(
         &project_id,
         host_port,
         &bootstrap_token,
-        apiserver.is_some(),
-        pinned_release_key_id,
+        release_gate,
     )?;
 
     let modloop_data = fs::read(&modloop)?;
@@ -3821,8 +3861,11 @@ mod tests {
             "",
             8081,
             "tok3n",
-            true,
-            &pinned_key_id,
+            Some(ReleaseGate {
+                pinned_key_id: &pinned_key_id,
+                evidence: None,
+                poison: false,
+            }),
         )
         .unwrap();
         let start = apkovl_file(&plain, "etc/local.d/appliance.start").unwrap();
@@ -4003,7 +4046,7 @@ mod tests {
         write_wrapper(&bin.join("sh"), "/bin/sh", "");
         // The gate uses only POSIX awk field operations, shared by BSD awk,
         // GNU awk, and BusyBox awk. Deliberately expose no broader userland.
-        for tool in ["awk", "cut", "wc"] {
+        for tool in ["awk", "cut", "wc", "rm", "tee", "uname"] {
             write_wrapper(&bin.join(tool), &command_path(&shell, tool), "");
         }
         let sha256sum = Command::new(&shell)
@@ -4069,6 +4112,48 @@ mod tests {
         fs::write(&source, b"tampered-binary").unwrap();
         let rejected = run("0");
         assert!(rejected.status.success(), "tampered seed was accepted: {}", String::from_utf8_lossy(&rejected.stderr));
+
+        // Exercise the complete copy/refusal path as well as the verification
+        // fragment: a digest mismatch must remove any previously installed
+        // binary and persist the warning marker the host doctor reads.
+        let payload = root.join("control-plane-release.json");
+        let envelope = root.join("control-plane-release.sig.json");
+        fs::write(&payload, "{}\n").unwrap();
+        fs::write(&envelope, "{}\n").unwrap();
+        let destination = root.join("installed-appliance-api-server");
+        let warnings = root.join("warnings");
+        let seed_log = root.join("seed.log");
+        let marker = root.join("seed-warning");
+        fs::write(&destination, b"previously-installed-binary").unwrap();
+        let full_script = apiserver_seed_copy().replace("__PINNED_RELEASE_KEY_ID__", &key_id);
+        let full_rejection = Command::new(&shell)
+            .arg("-c")
+            .arg(full_script)
+            .env("PATH", &restricted_path)
+            .env("APISERVER_MEDIA", shell_path(&shell, &root))
+            .env("APISERVER_SRC", &source_path)
+            .env("CONSOLE_SRC", shell_path(&shell, &root.join("missing-console.tar.gz")))
+            .env("RELEASE_CHECKSUMS", &checksums_path)
+            .env("RELEASE_PROPERTIES", &properties_path)
+            .env("RELEASE_PAYLOAD", shell_path(&shell, &payload))
+            .env("RELEASE_ENVELOPE", shell_path(&shell, &envelope))
+            .env("RELEASE_POISON", shell_path(&shell, &root.join("missing-release-poison")))
+            .env("APISERVER_DEST", shell_path(&shell, &destination))
+            .env("CONSOLE_DEST", shell_path(&shell, &root.join("console")))
+            .env("APPLIANCE_WARNINGS_FILE", shell_path(&shell, &warnings))
+            .env("APPLIANCE_SEED_LOG", shell_path(&shell, &seed_log))
+            .env("APPLIANCE_SEED_MARKER", shell_path(&shell, &marker))
+            .output()
+            .unwrap();
+        assert!(
+            full_rejection.status.success(),
+            "complete seed refusal failed: {}",
+            String::from_utf8_lossy(&full_rejection.stderr)
+        );
+        assert!(!destination.exists(), "tampered seed must remove the installed api-server");
+        let marker_text = fs::read_to_string(&marker).unwrap();
+        assert!(marker_text.contains("digest/size mismatch"));
+        assert!(marker_text.contains("api-server start refused"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -4452,8 +4537,7 @@ mod tests {
             "",
             8100,
             "",
-            false,
-            "",
+            None,
         )
         .unwrap();
         let repositories = apkovl_file(&overlay, "etc/apk/repositories").unwrap();
@@ -4803,8 +4887,7 @@ done >> "$CTR_ARGV"
             "",
             8081,
             "",
-            false,
-            "",
+            None,
         )
         .unwrap();
         let start = apkovl_file(&core, "etc/local.d/appliance.start").unwrap();

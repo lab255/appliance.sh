@@ -746,13 +746,18 @@ fn run() -> Result<()> {
             let spec = ensure_spec(&name)?;
             store::ensure_disk(&spec)?;
             prefetch_boot_artifacts(&spec)?;
+            let release_key_id = guest::pinned_release_key_id_from_env()?;
 
             // Re-exec ourselves detached to host the VM: the hypervisor
             // session lives inside a process, so something must stay
             // resident. Spawning the same binary keeps it to one
             // executable, and gives every backend identical daemon
             // semantics.
-            let child = spawn_host_process(&name, bringup::DEFAULT_BUDGET_SECS, "")?;
+            let child = spawn_host_process(
+                &name,
+                bringup::DEFAULT_BUDGET_SECS,
+                &release_key_id,
+            )?;
             println!("starting VM '{name}' (host pid {})", child.id());
             println!("console: appliance-vm console {name} -f");
             Ok(())

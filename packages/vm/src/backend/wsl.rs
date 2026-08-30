@@ -201,15 +201,18 @@ impl VmBackend for WslBackend {
             String::new()
         };
         let pinned_release_key_id = crate::guest::pinned_release_key_id_from_env()?;
+        let release_gate = crate::guest::ReleaseGate::from_assets(
+            &pinned_release_key_id,
+            apiserver.as_ref(),
+        );
         let script = build_bootstrap(
             spec,
             k3s.as_ref().map(|(p, sha)| (p.as_path(), *sha)),
             egress_ca.as_deref(),
-            apiserver.as_ref(),
+            release_gate,
             &bootstrap_token,
             &runtime_repositories,
             runtime_gateway,
-            &pinned_release_key_id,
         )?;
         // Build first so all pure validation (including repository names and
         // mount rendering) succeeds before the distro artifact stage changes.
@@ -1050,13 +1053,13 @@ fn build_bootstrap(
     spec: &VmSpec,
     k3s: Option<(&Path, &'static str)>,
     egress_ca_pem: Option<&str>,
-    // CLI-staged api-server artifacts + the VM's bootstrap token.
-    // `None` for agent-only VMs or when nothing was staged.
-    apiserver: Option<&crate::guest::ApiServerAssets>,
+    // CLI-staged release state + the VM's bootstrap token. `None` for
+    // agent-only VMs or when nothing was staged; the full assets are streamed
+    // separately after this pure composition step succeeds.
+    release_gate: Option<crate::guest::ReleaseGate<'_>>,
     bootstrap_token: &str,
     runtime_repositories: &[crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
-    pinned_release_key_id: &str,
 ) -> Result<String> {
     let state_dir = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
     build_bootstrap_with_inputs(
@@ -1064,12 +1067,11 @@ fn build_bootstrap(
         BootstrapInputs {
             k3s,
             egress_ca_pem,
-            apiserver,
+            release_gate,
             bootstrap_token,
             runtime_repositories,
             runtime_gateway,
             state_dir: &state_dir,
-            pinned_release_key_id,
         },
     )
 }
@@ -1077,25 +1079,26 @@ fn build_bootstrap(
 struct BootstrapInputs<'a> {
     k3s: Option<(&'a Path, &'static str)>,
     egress_ca_pem: Option<&'a str>,
-    apiserver: Option<&'a crate::guest::ApiServerAssets>,
+    release_gate: Option<crate::guest::ReleaseGate<'a>>,
     bootstrap_token: &'a str,
     runtime_repositories: &'a [crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
     state_dir: &'a Path,
-    pinned_release_key_id: &'a str,
 }
 
 fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Result<String> {
     let BootstrapInputs {
         k3s,
         egress_ca_pem,
-        apiserver,
+        release_gate,
         bootstrap_token,
         runtime_repositories,
         runtime_gateway,
         state_dir,
-        pinned_release_key_id,
     } = inputs;
+    if let Some(gate) = release_gate {
+        gate.validate()?;
+    }
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -1119,15 +1122,15 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
     // The api-server guest binary rides k3s VMs whose assets were
     // staged. Same substitution rules as the k3s block: injected before
     // the port markers so its nested markers expand too.
-    let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, apiserver) {
-        (false, true, false, Some(assets)) => {
+    let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, release_gate) {
+        (false, true, false, Some(gate)) => {
             format!(
                 "{WSL_APISERVER_COPY}{}{}",
                 crate::guest::apiserver_seed_copy(),
                 crate::guest::APISERVER_COMMON
             )
                 .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
-                .replace("__PINNED_RELEASE_KEY_ID__", pinned_release_key_id)
+                .replace("__PINNED_RELEASE_KEY_ID__", gate.pinned_key_id)
         }
         _ => String::new(),
     };
@@ -1499,17 +1502,20 @@ mod tests {
         runtime_repositories: &[crate::images::RuntimeApkRepository],
         runtime_gateway: Option<std::net::Ipv4Addr>,
     ) -> Result<String> {
+        let release_gate = crate::guest::ReleaseGate::from_assets(
+            "ed25519:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            apiserver,
+        );
         super::build_bootstrap_with_inputs(
             spec,
             BootstrapInputs {
                 k3s,
                 egress_ca_pem,
-                apiserver,
+                release_gate,
                 bootstrap_token,
                 runtime_repositories,
                 runtime_gateway,
                 state_dir: Path::new(r"C:\Users\appliance-test\.appliance\vm"),
-                pinned_release_key_id: "ed25519:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             },
         )
     }
