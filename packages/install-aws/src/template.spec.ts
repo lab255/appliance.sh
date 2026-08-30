@@ -334,6 +334,9 @@ describe('appliance CloudFormation template', () => {
   });
 
   it('expires workload build tags and old untagged manifests without matching system tags', () => {
+    expect(APPLIANCE_CLOUDFORMATION_TEMPLATE).toContain(
+      'workload builds and both mirror paths push image manifests, never OCI indexes or attestations'
+    );
     const lifecycle = JSON.parse(
       String(
         document.getIn(['Resources', 'ImageRepository', 'Properties', 'LifecyclePolicy', 'LifecyclePolicyText'])

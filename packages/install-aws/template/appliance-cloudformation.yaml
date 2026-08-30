@@ -736,6 +736,8 @@ Resources:
         ScanOnPush: true
       EncryptionConfiguration:
         EncryptionType: AES256
+      # The 7-day untagged rule is safe only while every repository producer stays single-platform:
+      # workload builds and both mirror paths push image manifests, never OCI indexes or attestations.
       LifecyclePolicy:
         LifecyclePolicyText: |
           {"rules":[{"rulePriority":1,"description":"Keep the newest 50 workload build images","selection":{"tagStatus":"tagged","tagPrefixList":["build-"],"countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}},{"rulePriority":2,"description":"Expire orphaned untagged manifests after 7 days","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}}]}
