@@ -199,6 +199,7 @@ impl VmBackend for WslBackend {
         } else {
             String::new()
         };
+        let pinned_release_key_id = crate::guest::pinned_release_key_id_from_env()?;
         let script = build_bootstrap(
             spec,
             k3s.as_ref().map(|(p, sha)| (p.as_path(), *sha)),
@@ -207,6 +208,7 @@ impl VmBackend for WslBackend {
             &bootstrap_token,
             &runtime_repositories,
             runtime_gateway,
+            &pinned_release_key_id,
         )?;
         // Build first so all pure validation (including repository names and
         // mount rendering) succeeds before the distro artifact stage changes.
@@ -1038,6 +1040,7 @@ fn build_bootstrap(
     bootstrap_token: &str,
     runtime_repositories: &[crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
+    pinned_release_key_id: &str,
 ) -> Result<String> {
     let state_dir = crate::store::canonicalize_with_missing_tail(&crate::store::vm_root());
     build_bootstrap_with_inputs(
@@ -1050,6 +1053,7 @@ fn build_bootstrap(
             runtime_repositories,
             runtime_gateway,
             state_dir: &state_dir,
+            pinned_release_key_id,
         },
     )
 }
@@ -1062,6 +1066,7 @@ struct BootstrapInputs<'a> {
     runtime_repositories: &'a [crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
     state_dir: &'a Path,
+    pinned_release_key_id: &'a str,
 }
 
 fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Result<String> {
@@ -1073,6 +1078,7 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
         runtime_repositories,
         runtime_gateway,
         state_dir,
+        pinned_release_key_id,
     } = inputs;
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
@@ -1099,18 +1105,13 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
     // the port markers so its nested markers expand too.
     let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, apiserver) {
         (false, true, false, Some(assets)) => {
-            let pinned_key_id = assets
-                .release_evidence
-                .as_ref()
-                .map(|evidence| evidence.key_id.as_str())
-                .unwrap_or_default();
             format!(
                 "{WSL_APISERVER_COPY}{}{}",
                 crate::guest::apiserver_seed_copy(),
                 crate::guest::APISERVER_COMMON
             )
                 .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
-                .replace("__PINNED_RELEASE_KEY_ID__", pinned_key_id)
+                .replace("__PINNED_RELEASE_KEY_ID__", pinned_release_key_id)
         }
         _ => String::new(),
     };
@@ -1492,6 +1493,7 @@ mod tests {
                 runtime_repositories,
                 runtime_gateway,
                 state_dir: Path::new(r"C:\Users\appliance-test\.appliance\vm"),
+                pinned_release_key_id: "ed25519:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             },
         )
     }
@@ -1847,7 +1849,6 @@ mod tests {
                 envelope: PathBuf::from(
                     r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.sig.json",
                 ),
-                key_id: format!("ed25519:sha256:{}", "a".repeat(64)),
             }),
         };
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();

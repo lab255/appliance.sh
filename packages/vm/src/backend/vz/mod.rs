@@ -79,6 +79,7 @@ impl VmBackend for VzBackend {
         crate::bringup::set(&paths.dir, crate::bringup::Phase::Media, None);
         let image = crate::images::ensure_image(&spec.image)?;
         crate::bringup::hostlog("assembling boot media");
+        let pinned_release_key_id = crate::guest::pinned_release_key_id_from_env()?;
         let boot_media = crate::guest::build_boot_media(
             &paths.dir,
             spec.registry_port,
@@ -89,6 +90,7 @@ impl VmBackend for VzBackend {
             spec.agent_only,
             spec.cluster,
             spec.host_port,
+            &pinned_release_key_id,
         )?;
 
         // The prebuilt agent image (Node ≥22 + the pinned CLIs) attaches as a

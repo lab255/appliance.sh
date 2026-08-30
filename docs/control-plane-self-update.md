@@ -202,7 +202,8 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
 `control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
 The protected `release-signing` environment signs only when `APPLIANCE_RELEASE_SIGNING_KEY` exists; pre-AP-226 publishing remains unsigned.
 Create/restage verifies the envelope, generation, validity, version, architecture, size, and SHA-256 before its first write.
-VZ and WSL use verified hash/size and keyId sidecars without `jq`; AP-226 replaces the intentionally empty production pin set.
+VZ and WSL use verified hash/size and keyId sidecars without `jq`, and compare the sidecar keyId to the trust pin rendered explicitly
+by the CLI rather than deriving trust from media; AP-226 replaces the intentionally empty production pin set.
 
 MV0 first adds a `control-plane-release` envelope role and changes the workflow to publish `SHA256SUMS` plus its Ed25519/RFC-8785
 production release envelope covering both
@@ -221,7 +222,8 @@ The unprivileged macOS/Linux CLI cannot create a genuinely root-owned host cache
 compatible `~/.appliance/vm/images/guest-assets` path, makes the directory `0700`, stages verified files atomically as `0444`, and treats
 the guest-side digest/size check as the effective seed gate. Windows additionally applies the existing protected owner/SYSTEM/
 Administrators DACL. The MV0 guest does not perform Ed25519 itself: the host verifies the signature and derives boot-media sidecars, then
-both VZ and WSL independently compare the selected binary's hash/size/architecture and keyId. This protects the seed copy after host
+both VZ and WSL independently compare the selected binary's hash/size/architecture and keyId against the CLI-rendered production pin.
+This protects the seed copy after host
 staging; it is not a second signature-verification boundary.
 
 `appliance vm update [--name NAME] [--version VERSION]` downloads binary, console, `SHA256SUMS`, payload, and envelope to an ACL'd,

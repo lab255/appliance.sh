@@ -238,7 +238,25 @@ pub struct ApiServerReleaseEvidence {
     pub properties: PathBuf,
     pub payload: PathBuf,
     pub envelope: PathBuf,
-    pub key_id: String,
+}
+
+pub(crate) const PINNED_RELEASE_KEY_ID_ENV: &str = "APPLIANCE_PINNED_RELEASE_KEY_ID";
+
+pub(crate) fn validate_pinned_release_key_id(value: &str) -> Result<()> {
+    if value.is_empty()
+        || value.strip_prefix("ed25519:sha256:").is_some_and(|hex| {
+            hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+    {
+        return Ok(());
+    }
+    bail!("release keyId must be empty or an ed25519:sha256 pin");
+}
+
+pub(crate) fn pinned_release_key_id_from_env() -> Result<String> {
+    let value = std::env::var(PINNED_RELEASE_KEY_ID_ENV).unwrap_or_default();
+    validate_pinned_release_key_id(&value)?;
+    Ok(value)
 }
 
 /// Locate the staged api-server artifacts, or None when the binary is
@@ -255,24 +273,14 @@ pub fn apiserver_assets() -> Option<ApiServerAssets> {
     let properties = dir.join("control-plane-release.properties");
     let payload = dir.join("control-plane-release.json");
     let envelope = dir.join("control-plane-release.sig.json");
-    let key_id = fs::read_to_string(&properties).ok().and_then(|contents| {
-        contents.lines().find_map(|line| line.strip_prefix("keyId=")).filter(|value| {
-            value
-                .strip_prefix("ed25519:sha256:")
-                .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        }).map(str::to_string)
-    });
     let release_evidence =
         (checksums.is_file() && properties.is_file() && payload.is_file() && envelope.is_file())
-            .then_some(key_id)
-            .flatten()
-            .map(|key_id| ApiServerReleaseEvidence {
-            checksums,
-            properties,
-            payload,
-            envelope,
-            key_id,
-        });
+            .then_some(ApiServerReleaseEvidence {
+                checksums,
+                properties,
+                payload,
+                envelope,
+            });
     Some(ApiServerAssets {
         binary,
         console,
@@ -2816,7 +2824,11 @@ pub fn build_boot_media(
     // Host ingress port (spec.host_port) — embedded in the guest
     // api-server's base config for deploy-result URLs.
     host_port: u16,
+    // Trust pin supplied by the CLI from PINNED_RELEASE_TRUST. This is
+    // deliberately independent of the release sidecar carried on media.
+    pinned_release_key_id: &str,
 ) -> Result<BootMedia> {
+    validate_pinned_release_key_id(pinned_release_key_id)?;
     let readiness = readiness_for(agent_only, cluster, dev);
     let (alpine_arch, _) = arch_tuple()?;
     let modloop = ensure_modloop()?;
@@ -2867,11 +2879,7 @@ pub fn build_boot_media(
         host_port,
         &bootstrap_token,
         apiserver.is_some(),
-        apiserver
-            .as_ref()
-            .and_then(|assets| assets.release_evidence.as_ref())
-            .map(|evidence| evidence.key_id.as_str())
-            .unwrap_or_default(),
+        pinned_release_key_id,
     )?;
 
     let modloop_data = fs::read(&modloop)?;
