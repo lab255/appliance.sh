@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`appliance CloudFormation template > snapshots both scoped execution-role policy documents > api-server scoped policy 1`] = `
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > api-server scoped policy 1`] = `
 {
   "Statement": [
     {
@@ -33,117 +33,9 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
 }
 `;
 
-exports[`appliance CloudFormation template > snapshots both scoped execution-role policy documents > worker scoped policy 1`] = `
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker provisioning scoped policy 1`] = `
 {
   "Statement": [
-    {
-      "Action": [
-        "s3:GetBucketLocation",
-        "s3:ListBucket",
-      ],
-      "Effect": "Allow",
-      "Resource": {
-        "tag": "!GetAtt",
-        "value": "DataBucket.Arn",
-      },
-      "Sid": "DataBucketMetadata",
-    },
-    {
-      "Action": [
-        "s3:DeleteObject",
-        "s3:GetObject",
-        "s3:PutObject",
-      ],
-      "Effect": "Allow",
-      "Resource": {
-        "tag": "!Sub",
-        "value": "\${DataBucket.Arn}/*",
-      },
-      "Sid": "DataBucketObjects",
-    },
-    {
-      "Action": [
-        "s3:GetBucketLocation",
-        "s3:ListBucket",
-      ],
-      "Effect": "Allow",
-      "Resource": {
-        "tag": "!GetAtt",
-        "value": "StateBucket.Arn",
-      },
-      "Sid": "PulumiStateBucketMetadata",
-    },
-    {
-      "Action": [
-        "s3:DeleteObject",
-        "s3:GetObject",
-        "s3:PutObject",
-      ],
-      "Effect": "Allow",
-      "Resource": {
-        "tag": "!Sub",
-        "value": "\${StateBucket.Arn}/*",
-      },
-      "Sid": "PulumiStateObjects",
-    },
-    {
-      "Action": [
-        "kms:Decrypt",
-        "kms:DescribeKey",
-        "kms:Encrypt",
-        "kms:GenerateDataKey",
-      ],
-      "Effect": "Allow",
-      "Resource": {
-        "tag": "!GetAtt",
-        "value": "StateKmsKey.Arn",
-      },
-      "Sid": "PulumiSecretsKey",
-    },
-    {
-      "Action": "ecr:GetAuthorizationToken",
-      "Effect": "Allow",
-      "Resource": "*",
-      "Sid": "EcrAuthorization",
-    },
-    {
-      "Action": [
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:BatchGetImage",
-        "ecr:CompleteLayerUpload",
-        "ecr:DescribeImages",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:GetRepositoryPolicy",
-        "ecr:InitiateLayerUpload",
-        "ecr:ListImages",
-        "ecr:PutImage",
-        "ecr:UploadLayerPart",
-      ],
-      "Effect": "Allow",
-      "Resource": {
-        "tag": "!GetAtt",
-        "value": "ImageRepository.Arn",
-      },
-      "Sid": "InstallationRepository",
-    },
-    {
-      "Action": "sts:GetCallerIdentity",
-      "Effect": "Allow",
-      "Resource": "*",
-      "Sid": "AccountIdentity",
-    },
-    {
-      "Action": [
-        "cloudformation:CreateResource",
-        "cloudformation:DeleteResource",
-        "cloudformation:GetResource",
-        "cloudformation:GetResourceRequestStatus",
-        "cloudformation:UpdateResource",
-      ],
-      "Effect": "Allow",
-      "Resource": "*",
-      "Sid": "AwsNativeCloudControl",
-    },
     {
       "Action": [
         "iam:GetRole",
@@ -151,6 +43,7 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         "iam:ListAttachedRolePolicies",
         "iam:ListInstanceProfilesForRole",
         "iam:ListRolePolicies",
+        "iam:ListRoleTags",
       ],
       "Effect": "Allow",
       "Resource": {
@@ -231,12 +124,6 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
     {
       "Action": "iam:TagRole",
       "Condition": {
-        "ArnEquals": {
-          "iam:PermissionsBoundary": {
-            "tag": "!Ref",
-            "value": "UserAppliancePermissionsBoundary",
-          },
-        },
         "StringEquals": {
           "aws:RequestTag/appliance:managed": "true",
         },
@@ -253,17 +140,8 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         "iam:PassRole",
       ],
       "Condition": {
-        "ArnEquals": {
-          "iam:PermissionsBoundary": {
-            "tag": "!Ref",
-            "value": "UserAppliancePermissionsBoundary",
-          },
-        },
         "StringEquals": {
-          "iam:PassedToService": [
-            "lambda.amazonaws.com",
-            "edgelambda.amazonaws.com",
-          ],
+          "iam:PassedToService": "lambda.amazonaws.com",
         },
       },
       "Effect": "Allow",
@@ -284,6 +162,22 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
       },
       "Sid": "DenyPermissionsBoundaryRemoval",
+    },
+    {
+      "Action": [
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy",
+      ],
+      "Effect": "Deny",
+      "Resource": {
+        "tag": "!Ref",
+        "value": "UserAppliancePermissionsBoundary",
+      },
+      "Sid": "DenyBoundaryPolicyMutation",
     },
     {
       "Action": [
@@ -425,7 +319,15 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         },
         {
           "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-api-server:*",
+        },
+        {
+          "tag": "!Sub",
           "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-worker",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-worker:*",
         },
       ],
       "Sid": "DenySystemFunctionMutation",
@@ -612,6 +514,122 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         },
       ],
       "Sid": "ApplianceLogDeliveryResources",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker runtime scoped policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "DataBucket.Arn",
+      },
+      "Sid": "DataBucketMetadata",
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "\${DataBucket.Arn}/*",
+      },
+      "Sid": "DataBucketObjects",
+    },
+    {
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "StateBucket.Arn",
+      },
+      "Sid": "PulumiStateBucketMetadata",
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "\${StateBucket.Arn}/*",
+      },
+      "Sid": "PulumiStateObjects",
+    },
+    {
+      "Action": [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "StateKmsKey.Arn",
+      },
+      "Sid": "PulumiSecretsKey",
+    },
+    {
+      "Action": "ecr:GetAuthorizationToken",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "EcrAuthorization",
+    },
+    {
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:GetRepositoryPolicy",
+        "ecr:InitiateLayerUpload",
+        "ecr:ListImages",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "ImageRepository.Arn",
+      },
+      "Sid": "InstallationRepository",
+    },
+    {
+      "Action": "sts:GetCallerIdentity",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AccountIdentity",
+    },
+    {
+      "Action": [
+        "cloudformation:CreateResource",
+        "cloudformation:DeleteResource",
+        "cloudformation:GetResource",
+        "cloudformation:GetResourceRequestStatus",
+        "cloudformation:UpdateResource",
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AwsNativeCloudControl",
     },
   ],
   "Version": "2012-10-17",

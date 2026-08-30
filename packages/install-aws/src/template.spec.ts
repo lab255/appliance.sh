@@ -5,8 +5,10 @@ import { APPLIANCE_CLOUDFORMATION_TEMPLATE, CLOUDFORMATION_TEMPLATE_BODY_LIMIT }
 type PolicyStatement = {
   Sid: string;
   Effect: 'Allow' | 'Deny';
-  Action: string | string[];
-  Resource: unknown;
+  Action?: string | string[];
+  NotAction?: string | string[];
+  Resource?: unknown;
+  NotResource?: unknown;
   Condition?: Record<string, unknown>;
 };
 
@@ -25,14 +27,22 @@ function toJson(path: (string | number)[]): unknown {
   return (document.getIn(path) as { toJSON(): unknown }).toJSON();
 }
 
-function scopedPolicy(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
+function scopedPolicies(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
   const policies = toJson(['Resources', role, 'Properties', 'Policies']) as [
     string,
     { PolicyDocument: { Version: string; Statement: PolicyStatement[] } },
     string,
   ][];
-  expect(policies[0]?.[0]).toBe('UseScopedSystemRoles');
-  return policies[0][1].PolicyDocument;
+  for (const policy of policies) expect(policy[0]).toBe('UseScopedSystemRoles');
+  return policies.map((policy) => policy[1].PolicyDocument);
+}
+
+function scopedPolicy(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
+  const policies = scopedPolicies(role);
+  return {
+    Version: policies[0]?.Version ?? '2012-10-17',
+    Statement: policies.flatMap((policy) => policy.Statement),
+  };
 }
 
 function boundaryPolicy() {
@@ -50,6 +60,11 @@ function resolvedPolicyBytes(policy: unknown): number {
     return value;
   });
   return Buffer.byteLength(resolved, 'utf8');
+}
+
+function actionsOf(statement: PolicyStatement): string[] {
+  if (!statement.Action) return [];
+  return Array.isArray(statement.Action) ? statement.Action : [statement.Action];
 }
 
 const WILDCARD_RESOURCE_JUSTIFICATIONS = {
@@ -77,6 +92,7 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
   ApplianceIamRoleTagging: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamPassRole: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   DenyPermissionsBoundaryRemoval: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
+  DenyBoundaryPolicyMutation: ref('UserAppliancePermissionsBoundary'),
   ApplianceIamPolicyRead: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
   ApplianceIamPolicyCreate: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
   ApplianceIamPolicyMutations: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
@@ -86,7 +102,9 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
   ApplianceLayers: sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:layer:*:*'),
   DenySystemFunctionMutation: [
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server'),
+    sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*'),
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker'),
+    sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*'),
   ],
   LambdaEdgeReplication: sub('arn:${AWS::Partition}:lambda:us-east-1:${AWS::AccountId}:function:*:*'),
 } as const;
@@ -101,7 +119,7 @@ describe('appliance CloudFormation template', () => {
     const templateBytes = Buffer.byteLength(APPLIANCE_CLOUDFORMATION_TEMPLATE, 'utf8');
     expect(templateBytes).toBeLessThan(CLOUDFORMATION_TEMPLATE_BODY_LIMIT);
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
-      expect(resolvedPolicyBytes(scopedPolicy(role))).toBeLessThan(10_240);
+      for (const policy of scopedPolicies(role)) expect(resolvedPolicyBytes(policy)).toBeLessThan(9_000);
     }
     expect(resolvedPolicyBytes(boundaryPolicy())).toBeLessThan(6_144);
   });
@@ -118,16 +136,19 @@ describe('appliance CloudFormation template', () => {
     }
   });
 
-  it('snapshots both scoped execution-role policy documents', () => {
+  it('snapshots every scoped execution-role policy document', () => {
     expect(scopedPolicy('SystemApiServerRole')).toMatchSnapshot('api-server scoped policy');
-    expect(scopedPolicy('SystemWorkerRole')).toMatchSnapshot('worker scoped policy');
+    const workerPolicies = scopedPolicies('SystemWorkerRole');
+    expect(workerPolicies).toHaveLength(2);
+    expect(workerPolicies[0]).toMatchSnapshot('worker runtime scoped policy');
+    expect(workerPolicies[1]).toMatchSnapshot('worker provisioning scoped policy');
   });
 
   it('has no all-action grants and allowlists every unavoidable wildcard resource', () => {
     const wildcardResourceSids: string[] = [];
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
       for (const statement of scopedPolicy(role).Statement) {
-        const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+        const actions = actionsOf(statement);
         expect(actions).not.toContain('*');
         expect(actions.filter((action) => action.includes('*'))).toEqual(
           actions.filter((action) => ['lambda:DisableReplication*', 'lambda:EnableReplication*'].includes(action))
@@ -141,7 +162,7 @@ describe('appliance CloudFormation template', () => {
 
   it('contains IAM and Lambda resources to an explicit, reviewable set', () => {
     const statements = scopedPolicy('SystemWorkerRole').Statement.filter((statement) => {
-      const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+      const actions = actionsOf(statement);
       return actions.some((action) => action.startsWith('iam:') || action.startsWith('lambda:'));
     });
     expect(Object.fromEntries(statements.map((statement) => [statement.Sid, statement.Resource]))).toEqual(
@@ -152,7 +173,7 @@ describe('appliance CloudFormation template', () => {
   it('conditions every allowed IAM mutation and keeps boundary/system-function denies explicit', () => {
     const statements = scopedPolicy('SystemWorkerRole').Statement;
     for (const statement of statements) {
-      const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+      const actions = actionsOf(statement);
       const mutatesIam = actions.some(
         (action) => action.startsWith('iam:') && !action.startsWith('iam:Get') && !action.startsWith('iam:List')
       );
@@ -171,11 +192,35 @@ describe('appliance CloudFormation template', () => {
         ],
       },
     });
+    expect(statements.find((statement) => statement.Sid === 'ApplianceIamRoleTagging')?.Condition).toEqual({
+      StringEquals: { 'aws:RequestTag/appliance:managed': 'true' },
+    });
+    expect(statements.find((statement) => statement.Sid === 'ApplianceIamPassRole')?.Condition).toEqual({
+      StringEquals: { 'iam:PassedToService': 'lambda.amazonaws.com' },
+    });
+    expect(statements.find((statement) => statement.Sid === 'ApplianceIamPolicyMutations')?.Condition).toEqual({
+      StringEquals: { 'aws:ResourceTag/appliance:managed': 'true' },
+    });
+    expect(statements.find((statement) => statement.Sid === 'ApplianceIamPolicyTagging')?.Condition).toEqual({
+      StringEquals: { 'aws:RequestTag/appliance:managed': 'true' },
+    });
 
     expect(statements.find((statement) => statement.Sid === 'DenyPermissionsBoundaryRemoval')).toMatchObject({
       Effect: 'Deny',
       Action: ['iam:DeleteRolePermissionsBoundary', 'iam:PutRolePermissionsBoundary'],
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenyPermissionsBoundaryRemoval,
+    });
+    expect(statements.find((statement) => statement.Sid === 'DenyBoundaryPolicyMutation')).toMatchObject({
+      Effect: 'Deny',
+      Action: [
+        'iam:CreatePolicyVersion',
+        'iam:DeletePolicy',
+        'iam:DeletePolicyVersion',
+        'iam:SetDefaultPolicyVersion',
+        'iam:TagPolicy',
+        'iam:UntagPolicy',
+      ],
+      Resource: ref('UserAppliancePermissionsBoundary'),
     });
     expect(statements.find((statement) => statement.Sid === 'DenySystemFunctionMutation')).toMatchObject({
       Effect: 'Deny',
@@ -196,6 +241,9 @@ describe('appliance CloudFormation template', () => {
 
   it('requires a stack-owned boundary that blocks role, own-stack, and system-function escalation', () => {
     expect(document.getIn(['Resources', 'UserAppliancePermissionsBoundary', 'Type'])).toBe('AWS::IAM::ManagedPolicy');
+    expect(document.getIn(['Resources', 'UserAppliancePermissionsBoundary', 'Properties', 'Path'])).toBe(
+      '/appliance-system/'
+    );
     const statements = boundaryPolicy().Statement;
     expect(statements.find((statement) => statement.Sid === 'AllowUserApplianceRuntimePermissions')).toMatchObject({
       Effect: 'Allow',
@@ -209,8 +257,33 @@ describe('appliance CloudFormation template', () => {
     });
     expect(statements.find((statement) => statement.Sid === 'DenyControlPlaneStackMutation')).toMatchObject({
       Effect: 'Deny',
-      Action: 'cloudformation:UpdateStack',
+      NotAction: [
+        'cloudformation:Describe*',
+        'cloudformation:Get*',
+        'cloudformation:List*',
+        'cloudformation:Detect*',
+        'cloudformation:Validate*',
+      ],
       Resource: sub('arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'),
+    });
+    expect(statements.find((statement) => statement.Sid === 'DenyBoundaryPolicyMutation')).toMatchObject({
+      Effect: 'Deny',
+      Action: [
+        'iam:CreatePolicyVersion',
+        'iam:DeletePolicy',
+        'iam:DeletePolicyVersion',
+        'iam:SetDefaultPolicyVersion',
+        'iam:TagPolicy',
+        'iam:UntagPolicy',
+      ],
+      Resource: sub(
+        'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance-system/${InstallationName}-user-appliance-boundary'
+      ),
+    });
+    expect(statements.find((statement) => statement.Sid === 'DenyAssumeOutsideApplianceRoles')).toMatchObject({
+      Effect: 'Deny',
+      Action: 'sts:AssumeRole',
+      NotResource: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
     });
     expect(statements.find((statement) => statement.Sid === 'DenySystemFunctionMutation')).toMatchObject({
       Effect: 'Deny',

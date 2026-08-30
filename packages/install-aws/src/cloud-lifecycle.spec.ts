@@ -77,7 +77,20 @@ describe('CloudFormation lifecycle', () => {
     expect(deps.deployStack).toHaveBeenCalledWith(
       expect.objectContaining({ imageUri: 'repo@sha256:new', architecture: 'x86_64' })
     );
+    expect(deps.updateBaseConfigBoundary).toHaveBeenCalledWith(
+      'data',
+      'system/base-config.json',
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary'
+    );
+    expect(vi.mocked(deps.updateBaseConfigBoundary).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deps.getBootstrapStatus).mock.invocationCallOrder[0]!
+    );
     expect(deps.getBootstrapStatus).toHaveBeenCalledWith(profile.apiUrl);
+    expect(deps.updateBaseConfigBoundary).toHaveBeenCalledWith(
+      'data',
+      'system/base-config.json',
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary'
+    );
   });
 
   it('documents the previous digest when post-update health fails', async () => {

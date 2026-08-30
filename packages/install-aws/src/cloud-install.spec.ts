@@ -93,7 +93,13 @@ function harness(
       };
     },
     async writeBaseConfigIfAbsent(_bucket, _key, value) {
-      expect(value).toMatchObject({ provisioner: 'cloudformation-v1', aws: { dataBucketName: 'data-bucket' } });
+      expect(value).toMatchObject({
+        provisioner: 'cloudformation-v1',
+        aws: {
+          dataBucketName: 'data-bucket',
+          userAppliancePermissionsBoundaryArn: 'arn:aws:iam::111:policy/appliance-system/test-user-appliance-boundary',
+        },
+      });
       mark('base-config');
       if (baseConfigObject) return false;
       baseConfigObject = value as Record<string, unknown>;
