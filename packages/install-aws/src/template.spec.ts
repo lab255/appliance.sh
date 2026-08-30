@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import YAML from 'yaml';
-import { APPLIANCE_CLOUDFORMATION_TEMPLATE, CLOUDFORMATION_TEMPLATE_BODY_LIMIT } from './template.js';
+import {
+  APPLIANCE_CLOUDFORMATION_TEMPLATE,
+  APPLIANCE_STACK_POLICY,
+  CLOUDFORMATION_TEMPLATE_BODY_LIMIT,
+} from './template.js';
 
 type PolicyStatement = {
   Sid: string;
@@ -22,6 +26,13 @@ const document = YAML.parseDocument(APPLIANCE_CLOUDFORMATION_TEMPLATE, {
 
 const sub = (value: string) => ({ tag: '!Sub', value });
 const ref = (value: string) => ({ tag: '!Ref', value });
+
+function resourcePolicy(logicalId: 'SelfUpdateRole' | 'SelfUpdateCloudFormationRole') {
+  const policies = toJson(['Resources', logicalId, 'Properties', 'Policies']) as Array<{
+    PolicyDocument: { Version: string; Statement: PolicyStatement[] };
+  }>;
+  return policies[0]?.PolicyDocument;
+}
 
 function toJson(path: (string | number)[]): unknown {
   return (document.getIn(path) as { toJSON(): unknown }).toJSON();
@@ -82,6 +93,7 @@ const WORST_GET_ATT: Record<string, string> = {
   'StateBucket.Arn': `arn:${WORST_CASE.partition}:s3:::${'s'.repeat(63)}`,
   'StateKmsKey.Arn': `arn:${WORST_CASE.partition}:kms:${WORST_CASE.region}:${WORST_CASE.accountId}:key/${'0'.repeat(36)}`,
   'ImageRepository.Arn': `arn:${WORST_CASE.partition}:ecr:${WORST_CASE.region}:${WORST_CASE.accountId}:repository/${'r'.repeat(256)}`,
+  'SelfUpdateCloudFormationRole.Arn': `arn:${WORST_CASE.partition}:iam::${WORST_CASE.accountId}:role/appliance-system/${WORST_CASE.installationName}-self-update-cloudformation`,
 };
 
 function worstSub(value: string): string {
@@ -113,6 +125,9 @@ function resolvedPolicyCharacters(policy: unknown): number {
       if (intrinsic.tag === '!Ref' && intrinsic.value === 'UserAppliancePermissionsBoundary') {
         return `arn:${WORST_CASE.partition}:iam::${WORST_CASE.accountId}:policy/appliance-system/${WORST_CASE.installationName}-user-appliance-boundary`;
       }
+      if (intrinsic.tag === '!Ref' && intrinsic.value === 'AWS::StackId') {
+        return `arn:${WORST_CASE.partition}:cloudformation:${WORST_CASE.region}:${WORST_CASE.accountId}:stack/${WORST_CASE.stackName}/${'0'.repeat(36)}`;
+      }
       throw new Error(`No worst-case resolution for ${intrinsic.tag} ${intrinsic.value}`);
     }
     return value;
@@ -141,6 +156,20 @@ const WILDCARD_RESOURCE_JUSTIFICATIONS = {
   // CloudWatch Logs describe APIs enumerate account state and do not support resource-level permissions.
   LogsAccountDiscovery: 'CloudWatch Logs discovery is account-scoped',
 } as const;
+
+const PROTECTED_LOGICAL_IDS = [
+  'StateBucket',
+  'DataBucket',
+  'StateKmsKey',
+  'StateKmsAlias',
+  'UserAppliancePermissionsBoundary',
+  'SystemApiServerRole',
+  'SystemWorkerRole',
+  'SystemWorkerProvisioningPolicy',
+  'SystemWorkerEdgeProvisioningPolicy',
+  'SelfUpdateRole',
+  'SelfUpdateCloudFormationRole',
+] as const;
 
 const EXPECTED_IAM_LAMBDA_RESOURCES = {
   ApplianceIamRoleRead: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
@@ -188,6 +217,8 @@ describe('appliance CloudFormation template', () => {
       expect(resolvedPolicyCharacters(policy)).toBeLessThanOrEqual(6_144);
     }
     expect(resolvedPolicyCharacters(boundaryPolicy())).toBeLessThanOrEqual(6_144);
+    expect(resolvedPolicyCharacters(resourcePolicy('SelfUpdateRole'))).toBeLessThanOrEqual(10_240);
+    expect(resolvedPolicyCharacters(resourcePolicy('SelfUpdateCloudFormationRole'))).toBeLessThanOrEqual(10_240);
   });
 
   it('defaults to scoped roles and makes AdministratorAccess break-glass only', () => {
@@ -216,6 +247,77 @@ describe('appliance CloudFormation template', () => {
     expect(managedPolicies[1]?.Statement.map(({ Sid }) => Sid)).toContain('CloudFrontAccountOperations');
     expect(managedPolicies[0]).toMatchSnapshot('worker IAM and Lambda provisioning managed policy');
     expect(managedPolicies[1]).toMatchSnapshot('worker edge-service provisioning managed policy');
+  });
+
+  it('snapshots the exact self-update caller and CloudFormation service-role policies', () => {
+    expect(resourcePolicy('SelfUpdateRole')).toMatchSnapshot('self-update caller policy');
+    expect(resourcePolicy('SelfUpdateCloudFormationRole')).toMatchSnapshot('self-update CloudFormation role policy');
+  });
+
+  it('pins the self-update trust and limits the worker to assuming only that role', () => {
+    expect(document.getIn(['Resources', 'SelfUpdateRole', 'Properties', 'Path'])).toBe('/appliance-system/');
+    expect(document.getIn(['Resources', 'SelfUpdateCloudFormationRole', 'Properties', 'Path'])).toBe(
+      '/appliance-system/'
+    );
+    expect(document.getIn(['Resources', 'SelfUpdateRole', 'Properties', 'MaxSessionDuration'])).toBe(3600);
+    expect(
+      toJson(['Resources', 'SelfUpdateRole', 'Properties', 'AssumeRolePolicyDocument', 'Statement', 0, 'Condition'])
+    ).toEqual({
+      StringEquals: { 'aws:PrincipalArn': { tag: '!GetAtt', value: 'SystemWorkerRole.Arn' } },
+      StringLike: { 'sts:SourceIdentity': 'self-update-*' },
+    });
+    const assume = scopedPolicy('SystemWorkerRole').Statement.filter((statement) =>
+      actionsOf(statement).includes('sts:AssumeRole')
+    );
+    expect(assume).toEqual([
+      {
+        Sid: 'AssumeOnlySelfUpdateRole',
+        Effect: 'Allow',
+        Action: 'sts:AssumeRole',
+        Resource: sub(
+          'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance-system/${InstallationName}-self-update'
+        ),
+      },
+    ]);
+  });
+
+  it('contains no wildcard actions or direct mutation in either self-update IAM policy', () => {
+    const policies = [resourcePolicy('SelfUpdateRole'), resourcePolicy('SelfUpdateCloudFormationRole')];
+    for (const policy of policies) {
+      for (const action of policy?.Statement.flatMap(actionsOf) ?? []) expect(action).not.toContain('*');
+    }
+    const callerActions = resourcePolicy('SelfUpdateRole')?.Statement.flatMap(actionsOf) ?? [];
+    expect(callerActions).not.toContain('lambda:GetFunction');
+    expect(callerActions.filter((action) => action === 'iam:PassRole')).toHaveLength(1);
+    const serviceActions = resourcePolicy('SelfUpdateCloudFormationRole')?.Statement.flatMap(actionsOf) ?? [];
+    expect(serviceActions.some((action) => /^(iam|s3|kms|ecr):/.test(action))).toBe(false);
+    expect(serviceActions).not.toContain('lambda:UpdateFunctionConfiguration');
+  });
+
+  it('snapshots and enforces the stack-policy protected logical ids against arbitrary templates', () => {
+    const policy = JSON.parse(APPLIANCE_STACK_POLICY) as {
+      Statement: Array<{ Effect: string; Action: string; Resource: string | string[] }>;
+    };
+    const denied = policy.Statement.find((statement) => statement.Effect === 'Deny');
+    const protectedIds = (Array.isArray(denied?.Resource) ? denied.Resource : [])
+      .map((resource) => resource.replace('LogicalResourceId/', ''))
+      .sort();
+    expect(protectedIds).toMatchSnapshot('stack-policy protected logical ids');
+    expect(protectedIds).toEqual([...PROTECTED_LOGICAL_IDS].sort());
+    const resources = toJson(['Resources']) as Record<string, { Type: string }>;
+    const securityLogicalIds = Object.entries(resources)
+      .filter(([, resource]) => /^AWS::(IAM|S3|KMS)::/.test(resource.Type))
+      .map(([logicalId]) => logicalId)
+      .sort();
+    expect(protectedIds).toEqual(securityLogicalIds);
+
+    // Model CloudFormation's explicit Deny precedence: an arbitrary
+    // caller-supplied template cannot update or replace a protected id.
+    for (const logicalId of PROTECTED_LOGICAL_IDS) {
+      expect(denied?.Action).toBe('Update:*');
+      expect(Array.isArray(denied?.Resource) && denied.Resource.includes(`LogicalResourceId/${logicalId}`)).toBe(true);
+    }
+    expect(policy.Statement).toContainEqual({ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' });
   });
 
   it('has no all-action grants and allowlists every unavoidable wildcard resource', () => {
@@ -434,6 +536,8 @@ describe('appliance CloudFormation template', () => {
       'StateKmsAliasName',
       'ImageRepositoryUrl',
       'UserAppliancePermissionsBoundaryArn',
+      'SelfUpdateRoleArn',
+      'SelfUpdateCloudFormationRoleArn',
       'WorkerFunctionName',
       'WorkerFunctionArn',
       'WorkerFunctionUrl',

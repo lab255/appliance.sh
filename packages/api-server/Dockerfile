@@ -92,6 +92,7 @@ ENV AWS_LWA_PORT=3000
 # TARGETARCH is auto-set by buildx; crane's release asset naming
 # uses x86_64 / arm64 so we map from Docker's amd64 / arm64 form.
 ARG TARGETARCH
+ARG CRANE_VERSION=v0.20.6
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
     && rm -rf /var/lib/apt/lists/* \
     && case "${TARGETARCH:-amd64}" in \
@@ -99,7 +100,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip \
          arm64) CRANE_ARCH=arm64 ;; \
          *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
        esac \
-    && curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
+    && curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
        | tar -xzf - -C /usr/local/bin crane
 
 # Crane writes its auth config to $DOCKER_CONFIG (or $HOME/.docker by default).

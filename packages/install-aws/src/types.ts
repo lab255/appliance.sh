@@ -21,6 +21,10 @@ export interface ApplianceCloudOutputs {
   bootstrapTokenSecretArn: string;
   /** Added by the CU0 template; absent from pre-1.58 stack snapshots. */
   userAppliancePermissionsBoundaryArn?: string;
+  /** Added by CU1; optional while resolving the pre-update stack snapshot. */
+  selfUpdateRoleArn?: string;
+  /** Added by CU1; optional while resolving the pre-update stack snapshot. */
+  selfUpdateCloudFormationRoleArn?: string;
   apiServer?: SystemFunctionOutput;
   worker?: SystemFunctionOutput;
 }

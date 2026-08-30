@@ -17,7 +17,7 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { ApplianceBaseType, VERSION } from '@appliance.sh/sdk';
 import { mirrorImageToEcr, type MirrorImageOptions, type MirrorImageResult } from './ecr-mirror.js';
-import { APPLIANCE_CLOUDFORMATION_TEMPLATE } from './template.js';
+import { APPLIANCE_CLOUDFORMATION_TEMPLATE, APPLIANCE_STACK_POLICY } from './template.js';
 import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
 export const BASE_CONFIG_KEY = 'system/base-config.json';
@@ -98,6 +98,8 @@ export function resolveCloudOutputs(snapshot: StackSnapshot): ApplianceCloudOutp
     workerRoleArn: output(snapshot, 'SystemWorkerRoleArn'),
     bootstrapTokenSecretArn: output(snapshot, 'BootstrapTokenSecretArn'),
     userAppliancePermissionsBoundaryArn: snapshot.outputs.UserAppliancePermissionsBoundaryArn,
+    selfUpdateRoleArn: snapshot.outputs.SelfUpdateRoleArn,
+    selfUpdateCloudFormationRoleArn: snapshot.outputs.SelfUpdateCloudFormationRoleArn,
   };
   if (snapshot.outputs.ApiServerFunctionUrl) {
     resolved.apiServer = {
@@ -394,6 +396,7 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
           new CreateStackCommand({
             StackName: input.stackName,
             TemplateBody: APPLIANCE_CLOUDFORMATION_TEMPLATE,
+            StackPolicyBody: APPLIANCE_STACK_POLICY,
             Parameters: parameters,
             Capabilities: [Capability.CAPABILITY_IAM],
           })
@@ -409,6 +412,7 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
             new UpdateStackCommand({
               StackName: input.stackName,
               TemplateBody: APPLIANCE_CLOUDFORMATION_TEMPLATE,
+              StackPolicyBody: APPLIANCE_STACK_POLICY,
               Parameters: parameters,
               Capabilities: [Capability.CAPABILITY_IAM],
             })

@@ -237,8 +237,6 @@ Resources:
           - UseAdminSystemRoles
           - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
           - !Ref AWS::NoValue
-      # CU1 marker: SystemWorkerProvisioningPolicy is 5,456/6,144 characters worst-case; add sts:AssumeRole on SelfUpdateRole only after it exists, using a third managed policy if needed.
-      # CU1 marker: a stack policy Deny Update:* on both system roles becomes load-bearing with the CFN service role.
       Policies:
         - !If
           - UseScopedSystemRoles
@@ -316,6 +314,11 @@ Resources:
                     - cloudformation:GetResourceRequestStatus
                     - cloudformation:UpdateResource
                   Resource: '*'
+                - Sid: AssumeOnlySelfUpdateRole
+                  Effect: Allow
+                  Action: sts:AssumeRole
+                  # Spelled out to avoid a WorkerRole <-> SelfUpdateRole dependency cycle.
+                  Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance-system/${InstallationName}-self-update
           - !Ref AWS::NoValue
       Tags:
         - Key: appliance.sh/installation
@@ -625,6 +628,102 @@ Resources:
               - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-destination:*
               - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-source:*
 
+  SelfUpdateCloudFormationRole:
+    Type: AWS::IAM::Role
+    Condition: UseScopedSystemRoles
+    Properties:
+      RoleName: !Sub ${InstallationName}-self-update-cloudformation
+      Path: /appliance-system/
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: appliance-self-update-cloudformation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: UpdateOnlySystemFunctionCode
+                Effect: Allow
+                Action:
+                  - lambda:GetFunctionConfiguration
+                  - lambda:ListTags
+                  - lambda:TagResource
+                  - lambda:UpdateFunctionCode
+                Resource:
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${InstallationName}-api-server
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${InstallationName}-worker
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
+  SelfUpdateRole:
+    Type: AWS::IAM::Role
+    Condition: UseScopedSystemRoles
+    Properties:
+      RoleName: !Sub ${InstallationName}-self-update
+      Path: /appliance-system/
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:PrincipalArn: !GetAtt SystemWorkerRole.Arn
+              StringLike:
+                sts:SourceIdentity: self-update-*
+      Policies:
+        - PolicyName: appliance-self-update
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EcrAuth
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Sid: MirrorOnlyToInstallationRepository
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt ImageRepository.Arn
+              - Sid: ObserveOnlyThisStack
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                Resource: !Ref AWS::StackId
+              - Sid: UpdateOnlyThisStack
+                Effect: Allow
+                Action: cloudformation:UpdateStack
+                Resource: !Ref AWS::StackId
+                Condition:
+                  StringEquals:
+                    cloudformation:RoleArn: !GetAtt SelfUpdateCloudFormationRole.Arn
+              - Sid: PassOnlySelfUpdateCloudFormationRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt SelfUpdateCloudFormationRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
   ImageRepository:
     Type: AWS::ECR::Repository
     DeletionPolicy: Retain
@@ -773,6 +872,12 @@ Outputs:
     Value: !GetAtt SystemWorkerRole.Arn
   UserAppliancePermissionsBoundaryArn:
     Value: !Ref UserAppliancePermissionsBoundary
+  SelfUpdateRoleArn:
+    Condition: UseScopedSystemRoles
+    Value: !GetAtt SelfUpdateRole.Arn
+  SelfUpdateCloudFormationRoleArn:
+    Condition: UseScopedSystemRoles
+    Value: !GetAtt SelfUpdateCloudFormationRole.Arn
   BootstrapTokenSecretArn:
     Value: !Ref BootstrapTokenSecret
   WorkerFunctionName:
