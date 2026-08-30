@@ -26,8 +26,7 @@ describe('desktop self-update panel states', () => {
       job({ status: 'failed', phase: 'complete', recovered: false, recoveryState: 'exhausted' })
     );
     expect(exhausted).toContain('the installation may still be running the failed image');
-    // Two shell-equivalent spaces keep the option boundary unmistakable in the compact monospace capture.
-    expect(exhausted).toContain('\nappliance cloud update  --local');
+    expect(exhausted).toContain('\nappliance cloud update --local');
   });
 
   it('renders the successful terminal result', () => {

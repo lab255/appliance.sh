@@ -379,7 +379,7 @@ v1=1.58.0 v2=1.59.0 v3=1.60.0 # replace with the three live signed releases
 appliance cloud update --version "$v1" --json > run1.json
 appliance cloud update --version "$v2" --json > run2.json
 appliance cloud update --version "$v3" --json > run3.json
-jq -e '(.job.resumeCount // 0) == 0' run*.json
+jq -se 'all(.[]; (.job.resumeCount // 0) == 0)' run*.json
 jq '{mirror:(.job.phaseDurationsMs.mirroring // 0), cfn:((.job.phaseDurationsMs["submitting-update"] // 0)+(.job.phaseDurationsMs["waiting-for-stack"] // 0)), health:(.job.phaseDurationsMs["probing-health"] // 0), total:.job.totalMs}' run*.json
 jq -s 'map(.job.totalMs)|max' run*.json
 ```
@@ -392,7 +392,7 @@ jq -s 'map(.job.totalMs)|max' run*.json
 
 Mirror, CloudFormation, and health are diagnostic breakdowns, not a substitute for the target total. A resumed job has
 `resumeCount > 0` and charges lease-gap wall time to whichever phase was in flight; retain that record as recovery evidence but discard
-it from the timing sample set. The first `jq` command above must pass for all three sample files.
+it from the timing sample set. The first `jq` command above must exit `0`, proving that all three sample files are uninterrupted jobs.
 Compute p95 and p99 for each component and target total; with three observations, report the nearest-rank value (the maximum) and retain
 all raw values. Acceptance requires the observed p99 target total to fit the 660-second target deadline, leaving 180 seconds to the
 840-second hard-work limit for recovery and a final 60-second reserve inside Lambda's 900-second worker budget. Also force one unhealthy

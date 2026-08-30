@@ -66,7 +66,7 @@ export function selfUpdateTerminalError(job: SelfUpdatePublicJob): string {
   const detail = job.error ?? 'The service update failed.';
   if (job.recovered) return `${detail} The previous image was re-pinned and passed health checks.`;
   if (job.recoveryState === 'exhausted') {
-    return `${detail} Automatic recovery is exhausted; the installation may still be running the failed image.\nRestore from a terminal:\nappliance cloud update  --local`;
+    return `${detail} Automatic recovery is exhausted; the installation may still be running the failed image.\nRestore from a terminal:\nappliance cloud update --local`;
   }
   return detail;
 }
