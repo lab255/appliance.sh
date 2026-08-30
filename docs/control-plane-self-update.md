@@ -157,12 +157,20 @@ Statement:
     Condition:
       StringEquals:
         cloudformation:RoleArn: !GetAtt SelfUpdateCloudFormationRole.Arn
+  - Sid: PassOnlySelfUpdateCloudFormationRole
+    Effect: Allow
+    Action: iam:PassRole
+    Resource: !GetAtt SelfUpdateCloudFormationRole.Arn
+    Condition:
+      StringEquals:
+        iam:PassedToService: cloudformation.amazonaws.com
 ```
 
-There is no `lambda:GetFunction` (it exposes plaintext environment variables including `BOOTSTRAP_TOKEN`) and no `iam:PassRole` or direct
-Lambda mutation. The permanently associated CFN service role owns the exact two-function permissions. Start from
+There is no `lambda:GetFunction` (it exposes plaintext environment variables including `BOOTSTRAP_TOKEN`) or direct Lambda mutation.
+Expect one `iam:PassRole`, scoped to `SelfUpdateCloudFormationRole` and `iam:PassedToService: cloudformation.amazonaws.com`; the CU1
+CloudTrail run confirms the exact minimum. The CFN service role owns the exact two-function permissions. Start from
 `lambda:UpdateFunctionCode`, `GetFunctionConfiguration`, `ListTags`, `TagResource`, and only add `UpdateFunctionConfiguration` if the CU1
-CloudTrail run proves CFN needs it; it has no IAM/S3/KMS/ECR mutation. The live run must prove no PassRole is needed.
+CloudTrail run proves CFN needs it; it has no IAM/S3/KMS/ECR mutation.
 
 IAM cannot express “only `ImageUri` changed”; audit the caller as if it submitted an arbitrary template. CU1 therefore also associates
 the scoped CFN role, conditions `UpdateStack` on its ARN, and installs a stack policy denying updates to every IAM, S3, and KMS logical
@@ -197,6 +205,11 @@ key whose SHA-256 `keyId` is pinned separately from the RFC-0001 fixture. Reuse 
 generation floor/high-water protection, expiry, and signed blacklist. Key custody/rotation/revocation procedure is a separate owner
 card. Only releases produced after MV0 are eligible for either cloud or microVM self-update.
 
+MV0 also makes `stageFromRelease` verify that envelope before writing and fail closed; `--allow-unsigned` is development-only and emits a
+loud warning. It moves `guestAssetsDir()` to the same ACL'd, non-user-writable staging area used by updates, and the guest accepts a seed
+copy from boot media only when it matches the same signed digest. Until all three controls land in MV0, restage+reboot is not a sanctioned
+update path; afterward it is a fallback only for signed post-MV0 releases.
+
 `appliance vm update [--name NAME] [--version VERSION]` downloads binary, console, `SHA256SUMS`, payload, and envelope to an ACL'd,
 non-user-writable host staging directory. It verifies the envelope offline, production key id, generation, validity, blacklist,
 version/architecture, and both hashes before opening the VM channel. The guest independently checks exact byte count and signed hash.
@@ -205,7 +218,8 @@ The shell listener cannot become a raw receiver because socat allocates its PTY 
 (`packages/vm/src/guest.rs:320-324,1234-1250`). MV1 adds a second `VSOCK-LISTEN:ARTIFACT_VSOCK_PORT` using non-PTY `EXEC:` and reuses
 `runtime_guest::artifact_receive_command`; VZ adds host `connect_vsock(ARTIFACT_VSOCK_PORT)`. WSL keeps `stream_guest_artifact`'s
 same-open-handle hash/stream contract but changes api-server/console from `expected_sha256: None` to the signed digest
-(`packages/vm/src/backend/wsl.rs:623-704`).
+(`packages/vm/src/backend/wsl.rs:623-704`). MV1 must widen that receive helper's current Windows/test-only cfg for VZ
+(`packages/vm/src/backend/runtime_guest.rs:228`).
 
 VZ gains a small root-only persistent control-plane volume mounted at `/var/lib/appliance-control-plane`, separate from `/persist`
 (the agent HOME/data disk) and never exposed by hostPath. WSL uses an ACL'd directory on its distro VHD, never drvfs. Releases contain
@@ -235,7 +249,8 @@ pass identical supervisor tests.
 | Cloud CFN resource failure                                  | stack events/status                      | CFN built-in rollback              | restored/current route            |
 | Cloud wrong/unhealthy server                                | versioned bootstrap probe                | re-pin `previousImage`             | restored signed route             |
 | Cloud re-pin exhausted                                      | persisted terminal recovery state        | clear lease + alert                | new request or `--local`          |
-| Pre-MV0 release or pre-MV1 launcher                         | trust/capability probe                   | refuse in-place                    | release upgrade or restage+reboot |
+| Pre-MV0 release                                             | trust probe                              | refuse every update path           | install a post-MV0 release        |
+| Old launcher after MV0                                      | capability probe                         | no in-place transfer               | signed restage+reboot             |
 | microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap        | old release, retry command        |
 | microVM candidate crash/probe timeout                       | supervisor                               | restore `previous`, respawn        | `appliance vm update`             |
 | microVM reboot with stale media                             | persistent current exists                | ignore media seed                  | persistent supervisor             |
@@ -252,24 +267,26 @@ enforce 51,200 bytes, snapshot caller/service-role allow-lists and stack-policy 
 negative test. Test CFN rollback, events, wrong-version health re-pin, exhaustion clearing its lease, resumption, and deadline reserve.
 
 CU0/CU1 live verification uses a disposable install and CloudTrail to remove admin, minimize both normal execution and CFN service-role
-actions, prove no PassRole/GetFunction is used, and prove baseline/IAM/S3/KMS mutation denied. Measure mirror/CFN p95/p99 before CU2;
+actions, confirm only the scoped CFN PassRole and no GetFunction, and prove baseline/IAM/S3/KMS mutation denied. Measure p95/p99 before CU2;
 then update N→N+1, reject concurrency, kill a worker and resume, force CFN failure, force healthy-wrong-version re-pin, and retry good.
 
-For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 refusal, protected host staging, raw VZ and same-handle WSL transfer, wrong
-size/hash, root-only separate volume/VHD path, symlink/held-fd race, PSA/hostPath denial, atomic binary+console promotion, crash/hang/
+For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 refusal, fail-closed create/restage before writing, protected staging and signed
+boot-media seed, raw VZ and same-handle WSL transfer, wrong size/hash, root-only volume/VHD, symlink/held-fd race, PSA/hostPath denial,
+atomic binary+console promotion, crash/hang/
 wrong-version rollback, stale media, old-launcher fallback, quarantine coexistence, doctor/banner, and VZ/WSL parity. Owner updates without
 reboot, injects a crash, confirms rollback then a good update, and reboots with stale media to confirm persistent current survives.
 
 ## 8. Sequencing and effort
 
-| Card | Scope                                                                                         | Depends on                     | Effort |
-| ---- | --------------------------------------------------------------------------------------------- | ------------------------------ | ------ |
-| CU0  | CloudTrail allow-list; de-admin both system Lambda execution roles                            | S1                             | L      |
-| CU1  | admin route/job, trust verifier, crane, scoped caller/CFN roles, stack policy, re-pin         | CU0                            | XL     |
-| MV0  | workflow signs SHA256SUMS, guest/console assets, and GHCR manifest digest with production key | S1                             | M      |
-| CU2  | CLI/desktop/SDK re-point, signed release evidence, `--local`, live timing gate                | CU1, MV0                       | M      |
-| CU3  | EventBridge and `off/notify/auto` policy                                                      | CU2                            | M      |
-| MV1  | verified transport, protected volume, supervisor, UX, VZ/WSL parity                           | S1, MV0; parallel with CU0/CU1 | XL     |
+| Card | Scope                                                                                 | Depends on                     | Effort |
+| ---- | ------------------------------------------------------------------------------------- | ------------------------------ | ------ |
+| KEY  | Owner provisions production Ed25519 key and custody/rotation/revocation procedure     | S1                             | M      |
+| CU0  | CloudTrail allow-list; de-admin both system Lambda execution roles                    | S1                             | L      |
+| CU1  | admin route/job, trust verifier, crane, scoped caller/CFN roles, stack policy, re-pin | CU0                            | XL     |
+| MV0  | sign releases; verify/harden create/restage staging and boot-media seed               | S1, KEY                        | M      |
+| CU2  | CLI/desktop/SDK re-point, signed release evidence, `--local`, live timing gate        | CU1, MV0                       | M      |
+| CU3  | EventBridge and `off/notify/auto` policy                                              | CU2                            | M      |
+| MV1  | verified transport, protected volume, supervisor, UX, VZ/WSL parity                   | S1, MV0; parallel with CU0/CU1 | XL     |
 
 AP-223 consumes the live steps after CU0/CU1 and MV0/MV1 test environments exist.
 
