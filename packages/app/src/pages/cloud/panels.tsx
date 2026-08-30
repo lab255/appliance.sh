@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Rocket, Trash2 } from 'lucide-react';
-import { applianceBaseConfig, fetchReleaseEvidence, type ApplianceBaseConfig } from '@appliance.sh/sdk';
+import { applianceBaseConfig, type ApplianceBaseConfig } from '@appliance.sh/sdk';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { CommandSnippet } from '@/components/ui/command-snippet';
@@ -16,7 +16,7 @@ import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import type { BootstrapEvent, Cluster, ConsoleHost } from '@/lib/host';
-import { selfUpdatePhaseMessage, selfUpdateTerminalError } from '@/lib/self-update-ui';
+import { runDesktopCloudSelfUpdate, selfUpdatePhaseMessage, selfUpdateTerminalError } from '@/lib/self-update-ui';
 
 // Cloud installation detail — the lifecycle ops for one bootstrapped AWS
 // installation: update baseline, update api-server/worker, detach/reattach
@@ -512,26 +512,18 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
     setError(null);
     try {
       if (cloudFormation) {
-        const evidence = await fetchReleaseEvidence({ version: targetVersion });
-        const started = await client.selfUpdate.start({
-          targetDigest: evidence.targetDigest,
-          release: evidence.release,
+        const update = await runDesktopCloudSelfUpdate(client, targetVersion, {
           idempotencyKey: `desktop-cloud-update-${crypto.randomUUID()}`,
-        });
-        if (!started.success) throw started.error;
-        const jobId = started.data.jobId;
-        if (started.data.httpStatus === 409) {
-          setLogs((prev) => [
-            ...prev,
-            `An update is already running at ${started.data.statusUrl}; attaching to ${jobId}.`,
-          ]);
-        }
-        const watched = await client.selfUpdate.watch(jobId, {
           intervalMs: 2_000,
           onPhase: (job) => setLogs((prev) => [...prev, selfUpdatePhaseMessage(job)]),
         });
-        if (!watched.success) throw watched.error;
-        if (watched.data.status === 'failed') throw new Error(selfUpdateTerminalError(watched.data));
+        if (update.existingStatusUrl) {
+          setLogs((prev) => [
+            ...prev,
+            `An update is already running at ${update.existingStatusUrl}; attaching to ${update.job.jobId}.`,
+          ]);
+        }
+        if (update.job.status === 'failed') throw new Error(selfUpdateTerminalError(update.job));
         await clusterInfoQuery.refetch();
         setStatus('succeeded');
         return;

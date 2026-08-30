@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SelfUpdatePublicJob } from '@appliance.sh/sdk';
-import { selfUpdatePhaseMessage, selfUpdateTerminalError } from './self-update-ui';
+import { runDesktopCloudSelfUpdate, selfUpdatePhaseMessage, selfUpdateTerminalError } from './self-update-ui';
 
 describe('desktop self-update panel states', () => {
   it.each([
@@ -27,6 +27,42 @@ describe('desktop self-update panel states', () => {
       'Updated successfully to 1.58.0'
     );
   });
+
+  it.each([202, 409] as const)(
+    'starts through the SDK and watches the %s job without a sidecar',
+    async (httpStatus) => {
+      const terminal = job({ status: 'succeeded', phase: 'complete' });
+      const client = {
+        selfUpdate: {
+          start: vi.fn(async () => ({
+            success: true as const,
+            data:
+              httpStatus === 202
+                ? { httpStatus, jobId: terminal.jobId, status: 'queued' as const, statusUrl: '/job' }
+                : { httpStatus, jobId: terminal.jobId, statusUrl: '/job' },
+          })),
+          watch: vi.fn(async () => ({ success: true as const, data: terminal })),
+        },
+      };
+      const resolveEvidence = vi.fn(async () => ({
+        version: '1.58.0',
+        targetDigest: terminal.target.digest,
+        release: { payload: {} as never, envelope: {} as never },
+      }));
+
+      const result = await runDesktopCloudSelfUpdate(client as never, '1.58.0', {
+        idempotencyKey: 'desktop-once',
+        resolveEvidence,
+      });
+
+      expect(client.selfUpdate.start).toHaveBeenCalledWith(
+        expect.objectContaining({ targetDigest: terminal.target.digest, idempotencyKey: 'desktop-once' })
+      );
+      expect(client.selfUpdate.watch).toHaveBeenCalledWith(terminal.jobId, expect.any(Object));
+      expect(result).toMatchObject({ job: terminal });
+      expect(result.existingStatusUrl).toBe(httpStatus === 409 ? '/job' : undefined);
+    }
+  );
 });
 
 function job(overrides: Partial<SelfUpdatePublicJob>): SelfUpdatePublicJob {

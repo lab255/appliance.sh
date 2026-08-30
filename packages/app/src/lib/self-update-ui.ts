@@ -1,4 +1,39 @@
-import type { SelfUpdatePublicJob } from '@appliance.sh/sdk';
+import {
+  fetchReleaseEvidence,
+  type ApplianceClient,
+  type ResolvedReleaseEvidence,
+  type SelfUpdatePublicJob,
+} from '@appliance.sh/sdk';
+
+export interface DesktopCloudSelfUpdateOptions {
+  idempotencyKey: string;
+  intervalMs?: number;
+  onPhase?: (job: SelfUpdatePublicJob) => void;
+  resolveEvidence?: (version: string) => Promise<ResolvedReleaseEvidence>;
+}
+
+export async function runDesktopCloudSelfUpdate(
+  client: ApplianceClient,
+  version: string,
+  options: DesktopCloudSelfUpdateOptions
+): Promise<{ job: SelfUpdatePublicJob; existingStatusUrl?: string }> {
+  const evidence = await (options.resolveEvidence ?? ((target) => fetchReleaseEvidence({ version: target })))(version);
+  const started = await client.selfUpdate.start({
+    targetDigest: evidence.targetDigest,
+    release: evidence.release,
+    idempotencyKey: options.idempotencyKey,
+  });
+  if (!started.success) throw started.error;
+  const watched = await client.selfUpdate.watch(started.data.jobId, {
+    intervalMs: options.intervalMs,
+    onPhase: options.onPhase,
+  });
+  if (!watched.success) throw watched.error;
+  return {
+    job: watched.data,
+    ...(started.data.httpStatus === 409 ? { existingStatusUrl: started.data.statusUrl } : {}),
+  };
+}
 
 const LABELS: Record<SelfUpdatePublicJob['phase'], string> = {
   queued: 'Queued — waiting for the update worker',

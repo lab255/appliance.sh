@@ -12,6 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./ghcr-latest": {
+      "types": "./dist/ghcr-latest.d.ts",
+      "import": "./dist/ghcr-latest.js",
+      "require": "./dist/ghcr-latest.js"
     }
   },
   "files": [
