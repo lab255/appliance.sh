@@ -14,9 +14,16 @@ Parameters:
     Type: String
     Default: x86_64
     AllowedValues: [x86_64, arm64]
+  SystemRoleMode:
+    Type: String
+    Default: scoped
+    AllowedValues: [scoped, admin]
+    Description: Scoped least-privilege system roles by default; admin is an operator break-glass escape hatch
 
 Conditions:
   HasImage: !Not [!Equals [!Ref ImageUri, '']]
+  UseAdminSystemRoles: !Equals [!Ref SystemRoleMode, admin]
+  UseScopedSystemRoles: !Equals [!Ref SystemRoleMode, scoped]
 
 Resources:
   StateBucket:
@@ -101,7 +108,35 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+        - !If
+          - UseAdminSystemRoles
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+          - !Ref AWS::NoValue
+      Policies:
+        - !If
+          - UseScopedSystemRoles
+          - PolicyName: appliance-system-api-server
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Sid: DataBucketMetadata
+                  Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt DataBucket.Arn
+                - Sid: DataBucketObjects
+                  Effect: Allow
+                  Action:
+                    - s3:DeleteObject
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource: !Sub ${DataBucket.Arn}/*
+                - Sid: BootstrapTokenRead
+                  Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref BootstrapTokenSecret
+          - !Ref AWS::NoValue
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName
@@ -118,7 +153,262 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+        - !If
+          - UseAdminSystemRoles
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+          - !Ref AWS::NoValue
+      # CU1 marker: add sts:AssumeRole on SelfUpdateRole here only after that role exists.
+      Policies:
+        - !If
+          - UseScopedSystemRoles
+          - PolicyName: appliance-system-worker
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Sid: DataBucketMetadata
+                  Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt DataBucket.Arn
+                - Sid: DataBucketObjects
+                  Effect: Allow
+                  Action:
+                    - s3:DeleteObject
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource: !Sub ${DataBucket.Arn}/*
+                - Sid: PulumiStateBucketMetadata
+                  Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt StateBucket.Arn
+                - Sid: PulumiStateObjects
+                  Effect: Allow
+                  Action:
+                    - s3:DeleteObject
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource: !Sub ${StateBucket.Arn}/*
+                - Sid: PulumiSecretsKey
+                  Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                    - kms:DescribeKey
+                    - kms:Encrypt
+                    - kms:GenerateDataKey
+                  Resource: !GetAtt StateKmsKey.Arn
+                # ECR authorization tokens are account-scoped and do not support repository ARNs.
+                - Sid: EcrAuthorization
+                  Effect: Allow
+                  Action: ecr:GetAuthorizationToken
+                  Resource: '*'
+                - Sid: InstallationRepository
+                  Effect: Allow
+                  Action:
+                    - ecr:BatchCheckLayerAvailability
+                    - ecr:BatchGetImage
+                    - ecr:CompleteLayerUpload
+                    - ecr:DeleteRepositoryPolicy
+                    - ecr:DescribeImages
+                    - ecr:GetDownloadUrlForLayer
+                    - ecr:GetRepositoryPolicy
+                    - ecr:InitiateLayerUpload
+                    - ecr:ListImages
+                    - ecr:PutImage
+                    - ecr:SetRepositoryPolicy
+                    - ecr:UploadLayerPart
+                  Resource: !GetAtt ImageRepository.Arn
+                # STS identity discovery has no resource-level permission model.
+                - Sid: AccountIdentity
+                  Effect: Allow
+                  Action: sts:GetCallerIdentity
+                  Resource: '*'
+                # aws-native Permission resources use Cloud Control, whose API is account-scoped.
+                - Sid: AwsNativeCloudControl
+                  Effect: Allow
+                  Action:
+                    - cloudformation:CreateResource
+                    - cloudformation:DeleteResource
+                    - cloudformation:GetResource
+                    - cloudformation:GetResourceRequestStatus
+                    - cloudformation:UpdateResource
+                  Resource: '*'
+                - Sid: ApplianceIamRoles
+                  Effect: Allow
+                  Action:
+                    - iam:AttachRolePolicy
+                    - iam:CreateRole
+                    - iam:DeleteRole
+                    - iam:DeleteRolePolicy
+                    - iam:DetachRolePolicy
+                    - iam:GetRole
+                    - iam:GetRolePolicy
+                    - iam:ListAttachedRolePolicies
+                    - iam:ListRolePolicies
+                    - iam:PassRole
+                    - iam:PutRolePolicy
+                    - iam:TagRole
+                    - iam:UntagRole
+                    - iam:UpdateAssumeRolePolicy
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+                    - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*-edge-router-role-*
+                - Sid: ApplianceIamPolicies
+                  Effect: Allow
+                  Action:
+                    - iam:CreatePolicy
+                    - iam:CreatePolicyVersion
+                    - iam:DeletePolicy
+                    - iam:DeletePolicyVersion
+                    - iam:GetPolicy
+                    - iam:GetPolicyVersion
+                    - iam:ListPolicyVersions
+                    - iam:SetDefaultPolicyVersion
+                    - iam:TagPolicy
+                    - iam:UntagPolicy
+                  Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+                - Sid: LambdaEdgeServiceLinkedRoles
+                  Effect: Allow
+                  Action: iam:CreateServiceLinkedRole
+                  Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/*
+                  Condition:
+                    StringEquals:
+                      iam:AWSServiceName:
+                        - replicator.lambda.amazonaws.com
+                        - logger.cloudfront.amazonaws.com
+                - Sid: ApplianceFunctions
+                  Effect: Allow
+                  Action:
+                    - lambda:AddPermission
+                    - lambda:CreateFunction
+                    - lambda:CreateFunctionUrlConfig
+                    - lambda:DeleteFunction
+                    - lambda:DeleteFunctionUrlConfig
+                    - lambda:GetFunction
+                    - lambda:GetFunctionConfiguration
+                    - lambda:GetFunctionUrlConfig
+                    - lambda:GetPolicy
+                    - lambda:ListTags
+                    - lambda:ListVersionsByFunction
+                    - lambda:PublishVersion
+                    - lambda:RemovePermission
+                    - lambda:TagResource
+                    - lambda:UntagResource
+                    - lambda:UpdateFunctionCode
+                    - lambda:UpdateFunctionConfiguration
+                    - lambda:UpdateFunctionUrlConfig
+                  Resource: !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:*
+                - Sid: LambdaEdgeReplication
+                  Effect: Allow
+                  Action:
+                    - lambda:DisableReplication*
+                    - lambda:EnableReplication*
+                  Resource: !Sub arn:${AWS::Partition}:lambda:us-east-1:${AWS::AccountId}:function:*:*
+                # CloudFront create/list operations and managed-policy discovery do not support resource ARNs.
+                - Sid: CloudFrontAccountOperations
+                  Effect: Allow
+                  Action:
+                    - cloudfront:CreateDistribution
+                    - cloudfront:CreateOriginAccessControl
+                    - cloudfront:ListCachePolicies
+                    - cloudfront:ListOriginAccessControls
+                    - cloudfront:ListOriginRequestPolicies
+                  Resource: '*'
+                - Sid: ApplianceCloudFrontResources
+                  Effect: Allow
+                  Action:
+                    - cloudfront:DeleteDistribution
+                    - cloudfront:DeleteOriginAccessControl
+                    - cloudfront:GetDistribution
+                    - cloudfront:GetDistributionConfig
+                    - cloudfront:GetOriginAccessControl
+                    - cloudfront:GetOriginAccessControlConfig
+                    - cloudfront:ListTagsForResource
+                    - cloudfront:TagResource
+                    - cloudfront:UntagResource
+                    - cloudfront:UpdateDistribution
+                    - cloudfront:UpdateOriginAccessControl
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
+                    - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*
+                - Sid: AwsManagedCloudFrontPolicies
+                  Effect: Allow
+                  Action:
+                    - cloudfront:GetCachePolicy
+                    - cloudfront:GetOriginRequestPolicy
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:cloudfront::aws:cache-policy/*
+                    - !Sub arn:${AWS::Partition}:cloudfront::aws:origin-request-policy/*
+                # Hosted-zone creation has no resource ARN because the zone does not exist yet.
+                - Sid: Route53CreateHostedZone
+                  Effect: Allow
+                  Action: route53:CreateHostedZone
+                  Resource: '*'
+                - Sid: ApplianceHostedZones
+                  Effect: Allow
+                  Action:
+                    - route53:ChangeResourceRecordSets
+                    - route53:ChangeTagsForResource
+                    - route53:DeleteHostedZone
+                    - route53:GetHostedZone
+                    - route53:ListResourceRecordSets
+                    - route53:ListTagsForResource
+                  Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/*
+                - Sid: Route53Changes
+                  Effect: Allow
+                  Action: route53:GetChange
+                  Resource: !Sub arn:${AWS::Partition}:route53:::change/*
+                # ACM certificate creation has no resource ARN before RequestCertificate returns one.
+                - Sid: AcmRequestCertificate
+                  Effect: Allow
+                  Action: acm:RequestCertificate
+                  Resource: '*'
+                - Sid: ApplianceCertificates
+                  Effect: Allow
+                  Action:
+                    - acm:AddTagsToCertificate
+                    - acm:DeleteCertificate
+                    - acm:DescribeCertificate
+                    - acm:ListTagsForCertificate
+                    - acm:RemoveTagsFromCertificate
+                  Resource: !Sub arn:${AWS::Partition}:acm:*:${AWS::AccountId}:certificate/*
+                - Sid: ApplianceLogGroups
+                  Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:DeleteLogGroup
+                    - logs:DeleteRetentionPolicy
+                    - logs:DescribeLogGroups
+                    - logs:ListTagsForResource
+                    - logs:PutRetentionPolicy
+                    - logs:TagResource
+                    - logs:UntagResource
+                  Resource: !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/appliance/*
+                # Delivery creation and lookup are account-scoped; destination/source mutation is scoped below.
+                - Sid: LogDeliveryAccountOperations
+                  Effect: Allow
+                  Action:
+                    - logs:CreateDelivery
+                    - logs:DeleteDelivery
+                    - logs:GetDelivery
+                    - logs:ListLogDeliveries
+                    - logs:UpdateDelivery
+                  Resource: '*'
+                - Sid: ApplianceLogDeliveryResources
+                  Effect: Allow
+                  Action:
+                    - logs:DeleteDeliveryDestination
+                    - logs:DeleteDeliverySource
+                    - logs:GetDeliveryDestination
+                    - logs:GetDeliverySource
+                    - logs:PutDeliveryDestination
+                    - logs:PutDeliverySource
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-destination:*
+                    - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-source:*
+          - !Ref AWS::NoValue
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName
