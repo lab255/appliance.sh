@@ -146,7 +146,10 @@ describe('self-update client', () => {
     );
     const client = createApplianceClient({ baseUrl: 'https://api.test' });
     const seen: string[] = [];
-    const watching = client.selfUpdate.watch('job/unsafe', { intervalMs: 10, onPhase: (value) => seen.push(value.phase) });
+    const watching = client.selfUpdate.watch('job/unsafe', {
+      intervalMs: 10,
+      onPhase: (value) => seen.push(value.phase),
+    });
     await vi.runAllTimersAsync();
 
     await expect(watching).resolves.toMatchObject({ success: true, data: { status: 'succeeded' } });

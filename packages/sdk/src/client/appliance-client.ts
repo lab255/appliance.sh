@@ -195,10 +195,7 @@ export class ApplianceClient {
     start: (input: SelfUpdateStartInput): Promise<Result<SelfUpdateStartResponse>> => this.startSelfUpdate(input),
     status: (jobId: string): Promise<Result<SelfUpdatePublicJob>> =>
       this.request<SelfUpdatePublicJob>('GET', `/api/v1/self-update/${encodeURIComponent(jobId)}`),
-    watch: async (
-      jobId: string,
-      options: SelfUpdateWatchOptions = {}
-    ): Promise<Result<SelfUpdatePublicJob>> => {
+    watch: async (jobId: string, options: SelfUpdateWatchOptions = {}): Promise<Result<SelfUpdatePublicJob>> => {
       const intervalMs = options.intervalMs ?? 2_000;
       if (!Number.isFinite(intervalMs) || intervalMs < 0) {
         return { success: false, error: new Error('selfUpdate.watch intervalMs must be a non-negative number') };

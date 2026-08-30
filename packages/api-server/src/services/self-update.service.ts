@@ -310,11 +310,7 @@ export class SelfUpdateService {
       };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
       return this.updateJob(jobId, (job) => ({
-        ...transitionPhase(
-          job.lease.holder === holder ? job : throwLeaseStolen(jobId),
-          phase,
-          this.now()
-        ),
+        ...transitionPhase(job.lease.holder === holder ? job : throwLeaseStolen(jobId), phase, this.now()),
         ...patch,
         lease: {
           ...lease,
@@ -330,11 +326,7 @@ export class SelfUpdateService {
   async finish(jobId: string, patch: Partial<SelfUpdateJob>, holder?: string): Promise<SelfUpdateJob> {
     if (holder) await this.assertHolder(jobId, holder);
     const finished = await this.updateJob(jobId, (job) => ({
-      ...transitionPhase(
-        holder && job.lease.holder !== holder ? throwLeaseStolen(jobId) : job,
-        'complete',
-        this.now()
-      ),
+      ...transitionPhase(holder && job.lease.holder !== holder ? throwLeaseStolen(jobId) : job, 'complete', this.now()),
       ...patch,
       completedAt: this.now().toISOString(),
       updatedAt: this.now().toISOString(),

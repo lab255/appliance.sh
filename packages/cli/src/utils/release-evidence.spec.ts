@@ -1,10 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import {
-  signReleaseEnvelope,
-  type ReleaseEnvelope,
-  type ReleaseTrustPolicy,
-} from '@appliance.sh/sdk';
+import { signReleaseEnvelope, type ReleaseEnvelope, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
 import { resolveReleaseEvidence, SELF_UPDATE_DISABLED_AP226 } from './release-evidence.js';
 
 beforeAll(() => {
@@ -42,9 +38,7 @@ async function fixture() {
 describe('release evidence', () => {
   it('fails before network access while AP-226 pins are empty', async () => {
     const fetcher = vi.fn<typeof fetch>();
-    await expect(resolveReleaseEvidence({ version: '1.58.0', fetcher })).rejects.toThrow(
-      SELF_UPDATE_DISABLED_AP226
-    );
+    await expect(resolveReleaseEvidence({ version: '1.58.0', fetcher })).rejects.toThrow(SELF_UPDATE_DISABLED_AP226);
     expect(fetcher).not.toHaveBeenCalled();
   });
 
