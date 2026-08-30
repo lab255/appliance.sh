@@ -55,8 +55,9 @@ The server verifies the Ed25519 envelope and current signed blacklist before per
 verified target/prior identity, timestamps, recovery state, and redacted error. Jobs live in S3 ObjectStore, not Lambda memory.
 
 Idempotency is keyed by `(callerKeyId, tenantId, idempotencyKey)`, never a global client string. A live lease has `expiresAt` and
-`heartbeatAt`; only it causes `409`. A later admin request CAS-takes an expired lease, marks the abandoned job `failed/unknown`, and may
-start a new job. Terminal or exhausted recovery state never holds the lock or short-circuits a request with a new idempotency key.
+`heartbeatAt`; a repeat returns its bound job and a different request gets `409 {jobId,statusUrl}`. A later admin request CAS-takes an
+expired lease, marks the abandoned job `failed/unknown`, and may start a new job. Terminal/exhausted recovery never holds the lock or
+short-circuits a request with a new idempotency key.
 
 The server re-signs `POST /api/internal/jobs/self-update` to the public `WORKER_URL` using the existing shared key-store path
 (`packages/api-server/src/app.ts:94-98`). Its body is **only** `{jobId}`. The worker rejects extra target/version/URI fields, loads the
@@ -119,8 +120,8 @@ Statement:
       StringLike: { sts:SourceIdentity: 'self-update-*' }
 ```
 
-The role sets `MaxSessionDuration: 3600`; the AssumeRole request sets `SourceIdentity` to the exact job id and the executor rejects any
-mismatch. Root-plus-`aws:PrincipalArn` survives safe role recreation without silently trusting a stale principal id.
+The role sets `MaxSessionDuration: 3600`; CU0 grants the worker `sts:AssumeRole` only on this role. The request sets `SourceIdentity` to
+the exact job id and the executor rejects mismatch. Root-plus-`aws:PrincipalArn` survives role recreation without trusting a stale id.
 
 The inline permissions policy draft (substitutions denote CFN references) is:
 
@@ -143,12 +144,15 @@ Statement:
       - ecr:PutImage
       - ecr:UploadLayerPart
     Resource: !GetAtt ImageRepository.Arn
-  - Sid: UpdateOnlyThisStack
+  - Sid: ObserveOnlyThisStack
     Effect: Allow
     Action:
       - cloudformation:DescribeStacks
       - cloudformation:DescribeStackEvents
-      - cloudformation:UpdateStack
+    Resource: !Ref AWS::StackId
+  - Sid: UpdateOnlyThisStack
+    Effect: Allow
+    Action: cloudformation:UpdateStack
     Resource: !Ref AWS::StackId
     Condition:
       StringEquals:
@@ -181,88 +185,99 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
   `packages/cli/src/appliance-cloud-update.ts:20-25`).
 - **CU3:** an opt-in EventBridge rule invokes the worker. Policy is `off` (no
   check), `notify` (persist/surface `availableVersion`, never mutate), or `auto`
-  (enqueue the same image job). `auto` applies IMAGE updates only; baseline drift
-  is notification-only and `runCloudBaselineUpdate` remains operator-side.
+  (enqueue the same image job). EventBridge carries only a pre-provisioned scheduler `jobId`; the worker CAS-claims that persisted
+  owner policy before checking signed release metadata. `auto` applies IMAGE updates only; baseline remains notification/operator-side.
 
 ## 5. microVM mechanism (MV1)
 
-`appliance vm update [--name NAME] [--version VERSION]` downloads the matching
-musl guest asset on the host. Require a release SHA-256 plus a Sigstore bundle
-whose GitHub OIDC identity is pinned to the release workflow: a checksum fetched
-beside its binary detects corruption but does not authenticate the publisher.
-The host verifies signature, identity, digest, architecture, and version before
-opening the VM channel; the guest independently verifies exact byte count and
-SHA-256 before making the root-owned candidate executable.
+MV0 first adds a `control-plane-release` envelope role and changes the workflow to publish `SHA256SUMS` plus its Ed25519/RFC-8785
+production release envelope covering both
+`appliance-api-server-linux-*`, `appliance-console.tar.gz`, and the GHCR manifest digest. It uses a new offline Appliance production
+key whose SHA-256 `keyId` is pinned separately from the RFC-0001 fixture. Reuse the catalogue verifier's canonical envelopes,
+generation floor/high-water protection, expiry, and signed blacklist. Key custody/rotation/revocation procedure is a separate owner
+card. Only releases produced after MV0 are eligible for either cloud or microVM self-update.
 
-Extend the existing owner-only VZ vsock one-shot transport
-(`packages/vm/src/backend/vz/shell.rs:1-55`) with a non-PTY artifact receive mode;
-do not push binary bytes through the interactive PTY. WSL uses its existing
-size-plus-SHA streaming primitive (`packages/vm/src/backend/wsl.rs:624-704`).
+`appliance vm update [--name NAME] [--version VERSION]` downloads binary, console, `SHA256SUMS`, payload, and envelope to an ACL'd,
+non-user-writable host staging directory. It verifies the envelope offline, production key id, generation, validity, blacklist,
+version/architecture, and both hashes before opening the VM channel. The guest independently checks exact byte count and signed hash.
 
-Store releases under `/persist/appliance/control-plane/releases/<version>/` with
-`current`, `previous`, and `pending` symlinks changed by atomic rename. Extend
-`APISERVER_COMMON` into the supervisor state machine: launch `pending`, poll
-guest-loopback `/bootstrap/status` for two minutes and require its target version;
-on success promote it, and on exit/bad health restore `previous` and respawn.
-The updater asks the supervisor to restart; it never kills the only retained
-known-good bytes.
+The shell listener cannot become a raw receiver because socat allocates its PTY before `SHELL_AGENT` parses input
+(`packages/vm/src/guest.rs:320-324,1234-1250`). MV1 adds a second `VSOCK-LISTEN:ARTIFACT_VSOCK_PORT` using non-PTY `EXEC:` and reuses
+`runtime_guest::artifact_receive_command`; VZ adds host `connect_vsock(ARTIFACT_VSOCK_PORT)`. WSL keeps `stream_guest_artifact`'s
+same-open-handle hash/stream contract but changes api-server/console from `expected_sha256: None` to the signed digest
+(`packages/vm/src/backend/wsl.rs:623-704`).
 
-Boot-media and WSL copy become seed-only: import a verified media asset when no
-persistent release exists, but never overwrite `current`. The 60-second legacy
-Deployment quarantine remains independent. Selector-less Service/Ingress and SA
-token wiring do not change. The skew doctor changes remediation from reboot to
-`appliance vm update`; it reports host-staged, persistent-current, and running
-versions. Desktop invokes the same host transport and replaces “restart the Dev
-Machine” with an update action. VZ and WSL must pass identical supervisor tests.
+VZ gains a small root-only persistent control-plane volume mounted at `/var/lib/appliance-control-plane`, separate from `/persist`
+(the agent HOME/data disk) and never exposed by hostPath. WSL uses an ACL'd directory on its distro VHD, never drvfs. Releases contain
+`{binary, console.tar.gz, console/}`; `current`, `previous`, and `pending` point to whole release directories and change by atomic rename,
+so `APPLIANCE_CONSOLE_DIR` and binary promote together rather than skew.
+
+Extend `APISERVER_COMMON` into a supervisor: open the candidate without following symlinks, verify its signed SHA-256 through that held
+fd immediately before executing `/proc/self/fd/<fd>`, launch with the candidate console, and poll guest-loopback `/bootstrap/status`
+for two minutes requiring the target version. Success promotes the directory; exit/bad health restores `previous` and respawns. Keep
+the old release until a later successful update. User namespaces enforce PSA `restricted` plus admission denial of `hostPath`; the
+control-plane volume is outside workload and agent-reachable mounts.
+
+Boot-media/WSL copy is seed-only and never overwrites `current`; quarantine, selector-less routing, and SA wiring remain independent.
+Because the artifact listener and supervisor are rendered by the host CLI at boot, VMs created before MV1 cannot update in place. A
+launcher-capability probe in doctor/banner detects this and offers restage+reboot; capable VMs get the update action. Doctor reports
+host-staged, signed release, persistent-current, console, and running versions. Desktop calls the same host transport. VZ and WSL must
+pass identical supervisor tests.
 
 ## 6. Failure matrix
 
-| Method / failure                           | Detection                     | Automatic action                   | Next update path                   |
-| ------------------------------------------ | ----------------------------- | ---------------------------------- | ---------------------------------- |
-| Cloud mirror/auth/disk budget              | crane exit/deadline           | no stack mutation                  | current signed route               |
-| Cloud CFN resource failure                 | stack terminal status         | CFN built-in rollback              | restored/current route             |
-| Cloud server starts but is wrong/unhealthy | versioned bootstrap probe     | re-pin `previousImage`             | restored signed route              |
-| Cloud worker code changes mid-job          | expected Lambda behavior      | old invocation continues           | new worker handles next job        |
-| Cloud re-pin submission transient          | stack-state check/retry       | retry, then CFN runs independently | `--local` break glass if exhausted |
-| microVM download/signature/hash failure    | host verifier                 | do not transport/swap              | old guest route/CLI command        |
-| microVM candidate crash or probe timeout   | supervisor                    | restore `previous`, respawn        | `appliance vm update`              |
-| microVM reboot with stale media            | persistent release exists     | ignore media seed                  | persistent supervisor path         |
-| microVM transport interruption             | `.partial` size/hash mismatch | discard candidate                  | retry host command                 |
+| Method / failure                                            | Detection                                | Automatic action                   | Next update path                  |
+| ----------------------------------------------------------- | ---------------------------------------- | ---------------------------------- | --------------------------------- |
+| Cloud unknown/expired/blacklisted signer or digest mismatch | production envelope verifier             | no crane/CFN mutation              | corrected signed request          |
+| Direct worker target injection                              | jobId-only schema + persisted derivation | reject before lease/mutation       | admin server route                |
+| Worker kill/stale lease                                     | `expiresAt`/heartbeat CAS                | mark abandoned; resume/new job     | signed route never permanent-409s |
+| Cloud mirror/auth/budget                                    | crane/deadline                           | no stack mutation; phase resumable | current route                     |
+| Cloud CFN resource failure                                  | stack events/status                      | CFN built-in rollback              | restored/current route            |
+| Cloud wrong/unhealthy server                                | versioned bootstrap probe                | re-pin `previousImage`             | restored signed route             |
+| Cloud re-pin exhausted                                      | persisted terminal recovery state        | clear lease + alert                | new request or `--local`          |
+| Pre-MV0 release or pre-MV1 launcher                         | trust/capability probe                   | refuse in-place                    | release upgrade or restage+reboot |
+| microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap        | old release, retry command        |
+| microVM candidate crash/probe timeout                       | supervisor                               | restore `previous`, respawn        | `appliance vm update`             |
+| microVM reboot with stale media                             | persistent current exists                | ignore media seed                  | persistent supervisor             |
 
 ## 7. Test and owner live-verification plan (input to AP-223)
 
-Automate route signature/validation, CAS conflict and idempotency, durable phase
-transitions, redaction, server-to-worker signing, crane argv/no-shell behavior,
-digest pinning, prior-image nonblank guard, exact `UpdateStack` request, CFN
-failure rollback, failed-health re-pin, worker timeout budget, and N/N-1 job reads.
-Template tests parse YAML, enforce size, and snapshot the exact allow-list.
+Automate POST/GET member and non-owner-tenant `403`, admin success, idempotency caller/tenant binding, live/expired lease takeover,
+durable resume, direct-worker extra-field/unknown-job rejection, N/N-1 job reads, and the named redaction set. Test bad/fixture/unknown
+keys, malformed envelopes, expiry, generation rollback, blacklist, wrong artifact/arch/digest, and successful production-key fixtures.
 
-For MV1 test bad signature, wrong arch/version/hash, interrupted transfer, atomic
-rename, candidate crash/hang/wrong-version, rollback health, stale boot media,
-watchdog coexistence, doctor output, and VZ/WSL parity.
+Test crane array argv/no shell, verified source-to-target digest binding, nonblank prior image, and exact `UpdateStack`: stack ARN,
+`UsePreviousTemplate`, only `ImageUri` new, every other parameter previous, service `RoleArn`, and exactly `[CAPABILITY_IAM]`. Parse YAML,
+enforce 51,200 bytes, snapshot caller/service-role allow-lists and stack-policy protected logical IDs, and submit an arbitrary-template
+negative test. Test CFN rollback, events, wrong-version health re-pin, exhaustion clearing its lease, resumption, and deadline reserve.
 
-Owner live verification: install a disposable cloud stack; update N→N+1 and
-observe job/version; reject a concurrent job; deny baseline APIs using assumed
-role; deploy a boot-failing image and observe CFN rollback; deploy a healthy-HTTP
-wrong-version image and observe automatic re-pin; then retry a good update. For
-microVM, update without reboot, inject a crashing candidate, confirm automatic
-rollback and a subsequent good update, then reboot with stale media and confirm
-the persistent good version survives.
+CU0/CU1 live verification uses a disposable install and CloudTrail to remove admin, minimize both normal execution and CFN service-role
+actions, prove no PassRole/GetFunction is used, and prove baseline/IAM/S3/KMS mutation denied. Measure mirror/CFN p95/p99 before CU2;
+then update N→N+1, reject concurrency, kill a worker and resume, force CFN failure, force healthy-wrong-version re-pin, and retry good.
+
+For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 refusal, protected host staging, raw VZ and same-handle WSL transfer, wrong
+size/hash, root-only separate volume/VHD path, symlink/held-fd race, PSA/hostPath denial, atomic binary+console promotion, crash/hang/
+wrong-version rollback, stale media, old-launcher fallback, quarantine coexistence, doctor/banner, and VZ/WSL parity. Owner updates without
+reboot, injects a crash, confirms rollback then a good update, and reboots with stale media to confirm persistent current survives.
 
 ## 8. Sequencing and effort
 
-| Card | Scope                                                                   | Depends on            | Effort |
-| ---- | ----------------------------------------------------------------------- | --------------------- | ------ |
-| CU1  | cloud route/job, worker executor, crane mirror, scoped role, CFN/re-pin | S1                    | L      |
-| CU2  | CLI/desktop/SDK re-point plus `--local`                                 | CU1                   | M      |
-| CU3  | EventBridge and `off/notify/auto` policy                                | CU1; after CU2        | M      |
-| MV1  | verified transport, persistent supervisor, UX, VZ/WSL parity            | S1; parallel with CU1 | XL     |
+| Card | Scope                                                                                         | Depends on                     | Effort |
+| ---- | --------------------------------------------------------------------------------------------- | ------------------------------ | ------ |
+| CU0  | CloudTrail allow-list; de-admin both system Lambda execution roles                            | S1                             | L      |
+| CU1  | admin route/job, trust verifier, crane, scoped caller/CFN roles, stack policy, re-pin         | CU0                            | XL     |
+| MV0  | workflow signs SHA256SUMS, guest/console assets, and GHCR manifest digest with production key | S1                             | M      |
+| CU2  | CLI/desktop/SDK re-point, signed release evidence, `--local`, live timing gate                | CU1, MV0                       | M      |
+| CU3  | EventBridge and `off/notify/auto` policy                                                      | CU2                            | M      |
+| MV1  | verified transport, protected volume, supervisor, UX, VZ/WSL parity                           | S1, MV0; parallel with CU0/CU1 | XL     |
 
-AP-223 consumes the live steps after CU1/MV1 test environments exist.
+AP-223 consumes the live steps after CU0/CU1 and MV0/MV1 test environments exist.
 
-## 9. Open owner fork
+## 9. Decisions taken
 
-**Guest trust root (Sasha gate):** approve keyless Sigstore verification pinned to
-the GitHub release-workflow identity (recommended), or require an offline Appliance
-release key and rotation/revocation procedure. MV1 must not ship unattended binary
-swap with checksum-only verification.
+- Trust root is a new offline Appliance production Ed25519 key, never the shipped RFC-0001 fixture; custody/rotation/revocation is an
+  owner card, while verifiers pin its SHA-256 key id and enforce generation, expiry, and blacklist offline.
+- One signed production release envelope gates two transports: the GHCR manifest digest before cloud crane copy and guest binary plus
+  console hashes before VM transfer.
+- CU0 de-admins both system Lambda execution roles before CU1/CU2; CU1 adds the scoped self-update/CFN roles and stack policy.
+- MV0 must publish signed metadata first. Cloud CU2 and MV1 accept only post-MV0 releases; checksum-only update is never allowed.
