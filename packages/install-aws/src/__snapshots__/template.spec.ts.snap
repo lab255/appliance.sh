@@ -1,5 +1,21 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`appliance CloudFormation template > snapshots and enforces the stack-policy protected logical ids against arbitrary templates > stack-policy protected logical ids 1`] = `
+[
+  "DataBucket",
+  "SelfUpdateCloudFormationRole",
+  "SelfUpdateRole",
+  "StateBucket",
+  "StateKmsAlias",
+  "StateKmsKey",
+  "SystemApiServerRole",
+  "SystemWorkerEdgeProvisioningPolicy",
+  "SystemWorkerProvisioningPolicy",
+  "SystemWorkerRole",
+  "UserAppliancePermissionsBoundary",
+]
+`;
+
 exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > api-server scoped policy 1`] = `
 {
   "Statement": [
@@ -651,6 +667,121 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
       "Effect": "Allow",
       "Resource": "*",
       "Sid": "AwsNativeCloudControl",
+    },
+    {
+      "Action": "sts:AssumeRole",
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance-system/\${InstallationName}-self-update",
+      },
+      "Sid": "AssumeOnlySelfUpdateRole",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots the exact self-update caller and CloudFormation service-role policies > self-update CloudFormation role policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": [
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListTags",
+        "lambda:TagResource",
+        "lambda:UpdateFunctionCode",
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${InstallationName}-api-server",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:\${AWS::Region}:\${AWS::AccountId}:function:\${InstallationName}-worker",
+        },
+      ],
+      "Sid": "UpdateOnlySystemFunctionCode",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots the exact self-update caller and CloudFormation service-role policies > self-update caller policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": "ecr:GetAuthorizationToken",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "EcrAuth",
+    },
+    {
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:InitiateLayerUpload",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "ImageRepository.Arn",
+      },
+      "Sid": "MirrorOnlyToInstallationRepository",
+    },
+    {
+      "Action": [
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Ref",
+        "value": "AWS::StackId",
+      },
+      "Sid": "ObserveOnlyThisStack",
+    },
+    {
+      "Action": [
+        "cloudformation:ContinueUpdateRollback",
+        "cloudformation:UpdateStack",
+      ],
+      "Condition": {
+        "StringEquals": {
+          "cloudformation:RoleArn": {
+            "tag": "!GetAtt",
+            "value": "SelfUpdateCloudFormationRole.Arn",
+          },
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Ref",
+        "value": "AWS::StackId",
+      },
+      "Sid": "UpdateOnlyThisStack",
+    },
+    {
+      "Action": "iam:PassRole",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "cloudformation.amazonaws.com",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "SelfUpdateCloudFormationRole.Arn",
+      },
+      "Sid": "PassOnlySelfUpdateCloudFormationRole",
     },
   ],
   "Version": "2012-10-17",

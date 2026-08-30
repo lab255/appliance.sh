@@ -1,11 +1,19 @@
-import { describe, expect, it } from 'vitest';
 import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+  SetStackPolicyCommand,
+  UpdateStackCommand,
+} from '@aws-sdk/client-cloudformation';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createAwsCloudInstallDependencies,
   isNoCloudFormationUpdates,
   runCloudInstall,
   type CloudInstallDependencies,
   type CloudInstallProfile,
   type StackSnapshot,
 } from './cloud-install.js';
+import { APPLIANCE_STACK_POLICY, APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE } from './template.js';
 
 const substrateOutputs = {
   StateBucketName: 'state-bucket',
@@ -318,5 +326,55 @@ describe('CloudFormation cloud installer', () => {
   it('recognizes the CloudFormation no-op response without hiding other failures', () => {
     expect(isNoCloudFormationUpdates(new Error('No updates are to be performed.'))).toBe(true);
     expect(isNoCloudFormationUpdates(new Error('Access denied'))).toBe(false);
+  });
+
+  it('temporarily overrides protection for operator updates and installs the policy even on no-op stacks', async () => {
+    const commands: unknown[] = [];
+    const send = vi.spyOn(CloudFormationClient.prototype, 'send').mockImplementation(async (command: unknown) => {
+      commands.push(command);
+      if (command instanceof DescribeStacksCommand) {
+        return {
+          Stacks: [
+            {
+              StackId: 'arn:aws:cloudformation:us-east-1:111111111111:stack/appliance-test/id',
+              StackName: 'appliance-test',
+              StackStatus: 'UPDATE_COMPLETE',
+              Parameters: [],
+              Outputs: [],
+            },
+          ],
+        } as never;
+      }
+      if (command instanceof UpdateStackCommand) throw new Error('No updates are to be performed.');
+      if (command instanceof SetStackPolicyCommand) return {} as never;
+      throw new Error(`unexpected CloudFormation command ${command?.constructor.name}`);
+    });
+    try {
+      const deps = createAwsCloudInstallDependencies({
+        region: 'us-east-1',
+        writeProfile() {},
+      });
+      await expect(
+        deps.deployStack({
+          stackName: 'appliance-test',
+          installationName: 'test-install',
+          imageUri: 'repo@sha256:digest',
+          architecture: 'x86_64',
+          systemRoleMode: 'scoped',
+        })
+      ).resolves.toMatchObject({ exists: true });
+    } finally {
+      send.mockRestore();
+    }
+
+    const update = commands.find((command) => command instanceof UpdateStackCommand) as UpdateStackCommand;
+    expect(update.input).toMatchObject({
+      Capabilities: ['CAPABILITY_NAMED_IAM'],
+      StackPolicyBody: APPLIANCE_STACK_POLICY,
+      StackPolicyDuringUpdateBody: APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE,
+    });
+    const policy = commands.find((command) => command instanceof SetStackPolicyCommand) as SetStackPolicyCommand;
+    expect(policy.input).toEqual({ StackName: 'appliance-test', StackPolicyBody: APPLIANCE_STACK_POLICY });
+    expect(commands.indexOf(policy)).toBeGreaterThan(commands.indexOf(update));
   });
 });

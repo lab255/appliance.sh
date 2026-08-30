@@ -1,7 +1,28 @@
 # Control-plane self-update (AP-218)
 
-**Status:** S1 written decision, re-baselined on `main` at `673be14`. This is a design, not an implementation. Scope is the
-control-plane image/binary only: cloud first, then microVM. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
+**Status:** CU1 shipped by AP-219; CU2 trigger re-pointing and the microVM path remain follow-on work. Scope is the control-plane
+image/binary only. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
+
+## CU1 shipped (AP-219)
+
+The cloud server now exposes owner-admin signed POST/GET self-update routes, persists idempotent CAS-leased jobs in the ObjectStore,
+re-signs job-id-only worker dispatch, independently verifies production release evidence, mirrors the bound digest with pinned crane,
+and performs previous-template `ImageUri`-only CloudFormation update/recovery. Scoped self-update and CloudFormation service roles plus
+the protected-resource stack policy bound the mutation surface. Both route and worker call MV0's `verifyReleaseEnvelope` directly with
+`PINNED_RELEASE_TRUST`; its intentionally empty key set fails closed with AP-226 guidance. CU2 only re-points the CLI/desktop/SDK to
+these routes and supplies signed release evidence. CU1 does not change existing client triggers.
+
+Owner live proof, on a disposable installation:
+
+1. Capture CloudTrail for both the worker-assumed self-update role and the CloudFormation service role; minimize both allow-lists and
+   confirm the only `iam:PassRole` is the scoped CFN role with `iam:PassedToService=cloudformation.amazonaws.com`.
+2. Attempt arbitrary-template baseline, IAM, S3, and KMS mutations and confirm the stack policy/service role denies all of them; confirm
+   no `lambda:GetFunction` appears.
+3. Perform a signed N→N+1 update, then submit a concurrent different idempotency key and observe `409` only while the lease is live.
+4. Kill the worker during stack wait and prove GET polling resumes after lease expiry without re-injecting target controls.
+5. Force a CloudFormation resource failure and confirm rollback/events are recorded; force a healthy wrong-version response and confirm
+   the worker re-pins the previous image.
+6. Retry a good signed release after each failure and confirm terminal/exhausted jobs no longer hold the installation lock.
 
 ## 0. Ground truth at `673be14`
 
@@ -55,17 +76,22 @@ The server verifies the Ed25519 envelope and current signed blacklist before per
 verified target/prior identity, timestamps, recovery state, and redacted error. Jobs live in S3 ObjectStore, not Lambda memory.
 
 Idempotency is keyed by `(callerKeyId, tenantId, idempotencyKey)`, never a global client string. A live lease has `expiresAt` and
-`heartbeatAt`; a repeat returns its bound job and a different request gets `409 {jobId,statusUrl}`. A later admin request CAS-takes an
-expired lease, marks the abandoned job `failed/unknown`, and may start a new job. Terminal/exhausted recovery never holds the lock or
-short-circuits a request with a new idempotency key.
+`heartbeatAt`; a claimed lease also has a random `holder` fencing epoch. Heartbeat and finish CAS against that holder, so an invocation
+that outlives its lease cannot mutate after a replacement worker claims the job. A repeat is reused only when digest and generation
+still match; otherwise it gets `409 {jobId,statusUrl}`. A later admin request CAS-takes an expired lease, marks the abandoned job
+`failed/unknown`, and may start a new job. Terminal/exhausted recovery never holds the lock or short-circuits a new idempotency key.
 
 The server re-signs `POST /api/internal/jobs/self-update` to the public `WORKER_URL` using the existing shared key-store path
 (`packages/api-server/src/app.ts:94-98`). Its body is **only** `{jobId}`. The worker rejects extra target/version/URI fields, loads the
 job, independently re-verifies its signed release evidence, and CAS-claims its live lease before deriving every digest, repository,
 stack, and prior image from server-persisted/install data. Direct calls to the worker therefore cannot bypass route validation.
+GET checks job ownership before attempting resume and signs redispatch with the job's original caller key; a redispatch failure is
+logged but leaves the job resumable. Installations in `SystemRoleMode=admin` receive `503` guidance to restore scoped roles before a
+job is persisted, and the worker also turns a missing scoped-role ARN into a terminal pre-mutation failure.
 
-Audit/log redaction explicitly covers ECR auth tokens, the ECR registry host/account id, assumed-role ARN/session, release envelope
-bytes, and all key/signature headers. Logs retain job id, caller key id, digest prefix, phase, and result.
+Audit/log redaction explicitly covers the exact live ECR token, bearer/basic forms, every AWS ARN and bare account id, the ECR registry
+host, assumed-role session, release envelope bytes, and all key/signature headers. Logs retain job id, caller key id, digest prefix,
+phase, and result.
 
 ### Mirror, update, and recovery
 
@@ -75,8 +101,10 @@ only after that image is built and delivered; CU1 pins it and CU2 acceptance ver
 
 Before `crane cp`, the worker uses the new production release trust (not `PINNED_CATALOGUE_TRUST`) to verify the RFC-8785 envelope,
 keyId SHA-256 pin, generation floor/high-water mark, validity, blacklist, artifact kind/arch, and exact GHCR manifest digest. Verification
-needs no transparency/network service. Only that digest is copied to installation ECR; the verified source and resolved target digest
-are recorded. Signature, expiry, rollback-generation, blacklist, or digest mismatch fails before ECR/CFN mutation.
+needs no transparency/network service. Only that digest is copied to installation ECR under `system-<version>`; the repository
+lifecycle expires only `build-` workload tags, so updater `system-` and installer `sha256-` tags are never lifecycle candidates. Tags are immutable. `ecr:DescribeImages` resolves the mirrored tag back
+to a digest, which must equal the signed digest and is persisted before `UpdateStack`. Signature, expiry, rollback-generation,
+blacklist, or digest mismatch fails before ECR/CFN mutation.
 
 The worker never materializes the image in Lambda's 4-GiB filesystem. First it describes the stack, rejects blank `ImageUri`, and
 records `previousImage`, stack id, signed target, target ECR digest, and template identity. The health URL is re-derived from
@@ -84,20 +112,25 @@ records `previousImage`, stack id, signed target, target ECR digest, and templat
 (`packages/install-aws/template/appliance-cloudformation.yaml:280-291`).
 
 It calls `UpdateStack` with `UsePreviousTemplate: true`; only `ImageUri` is new and all other parameters use `UsePreviousValue: true`.
-Because the retained template contains IAM resources it passes exactly `Capabilities: [CAPABILITY_IAM]`, as today's updater does
-(`packages/install-aws/src/cloud-install.ts:394-400`). No template body enters this path. CFN rollback handles resource-update failure.
+Because the retained template names IAM roles and managed policies it passes exactly
+`Capabilities: [CAPABILITY_NAMED_IAM]`. The operator installer uses the same capability, installs the protective stack policy
+unconditionally with `SetStackPolicy`, and supplies an allow-all `StackPolicyDuringUpdateBody` only for an operator baseline update.
+The self-update executor never supplies that override or a template body. CFN rollback handles resource-update failure.
 
 The parameter updates both functions, so CFN does not promise worker-before-server ordering. Lambda preserves the in-flight old worker
 while code changes. Job phases and schemas are N/N-1 compatible and resumable: each invocation heartbeats a bounded phase; GET polling
 re-dispatches `{jobId}` after an expired lease, and a fresh worker resumes stack wait or health from persisted AWS/job state. Before
-mutation the worker reserves recovery time; near its hard deadline it attempts re-pin rather than waiting indefinitely.
+mutation the worker reserves recovery time; it will not submit a re-pin unless both stack-wait and health floors remain. A re-pin that
+was submitted but cannot be observed before the invocation deadline stays `recoveryState:"in-progress"` with its phase and lease
+heartbeat persisted, so the next GET-driven invocation resumes rather than declaring false exhaustion.
 
 After `UPDATE_COMPLETE`, the worker polls unauthenticated `GET /bootstrap/status` every five seconds for two minutes. Success is HTTP
 200 with `initialized: true` and the target `serverVersion`. CU2 is gated on live p95/p99 mirror and CFN timing proving the recovery
 reserve inside 900 seconds; the existing 1,800-second host waiter is not copied into a single invocation.
 
 On probe failure the worker repeats the previous-template, ImageUri-only update with `previousImage`, waiting for a stable stack and
-retrying submission. CFN continues after worker exit. A restored prior version yields `failed`/`recovered: true`; exhaustion is
+retrying submission. Stable `*_FAILED` states stop retries and include redacted stack events; `UPDATE_ROLLBACK_FAILED` is not hammered.
+CFN continues after worker exit. A restored prior version yields `failed`/`recovered: true`; exhaustion is
 persisted as terminal `failed`, `recovered:false`, `recoveryState:"exhausted"`, with lease cleared; it alerts and leaves `--local` break
 glass, but cannot block a later signed request. This is weaker than aliases only during the bounded bad-image window.
 
@@ -139,8 +172,9 @@ Statement:
       StringLike: { sts:SourceIdentity: 'self-update-*' }
 ```
 
-The role sets `MaxSessionDuration: 3600`; CU0 grants the worker `sts:AssumeRole` only on this role. The request sets `SourceIdentity` to
-the exact job id and the executor rejects mismatch. Root-plus-`aws:PrincipalArn` survives role recreation without trusting a stale id.
+The role and each executor session use 3,600 seconds; CU0 grants the worker `sts:AssumeRole` only on this role. The request sets both
+`SourceIdentity` and `RoleSessionName` to `self-update-<jobId>`. Root-plus-`aws:PrincipalArn` survives role recreation without trusting
+a stale principal id.
 
 The inline permissions policy draft (substitutions denote CFN references) is:
 
@@ -171,7 +205,9 @@ Statement:
     Resource: !Ref AWS::StackId
   - Sid: UpdateOnlyThisStack
     Effect: Allow
-    Action: cloudformation:UpdateStack
+    Action:
+      - cloudformation:ContinueUpdateRollback
+      - cloudformation:UpdateStack
     Resource: !Ref AWS::StackId
     Condition:
       StringEquals:
@@ -195,6 +231,8 @@ IAM cannot express “only `ImageUri` changed”; audit the caller as if it subm
 the scoped CFN role, conditions `UpdateStack` on its ARN, and installs a stack policy denying updates to every IAM, S3, and KMS logical
 resource. The code adds `UsePreviousTemplate`, previous values, and exact capability as defense in depth. CU0 owns de-admin of the two
 Lambda execution roles; CU1 owns this structural self-modifying-stack boundary.
+Operator baseline changes temporarily override that policy only for their in-flight update and then re-install it; the signed executor
+has no path to `StackPolicyDuringUpdateBody`.
 
 The current YAML is 8,695 bytes versus 51,200 bytes. Keep the role and compact
 inline policy in that file (not another embedded asset), extend the existing byte
@@ -279,11 +317,13 @@ pass identical supervisor tests.
 | ----------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------- |
 | Cloud unknown/expired/blacklisted signer or digest mismatch | production envelope verifier             | no crane/CFN mutation                                                                        | corrected signed request          |
 | Direct worker target injection                              | jobId-only schema + persisted derivation | reject before lease/mutation                                                                 | admin server route                |
-| Worker kill/stale lease                                     | `expiresAt`/heartbeat CAS                | mark abandoned; resume/new job                                                               | signed route never permanent-409s |
-| Cloud mirror/auth/budget                                    | crane/deadline                           | no stack mutation; phase resumable                                                           | current route                     |
+| Worker kill/stale lease                                     | expiry + holder-epoch CAS                | fence zombie; resume same job or fail abandoned for a new request                            | signed route never permanent-409s |
+| Cloud mirror/auth/digest                                    | crane + ECR-resolved digest              | persist recovered pre-mutation failure                                                       | current route                     |
 | Cloud CFN resource failure                                  | stack events/status                      | CFN built-in rollback                                                                        | restored/current route            |
 | Cloud wrong/unhealthy server                                | versioned bootstrap probe                | re-pin `previousImage`                                                                       | restored signed route             |
 | Cloud re-pin exhausted                                      | persisted terminal recovery state        | clear lease + alert                                                                          | new request or `--local`          |
+| Cloud re-pin submitted but unobserved                       | deadline with recovery in progress       | retain phase/holder state; resume after lease expiry                                         | GET resumes recovery              |
+| Cloud stable `*_FAILED` / rollback failed                   | stack status + events                    | stop submission loop, redact events, mark exhausted; scoped role permits operator rollback   | new request or operator recovery  |
 | Pre-MV0 release                                             | empty production pin / missing envelope  | allow initial seed with loud warning and disable self-update; refuse after AP-226 pins trust | install a signed post-MV0 release |
 | Old launcher after MV0                                      | capability probe                         | no in-place transfer                                                                         | signed restage+reboot             |
 | microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap                                                                  | old release, retry command        |
@@ -296,11 +336,16 @@ pass identical supervisor tests.
 Automate POST/GET member and non-owner-tenant `403`, admin success, idempotency caller/tenant binding, live/expired lease takeover,
 durable resume, direct-worker extra-field/unknown-job rejection, N/N-1 job reads, and the named redaction set. Test bad/fixture/unknown
 keys, malformed envelopes, expiry, generation rollback, blacklist, wrong artifact/arch/digest, and successful production-key fixtures.
+Also test original-caller resume signing, non-fatal resume dispatch, idempotency target mismatch, scoped-role preflight, holder fencing,
+and a zombie worker heartbeat after takeover.
 
 Test crane array argv/no shell, verified source-to-target digest binding, nonblank prior image, and exact `UpdateStack`: stack ARN,
-`UsePreviousTemplate`, only `ImageUri` new, every other parameter previous, service `RoleArn`, and exactly `[CAPABILITY_IAM]`. Parse YAML,
-enforce 51,200 bytes, snapshot caller/service-role allow-lists and stack-policy protected logical IDs, and submit an arbitrary-template
-negative test. Test CFN rollback, events, wrong-version health re-pin, exhaustion clearing its lease, resumption, and deadline reserve.
+`UsePreviousTemplate`, only `ImageUri` new, every other parameter previous, service `RoleArn`, and exactly
+`[CAPABILITY_NAMED_IAM]`, with no stack-policy override. Parse YAML, enforce 51,200 bytes, fail if a named IAM resource lacks
+NAMED_IAM acknowledgement, snapshot caller/service-role allow-lists and stack-policy protected logical IDs, and submit an
+arbitrary-template negative test. Test operator-only `StackPolicyDuringUpdateBody`, unconditional policy installation, lifecycle
+exclusion of system tags, ECR digest resolution, exact AssumeRole shape, token-to-DOCKER_CONFIG wiring, pre-mutation failure,
+terminal stack failures, submitted-but-unobserved recovery, exhaustion clearing its lease, resumption, and deadline reserve.
 
 CU0/CU1 live verification uses a disposable install and CloudTrail to remove admin, minimize both normal execution and CFN service-role
 actions, confirm only the scoped CFN PassRole and no GetFunction, and prove baseline/IAM/S3/KMS mutation denied. Measure p95/p99 before CU2;

@@ -31,8 +31,10 @@
   "dependencies": {
     "@appliance.sh/infra": "workspace:*",
     "@appliance.sh/sdk": "workspace:*",
+    "@aws-sdk/client-cloudformation": "^3.1005.0",
     "@aws-sdk/client-ecr": "^3.1005.0",
     "@aws-sdk/client-s3": "^3.750.0",
+    "@aws-sdk/client-sts": "^3.1005.0",
     "@aws-sdk/s3-request-presigner": "^3.1009.0",
     "cors": "^2.8.5",
     "express": "^5.2.1"

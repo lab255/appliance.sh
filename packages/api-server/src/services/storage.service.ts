@@ -76,6 +76,11 @@ export class StorageService {
     await this.store.set(this.getKey(collection, id), JSON.stringify(value));
   }
 
+  async setIfAbsent<T>(collection: string, id: string, value: T): Promise<boolean> {
+    if (!this.store.setIfAbsent) throw new Error('Object store does not support atomic creation');
+    return this.store.setIfAbsent(this.getKey(collection, id), JSON.stringify(value));
+  }
+
   async setIfVersion<T>(collection: string, id: string, value: T, version: string): Promise<boolean> {
     if (!this.store.setIfVersion) throw new Error('Object store does not support optimistic concurrency');
     return this.store.setIfVersion(this.getKey(collection, id), JSON.stringify(value), version);
