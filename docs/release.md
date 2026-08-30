@@ -22,9 +22,9 @@ AP-226 owner steps, in order:
    `RELEASE_DEV_FIXTURE_KEY_ID`, and the `PINNED_RELEASE_TRUST` mapping in
    `packages/sdk/src/models/release-trust.ts` with that production public key
    and its `ed25519:sha256:<hex>` pin.
-3. Store the matching 32-byte seed as standard base64 in the release
-   environment secret named exactly `APPLIANCE_RELEASE_SIGNING_KEY`; restrict
-   environment access to release owners and required reviewers.
+3. Store the matching 32-byte seed as standard base64 in the Actions secret
+   named exactly `APPLIANCE_RELEASE_SIGNING_KEY`; restrict secret management
+   to release owners.
 4. Run a non-publishing workflow dry run, then publish a canary and confirm the
    CLI reports `staged asset signed by keyId …` and both VZ/WSL seed checks pass.
 
