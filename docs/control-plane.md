@@ -99,6 +99,17 @@ host-local.
 | `GET /api/v1/self-update/:jobId`         | signed owner-tenant admin key | Read durable phase/result and resume an expired-lease cloud job      |
 | `GET /healthz`                           | none                          | Process liveness only                                                |
 
+The SDK exposes the self-update contract as `client.selfUpdate`:
+
+- `start({targetDigest, release, idempotencyKey})` signs `POST /api/v1/self-update` and returns a typed `202` accepted or `409`
+  live-lease response.
+- `status(jobId)` signs `GET /api/v1/self-update/:jobId` and returns the shared `SelfUpdatePublicJob`, including redacted failure and
+  additive `phaseDurationsMs` timing evidence.
+- `watch(jobId, {intervalMs, onPhase})` polls status, calls `onPhase` once per phase transition, and resolves on `succeeded` or `failed`.
+
+CLI and Desktop CloudFormation-v1 updates use this same client. Desktop retains the argv-based Tauri sidecar only for the legacy
+two-release deprecation path; baseline updates and other host/AWS operations remain host-local.
+
 The server already talks to the cluster via `@kubernetes/client-node`
 (`CoreV1Api` + `AppsV1Api`, authed with its ServiceAccount token) inside
 `packages/infra/src/lib/local/LocalContainerDeploymentService.ts:141-158,642`,

@@ -54,9 +54,33 @@ top-level commands remain unchanged.
 
 ## Cloud baseline role mode
 
+### `cloud update`
+
+For a `cloudformation-v1` profile, `appliance cloud update` resolves the requested release (`--version <semver>`, or the latest semver
+GHCR tag), downloads `control-plane-release.json` plus `control-plane-release.sig.json`, verifies that pair offline with the pinned
+production release key, and sends only the signed manifest digest/evidence to the running server. It streams mirror, CloudFormation,
+health, and recovery phases until the job is terminal.
+
+```sh
+appliance cloud update [--version 1.58.0]
+appliance cloud update --follow selfupdate_123
+appliance cloud update --json
+appliance cloud update --local [--image <registry/ref>] [--arch amd64|arm64] [--aws-profile <name>]
+```
+
+`409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. `--json` emits the
+terminal job, including `phaseDurationsMs`, for timing evidence. A failed target with `recovered:true` reports that the previous image
+was re-pinned and passed health. `recoveryState:"exhausted"` points to `--local`.
+
+`--local` is the explicit break-glass path: it preserves the former operator-machine ECR mirror plus CloudFormation update, so its
+`--image`, `--arch`, and `--aws-profile` flags are intentionally unavailable on the normal in-server route. Legacy profiles without an
+install-generation marker retain their deprecated updater behavior for the two-release compatibility window. Until AP-226 provisions
+`PINNED_RELEASE_TRUST`, signed self-update fails closed with: `self-update disabled until the production key is pinned (AP-226)`.
+
 `appliance cloud baseline-update` applies the CLI's current CloudFormation template while preserving the stack's existing `ImageUri`.
 New stacks default to scoped roles; omitting `--system-role-mode` on an existing stack preserves its current mode. A routine
-`appliance cloud update` also sends all parameters and intentionally bundles the de-admin migration for pre-existing stacks.
+`appliance cloud baseline-update` intentionally bundles baseline/IAM migrations; the normal signed image update uses the previous
+template and changes only `ImageUri`.
 
 If a live deployment exposes an unenumerated AWS permission, `--system-role-mode admin --yes` is the loud, temporary break-glass
 escape hatch. Restore least privilege with `appliance cloud baseline-update --system-role-mode scoped` after identifying the missing
