@@ -107,7 +107,6 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
       "Action": [
         "iam:DeleteRole",
         "iam:UntagRole",
-        "iam:UpdateAssumeRolePolicy",
       ],
       "Condition": {
         "StringEquals": {
@@ -152,10 +151,24 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
       "Sid": "ApplianceIamPassRole",
     },
     {
-      "Action": [
-        "iam:DeleteRolePermissionsBoundary",
-        "iam:PutRolePermissionsBoundary",
-      ],
+      "Action": "iam:PutRolePermissionsBoundary",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PermissionsBoundary": {
+            "tag": "!Ref",
+            "value": "UserAppliancePermissionsBoundary",
+          },
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "AllowPermissionsBoundaryAdoption",
+    },
+    {
+      "Action": "iam:DeleteRolePermissionsBoundary",
       "Effect": "Deny",
       "Resource": {
         "tag": "!Sub",
@@ -303,6 +316,13 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
         "lambda:CreateFunctionUrlConfig",
         "lambda:DeleteFunction",
         "lambda:DeleteFunctionUrlConfig",
+        "lambda:GetFunction",
+        "lambda:GetFunctionCodeSigningConfig",
+        "lambda:GetFunctionConfiguration",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:GetPolicy",
+        "lambda:ListTags",
+        "lambda:ListVersionsByFunction",
         "lambda:PublishVersion",
         "lambda:RemovePermission",
         "lambda:TagResource",

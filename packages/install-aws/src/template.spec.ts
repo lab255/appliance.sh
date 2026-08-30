@@ -91,6 +91,7 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
   ApplianceIamRoleMetadataMutations: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamRoleTagging: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamPassRole: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
+  AllowPermissionsBoundaryAdoption: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   DenyPermissionsBoundaryRemoval: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   DenyBoundaryPolicyMutation: ref('UserAppliancePermissionsBoundary'),
   ApplianceIamPolicyRead: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
@@ -179,6 +180,7 @@ describe('appliance CloudFormation template', () => {
       );
       if (statement.Effect === 'Allow' && mutatesIam) expect(statement.Condition).toBeDefined();
     }
+    expect(statements.flatMap(actionsOf)).not.toContain('iam:UpdateAssumeRolePolicy');
 
     expect(statements.find((statement) => statement.Sid === 'ApplianceIamRoleBoundaryMutations')?.Condition).toEqual({
       ArnEquals: { 'iam:PermissionsBoundary': ref('UserAppliancePermissionsBoundary') },
@@ -198,6 +200,12 @@ describe('appliance CloudFormation template', () => {
     expect(statements.find((statement) => statement.Sid === 'ApplianceIamPassRole')?.Condition).toEqual({
       StringEquals: { 'iam:PassedToService': 'lambda.amazonaws.com' },
     });
+    expect(statements.find((statement) => statement.Sid === 'AllowPermissionsBoundaryAdoption')).toMatchObject({
+      Effect: 'Allow',
+      Action: 'iam:PutRolePermissionsBoundary',
+      Resource: EXPECTED_IAM_LAMBDA_RESOURCES.AllowPermissionsBoundaryAdoption,
+      Condition: { ArnEquals: { 'iam:PermissionsBoundary': ref('UserAppliancePermissionsBoundary') } },
+    });
     expect(statements.find((statement) => statement.Sid === 'ApplianceIamPolicyMutations')?.Condition).toEqual({
       StringEquals: { 'aws:ResourceTag/appliance:managed': 'true' },
     });
@@ -207,7 +215,7 @@ describe('appliance CloudFormation template', () => {
 
     expect(statements.find((statement) => statement.Sid === 'DenyPermissionsBoundaryRemoval')).toMatchObject({
       Effect: 'Deny',
-      Action: ['iam:DeleteRolePermissionsBoundary', 'iam:PutRolePermissionsBoundary'],
+      Action: 'iam:DeleteRolePermissionsBoundary',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenyPermissionsBoundaryRemoval,
     });
     expect(statements.find((statement) => statement.Sid === 'DenyBoundaryPolicyMutation')).toMatchObject({
@@ -226,17 +234,11 @@ describe('appliance CloudFormation template', () => {
       Effect: 'Deny',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySystemFunctionMutation,
     });
-    const applianceFunctionActions = statements.find((statement) => statement.Sid === 'ApplianceFunctions')?.Action;
-    const deniedSystemFunctionActions = statements.find(
-      (statement) => statement.Sid === 'DenySystemFunctionMutation'
-    )?.Action;
-    const allowedMutations = (
-      Array.isArray(applianceFunctionActions) ? applianceFunctionActions : [applianceFunctionActions]
-    ).filter(
-      (action): action is string =>
-        typeof action === 'string' && !action.startsWith('lambda:Get') && !action.startsWith('lambda:List')
+    const applianceFunctionActions = actionsOf(statements.find((statement) => statement.Sid === 'ApplianceFunctions')!);
+    const deniedSystemFunctionActions = new Set(
+      actionsOf(statements.find((statement) => statement.Sid === 'DenySystemFunctionMutation')!)
     );
-    expect(deniedSystemFunctionActions).toEqual(allowedMutations);
+    expect(applianceFunctionActions.every((action) => deniedSystemFunctionActions.has(action))).toBe(true);
   });
 
   it('requires a stack-owned boundary that blocks role, own-stack, and system-function escalation', () => {

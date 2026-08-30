@@ -352,7 +352,6 @@ Resources:
                   Action:
                     - iam:DeleteRole
                     - iam:UntagRole
-                    - iam:UpdateAssumeRolePolicy
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
                   Condition:
                     StringEquals:
@@ -372,11 +371,16 @@ Resources:
                   Condition:
                     StringEquals:
                       iam:PassedToService: lambda.amazonaws.com
+                - Sid: AllowPermissionsBoundaryAdoption
+                  Effect: Allow
+                  Action: iam:PutRolePermissionsBoundary
+                  Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+                  Condition:
+                    ArnEquals:
+                      iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
                 - Sid: DenyPermissionsBoundaryRemoval
                   Effect: Deny
-                  Action:
-                    - iam:DeleteRolePermissionsBoundary
-                    - iam:PutRolePermissionsBoundary
+                  Action: iam:DeleteRolePermissionsBoundary
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
                 - Sid: DenyBoundaryPolicyMutation
                   Effect: Deny
@@ -466,6 +470,13 @@ Resources:
                     - lambda:CreateFunctionUrlConfig
                     - lambda:DeleteFunction
                     - lambda:DeleteFunctionUrlConfig
+                    - lambda:GetFunction
+                    - lambda:GetFunctionCodeSigningConfig
+                    - lambda:GetFunctionConfiguration
+                    - lambda:GetFunctionUrlConfig
+                    - lambda:GetPolicy
+                    - lambda:ListTags
+                    - lambda:ListVersionsByFunction
                     - lambda:PublishVersion
                     - lambda:RemovePermission
                     - lambda:TagResource
