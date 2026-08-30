@@ -64,6 +64,7 @@ const APISERVER_CHECKSUMS_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appli
 const APISERVER_PROPERTIES_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.properties";
 const APISERVER_RELEASE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.json";
 const APISERVER_ENVELOPE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.sig.json";
+const APISERVER_POISON_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.invalid";
 
 pub(crate) const WSL_CONF: &str = r#"[automount]
 enabled=false
@@ -714,6 +715,20 @@ fn stream_boot_artifacts(
             stream_guest_artifact(distro, &evidence.properties, APISERVER_PROPERTIES_GUEST_ARTIFACT, None)?;
             stream_guest_artifact(distro, &evidence.payload, APISERVER_RELEASE_GUEST_ARTIFACT, None)?;
             stream_guest_artifact(distro, &evidence.envelope, APISERVER_ENVELOPE_GUEST_ARTIFACT, None)?;
+        } else if assets.evidence_poisoned {
+            let command = format!(
+                "printf '%s\\n' incomplete-or-malformed > {APISERVER_POISON_GUEST_ARTIFACT}"
+            );
+            let out = wsl_cmd()
+                .args(["-d", distro, "-u", "root", "--", "sh", "-c", &command])
+                .output()
+                .context("stream poisoned api-server release evidence marker")?;
+            if !out.status.success() {
+                bail!(
+                    "could not stream poisoned api-server release evidence marker: {}",
+                    combined_output(&out).trim()
+                );
+            }
         }
     }
     for repository in runtime_repositories {
@@ -980,6 +995,7 @@ RELEASE_CHECKSUMS=/opt/appliance/artifacts/appliance-api-server.sha256
 RELEASE_PROPERTIES=/opt/appliance/artifacts/control-plane-release.properties
 RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json
 RELEASE_ENVELOPE=/opt/appliance/artifacts/control-plane-release.sig.json
+RELEASE_POISON=/opt/appliance/artifacts/control-plane-release.invalid
 printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
 chmod 600 /etc/appliance/bootstrap-token
 "#;
@@ -1608,6 +1624,7 @@ mod tests {
             binary: assets_dir.join("appliance-api-server"),
             console: Some(assets_dir.join("appliance-console.tar.gz")),
             release_evidence: None,
+            evidence_poisoned: false,
         };
         let script = build_bootstrap(
             &s,
@@ -1850,6 +1867,7 @@ mod tests {
                     r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.sig.json",
                 ),
             }),
+            evidence_poisoned: false,
         };
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
         assert!(script.contains(
@@ -1859,6 +1877,7 @@ mod tests {
             "CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz"
         ));
         assert!(script.contains("RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json"));
+        assert!(script.contains("RELEASE_POISON=/opt/appliance/artifacts/control-plane-release.invalid"));
         assert!(script.contains(
             "RELEASE_PROPERTIES=/opt/appliance/artifacts/control-plane-release.properties"
         ));
