@@ -738,9 +738,11 @@ Resources:
         EncryptionType: AES256
       # The 7-day untagged rule is safe only while every repository producer stays single-platform:
       # workload builds and both mirror paths push image manifests, never OCI indexes or attestations.
+      # Source-digest provenance tags make immutable mirrors retryable; retain only the newest 10 so
+      # superseded control-plane manifests remain bounded instead of being pinned forever.
       LifecyclePolicy:
         LifecyclePolicyText: |
-          {"rules":[{"rulePriority":1,"description":"Keep the newest 50 workload build images","selection":{"tagStatus":"tagged","tagPrefixList":["build-"],"countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}},{"rulePriority":2,"description":"Expire orphaned untagged manifests after 7 days","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}}]}
+          {"rules":[{"rulePriority":1,"description":"Keep the newest 50 workload build images","selection":{"tagStatus":"tagged","tagPrefixList":["build-"],"countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the newest 10 source provenance images","selection":{"tagStatus":"tagged","tagPrefixList":["src-"],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}},{"rulePriority":3,"description":"Expire orphaned untagged manifests after 7 days","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}}]}
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName

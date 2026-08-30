@@ -69,8 +69,8 @@ appliance cloud update --local [--image <registry/ref>] [--arch amd64|arm64] [--
 `409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. Successful and failed
 terminal `--json` output has the stable top-level shape
 `{outcome:"terminal", job, previousServerVersion, currentServerVersion}`. The terminal `job` contains `phaseDurationsMs`, explicit
-`totalMs`, and `resumeCount`. A live-job conflict instead exits `3` and emits
-`{outcome:"conflict", jobId, statusUrl, start, previousServerVersion}`; `jobId` and `statusUrl` are top-level so automation can follow it.
+`totalMs`, and `resumeCount`. A live-job conflict instead exits `3` and emits an object with the fields
+`{outcome:"conflict", start, previousServerVersion, jobId, statusUrl}`; `jobId` and `statusUrl` are top-level so automation can follow it.
 For example, the timing-gate breakdown is:
 
 ```sh

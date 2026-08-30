@@ -333,9 +333,12 @@ describe('appliance CloudFormation template', () => {
     expect(policy.Statement).toContainEqual({ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' });
   });
 
-  it('expires workload build tags and old untagged manifests without matching system tags', () => {
+  it('bounds workload and provenance tags plus untagged manifests without matching release tags', () => {
     expect(APPLIANCE_CLOUDFORMATION_TEMPLATE).toContain(
       'workload builds and both mirror paths push image manifests, never OCI indexes or attestations'
+    );
+    expect(APPLIANCE_CLOUDFORMATION_TEMPLATE).toContain(
+      'superseded control-plane manifests remain bounded instead of being pinned forever'
     );
     const lifecycle = JSON.parse(
       String(
@@ -356,6 +359,17 @@ describe('appliance CloudFormation template', () => {
       },
       {
         rulePriority: 2,
+        description: 'Keep the newest 10 source provenance images',
+        selection: {
+          tagStatus: 'tagged',
+          tagPrefixList: ['src-'],
+          countType: 'imageCountMoreThan',
+          countNumber: 10,
+        },
+        action: { type: 'expire' },
+      },
+      {
+        rulePriority: 3,
         description: 'Expire orphaned untagged manifests after 7 days',
         selection: {
           tagStatus: 'untagged',
