@@ -43,6 +43,11 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
     const wildcardDomain = `*.${domainName}`;
     this.apiServerPublicUrl = `https://api.${domainName}`;
     const providerOpts = { parent: this, provider: opts?.globalProvider };
+    const boundaryArn = pulumi.interpolate`arn:${
+      aws.getPartitionOutput({}, providerOpts).partition
+    }:iam::${aws.getCallerIdentityOutput({}, providerOpts).accountId}:policy/appliance/${
+      substrate.installationName
+    }-user-appliance-boundary`;
 
     if (args.domain.zone.mode === 'create') {
       this.zone = new aws.route53.Zone(`${name}-zone`, { name: domainName }, providerOpts);
@@ -104,9 +109,15 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
     this.edgeRouterRole = new aws.iam.Role(
       `${name}-edge-router-role`,
       {
+        path: `/appliance/${name}/`,
         assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
           Service: ['lambda.amazonaws.com', 'edgelambda.amazonaws.com'],
         }),
+        permissionsBoundary: boundaryArn,
+        tags: {
+          'appliance:managed': 'true',
+          'appliance:stack-name': name,
+        },
       },
       providerOpts
     );

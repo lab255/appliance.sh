@@ -14,7 +14,13 @@ const resources: RegisteredResource[] = [];
 beforeAll(async () => {
   await pulumi.runtime.setMocks(
     {
-      call: (args) => ({ ...args.inputs, id: `mock-${args.token.split(':').at(-1)}` }),
+      call: (args) => {
+        if (args.token === 'aws:index/getPartition:getPartition') return { partition: 'aws' };
+        if (args.token === 'aws:index/getCallerIdentity:getCallerIdentity') {
+          return { accountId: '123456789012', arn: 'arn:aws:iam::123456789012:root', userId: 'root' };
+        }
+        return { ...args.inputs, id: `mock-${args.token.split(':').at(-1)}` };
+      },
       newResource: (args) => {
         resources.push({ type: args.type, name: args.name, inputs: args.inputs });
         const state: Record<string, unknown> = { ...args.inputs };
@@ -120,6 +126,11 @@ describe('ApplianceEdgeBase', () => {
       const roles = resources.filter((resource) => resource.type === 'aws:iam/role:Role');
       expect(roles).toHaveLength(1);
       expect(roles[0]?.name).toContain('edge-router-role');
+      expect(roles[0]?.inputs).toMatchObject({
+        path: '/appliance/prod-edge/',
+        permissionsBoundary: 'arn:aws:iam::123456789012:policy/appliance/prod-user-appliance-boundary',
+        tags: { 'appliance:managed': 'true' },
+      });
 
       const invokePolicy = resources.find(
         (resource) => resource.type === 'aws:iam/rolePolicy:RolePolicy' && resource.name.includes('system-invoke')

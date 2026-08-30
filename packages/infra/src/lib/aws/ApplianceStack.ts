@@ -135,6 +135,11 @@ export class ApplianceStack extends pulumi.ComponentResource {
 
     const defaultOpts = { parent: this, provider: opts.provider };
     const defaultNativeOpts = { parent: this, provider: opts.nativeProvider };
+    const boundaryArn = pulumi.interpolate`arn:${
+      aws.getPartitionOutput({}, defaultOpts).partition
+    }:iam::${aws.getCallerIdentityOutput({}, defaultOpts).accountId}:policy/appliance/${
+      args.config.name
+    }-user-appliance-boundary`;
     const defaultTags: Record<string, string> = {
       'appliance:managed': 'true',
       'appliance:stack-name': name,
@@ -156,6 +161,7 @@ export class ApplianceStack extends pulumi.ComponentResource {
       this.lambdaRole = new aws.iam.Role(`${rid}-role`, {
         path: `/appliance/${name}/`,
         assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({ Service: 'lambda.amazonaws.com' }),
+        permissionsBoundary: boundaryArn,
         tags: defaultTags,
       });
 
@@ -204,6 +210,7 @@ export class ApplianceStack extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: policyStatements,
         },
+        tags: defaultTags,
       });
 
       new aws.iam.RolePolicyAttachment(`${rid}-role-policy-attachment`, {
@@ -264,6 +271,7 @@ export class ApplianceStack extends pulumi.ComponentResource {
       this.lambda = new aws.lambda.CallbackFunction(
         `${rid}-handler`,
         {
+          role: this.lambdaRoleArn,
           runtime: 'nodejs22.x',
           callback: async () => {
             return { statusCode: 200, body: JSON.stringify({ message: 'Hello world!' }) };
