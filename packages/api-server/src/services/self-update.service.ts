@@ -13,6 +13,8 @@ import {
 } from '@appliance.sh/sdk';
 import { getStorageService, type StorageService } from './storage.service';
 import { logger } from '../logger';
+import { DEFAULT_TENANT } from './tenant-context';
+import { redactSelfUpdateError } from './self-update-redaction';
 
 export const SELF_UPDATE_JOBS = 'self-update-jobs';
 export const SELF_UPDATE_CONTROL = 'self-update-control';
@@ -21,6 +23,22 @@ const CONTROL_ID = 'cloud';
 const LEASE_MS = 60_000;
 const DISPATCH_TIMEOUT_MS = 5_000;
 const MAX_CAS_ATTEMPTS = 12;
+
+/**
+ * Reserved in-process principal for EventBridge checks. It is deliberately
+ * not stored in api-keys. Its secret getter throws so any future path that
+ * tries to turn it into an HTTP credential fails closed. The dispatcher must
+ * short-circuit this key id before signing.
+ */
+export const SYSTEM_SCHEDULED_SELF_UPDATE_CALLER = Object.freeze({
+  keyId: 'system-self-update-scheduler',
+  tenantId: DEFAULT_TENANT,
+  role: 'admin' as const,
+  kind: 'system' as const,
+  get secret(): never {
+    throw new Error('scheduled self-update system principal has no signing secret');
+  },
+});
 
 export const selfUpdateRequestSchema = z.strictObject({
   targetDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
@@ -102,6 +120,11 @@ export interface SelfUpdateDispatcher {
 
 export class HttpSelfUpdateDispatcher implements SelfUpdateDispatcher {
   async dispatch(jobId: string, caller: SigningCredentials): Promise<void> {
+    if (caller.keyId === SYSTEM_SCHEDULED_SELF_UPDATE_CALLER.keyId) {
+      const { getSelfUpdateExecutor } = await import('./self-update-executor.service.js');
+      await getSelfUpdateExecutor().execute(jobId);
+      return;
+    }
     const workerUrl = process.env.WORKER_URL;
     if (!workerUrl) throw new Error('WORKER_URL is required for cloud self-update');
     const url = `${workerUrl.replace(/\/$/, '')}/api/internal/jobs/self-update`;
@@ -154,6 +177,9 @@ export class SelfUpdateService {
     principal: { keyId: string; tenantId: string; secret: string },
     idempotencyKey?: string
   ): Promise<{ job: SelfUpdateJob; reused: boolean }> {
+    if (principal.tenantId !== DEFAULT_TENANT) {
+      throw new Error('control-plane self-update requires the owner tenant');
+    }
     const initialState = await this.getControlState();
     const verified = await this.verifier(input.release.payload, input.release.envelope, PINNED_RELEASE_TRUST, {
       now: this.now(),
@@ -234,7 +260,12 @@ export class SelfUpdateService {
         jobId: job.id,
         createdAt: now.toISOString(),
       });
-      await this.dispatchOrFail(job, { keyId: principal.keyId, secret: principal.secret });
+      await this.dispatchOrFail(
+        job,
+        principal.keyId === SYSTEM_SCHEDULED_SELF_UPDATE_CALLER.keyId
+          ? SYSTEM_SCHEDULED_SELF_UPDATE_CALLER
+          : { keyId: principal.keyId, secret: principal.secret }
+      );
       return { job: (await this.get(job.id)) ?? job, reused: false };
     }
     await this.storage.delete(SELF_UPDATE_JOBS, job.id);
@@ -422,7 +453,10 @@ export class SelfUpdateService {
     try {
       await this.dispatcher.dispatch(job.id, caller);
     } catch (error) {
-      logger.error('self-update worker dispatch failed', error, { jobId: job.id, phase: job.phase });
+      logger.error('self-update worker dispatch failed', redactSelfUpdateError(error), {
+        jobId: job.id,
+        phase: job.phase,
+      });
       await this.finish(job.id, {
         status: 'failed',
         recovered: false,
@@ -436,7 +470,7 @@ export class SelfUpdateService {
     try {
       await this.dispatcher.dispatch(job.id, caller);
     } catch (error) {
-      logger.error('self-update worker resume dispatch failed; job remains resumable', error, {
+      logger.error('self-update worker resume dispatch failed; job remains resumable', redactSelfUpdateError(error), {
         jobId: job.id,
         phase: job.phase,
       });

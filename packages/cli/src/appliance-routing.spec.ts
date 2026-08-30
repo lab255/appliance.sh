@@ -115,6 +115,11 @@ describe('appliance umbrella routing', () => {
     expect(result.stdout).toContain('--follow <jobId>');
     expect(result.stdout).toContain('--json');
     expect(result.stdout).toContain('--local');
+    expect(result.stdout).toContain('--policy <policy>');
+    expect(result.stdout).toContain('--check-now');
+    expect(result.stdout).toContain('--status');
+    expect(result.stdout).toContain('checked ~daily');
+    expect(result.stdout).toContain('off, notify, or auto');
     expect(result.stdout).toContain('break glass');
   });
 
@@ -123,6 +128,24 @@ describe('appliance umbrella routing', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('--local has no job record; omit --json');
     expect(result.stderr).not.toContain('at run');
+  });
+
+  it('validates the scheduled cloud update policy before profile or AWS access', () => {
+    const invalid = appliance('cloud', 'update', '--policy', 'always');
+    expect(invalid.status).toBe(1);
+    expect(invalid.stderr).toContain('--policy must be off, notify, or auto');
+
+    const mixed = appliance('cloud', 'update', '--policy', 'notify', '--json');
+    expect(mixed.status).toBe(1);
+    expect(mixed.stderr).toContain('--policy cannot be combined');
+
+    const checkMixed = appliance('cloud', 'update', '--check-now', '--json');
+    expect(checkMixed.status).toBe(1);
+    expect(checkMixed.stderr).toContain('--check-now cannot be combined');
+
+    const statusMixed = appliance('cloud', 'update', '--status', '--policy', 'notify');
+    expect(statusMixed.status).toBe(1);
+    expect(statusMixed.stderr).toContain('--policy cannot be combined');
   });
 
   it('requires explicit confirmation before restoring AdministratorAccess', () => {

@@ -194,12 +194,15 @@ describe('SelfUpdateExecutor', () => {
   it('copies the verified digest and submits the exact previous-template ImageUri-only update', async () => {
     const job = await queuedJob();
     const aws = fakeAws(now);
+    const clearAvailable = vi.fn(async () => true);
     const updateStack = aws.deps.updateStack;
     aws.deps.updateStack = vi.fn(async (assumed, request) => {
       expect(await jobs.get(job.id)).toMatchObject({ phase: 'submitting-update', targetImage });
       await updateStack(assumed, request);
     });
-    await expect(new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id)).resolves.toBe('complete');
+    await expect(
+      new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps, clearAvailable }).execute(job.id)
+    ).resolves.toBe('complete');
 
     expect(aws.deps.assumeRole).toHaveBeenCalledWith(process.env.SELF_UPDATE_ROLE_ARN, `self-update-${job.id}`);
     expect(aws.deps.craneCopy).toHaveBeenCalledWith(
@@ -213,6 +216,7 @@ describe('SelfUpdateExecutor', () => {
       '111111111111.dkr.ecr.us-east-1.amazonaws.com/appliance',
       'system-1.58.0'
     );
+    expect(clearAvailable).toHaveBeenCalledWith(digest);
     expect(aws.updateRequests).toEqual([
       {
         StackName: aws.stack.stackId,

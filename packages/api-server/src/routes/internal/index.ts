@@ -2,10 +2,34 @@ import { Router } from 'express';
 import { executeDeployment, workerEventSchema } from '../../services/deployment-executor.service';
 import { getSelfUpdateService, selfUpdateWorkerEventSchema } from '../../services/self-update.service';
 import { getSelfUpdateExecutor } from '../../services/self-update-executor.service';
-import { redactSelfUpdateError } from '../self-update';
+import { redactSelfUpdateError } from '../../services/self-update-redaction';
 import { logger } from '../../logger';
+import {
+  getSelfUpdateSchedulerService,
+  selfUpdateCheckEventSchema,
+} from '../../services/self-update-scheduler.service';
+import { DEFAULT_TENANT } from '../../services/tenant-context';
 
 export const internalRoutes: Router = Router();
+
+internalRoutes.post('/self-update/check', async (req, res) => {
+  const parsed = selfUpdateCheckEventSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid self-update check payload' });
+    return;
+  }
+  if (req.apiKeyRole !== 'admin' || req.tenantId !== DEFAULT_TENANT) {
+    res.status(403).json({ error: 'Self-update check requires an owner admin' });
+    return;
+  }
+  try {
+    const check = await getSelfUpdateSchedulerService().check();
+    res.status(200).json({ decision: check.decision, reason: check.reason });
+  } catch (error) {
+    logger.error('self-update check failed', redactSelfUpdateError(error), { requestId: req.requestId });
+    res.status(500).json({ error: 'Self-update check failed' });
+  }
+});
 
 internalRoutes.post('/jobs/deployment', async (req, res) => {
   const parsed = workerEventSchema.safeParse(req.body);

@@ -5,6 +5,8 @@ exports[`appliance CloudFormation template > snapshots and enforces the stack-po
   "DataBucket",
   "SelfUpdateCloudFormationRole",
   "SelfUpdateRole",
+  "SelfUpdateSchedule",
+  "SelfUpdateSchedulerRole",
   "StateBucket",
   "StateKmsAlias",
   "StateKmsKey",
@@ -360,6 +362,19 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
         },
       ],
       "Sid": "DenySystemFunctionMutation",
+    },
+    {
+      "Action": [
+        "scheduler:CreateSchedule*",
+        "scheduler:DeleteSchedule*",
+        "scheduler:UpdateSchedule*",
+      ],
+      "Effect": "Deny",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:scheduler:\${AWS::Region}:\${AWS::AccountId}:schedule/default/\${InstallationName}-self-update",
+      },
+      "Sid": "DenySchedulerMutation",
     },
   ],
   "Version": "2012-10-17",

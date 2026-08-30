@@ -28,6 +28,11 @@ export interface SelfUpdateStartInput {
   idempotencyKey: string;
 }
 
+export interface SelfUpdateCheckResponse {
+  decision: string;
+  reason: string;
+}
+
 export interface SelfUpdateStartAccepted {
   httpStatus: 202;
   jobId: string;

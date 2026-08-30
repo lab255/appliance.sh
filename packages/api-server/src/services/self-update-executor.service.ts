@@ -18,7 +18,7 @@ import {
   type SelfUpdateJob,
   type SelfUpdateService,
 } from './self-update.service';
-import { redactSelfUpdateError } from '../routes/self-update';
+import { redactSelfUpdateError } from './self-update-redaction';
 import { logger } from '../logger';
 
 const POLL_MS = 5_000;
@@ -248,17 +248,25 @@ export interface SelfUpdateExecutorOptions {
   jobs?: SelfUpdateService;
   verifier?: ReleaseVerifier;
   aws?: SelfUpdateExecutorDependencies;
+  clearAvailable?: (targetDigest: string) => Promise<boolean>;
 }
 
 export class SelfUpdateExecutor {
   private readonly jobs: SelfUpdateService;
   private readonly verifier: ReleaseVerifier;
   private readonly aws: SelfUpdateExecutorDependencies;
+  private readonly clearAvailable: (targetDigest: string) => Promise<boolean>;
 
   constructor(options: SelfUpdateExecutorOptions = {}) {
     this.jobs = options.jobs ?? getSelfUpdateService();
     this.verifier = options.verifier ?? verifyReleaseEnvelope;
     this.aws = options.aws ?? createAwsSelfUpdateDependencies();
+    this.clearAvailable =
+      options.clearAvailable ??
+      (async (targetDigest) => {
+        const { getSelfUpdateSchedulerService } = await import('./self-update-scheduler.service.js');
+        return getSelfUpdateSchedulerService().clearAvailableIfDigest(targetDigest);
+      });
   }
 
   async execute(jobId: string): Promise<'complete'> {
@@ -424,6 +432,14 @@ export class SelfUpdateExecutor {
       if (!healthy)
         return await this.recover(job, holder, credentials, stack, 'target health/version probe failed', hardDeadline);
       await this.jobs.finish(jobId, { status: 'succeeded', recovered: false, healthUrl }, holder);
+      try {
+        await this.clearAvailable(job.targetDigest);
+      } catch (error) {
+        logger.warn('self-update completed but availability marker cleanup failed', {
+          jobId,
+          error: redactSelfUpdateError(error).message,
+        });
+      }
       logger.info('self-update completed', {
         jobId,
         digestPrefix: job.targetDigest.slice(0, 19),

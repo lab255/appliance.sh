@@ -36,6 +36,8 @@ export const APPLIANCE_STACK_POLICY = JSON.stringify({
         'LogicalResourceId/SystemWorkerEdgeProvisioningPolicy',
         'LogicalResourceId/SelfUpdateRole',
         'LogicalResourceId/SelfUpdateCloudFormationRole',
+        'LogicalResourceId/SelfUpdateSchedulerRole',
+        'LogicalResourceId/SelfUpdateSchedule',
       ],
     },
     { Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' },

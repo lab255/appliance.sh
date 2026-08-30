@@ -4,6 +4,9 @@ import { apiKeyInput, inviteRedeemInput, VERSION } from '@appliance.sh/sdk';
 import { apiKeyService } from '../../services/api-key.service';
 import { inviteService } from '../../services/invite.service';
 import { logger } from '../../logger';
+import { getSelfUpdateSchedulerService, selfUpdatePolicy } from '../../services/self-update-scheduler.service';
+import { DEFAULT_TENANT, runWithTenant } from '../../services/tenant-context';
+import { redactSelfUpdateError } from '../../services/self-update-redaction';
 
 function constantTimeEqual(a: string, b: string): boolean {
   const ha = createHash('sha256').update(a).digest();
@@ -77,11 +80,21 @@ bootstrapRoutes.post('/redeem-invite', async (req, res) => {
 bootstrapRoutes.get('/status', async (req, res) => {
   try {
     const initialized = await apiKeyService.exists();
+    let selfUpdateAvailable = false;
+    if (selfUpdatePolicy() === 'notify') {
+      try {
+        const marker = await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getAvailable());
+        selfUpdateAvailable = Boolean(marker && marker.version !== VERSION);
+      } catch (error) {
+        // This optional boolean must never break the bootstrap health probe.
+        logger.warn('bootstrap self-update marker unavailable', { error: redactSelfUpdateError(error).message });
+      }
+    }
     // serverVersion rides the one unauthenticated probe every client
     // already polls, so version skew is observable before any
     // credential exists (cluster-info needs a signed request). Engine-
     // side consumption is deferred; additive + optional for clients.
-    res.json({ initialized, serverVersion: VERSION });
+    res.json({ initialized, serverVersion: VERSION, selfUpdateAvailable });
   } catch (error) {
     logger.error('bootstrap status check failed', error, { requestId: req.requestId });
     res.status(500).json({ error: 'Failed to check bootstrap status', message: String(error) });

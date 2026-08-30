@@ -339,7 +339,13 @@ describe('CloudFormation cloud installer', () => {
               StackId: 'arn:aws:cloudformation:us-east-1:111111111111:stack/appliance-test/id',
               StackName: 'appliance-test',
               StackStatus: 'UPDATE_COMPLETE',
-              Parameters: [],
+              Parameters: [
+                { ParameterKey: 'InstallationName', ParameterValue: 'test-install' },
+                { ParameterKey: 'ImageUri', ParameterValue: 'repo@sha256:digest' },
+                { ParameterKey: 'ImageArchitecture', ParameterValue: 'x86_64' },
+                { ParameterKey: 'SystemRoleMode', ParameterValue: 'scoped' },
+                { ParameterKey: 'SelfUpdatePolicy', ParameterValue: 'off' },
+              ],
               Outputs: [],
             },
           ],
@@ -360,7 +366,8 @@ describe('CloudFormation cloud installer', () => {
           installationName: 'test-install',
           imageUri: 'repo@sha256:digest',
           architecture: 'x86_64',
-          systemRoleMode: 'scoped',
+          selfUpdatePolicy: 'notify',
+          preserveParameters: true,
         })
       ).resolves.toMatchObject({ exists: true });
     } finally {
@@ -373,6 +380,13 @@ describe('CloudFormation cloud installer', () => {
       StackPolicyBody: APPLIANCE_STACK_POLICY,
       StackPolicyDuringUpdateBody: APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE,
     });
+    expect(update.input.Parameters).toEqual([
+      { ParameterKey: 'InstallationName', UsePreviousValue: true },
+      { ParameterKey: 'ImageUri', ParameterValue: 'repo@sha256:digest' },
+      { ParameterKey: 'ImageArchitecture', UsePreviousValue: true },
+      { ParameterKey: 'SystemRoleMode', UsePreviousValue: true },
+      { ParameterKey: 'SelfUpdatePolicy', ParameterValue: 'notify' },
+    ]);
     const policy = commands.find((command) => command instanceof SetStackPolicyCommand) as SetStackPolicyCommand;
     expect(policy.input).toEqual({ StackName: 'appliance-test', StackPolicyBody: APPLIANCE_STACK_POLICY });
     expect(commands.indexOf(policy)).toBeGreaterThan(commands.indexOf(update));

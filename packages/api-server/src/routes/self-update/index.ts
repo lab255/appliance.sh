@@ -1,4 +1,5 @@
 import { Router, type RequestHandler } from 'express';
+import { signRequest, z, type SigningCredentials } from '@appliance.sh/sdk';
 import { DEFAULT_TENANT } from '../../services/tenant-context';
 import { apiKeyService } from '../../services/api-key.service';
 import {
@@ -8,6 +9,45 @@ import {
   type SelfUpdateService,
 } from '../../services/self-update.service';
 import { logger } from '../../logger';
+import { requireAdmin } from '../../middleware/auth';
+import { redactSelfUpdateError } from '../../services/self-update-redaction';
+import {
+  getSelfUpdateSchedulerService,
+  SELF_UPDATE_STATE_CACHE_MS,
+  type SelfUpdateLastCheck,
+} from '../../services/self-update-scheduler.service';
+
+export { redactSelfUpdateError } from '../../services/self-update-redaction';
+
+export interface SelfUpdateCheckResponse {
+  decision: string;
+  reason: string;
+}
+
+export type SelfUpdateCheckDispatcher = (caller: SigningCredentials) => Promise<SelfUpdateCheckResponse>;
+export type SelfUpdateLastCheckReader = () => Promise<SelfUpdateLastCheck | null>;
+
+const emptyCheckSchema = z.strictObject({});
+const SELF_UPDATE_CHECK_TIMEOUT_MS = 25_000;
+
+export async function dispatchSelfUpdateCheck(caller: SigningCredentials): Promise<SelfUpdateCheckResponse> {
+  const workerUrl = process.env.WORKER_URL;
+  if (!workerUrl) throw new Error('WORKER_URL is required for a self-update check');
+  const url = `${workerUrl.replace(/\/$/, '')}/api/internal/self-update/check`;
+  const body = JSON.stringify({ kind: 'self-update-check' });
+  const baseHeaders = { 'content-type': 'application/json' };
+  const signed = await signRequest(caller, { method: 'POST', url, headers: baseHeaders, body });
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...baseHeaders, ...signed },
+    body,
+    signal: AbortSignal.timeout(SELF_UPDATE_CHECK_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`worker self-update check returned HTTP ${response.status}`);
+  const parsed = z.strictObject({ decision: z.string(), reason: z.string() }).safeParse(await response.json());
+  if (!parsed.success) throw new Error('worker self-update check returned an invalid response');
+  return parsed.data;
+}
 
 export const requireOwnerTenant: RequestHandler = (req, res, next) => {
   if (req.tenantId !== DEFAULT_TENANT) {
@@ -23,8 +63,46 @@ export const requireOwnerTenant: RequestHandler = (req, res, next) => {
   next();
 };
 
-export function createSelfUpdateRoutes(resolveService: () => SelfUpdateService = getSelfUpdateService): Router {
+export function createSelfUpdateRoutes(
+  resolveService: () => SelfUpdateService = getSelfUpdateService,
+  dispatchCheck: SelfUpdateCheckDispatcher = dispatchSelfUpdateCheck,
+  readLastCheck: SelfUpdateLastCheckReader = () => getSelfUpdateSchedulerService().getLastCheck(),
+  now: () => number = Date.now
+): Router {
   const router = Router();
+  let lastCheckDispatchAt: number | undefined;
+
+  router.post('/check', requireAdmin, async (req, res) => {
+    if (!emptyCheckSchema.safeParse(req.body).success) {
+      res.status(400).json({ error: 'Self-update check accepts no target controls' });
+      return;
+    }
+    if (!req.apiKeyId) {
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
+    }
+    const caller = await apiKeyService.getByKeyId(req.apiKeyId);
+    if (!caller) {
+      res.status(401).json({ error: 'Api key not found' });
+      return;
+    }
+    try {
+      const requestedAt = now();
+      if (lastCheckDispatchAt !== undefined && requestedAt - lastCheckDispatchAt < SELF_UPDATE_STATE_CACHE_MS) {
+        const stored = await readLastCheck();
+        res.json({ decision: stored?.decision ?? 'not-checked', reason: 'cooldown' });
+        return;
+      }
+      lastCheckDispatchAt = requestedAt;
+      res.json(await dispatchCheck({ keyId: caller.id, secret: caller.secret }));
+    } catch (error) {
+      logger.error('dispatch self-update check failed', redactSelfUpdateError(error), {
+        requestId: req.requestId,
+        keyId: req.apiKeyId,
+      });
+      res.status(502).json({ error: 'Failed to run self-update check' });
+    }
+  });
 
   router.post('/', async (req, res) => {
     if (!process.env.SELF_UPDATE_ROLE_ARN) {
@@ -132,23 +210,4 @@ export const selfUpdateRoutes = createSelfUpdateRoutes();
 function trustErrorCode(error: unknown): string | undefined {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   return typeof code === 'string' ? code : undefined;
-}
-
-/** Named CU1 redaction set. Error text is scrubbed before it reaches logs/job status. */
-export function redactSelfUpdateError(error: unknown, exactSecrets: readonly string[] = []): Error {
-  const raw = error instanceof Error ? error.message : String(error);
-  let redacted = raw;
-  for (const secret of exactSecrets) {
-    if (secret) redacted = redacted.replaceAll(secret, '[REDACTED_ECR_TOKEN]');
-  }
-  redacted = redacted
-    .replace(/arn:[a-z0-9-]*:[^\s"']+/gi, '[REDACTED_ARN]')
-    .replace(/(?:Basic|Bearer)\s+[A-Za-z0-9+/=_-]+/gi, '[REDACTED_ECR_TOKEN]')
-    .replace(/\b\d{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com\b/gi, '[REDACTED_ECR_REGISTRY]')
-    .replace(/arn:[^\s,]+:iam::\d{12}:role\/[^\s,]+/gi, '[REDACTED_ROLE_ARN]')
-    .replace(/\bself-update-[A-Za-z0-9_-]+\b/g, '[REDACTED_ROLE_SESSION]')
-    .replace(/(signature|signature-input|authorization|content-digest|x-api-key)\s*[:=]\s*[^\s,}]+/gi, '$1=[REDACTED]')
-    .replace(/("?(?:envelope|sig)"?\s*:\s*)"[^"]+"/gi, '$1"[REDACTED]"')
-    .replace(/\b\d{12}\b/g, '[REDACTED_ACCOUNT]');
-  return new Error(redacted);
 }

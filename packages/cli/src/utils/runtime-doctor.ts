@@ -744,7 +744,10 @@ async function probeSigned(apiUrl: string, keyId: string, secret: string): Promi
     const client = createApplianceClient({ baseUrl: apiUrl, credentials: { keyId, secret } });
     const result = await client.getClusterInfo();
     if (result.success) {
-      return { kind: 'ok', serverVersion: result.data.serverVersion ?? result.data.version ?? null };
+      return {
+        kind: 'ok',
+        serverVersion: result.data.serverVersion ?? result.data.version ?? null,
+      };
     }
     const match = /HTTP (\d{3})/.exec(result.error.message);
     if (match) return { kind: 'http', status: Number(match[1]) };
@@ -965,7 +968,9 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
       const signed = bootstrapReachable
         ? await probeSigned(apiUrl, keyId, secret)
         : ({ kind: 'network-error', message: 'skipped (server unreachable)' } as SignedProbe);
-      if (signed.kind === 'ok') serverVersion = signed.serverVersion;
+      if (signed.kind === 'ok') {
+        serverVersion = signed.serverVersion;
+      }
       let authFinding = triangulateAuth({
         bootstrapReachable,
         signed,

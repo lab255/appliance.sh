@@ -1,6 +1,6 @@
 # Control-plane self-update (AP-218)
 
-**Status:** CU1 shipped by AP-219 and CU2 shipped by AP-220; the microVM path remains follow-on work. Scope is the control-plane
+**Status:** CU1 shipped by AP-219, CU2 by AP-220, and CU3 by AP-221; the microVM path remains follow-on work. Scope is the control-plane
 image/binary only. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
 
 ## CU2 shipped (AP-220)
@@ -263,10 +263,82 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
   SDK route only when `profile.installGeneration === 'cloudformation-v1'`; frozen legacy installs retain `updateApiServer` sidecar for
   the two-release window. `updateBaseline` stays host-side (`packages/app/src/lib/host.ts:212-242`;
   `packages/cli/src/appliance-cloud-update.ts:20-25`).
-- **CU3:** an opt-in EventBridge rule invokes the worker. Policy is `off` (no
-  check), `notify` (persist/surface `availableVersion`, never mutate), or `auto`
-  (enqueue the same image job). EventBridge carries only a pre-provisioned scheduler `jobId`; the worker CAS-claims that persisted
-  owner policy before checking signed release metadata. `auto` applies IMAGE updates only; baseline remains notification/operator-side.
+- **CU3 (shipped by AP-221):** an opt-in EventBridge Scheduler schedule invokes the worker daily with the fixed payload
+  `{"kind":"self-update-check"}`. Policy is `off` by default (the schedule and its execution role are absent), `notify` (verify the
+  latest signed release and persist an update-available marker), or `auto` (create and dispatch the same verified, leased image job as
+  the owner-admin route). The event carries no job, digest, version, image URI, or release origin. The scheduler execution role can
+  invoke only the installation worker. `auto` applies image updates only; baseline changes remain operator-side. Empty production pins
+  and `SystemRoleMode=admin` both log a reason and exit without fetching or mutating. Function URL requests cannot reach the direct
+  `/events` pass-through handler, scheduler role trust is account/source-ARN bound, and Scheduler retries are disabled in favor of the
+  next daily check. Every outcome is persisted as `self-update-last-check`; signed cluster-info and the CLI/desktop render it, while
+  unauthenticated bootstrap exposes only the memoized availability boolean.
+
+CU3 owner runbook (after AP-226 provisions production trust), on a disposable installation:
+
+Set the installation coordinates once (replace the three example values):
+
+```sh
+export APPLIANCE_PROFILE=prod
+export APPLIANCE_STACK=appliance-prod
+export AWS_REGION=us-east-1
+```
+
+1. Enable notify and trigger a deterministic check:
+
+   ```sh
+   appliance cloud baseline-update --system-role-mode scoped
+   appliance cloud update --policy notify
+   aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query 'Stacks[0].Parameters[?ParameterKey==`SelfUpdatePolicy`].ParameterValue' --output text
+   aws cloudformation describe-stack-resource --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --logical-resource-id SelfUpdateSchedule --query 'StackResourceDetail.ResourceStatus' --output text
+   appliance cloud update --check-now
+   appliance cloud update --status --json | jq '.lastCheck, .available'
+   ```
+
+   Expect `notify`, `CREATE_COMPLETE`/`UPDATE_COMPLETE`, then `notify (notify-marked)`, then a `lastCheck.reason` of `notify-marked` and an available version. Before AP-226,
+   expect the explicit inactive message and `lastCheck.reason == "no-pinned-release-trust"`. The desktop must show **Update available
+   (vX)**; its **Update now** action independently resolves the latest signed release. `/bootstrap/status` may expose only
+   `selfUpdateAvailable`, never version, generation, digest, reason, or trust state.
+
+2. Prove a manual update uses the ordinary route and clears the marker:
+
+   ```sh
+   appliance cloud update
+   appliance cloud update --status --json | jq '.available // "cleared"'
+   ```
+
+   Expect the command to print `Updating to vX (from the scheduled notify check)` or `(latest signed release)` before phases, then
+   `"cleared"` after success. No marker banner or bootstrap boolean may remain when the marker version equals the running version.
+
+3. Enable auto and prove manual-check cooldown plus scheduled-job idempotency:
+
+   ```sh
+   appliance cloud update --policy auto
+   SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+   appliance cloud update --check-now
+   appliance cloud update --check-now
+   sleep 60
+   appliance cloud update --check-now
+   appliance cloud update --status --json | jq '.lastCheck'
+   aws cloudformation describe-stack-events --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query "StackEvents[?Timestamp >= \`$SINCE\` && ResourceStatus == \`UPDATE_IN_PROGRESS\`].[Timestamp,LogicalResourceId,ResourceType]" --output table
+   ```
+
+   Expect the immediate repeat to report `cooldown` without another worker dispatch. After 60 seconds, expect `auto-reused`,
+   `lease-conflict` while another update lease is live, or `current` if the first job already completed; the scheduled idempotency key
+   remains `scheduled:<digest>`. Follow any reported live job with `appliance cloud update --follow <jobId>`. Since the captured
+   timestamp, the stack events may show only `ApiServerFunction` and `WorkerFunction` entering `UPDATE_IN_PROGRESS`; no IAM, S3, KMS,
+   permissions-boundary, managed-policy, scheduler-role, or schedule logical resource may appear.
+
+4. Turn the feature off and verify CloudFormation removed its trigger resources:
+
+   ```sh
+   appliance cloud update --policy off
+   aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query 'Stacks[0].Parameters[?ParameterKey==`SelfUpdatePolicy`].ParameterValue' --output text
+   aws cloudformation describe-stack-resource --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --logical-resource-id SelfUpdateSchedule
+   aws cloudformation describe-stack-resource --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --logical-resource-id SelfUpdateSchedulerRole
+   appliance cloud update --status --json | jq '.'
+   ```
+
+   Expect `off`, both `describe-stack-resource` calls to report `ResourceNotFound`, and status to report policy `off`.
 
 ## 5. microVM mechanism (MV1)
 

@@ -16,7 +16,7 @@ import {
   type CloudInstallDependencies,
   type StackSnapshot,
 } from './cloud-install.js';
-import type { CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
+import type { CloudInstallProfileMetadata, ImageArchitecture, SelfUpdatePolicy, SystemRoleMode } from './types.js';
 
 export interface CloudLifecycleProfile extends CloudInstallProfileMetadata {
   apiUrl: string;
@@ -38,6 +38,7 @@ export interface CloudBaselineUpdateOptions {
   profile: CloudLifecycleProfile;
   installationName?: string;
   systemRoleMode?: SystemRoleMode;
+  selfUpdatePolicy?: SelfUpdatePolicy;
   healthTimeoutMs?: number;
   healthPollMs?: number;
 }
@@ -145,6 +146,10 @@ export async function runCloudSystemUpdate(
     imageUri: mirrored.imageUri,
     architecture,
     systemRoleMode: stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped',
+    selfUpdatePolicy:
+      stack.parameters.SelfUpdatePolicy === 'notify' || stack.parameters.SelfUpdatePolicy === 'auto'
+        ? stack.parameters.SelfUpdatePolicy
+        : 'off',
   });
   await syncPermissionsBoundary(deps, updated);
   try {
@@ -211,13 +216,23 @@ export async function runCloudBaselineUpdate(
   const stack = await deps.getStack(options.profile.cloudFormationStackName);
   if (!stack.exists) throw new Error(`CloudFormation stack ${options.profile.cloudFormationStackName} does not exist`);
   if (!stack.parameters.ImageUri) throw new Error('CloudFormation stack has no ImageUri to preserve');
+  if (
+    (options.selfUpdatePolicy === 'notify' || options.selfUpdatePolicy === 'auto') &&
+    stack.parameters.SystemRoleMode === 'admin'
+  ) {
+    throw new Error(
+      `Scheduled ${options.selfUpdatePolicy} checks require scoped system roles; run appliance cloud baseline-update --system-role-mode scoped`
+    );
+  }
   const updated = await deps.deployStack({
     stackName: options.profile.cloudFormationStackName,
     installationName:
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: stack.parameters.ImageUri,
     architecture: stack.parameters.ImageArchitecture === 'arm64' ? 'arm64' : 'x86_64',
-    systemRoleMode: options.systemRoleMode ?? (stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped'),
+    ...(options.systemRoleMode ? { systemRoleMode: options.systemRoleMode } : {}),
+    ...(options.selfUpdatePolicy ? { selfUpdatePolicy: options.selfUpdatePolicy } : {}),
+    preserveParameters: true,
   });
   await syncPermissionsBoundary(deps, updated);
   try {

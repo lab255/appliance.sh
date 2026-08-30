@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Rocket, Trash2 } from 'lucide-react';
-import { applianceBaseConfig, type ApplianceBaseConfig } from '@appliance.sh/sdk';
+import { applianceBaseConfig, type ApplianceBaseConfig, type ClusterInfoResponse } from '@appliance.sh/sdk';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { CommandSnippet } from '@/components/ui/command-snippet';
@@ -254,6 +254,59 @@ export function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: 
   );
 }
 
+export function SelfUpdateAvailableNotice({
+  version,
+  busy,
+  canUpdate = true,
+  onUpdate,
+}: {
+  version: string;
+  busy: boolean;
+  canUpdate?: boolean;
+  onUpdate: () => void;
+}) {
+  return (
+    <Banner
+      tone="info"
+      title={`Update available (v${version})`}
+      action={
+        <Button size="sm" onClick={onUpdate} disabled={busy || !canUpdate}>
+          {busy ? 'Updating…' : 'Update now'}
+        </Button>
+      }
+    >
+      This signed image release was found by the scheduled notify check.
+      {!canUpdate ? (
+        <span className="mt-1 block">Update now is unavailable until the latest signed release lookup succeeds.</span>
+      ) : null}
+    </Banner>
+  );
+}
+
+export function selfUpdateLastCheckCopy(
+  policy: 'off' | 'notify' | 'auto',
+  check: NonNullable<NonNullable<ClusterInfoResponse['selfUpdate']>['lastCheck']> | undefined
+): string {
+  if (policy === 'off') return 'Scheduled image updates are off.';
+  if (check?.reason === 'no-pinned-release-trust') {
+    return 'Scheduled checks are inactive: this build has no pinned release trust.';
+  }
+  if (check?.reason === 'unscoped-role') {
+    return 'Scheduled checks are inactive: enable scoped system roles with appliance cloud baseline-update --system-role-mode scoped.';
+  }
+  const checked = check?.at ? `Last checked ${check.at}` : 'Not checked yet';
+  if (policy === 'auto' && (check?.decision === 'auto-created' || check?.decision === 'auto-reused')) {
+    return `${checked} — updated to v${check.version ?? 'unknown'}.`;
+  }
+  if (check?.decision === 'current') return `${checked} — up to date.`;
+  if (check?.decision === 'error') return `${checked} — check failed; run appliance cloud update --check-now.`;
+  return `${checked} — ${check?.reason ?? policy}.`;
+}
+
+export function shouldShowSelfUpdateAvailable(version: string | undefined, runningVersion: string | null): boolean {
+  return Boolean(version && version !== runningVersion);
+}
+
 export function defaultSelfUpdateTarget(
   latestVersion: string | null,
   runningVersion: string | null,
@@ -461,6 +514,9 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
     retry: false,
   });
   const runningVersion = clusterInfoQuery.data?.serverVersion ?? clusterInfoQuery.data?.version ?? null;
+  const scheduledAvailable =
+    clusterInfoQuery.data?.selfUpdate?.policy === 'notify' ? clusterInfoQuery.data.selfUpdate.available : undefined;
+  const scheduledState = clusterInfoQuery.data?.selfUpdate;
 
   // Latest semver tag on ghcr.io/appliance-sh/api-server. Best-effort:
   // if the lookup fails (no network, package private, etc.) the user
@@ -524,8 +580,8 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
   }, [baseConfigJson]);
   const overrideValid = !clusterInfoUnavailable || parsedOverride !== null;
 
-  const onRun = async () => {
-    if (!targetValid) return;
+  const onRun = async (requestedVersion = targetVersion) => {
+    if (!/^\d+\.\d+\.\d+$/.test(requestedVersion)) return;
     if (!cloudFormation && !overrideValid) return;
     if (!cloudFormation && !host.bootstrap?.updateApiServer) return;
     if (!client || !apiKey) {
@@ -539,7 +595,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
     setRollbackMessage(null);
     try {
       if (cloudFormation) {
-        const update = await runDesktopCloudSelfUpdate(client, targetVersion, {
+        const update = await runDesktopCloudSelfUpdate(client, requestedVersion, {
           idempotencyKey: `desktop-cloud-update-${crypto.randomUUID()}`,
           intervalMs: 2_000,
           onPhase: (job) => setLogs((prev) => [...prev, selfUpdatePhaseMessage(job)]),
@@ -561,7 +617,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
         {
           apiServerUrl: cluster.apiServerUrl,
           apiKey,
-          targetVersion,
+          targetVersion: requestedVersion,
           awsProfile: awsProfile || undefined,
           baseConfigOverride: clusterInfoUnavailable ? (parsedOverride ?? undefined) : undefined,
         },
@@ -629,6 +685,23 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
           </div>
         </div>
       </div>
+
+      {cloudFormation && scheduledState ? (
+        <Banner tone="neutral">{selfUpdateLastCheckCopy(scheduledState.policy, scheduledState.lastCheck)}</Banner>
+      ) : null}
+
+      {cloudFormation && shouldShowSelfUpdateAvailable(scheduledAvailable?.version, runningVersion) ? (
+        <SelfUpdateAvailableNotice
+          version={scheduledAvailable!.version}
+          busy={status === 'running'}
+          canUpdate={Boolean(latestVersion)}
+          onUpdate={() => {
+            if (!latestVersion) return;
+            setTargetVersion(latestVersion);
+            void onRun(latestVersion);
+          }}
+        />
+      ) : null}
 
       {!cloudFormation && clusterInfoUnavailable ? (
         <label className="block space-y-1 text-xs">
@@ -707,7 +780,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
       <div className="flex items-center gap-2">
         <Button
           size="sm"
-          onClick={onRun}
+          onClick={() => void onRun()}
           disabled={
             status === 'running' ||
             !targetValid ||

@@ -7,6 +7,7 @@ import {
   type CloudLifecycleDependencies,
 } from './cloud-lifecycle.js';
 import type { SelfUpdatePublicJob } from '@appliance.sh/sdk';
+import type { StackSnapshot } from './cloud-install.js';
 
 const profile = {
   installGeneration: 'cloudformation-v1' as const,
@@ -51,11 +52,14 @@ function preCu0Stack() {
   return { ...stack, outputs };
 }
 
-function dependencies(): CloudLifecycleDependencies {
+function dependencies(stackOverride: StackSnapshot = stack): CloudLifecycleDependencies {
   return {
     getAccountId: vi.fn(async () => profile.awsAccountId),
-    getStack: vi.fn(async () => stack),
-    deployStack: vi.fn(async () => ({ ...stack, parameters: { ...stack.parameters, ImageUri: 'repo@sha256:new' } })),
+    getStack: vi.fn(async () => stackOverride),
+    deployStack: vi.fn(async () => ({
+      ...stackOverride,
+      parameters: { ...stackOverride.parameters, ImageUri: 'repo@sha256:new' },
+    })),
     getRegistryCredentials: vi.fn(async () => ({ username: 'AWS', password: 'token' })),
     mirror: vi.fn(async () => ({
       imageUri: 'repo@sha256:new',
@@ -218,24 +222,46 @@ describe('CloudFormation lifecycle', () => {
       imageUri: 'repo@sha256:old',
       architecture: 'x86_64',
       systemRoleMode: 'admin',
+      preserveParameters: true,
     });
     expect(deps.getBootstrapStatus).toHaveBeenCalledWith(profile.apiUrl);
   });
 
-  it('baseline update preserves the stack role mode when the flag is omitted', async () => {
+  it('baseline update preserves the stack role mode with UsePreviousValue when the flag is omitted', async () => {
     const deps = dependencies();
     vi.mocked(deps.getStack).mockResolvedValue({
       ...stack,
       parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
     });
     await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
-    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ preserveParameters: true }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.not.objectContaining({ systemRoleMode: expect.anything() }));
   });
 
-  it('baseline update defaults legacy stacks without the parameter to scoped', async () => {
+  it('lets the baseline parameter builder default legacy stacks without SystemRoleMode to scoped', async () => {
     const deps = dependencies();
     await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
-    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'scoped' }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ preserveParameters: true }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.not.objectContaining({ systemRoleMode: expect.anything() }));
+  });
+
+  it('passes a scheduled self-update policy through the operator baseline path', async () => {
+    const deps = dependencies();
+    await runCloudBaselineUpdate({ profile, installationName: 'prod', selfUpdatePolicy: 'notify' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(
+      expect.objectContaining({ selfUpdatePolicy: 'notify', preserveParameters: true, imageUri: 'repo@sha256:old' })
+    );
+  });
+
+  it.each(['notify', 'auto'] as const)('refuses policy %s while system roles are admin', async (selfUpdatePolicy) => {
+    const deps = dependencies({
+      ...stack,
+      parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
+    });
+    await expect(runCloudBaselineUpdate({ profile, selfUpdatePolicy }, deps)).rejects.toThrow(
+      'appliance cloud baseline-update --system-role-mode scoped'
+    );
+    expect(deps.deployStack).not.toHaveBeenCalled();
   });
 
   it('baseline update reports the admin recovery command when post-update health fails', async () => {

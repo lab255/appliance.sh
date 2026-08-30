@@ -28,7 +28,7 @@ const document = YAML.parseDocument(APPLIANCE_CLOUDFORMATION_TEMPLATE, {
 const sub = (value: string) => ({ tag: '!Sub', value });
 const ref = (value: string) => ({ tag: '!Ref', value });
 
-function resourcePolicy(logicalId: 'SelfUpdateRole' | 'SelfUpdateCloudFormationRole') {
+function resourcePolicy(logicalId: 'SelfUpdateRole' | 'SelfUpdateCloudFormationRole' | 'SelfUpdateSchedulerRole') {
   const policies = toJson(['Resources', logicalId, 'Properties', 'Policies']) as Array<{
     PolicyDocument: { Version: string; Statement: PolicyStatement[] };
   }>;
@@ -95,6 +95,7 @@ const WORST_GET_ATT: Record<string, string> = {
   'StateKmsKey.Arn': `arn:${WORST_CASE.partition}:kms:${WORST_CASE.region}:${WORST_CASE.accountId}:key/${'0'.repeat(36)}`,
   'ImageRepository.Arn': `arn:${WORST_CASE.partition}:ecr:${WORST_CASE.region}:${WORST_CASE.accountId}:repository/${'r'.repeat(256)}`,
   'SelfUpdateCloudFormationRole.Arn': `arn:${WORST_CASE.partition}:iam::${WORST_CASE.accountId}:role/appliance-system/${WORST_CASE.installationName}-self-update-cloudformation`,
+  'WorkerFunction.Arn': `arn:${WORST_CASE.partition}:lambda:${WORST_CASE.region}:${WORST_CASE.accountId}:function:${WORST_CASE.installationName}-worker`,
 };
 
 function worstSub(value: string): string {
@@ -170,6 +171,8 @@ const PROTECTED_LOGICAL_IDS = [
   'SystemWorkerEdgeProvisioningPolicy',
   'SelfUpdateRole',
   'SelfUpdateCloudFormationRole',
+  'SelfUpdateSchedulerRole',
+  'SelfUpdateSchedule',
 ] as const;
 
 const EXPECTED_IAM_LAMBDA_RESOURCES = {
@@ -195,6 +198,9 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker'),
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*'),
   ],
+  DenySchedulerMutation: sub(
+    'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update'
+  ),
   LambdaEdgeReplication: sub('arn:${AWS::Partition}:lambda:us-east-1:${AWS::AccountId}:function:*:*'),
 } as const;
 
@@ -232,6 +238,7 @@ describe('appliance CloudFormation template', () => {
     expect(resolvedPolicyCharacters(boundaryPolicy())).toBeLessThanOrEqual(6_144);
     expect(resolvedPolicyCharacters(resourcePolicy('SelfUpdateRole'))).toBeLessThanOrEqual(10_240);
     expect(resolvedPolicyCharacters(resourcePolicy('SelfUpdateCloudFormationRole'))).toBeLessThanOrEqual(10_240);
+    expect(resolvedPolicyCharacters(resourcePolicy('SelfUpdateSchedulerRole'))).toBeLessThanOrEqual(10_240);
   });
 
   it('defaults to scoped roles and makes AdministratorAccess break-glass only', () => {
@@ -265,6 +272,67 @@ describe('appliance CloudFormation template', () => {
   it('snapshots the exact self-update caller and CloudFormation service-role policies', () => {
     expect(resourcePolicy('SelfUpdateRole')).toMatchSnapshot('self-update caller policy');
     expect(resourcePolicy('SelfUpdateCloudFormationRole')).toMatchSnapshot('self-update CloudFormation role policy');
+  });
+
+  it('defaults scheduled self-update off and targets only the worker with a fixed target-free event', () => {
+    expect(document.getIn(['Parameters', 'SelfUpdatePolicy', 'Default'])).toBe('off');
+    expect(toJson(['Parameters', 'SelfUpdatePolicy', 'AllowedValues'])).toEqual(['off', 'notify', 'auto']);
+    expect(APPLIANCE_CLOUDFORMATION_TEMPLATE).toContain(
+      'SelfUpdateScheduled: !And [!Condition HasImage, !Not [!Equals [!Ref SelfUpdatePolicy, off]]]'
+    );
+    expect(document.getIn(['Resources', 'SelfUpdateSchedule', 'Condition'])).toBe('SelfUpdateScheduled');
+    expect(document.getIn(['Resources', 'SelfUpdateSchedulerRole', 'Condition'])).toBe('SelfUpdateScheduled');
+    expect(document.getIn(['Resources', 'SelfUpdateSchedule', 'Properties', 'Name'])).toEqual(
+      sub('${InstallationName}-self-update')
+    );
+    expect(document.getIn(['Resources', 'SelfUpdateSchedule', 'Properties', 'GroupName'])).toBe('default');
+    expect(toJson(['Resources', 'SelfUpdateSchedule', 'Properties', 'Target'])).toEqual({
+      Arn: { tag: '!GetAtt', value: 'WorkerFunction.Arn' },
+      RoleArn: { tag: '!GetAtt', value: 'SelfUpdateSchedulerRole.Arn' },
+      Input: '{"kind":"self-update-check"}',
+      RetryPolicy: { MaximumRetryAttempts: 0 },
+    });
+    expect(toJson(['Resources', 'SelfUpdateSchedule', 'Properties', 'FlexibleTimeWindow'])).toEqual({
+      Mode: 'FLEXIBLE',
+      MaximumWindowInMinutes: 60,
+    });
+    expect(resourcePolicy('SelfUpdateSchedulerRole')?.Statement).toEqual([
+      {
+        Sid: 'InvokeOnlySystemWorker',
+        Effect: 'Allow',
+        Action: 'lambda:InvokeFunction',
+        Resource: { tag: '!GetAtt', value: 'WorkerFunction.Arn' },
+      },
+    ]);
+    expect(
+      toJson([
+        'Resources',
+        'SelfUpdateSchedulerRole',
+        'Properties',
+        'AssumeRolePolicyDocument',
+        'Statement',
+        0,
+        'Principal',
+      ])
+    ).toEqual({ Service: 'scheduler.amazonaws.com' });
+    expect(
+      toJson([
+        'Resources',
+        'SelfUpdateSchedulerRole',
+        'Properties',
+        'AssumeRolePolicyDocument',
+        'Statement',
+        0,
+        'Condition',
+      ])
+    ).toEqual({
+      StringEquals: { 'aws:SourceAccount': ref('AWS::AccountId') },
+      ArnLike: {
+        'aws:SourceArn': sub(
+          'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update'
+        ),
+      },
+    });
   });
 
   it('pins the self-update trust and limits the worker to assuming only that role', () => {
@@ -322,7 +390,7 @@ describe('appliance CloudFormation template', () => {
       .filter(([, resource]) => /^AWS::(IAM|S3|KMS)::/.test(resource.Type))
       .map(([logicalId]) => logicalId)
       .sort();
-    expect(protectedIds).toEqual(securityLogicalIds);
+    expect(protectedIds).toEqual([...securityLogicalIds, 'SelfUpdateSchedule'].sort());
 
     // Model CloudFormation's explicit Deny precedence: an arbitrary
     // caller-supplied template cannot update or replace a protected id.
@@ -404,6 +472,14 @@ describe('appliance CloudFormation template', () => {
     }
   });
 
+  it('passes the scheduled policy to both Lambda processes', () => {
+    for (const logicalId of ['ApiServerFunction', 'WorkerFunction']) {
+      expect(
+        document.getIn(['Resources', logicalId, 'Properties', 'Environment', 'Variables', 'SELF_UPDATE_POLICY'])
+      ).toEqual(ref('SelfUpdatePolicy'));
+    }
+  });
+
   it('has no all-action grants and allowlists every unavoidable wildcard resource', () => {
     const wildcardResourceSids: string[] = [];
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
@@ -411,7 +487,15 @@ describe('appliance CloudFormation template', () => {
         const actions = actionsOf(statement);
         expect(actions).not.toContain('*');
         expect(actions.filter((action) => action.includes('*'))).toEqual(
-          actions.filter((action) => ['lambda:DisableReplication*', 'lambda:EnableReplication*'].includes(action))
+          actions.filter((action) =>
+            [
+              'lambda:DisableReplication*',
+              'lambda:EnableReplication*',
+              'scheduler:CreateSchedule*',
+              'scheduler:DeleteSchedule*',
+              'scheduler:UpdateSchedule*',
+            ].includes(action)
+          )
         );
         const resources = Array.isArray(statement.Resource) ? statement.Resource : [statement.Resource];
         if (resources.includes('*')) wildcardResourceSids.push(statement.Sid);
@@ -420,10 +504,12 @@ describe('appliance CloudFormation template', () => {
     expect(wildcardResourceSids.sort()).toEqual(Object.keys(WILDCARD_RESOURCE_JUSTIFICATIONS).sort());
   });
 
-  it('contains IAM and Lambda resources to an explicit, reviewable set', () => {
+  it('contains IAM, Lambda, and scheduler resources to an explicit, reviewable set', () => {
     const statements = scopedPolicy('SystemWorkerRole').Statement.filter((statement) => {
       const actions = actionsOf(statement);
-      return actions.some((action) => action.startsWith('iam:') || action.startsWith('lambda:'));
+      return actions.some(
+        (action) => action.startsWith('iam:') || action.startsWith('lambda:') || action.startsWith('scheduler:')
+      );
     });
     expect(Object.fromEntries(statements.map((statement) => [statement.Sid, statement.Resource]))).toEqual(
       EXPECTED_IAM_LAMBDA_RESOURCES
@@ -493,6 +579,12 @@ describe('appliance CloudFormation template', () => {
       Effect: 'Deny',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySystemFunctionMutation,
     });
+    expect(statements.find((statement) => statement.Sid === 'DenySchedulerMutation')).toEqual({
+      Sid: 'DenySchedulerMutation',
+      Effect: 'Deny',
+      Action: ['scheduler:CreateSchedule*', 'scheduler:DeleteSchedule*', 'scheduler:UpdateSchedule*'],
+      Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySchedulerMutation,
+    });
     const applianceFunctionMutations = new Set(
       actionsOf(statements.find((statement) => statement.Sid === 'ApplianceFunctions')!).filter(
         (action) => !action.startsWith('lambda:Get') && !action.startsWith('lambda:List')
@@ -553,6 +645,12 @@ describe('appliance CloudFormation template', () => {
     expect(statements.find((statement) => statement.Sid === 'DenySystemFunctionMutation')).toMatchObject({
       Effect: 'Deny',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySystemFunctionMutation,
+    });
+    expect(statements.find((statement) => statement.Sid === 'DenySchedulerMutation')).toEqual({
+      Sid: 'DenySchedulerMutation',
+      Effect: 'Deny',
+      Action: ['scheduler:CreateSchedule*', 'scheduler:DeleteSchedule*', 'scheduler:UpdateSchedule*'],
+      Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySchedulerMutation,
     });
   });
 

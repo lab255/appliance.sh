@@ -9,7 +9,9 @@ import {
   createAwsCloudInstallDependencies,
   defaultSourceImage,
   runCloudRouteUpdate,
+  runCloudBaselineUpdate,
   runCloudSystemUpdate,
+  type SelfUpdatePolicy,
 } from '@appliance.sh/install-aws';
 import { getActiveProfileOverride } from './utils/credentials.js';
 import { resolveProfileSecret } from './utils/credential-store.js';
@@ -20,6 +22,7 @@ import {
   createPhaseLineFormatter,
   terminalFailureMessage,
 } from './utils/cloud-update-output.js';
+import { inactiveReasonCopy, selfUpdateStatusJson, selfUpdateStatusLines } from './utils/self-update-status.js';
 
 interface Options {
   version?: string;
@@ -29,6 +32,9 @@ interface Options {
   json: boolean;
   arch?: string;
   awsProfile?: string;
+  policy?: SelfUpdatePolicy;
+  checkNow: boolean;
+  status: boolean;
 }
 
 const program = new Command();
@@ -39,11 +45,60 @@ program
   .option('--local', 'break glass: mirror and update CloudFormation from this operator machine', false)
   .option('--image <reference>', 'source image for --local only')
   .option('--arch <architecture>', 'amd64 or arm64 for --local')
-  .option('--aws-profile <name>', 'AWS credential profile for --local')
-  .option('--json', 'print the terminal job including per-phase durations as JSON', false)
+  .option('--aws-profile <name>', 'AWS credential profile for --local or --policy')
+  .option('--policy <policy>', 'set scheduled image-update policy (checked ~daily): off, notify, or auto')
+  .option('--check-now', 'run a signed scheduled image-update check now', false)
+  .option('--status', 'show scheduled image-update policy and last-check status', false)
+  .option('--json', 'print status or the terminal job including per-phase durations as JSON', false)
   .action(run);
 
 async function run(options: Options): Promise<void> {
+  if (options.policy && !['off', 'notify', 'auto'].includes(options.policy)) {
+    throw new Error('--policy must be off, notify, or auto');
+  }
+  if (
+    options.policy &&
+    (options.local ||
+      options.follow ||
+      options.version ||
+      options.image ||
+      options.arch ||
+      options.json ||
+      options.checkNow ||
+      options.status)
+  ) {
+    throw new Error('--policy cannot be combined with update target, follow, local, architecture, or JSON options');
+  }
+  if (
+    options.checkNow &&
+    (options.local ||
+      options.follow ||
+      options.version ||
+      options.image ||
+      options.arch ||
+      options.json ||
+      options.awsProfile ||
+      options.status)
+  ) {
+    throw new Error(
+      '--check-now cannot be combined with update target, follow, local, architecture, JSON, or AWS options'
+    );
+  }
+  if (
+    options.status &&
+    (options.local ||
+      options.follow ||
+      options.version ||
+      options.image ||
+      options.arch ||
+      options.awsProfile ||
+      options.policy ||
+      options.checkNow)
+  ) {
+    throw new Error(
+      '--status cannot be combined with update target, follow, local, architecture, AWS, policy, or check options'
+    );
+  }
   if (options.local && options.follow) throw new Error('--follow cannot be combined with --local');
   if (options.local && options.json) throw new Error('--local has no job record; omit --json');
   if (options.local && options.version)
@@ -51,7 +106,8 @@ async function run(options: Options): Promise<void> {
   if (!options.local && options.image)
     throw new Error('--image is a --local break-glass option; use --version for self-update');
   if (!options.local && options.arch) throw new Error('--arch is a --local break-glass option');
-  if (!options.local && options.awsProfile) throw new Error('--aws-profile is a --local break-glass option');
+  if (!options.local && !options.policy && options.awsProfile)
+    throw new Error('--aws-profile is a --local or --policy operator option');
   if (options.follow && options.version) throw new Error('--follow cannot be combined with --version');
   if (options.arch && options.arch !== 'amd64' && options.arch !== 'arm64') {
     throw new Error('--arch must be amd64 or arm64');
@@ -71,6 +127,21 @@ async function run(options: Options): Promise<void> {
   }
   const secret = resolveProfileSecret(resolved.name, profile);
   const lifecycleProfile = { ...profile, keyId: secret.keyId, secret: secret.secret } as never;
+
+  if (options.policy) {
+    const deps = createAwsCloudInstallDependencies({
+      region: profile.awsRegion,
+      awsProfile: options.awsProfile,
+      writeProfile: () => undefined,
+      log: (message) => console.log(chalk.dim(message)),
+    });
+    await runCloudBaselineUpdate(
+      { profile: lifecycleProfile, installationName: resolved.name, selfUpdatePolicy: options.policy },
+      deps
+    );
+    console.log(chalk.green(`Scheduled cloud self-update policy set to ${options.policy}.`));
+    return;
+  }
 
   if (options.local) {
     const deps = createAwsCloudInstallDependencies({
@@ -99,7 +170,36 @@ async function run(options: Options): Promise<void> {
     product: 'cli',
     timeout: 30_000,
   });
+  if (options.status) {
+    const clusterInfo = await client.getClusterInfo();
+    if (!clusterInfo.success) throw clusterInfo.error;
+    if (!clusterInfo.data.selfUpdate) {
+      throw new Error('Scheduled self-update status is unavailable on this server version');
+    }
+    process.stdout.write(
+      options.json
+        ? `${selfUpdateStatusJson(clusterInfo.data.selfUpdate)}\n`
+        : `${selfUpdateStatusLines(clusterInfo.data.selfUpdate).join('\n')}\n`
+    );
+    return;
+  }
+  if (options.checkNow) {
+    const checked = await client.selfUpdate.check();
+    if (!checked.success) throw checked.error;
+    console.log(chalk.cyan(`Scheduled self-update check: ${checkDecisionCopy(checked.data)}`));
+    return;
+  }
+  const clusterInfo = await client.getClusterInfo();
+  const available = clusterInfo.success ? clusterInfo.data.selfUpdate?.available : undefined;
   const evidence = options.follow ? undefined : await resolveReleaseEvidence({ version: options.version });
+  if (!options.json && evidence) {
+    const provenance = options.version
+      ? 'requested signed release'
+      : available?.version === evidence.version
+        ? 'from the scheduled notify check'
+        : 'latest signed release';
+    console.log(chalk.cyan(`Updating to v${evidence.version} (${provenance}).`));
+  }
   const formatPhaseLines = createPhaseLineFormatter();
   const result = await runCloudRouteUpdate(
     {
@@ -149,6 +249,12 @@ async function run(options: Options): Promise<void> {
     return;
   }
   throw new Error(terminalFailureMessage(result.job));
+}
+
+export function checkDecisionCopy(check: { decision: string; reason: string }): string {
+  const inactive = inactiveReasonCopy(check.reason);
+  if (inactive) return inactive;
+  return `${check.decision} (${check.reason})`;
 }
 
 program.parseAsync(process.argv).catch((error: unknown) => {
