@@ -6,6 +6,7 @@ import {
   type ResolvedReleaseEvidence,
   type SelfUpdatePublicJob,
 } from '@appliance.sh/sdk';
+import { errorText } from '@/components/friendly-error';
 
 export interface DesktopCloudSelfUpdateOptions {
   idempotencyKey: string;
@@ -65,12 +66,12 @@ export function selfUpdateTerminalError(job: SelfUpdatePublicJob): string {
   const detail = job.error ?? 'The service update failed.';
   if (job.recovered) return `${detail} The previous image was re-pinned and passed health checks.`;
   if (job.recoveryState === 'exhausted') {
-    return `${detail} Automatic recovery is exhausted; the installation may still be running the failed image. Restore with appliance cloud update --local from a terminal.`;
+    return `${detail} Automatic recovery is exhausted; the installation may still be running the failed image.\nRestore from a terminal:\nappliance cloud update  --local`;
   }
   return detail;
 }
 
-export function selfUpdateRollbackMessage(job: SelfUpdatePublicJob, previousServerVersion: string | null): string {
+export function selfUpdateRollbackMessage(previousServerVersion: string | null): string {
   const serving = previousServerVersion
     ? `v${previousServerVersion} is serving and healthy`
     : 'the previous version is serving and healthy';
@@ -79,10 +80,10 @@ export function selfUpdateRollbackMessage(job: SelfUpdatePublicJob, previousServ
 
 export function desktopSelfUpdateError(error: unknown): string {
   if (
-    error === SELF_UPDATE_DISABLED_AP226 ||
+    errorText(error) === SELF_UPDATE_DISABLED_AP226 ||
     (error instanceof SelfUpdateStartError && error.code === 'trust-not-provisioned')
   ) {
-    return "This build ships no production release key; update via the CLI's --local path or install a newer release.";
+    return 'This build ships no production release key; run appliance cloud update --local or install a newer release.';
   }
-  return error instanceof Error ? error.message : String(error);
+  return errorText(error);
 }

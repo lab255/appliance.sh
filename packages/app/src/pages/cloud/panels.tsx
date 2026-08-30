@@ -547,7 +547,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
             setLogs((prev) => [...prev, `An update is already running at ${statusUrl}; attaching to ${jobId}.`]),
         });
         if (update.job.status === 'failed' && update.job.recovered) {
-          setRollbackMessage(selfUpdateRollbackMessage(update.job, runningVersion));
+          setRollbackMessage(selfUpdateRollbackMessage(runningVersion));
           setStatus('rolled-back');
           await clusterInfoQuery.refetch();
           return;

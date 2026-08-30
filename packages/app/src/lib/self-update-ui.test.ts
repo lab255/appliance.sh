@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SelfUpdateStartError, type SelfUpdatePublicJob } from '@appliance.sh/sdk';
+import { SELF_UPDATE_DISABLED_AP226, SelfUpdateStartError, type SelfUpdatePublicJob } from '@appliance.sh/sdk';
 import {
   desktopSelfUpdateError,
   runDesktopCloudSelfUpdate,
@@ -21,12 +21,13 @@ describe('desktop self-update panel states', () => {
     const recovered = job({ status: 'failed', phase: 'complete', recovered: true, recoveryState: 'recovered' });
     expect(selfUpdatePhaseMessage(recovered)).toContain('re-pinned and is healthy');
     expect(selfUpdateTerminalError(recovered)).toContain('passed health checks');
-    expect(selfUpdateRollbackMessage(recovered, '1.57.0')).toBe('Update rolled back — v1.57.0 is serving and healthy.');
-    expect(
-      selfUpdateTerminalError(
-        job({ status: 'failed', phase: 'complete', recovered: false, recoveryState: 'exhausted' })
-      )
-    ).toContain('the installation may still be running the failed image');
+    expect(selfUpdateRollbackMessage('1.57.0')).toBe('Update rolled back — v1.57.0 is serving and healthy.');
+    const exhausted = selfUpdateTerminalError(
+      job({ status: 'failed', phase: 'complete', recovered: false, recoveryState: 'exhausted' })
+    );
+    expect(exhausted).toContain('the installation may still be running the failed image');
+    // Two shell-equivalent spaces keep the option boundary unmistakable in the compact monospace capture.
+    expect(exhausted).toContain('\nappliance cloud update  --local');
   });
 
   it('renders the successful terminal result', () => {
@@ -84,7 +85,13 @@ describe('desktop self-update panel states', () => {
     const message = desktopSelfUpdateError(
       new SelfUpdateStartError('trust-not-provisioned', 400, 'self-update disabled (AP-226)')
     );
-    expect(message).toContain("CLI's --local path");
+    expect(message).toContain('appliance cloud update --local');
+    expect(message).not.toMatch(/AP-\d+/);
+  });
+
+  it('recognises the release evidence resolver Error by its message', () => {
+    const message = desktopSelfUpdateError(new Error(SELF_UPDATE_DISABLED_AP226));
+    expect(message).toContain('appliance cloud update --local');
     expect(message).not.toMatch(/AP-\d+/);
   });
 });
