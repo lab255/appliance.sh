@@ -1,6 +1,13 @@
 import { CloudFormationClient, DeleteStackCommand, waitUntilStackDeleteComplete } from '@aws-sdk/client-cloudformation';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
-import { createApplianceClient, DeploymentStatus } from '@appliance.sh/sdk';
+import {
+  createApplianceClient,
+  DeploymentStatus,
+  type ApplianceClient,
+  type SelfUpdatePublicJob,
+  type SelfUpdateReleaseEvidence,
+  type SelfUpdateStartResponse,
+} from '@appliance.sh/sdk';
 import {
   createAwsCloudInstallDependencies,
   BASE_CONFIG_KEY,
@@ -38,6 +45,28 @@ export interface CloudBaselineUpdateOptions {
 export interface CloudTeardownResult {
   retained: Array<{ kind: 'state bucket' | 'data bucket' | 'KMS key' | 'ECR repository'; value: string }>;
 }
+
+export interface CloudRouteUpdateOptions {
+  targetDigest?: string;
+  release?: SelfUpdateReleaseEvidence;
+  idempotencyKey?: string;
+  followJobId?: string;
+  intervalMs?: number;
+  onPhase?: (job: SelfUpdatePublicJob) => void;
+}
+
+export type CloudRouteUpdateResult =
+  | {
+      outcome: 'conflict';
+      start: Extract<SelfUpdateStartResponse, { httpStatus: 409 }>;
+      previousServerVersion?: string;
+    }
+  | {
+      outcome: 'terminal';
+      job: SelfUpdatePublicJob;
+      previousServerVersion?: string;
+      currentServerVersion?: string;
+    };
 
 export interface CloudLifecycleDependencies extends CloudInstallDependencies {
   destroyEdge(profile: CloudLifecycleProfile): Promise<void>;
@@ -124,6 +153,43 @@ export async function runCloudSystemUpdate(
     );
   }
   return updated;
+}
+
+/** Drive CU2 through the signed in-server route; no operator AWS credentials are used. */
+export async function runCloudRouteUpdate(
+  options: CloudRouteUpdateOptions,
+  client: ApplianceClient
+): Promise<CloudRouteUpdateResult> {
+  const before = await client.getClusterInfo();
+  const previousServerVersion = before.success ? before.data.serverVersion : undefined;
+  let jobId = options.followJobId;
+  if (!jobId) {
+    if (!options.targetDigest || !options.release || !options.idempotencyKey) {
+      throw new Error('targetDigest, signed release evidence, and idempotencyKey are required to start self-update');
+    }
+    const started = await client.selfUpdate.start({
+      targetDigest: options.targetDigest,
+      release: options.release,
+      idempotencyKey: options.idempotencyKey,
+    });
+    if (!started.success) throw started.error;
+    if (started.data.httpStatus === 409) {
+      return { outcome: 'conflict', start: started.data, previousServerVersion };
+    }
+    jobId = started.data.jobId;
+  }
+  const watched = await client.selfUpdate.watch(jobId, {
+    intervalMs: options.intervalMs,
+    onPhase: options.onPhase,
+  });
+  if (!watched.success) throw watched.error;
+  const after = await client.getClusterInfo();
+  return {
+    outcome: 'terminal',
+    job: watched.data,
+    previousServerVersion,
+    currentServerVersion: after.success ? after.data.serverVersion : undefined,
+  };
 }
 
 export async function runCloudBaselineUpdate(
