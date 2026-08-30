@@ -1,5 +1,6 @@
 export type ImageArchitecture = 'x86_64' | 'arm64';
 export type RegistryArchitecture = 'amd64' | 'arm64';
+export type SystemRoleMode = 'scoped' | 'admin';
 
 export interface SystemFunctionOutput {
   name: string;

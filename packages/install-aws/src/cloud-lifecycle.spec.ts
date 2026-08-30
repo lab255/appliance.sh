@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runCloudSystemUpdate, runCloudTeardown, type CloudLifecycleDependencies } from './cloud-lifecycle.js';
+import {
+  runCloudBaselineUpdate,
+  runCloudSystemUpdate,
+  runCloudTeardown,
+  type CloudLifecycleDependencies,
+} from './cloud-lifecycle.js';
 
 const profile = {
   installGeneration: 'cloudformation-v1' as const,
@@ -78,6 +83,34 @@ describe('CloudFormation lifecycle', () => {
     await expect(
       runCloudSystemUpdate({ profile, installationName: 'prod', healthTimeoutMs: 1, healthPollMs: 0 }, deps)
     ).rejects.toThrow(/repo@sha256:old/);
+  });
+
+  it('system image updates preserve an explicit admin escape hatch', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue({
+      ...stack,
+      parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
+    });
+    await runCloudSystemUpdate({ profile, installationName: 'prod' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
+  });
+
+  it('baseline update preserves ImageUri and passes the selected role mode', async () => {
+    const deps = dependencies();
+    await runCloudBaselineUpdate({ profile, installationName: 'prod', systemRoleMode: 'admin' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith({
+      stackName: profile.cloudFormationStackName,
+      installationName: 'prod',
+      imageUri: 'repo@sha256:old',
+      architecture: 'x86_64',
+      systemRoleMode: 'admin',
+    });
+  });
+
+  it('baseline update defaults the role mode to scoped', async () => {
+    const deps = dependencies();
+    await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'scoped' }));
   });
 
   it('destroys edge before CFN and reports retained resources', async () => {

@@ -18,7 +18,7 @@ import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { ApplianceBaseType, VERSION } from '@appliance.sh/sdk';
 import { mirrorImageToEcr, type MirrorImageOptions, type MirrorImageResult } from './ecr-mirror.js';
 import { APPLIANCE_CLOUDFORMATION_TEMPLATE } from './template.js';
-import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture } from './types.js';
+import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
 const BASE_CONFIG_KEY = 'system/base-config.json';
 const DEFAULT_HEALTH_TIMEOUT_MS = 15 * 60_000;
@@ -62,6 +62,7 @@ export interface CloudInstallDependencies {
     installationName: string;
     imageUri: string;
     architecture: ImageArchitecture;
+    systemRoleMode?: SystemRoleMode;
   }): Promise<StackSnapshot>;
   getRegistryCredentials(): Promise<{ username: string; password: string }>;
   mirror(options: MirrorImageOptions): Promise<MirrorImageResult>;
@@ -372,6 +373,7 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
         { ParameterKey: 'InstallationName', ParameterValue: input.installationName },
         { ParameterKey: 'ImageUri', ParameterValue: input.imageUri },
         { ParameterKey: 'ImageArchitecture', ParameterValue: input.architecture },
+        { ParameterKey: 'SystemRoleMode', ParameterValue: input.systemRoleMode ?? 'scoped' },
       ];
       const current = await getStack(input.stackName);
       if (!current.exists) {

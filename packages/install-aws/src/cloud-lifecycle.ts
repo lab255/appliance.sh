@@ -8,7 +8,7 @@ import {
   type CloudInstallDependencies,
   type StackSnapshot,
 } from './cloud-install.js';
-import type { CloudInstallProfileMetadata, ImageArchitecture } from './types.js';
+import type { CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
 export interface CloudLifecycleProfile extends CloudInstallProfileMetadata {
   apiUrl: string;
@@ -24,6 +24,12 @@ export interface CloudUpdateOptions {
   awsProfile?: string;
   healthTimeoutMs?: number;
   healthPollMs?: number;
+}
+
+export interface CloudBaselineUpdateOptions {
+  profile: CloudLifecycleProfile;
+  installationName?: string;
+  systemRoleMode?: SystemRoleMode;
 }
 
 export interface CloudTeardownResult {
@@ -92,6 +98,7 @@ export async function runCloudSystemUpdate(
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: mirrored.imageUri,
     architecture,
+    systemRoleMode: stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped',
   });
   try {
     await healthPoll(deps, options.profile.apiUrl, options.healthTimeoutMs, options.healthPollMs);
@@ -104,7 +111,7 @@ export async function runCloudSystemUpdate(
 }
 
 export async function runCloudBaselineUpdate(
-  options: Pick<CloudUpdateOptions, 'profile' | 'installationName'>,
+  options: CloudBaselineUpdateOptions,
   deps: CloudInstallDependencies
 ): Promise<StackSnapshot> {
   assertCloudProfile(options.profile);
@@ -120,6 +127,7 @@ export async function runCloudBaselineUpdate(
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: stack.parameters.ImageUri,
     architecture: stack.parameters.ImageArchitecture === 'arm64' ? 'arm64' : 'x86_64',
+    systemRoleMode: options.systemRoleMode ?? 'scoped',
   });
 }
 
