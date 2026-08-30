@@ -591,6 +591,8 @@ export interface MicroVmStatus {
   /** The running guest was booted with the MV1 artifact listener and
    *  control-plane supervisor, so it can update without a reboot. */
   controlPlaneUpdateCapable: boolean;
+  /** This CLI build has a pinned signed-release key (or a dev-only trust file). */
+  selfUpdateEnabled: boolean;
   /** Current bring-up stage while starting; absent when not running or
    *  when the engine predates phase reporting. Lets the badge show
    *  "starting (k3s)" / "failed" instead of a blunt "running". */
@@ -841,7 +843,7 @@ export interface MicroVmInstanceHost {
    *  Stops and re-ups the VM while preserving its persisted dev mode. */
   clusterUp(onEvent: (event: { message: string }) => void): Promise<void>;
   /** Install a signed control-plane release in the running VM without rebooting. */
-  update(version?: string): Promise<string>;
+  update(version?: string, onEvent?: (event: { message: string }) => void): Promise<string>;
   /** Sweep the debugger pods a dev/host shell leaves behind. Called
    *  when a shell terminal closes; best-effort. */
   cleanupShell(): Promise<void>;

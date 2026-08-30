@@ -22,6 +22,8 @@ export interface ClusterCompat {
   vmName?: string;
   /** Host probe of the boot-rendered MV1 launcher marker. */
   controlPlaneUpdateCapable: boolean;
+  /** Signed release trust is provisioned in this CLI build. */
+  selfUpdateEnabled: boolean;
   /** The server's advisory floor is above this app's version — update the app. */
   clientBelowMinimum: boolean;
   /** microVM control plane doesn't report a version at all: the guest
@@ -127,6 +129,7 @@ export function useClusterCompat(): ClusterCompat {
     isMicroVm,
     vmName,
     controlPlaneUpdateCapable: vmStatusQuery.data?.controlPlaneUpdateCapable === true,
+    selfUpdateEnabled: vmStatusQuery.data?.selfUpdateEnabled === true,
     clientBelowMinimum,
     controlPlanePredatesReporting,
     versionDrift,

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useClusterCompat } from '@/hooks/use-cluster-compat';
 import { Banner } from '@/components/ui/banner';
 import { useHost } from '@/providers/host-provider';
@@ -20,40 +20,61 @@ export function ClusterCompatBanner() {
   const queryClient = useQueryClient();
   const compat = useClusterCompat();
   const [updating, setUpdating] = React.useState(false);
+  const [updatePhase, setUpdatePhase] = React.useState<string | null>(null);
   const [updateError, setUpdateError] = React.useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = React.useState<string | null>(null);
+  if (updateSuccess) {
+    return (
+      <Banner tone="success" role="status" icon={CheckCircle2} className="mb-4">
+        {updateSuccess}
+      </Banner>
+    );
+  }
   if (compat.loading) return null;
 
+  const machineRestart = (
+    <>
+      restart it from the{' '}
+      <Link to="/machine" className="underline">
+        Machine page
+      </Link>
+    </>
+  );
   const updateAction =
-    compat.controlPlaneUpdateCapable && compat.vmName && host.vm ? (
+    compat.controlPlaneUpdateCapable && compat.selfUpdateEnabled && compat.vmName && host.vm ? (
       <button
         type="button"
         disabled={updating}
         className="underline disabled:opacity-60"
         onClick={() => {
           setUpdating(true);
+          setUpdatePhase('Checking VM capability…');
           setUpdateError(null);
           void host
             .vm!.instance(compat.vmName)
-            .update(compat.clientVersion)
+            .update(compat.clientVersion, ({ message }) => setUpdatePhase(message.replace(/^»\s*/u, '')))
             .then(async () => {
+              setUpdateSuccess(
+                `Control plane updated: v${compat.serverVersion ?? 'unknown'} → v${compat.clientVersion}`
+              );
               await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['cluster-info'] }),
                 queryClient.invalidateQueries({ queryKey: ['microvm', compat.vmName, 'status'] }),
               ]);
             })
             .catch((error: unknown) => setUpdateError(error instanceof Error ? error.message : String(error)))
-            .finally(() => setUpdating(false));
+            .finally(() => {
+              setUpdating(false);
+              setUpdatePhase(null);
+            });
         }}
       >
-        {updating ? 'Updating…' : 'Update now'}
+        {updating ? (updatePhase ?? 'Updating…') : 'Update now'}
       </button>
+    ) : compat.controlPlaneUpdateCapable && !compat.selfUpdateEnabled ? (
+      <>in-place updates are not enabled in this build; {machineRestart}</>
     ) : (
-      <>
-        restart it from the{' '}
-        <Link to="/machine" className="underline">
-          Machine page
-        </Link>
-      </>
+      machineRestart
     );
 
   let message: React.ReactNode = null;
@@ -65,7 +86,7 @@ export function ClusterCompatBanner() {
       </>
     );
   } else if (compat.controlPlanePredatesReporting) {
-    message = <>The Dev Machine&apos;s control plane predates capability reporting — {updateAction} to update it.</>;
+    message = <>The Dev Machine&apos;s control plane is too old for in-place updates — {machineRestart}.</>;
   } else if (compat.versionDrift && compat.isMicroVm) {
     message = (
       <>

@@ -10,7 +10,7 @@ import { ClusterCompatBanner } from './cluster-compat-banner';
 const useClusterCompat = vi.hoisted(() => vi.fn<() => ClusterCompat>());
 vi.mock('@/hooks/use-cluster-compat', () => ({ useClusterCompat }));
 
-function compat(capable: boolean): ClusterCompat {
+function compat(capable: boolean, selfUpdateEnabled = true): ClusterCompat {
   return {
     loading: false,
     clientVersion: '1.58.0',
@@ -19,6 +19,7 @@ function compat(capable: boolean): ClusterCompat {
     isMicroVm: true,
     vmName: 'appliance',
     controlPlaneUpdateCapable: capable,
+    selfUpdateEnabled,
     clientBelowMinimum: false,
     controlPlanePredatesReporting: false,
     versionDrift: true,
@@ -58,5 +59,14 @@ describe('ClusterCompatBanner microVM update remediation', () => {
     const html = renderBanner();
     expect(html).toContain('Machine page');
     expect(html).not.toContain('<button');
+  });
+
+  it('does not offer a dead-end update when signed release trust is not enabled', () => {
+    useClusterCompat.mockReturnValue(compat(true, false));
+    const html = renderBanner();
+    expect(html).toContain('in-place updates are not enabled in this build');
+    expect(html).toContain('Machine page');
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('AP-226');
   });
 });

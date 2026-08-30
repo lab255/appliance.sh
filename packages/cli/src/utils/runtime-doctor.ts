@@ -12,7 +12,7 @@ import {
   resolveProfileSecret,
 } from './credential-store.js';
 import { DEFAULT_VM_NAME, LEGACY_MICROVM_PROFILE, profileForVm, resolveVmBinary, vmDir } from './microvm-up.js';
-import { guestAssetsDir } from './api-server-artifact.js';
+import { guestAssetsDir, releaseTrustFromEnvironment } from './api-server-artifact.js';
 
 // Runtime doctor: "why doesn't my ALREADY-SET-UP runtime work?" — the
 // second half of `appliance doctor`. The preflight (preflight.ts) asks
@@ -881,6 +881,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   const vmExplicit = opts.vmExplicit ?? opts.vm !== undefined;
   const findings: RuntimeFinding[] = [];
   const fixes: RuntimeFixOutcome[] = [];
+  const releaseTrust = releaseTrustFromEnvironment();
 
   // 1. Engine-side checks (guest clock, in-guest api-server liveness).
   //    Old/missing engines degrade to an info row, never a failure; a
@@ -985,7 +986,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
       VERSION,
       serverVersion,
       readGuestSigningKeyId(),
-      PINNED_RELEASE_TRUST,
+      releaseTrust,
       engine?.controlPlaneUpdateCapable === true
     )
   );

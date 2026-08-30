@@ -11,7 +11,7 @@ use std::io::{BufRead as _, Write as _};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -4174,6 +4174,8 @@ struct MicroVmStatus {
     kubeconfig_ready: bool,
     /// MV1 launcher marker is reachable in this running guest.
     control_plane_update_capable: bool,
+    /// The bundled CLI has active signed-release trust.
+    self_update_enabled: bool,
     /// Current bring-up stage while starting: media | booting | network |
     /// cluster (+ cluster-node/cluster-images/cluster-api/ingress
     /// sub-phases) | ready | failed. `None` when not running. Lets the UI
@@ -4207,6 +4209,47 @@ fn vm_name(name: Option<String>) -> String {
     name.map(|n| n.trim().to_string())
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| MICROVM_NAME.to_string())
+}
+
+fn capability_cache() -> &'static Mutex<BTreeMap<String, (u64, bool)>> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, (u64, bool)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+async fn cached_control_plane_capability(bin: &str, name: &str, pid: u64) -> bool {
+    if let Some((cached_pid, capable)) = capability_cache().lock().unwrap().get(name).copied() {
+        if cached_pid == pid {
+            return capable;
+        }
+    }
+    let capable = run_command_with_timeout(
+        &[bin, "control-plane-capability", name],
+        Duration::from_secs(12),
+    )
+    .await
+    .map(|(ok, _, _)| ok)
+    .unwrap_or(false);
+    capability_cache()
+        .lock()
+        .unwrap()
+        .insert(name.to_string(), (pid, capable));
+    capable
+}
+
+async fn bundled_self_update_enabled(app: &AppHandle) -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    if let Some(enabled) = ENABLED.get() {
+        return *enabled;
+    }
+    let args = vec!["vm".to_string(), "self-update-enabled".to_string()];
+    let output = tokio::time::timeout(Duration::from_secs(12), run_appliance_capture(app, &args))
+        .await
+        .ok()
+        .and_then(Result::ok);
+    let Some(output) = output else { return false };
+    let enabled = output.lines().any(|line| line.trim() == "true");
+    let _ = ENABLED.set(enabled);
+    enabled
 }
 
 /// The desktop cluster id (and CLI profile name) a VM owns. Mirrors
@@ -4320,6 +4363,7 @@ async fn microvm_list() -> Result<Vec<MicroVmSummary>, String> {
 #[tauri::command]
 async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
     let name = vm_name(name);
+    let self_update_enabled = bundled_self_update_enabled(&app).await;
     // Fallback URL before we know the VM's allocated port (binary
     // missing, or status failed). The default VM keeps 8081; a named VM
     // we can't probe yet gets its host:port filled in from status below.
@@ -4337,6 +4381,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             cluster_provisioned: false,
             kubeconfig_ready: false,
             control_plane_update_capable: false,
+            self_update_enabled,
             phase: None,
             phase_detail: None,
             dev: false,
@@ -4364,6 +4409,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
                 cluster_provisioned: false,
                 kubeconfig_ready: false,
                 control_plane_update_capable: false,
+                self_update_enabled,
                 phase: None,
                 phase_detail: None,
                 dev: false,
@@ -4382,6 +4428,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             cluster_provisioned: false,
             kubeconfig_ready: false,
             control_plane_update_capable: false,
+            self_update_enabled,
             phase: None,
             phase_detail: None,
             dev: false,
@@ -4431,10 +4478,11 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     let control_plane_update_capable = if running {
-        run_status_command(&[&bin, "control-plane-capability", &name])
-            .await
-            .map(|(ok, _, _)| ok)
-            .unwrap_or(false)
+        let pid = parsed
+            .get("pid")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0);
+        cached_control_plane_capability(&bin, &name, pid).await
     } else {
         false
     };
@@ -4457,6 +4505,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
         cluster_provisioned,
         kubeconfig_ready,
         control_plane_update_capable,
+        self_update_enabled,
         phase,
         phase_detail,
         dev: parsed.get("dev").and_then(|v| v.as_bool()).unwrap_or(false),
@@ -4870,6 +4919,7 @@ async fn microvm_update(
     app: AppHandle,
     name: Option<String>,
     version: Option<String>,
+    on_event: Channel<serde_json::Value>,
 ) -> Result<String, String> {
     let name = vm_name(name);
     let mut argv = vec![
@@ -4881,7 +4931,7 @@ async fn microvm_update(
     if let Some(version) = version.filter(|value| !value.trim().is_empty()) {
         argv.extend(["--version".to_string(), version]);
     }
-    let (mut rx, _child) = app
+    let (mut rx, child) = app
         .shell()
         .sidecar("appliance")
         .map_err(|error| format!("Bundled appliance CLI is unavailable: {error}"))?
@@ -4891,13 +4941,37 @@ async fn microvm_update(
     let mut stdout = String::new();
     let mut stderr = String::new();
     let mut exit_code = None;
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(bytes) => stdout.push_str(&String::from_utf8_lossy(&bytes)),
-            CommandEvent::Stderr(bytes) => stderr.push_str(&String::from_utf8_lossy(&bytes)),
-            CommandEvent::Error(message) => return Err(message),
-            CommandEvent::Terminated(payload) => exit_code = payload.code,
-            _ => {}
+    let receive = async {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    stdout.push_str(&text);
+                    for message in text.lines().filter(|line| !line.trim().is_empty()) {
+                        let _ =
+                            on_event.send(serde_json::json!({ "type": "log", "message": message }));
+                    }
+                }
+                CommandEvent::Stderr(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    stderr.push_str(&text);
+                    for message in text.lines().filter(|line| !line.trim().is_empty()) {
+                        let _ =
+                            on_event.send(serde_json::json!({ "type": "log", "message": message }));
+                    }
+                }
+                CommandEvent::Error(message) => return Err(message),
+                CommandEvent::Terminated(payload) => exit_code = payload.code,
+                _ => {}
+            }
+        }
+        Ok::<(), String>(())
+    };
+    match tokio::time::timeout(Duration::from_secs(300), receive).await {
+        Ok(result) => result?,
+        Err(_) => {
+            let _ = child.kill();
+            return Err("microVM update timed out after 300 seconds; check the running control-plane version before retrying".into());
         }
     }
     if exit_code == Some(0) {
