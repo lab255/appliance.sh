@@ -1,5 +1,7 @@
 import {
   fetchReleaseEvidence,
+  SELF_UPDATE_DISABLED_AP226,
+  SelfUpdateStartError,
   type ApplianceClient,
   type ResolvedReleaseEvidence,
   type SelfUpdatePublicJob,
@@ -9,6 +11,7 @@ export interface DesktopCloudSelfUpdateOptions {
   idempotencyKey: string;
   intervalMs?: number;
   onPhase?: (job: SelfUpdatePublicJob) => void;
+  onExistingJob?: (statusUrl: string, jobId: string) => void;
   resolveEvidence?: (version: string) => Promise<ResolvedReleaseEvidence>;
 }
 
@@ -24,6 +27,9 @@ export async function runDesktopCloudSelfUpdate(
     idempotencyKey: options.idempotencyKey,
   });
   if (!started.success) throw started.error;
+  if (started.data.httpStatus === 409) {
+    options.onExistingJob?.(started.data.statusUrl, started.data.jobId);
+  }
   const watched = await client.selfUpdate.watch(started.data.jobId, {
     intervalMs: options.intervalMs,
     onPhase: options.onPhase,
@@ -51,7 +57,7 @@ const LABELS: Record<SelfUpdatePublicJob['phase'], string> = {
 export function selfUpdatePhaseMessage(job: SelfUpdatePublicJob): string {
   if (job.phase !== 'complete') return LABELS[job.phase];
   if (job.status === 'succeeded') return `Updated successfully to ${job.target.version}`;
-  if (job.recovered) return 'Update failed; the previous image was re-pinned and is healthy';
+  if (job.recovered) return 'Update rolled back; the previous image was re-pinned and is healthy';
   return 'Update failed and automatic recovery did not complete';
 }
 
@@ -59,7 +65,24 @@ export function selfUpdateTerminalError(job: SelfUpdatePublicJob): string {
   const detail = job.error ?? 'The service update failed.';
   if (job.recovered) return `${detail} The previous image was re-pinned and passed health checks.`;
   if (job.recoveryState === 'exhausted') {
-    return `${detail} Automatic recovery is exhausted. Run appliance cloud update --local from a terminal.`;
+    return `${detail} Automatic recovery is exhausted; the installation may still be running the failed image. Restore with appliance cloud update --local from a terminal.`;
   }
   return detail;
+}
+
+export function selfUpdateRollbackMessage(job: SelfUpdatePublicJob, previousServerVersion: string | null): string {
+  const serving = previousServerVersion
+    ? `v${previousServerVersion} is serving and healthy`
+    : 'the previous version is serving and healthy';
+  return `Update rolled back — ${serving}.`;
+}
+
+export function desktopSelfUpdateError(error: unknown): string {
+  if (
+    error === SELF_UPDATE_DISABLED_AP226 ||
+    (error instanceof SelfUpdateStartError && error.code === 'trust-not-provisioned')
+  ) {
+    return "This build ships no production release key; update via the CLI's --local path or install a newer release.";
+  }
+  return error instanceof Error ? error.message : String(error);
 }

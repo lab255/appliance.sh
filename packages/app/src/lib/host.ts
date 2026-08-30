@@ -344,6 +344,8 @@ export interface UpdaterHost {
 export interface ConsoleHost {
   /** Resolved once when the host is constructed so render-time copy stays synchronous. */
   platform: HostPlatform;
+  /** Explicit shell identity; do not infer desktop from an unrelated optional capability. */
+  desktop?: boolean;
   getConfig(): Promise<HostConfig>;
   /** Persist a new cluster + its key, and select it. Returns the stored Cluster. */
   addCluster(input: AddClusterInput): Promise<Cluster>;

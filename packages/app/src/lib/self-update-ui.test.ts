@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SelfUpdatePublicJob } from '@appliance.sh/sdk';
-import { runDesktopCloudSelfUpdate, selfUpdatePhaseMessage, selfUpdateTerminalError } from './self-update-ui';
+import { SelfUpdateStartError, type SelfUpdatePublicJob } from '@appliance.sh/sdk';
+import {
+  desktopSelfUpdateError,
+  runDesktopCloudSelfUpdate,
+  selfUpdatePhaseMessage,
+  selfUpdateRollbackMessage,
+  selfUpdateTerminalError,
+} from './self-update-ui';
 
 describe('desktop self-update panel states', () => {
   it.each([
@@ -15,11 +21,12 @@ describe('desktop self-update panel states', () => {
     const recovered = job({ status: 'failed', phase: 'complete', recovered: true, recoveryState: 'recovered' });
     expect(selfUpdatePhaseMessage(recovered)).toContain('re-pinned and is healthy');
     expect(selfUpdateTerminalError(recovered)).toContain('passed health checks');
+    expect(selfUpdateRollbackMessage(recovered, '1.57.0')).toBe('Update rolled back — v1.57.0 is serving and healthy.');
     expect(
       selfUpdateTerminalError(
         job({ status: 'failed', phase: 'complete', recovered: false, recoveryState: 'exhausted' })
       )
-    ).toContain('appliance cloud update --local');
+    ).toContain('the installation may still be running the failed image');
   });
 
   it('renders the successful terminal result', () => {
@@ -32,16 +39,23 @@ describe('desktop self-update panel states', () => {
     'starts through the SDK and watches the %s job without a sidecar',
     async (httpStatus) => {
       const terminal = job({ status: 'succeeded', phase: 'complete' });
+      const events: string[] = [];
       const client = {
         selfUpdate: {
-          start: vi.fn(async () => ({
-            success: true as const,
-            data:
-              httpStatus === 202
-                ? { httpStatus, jobId: terminal.jobId, status: 'queued' as const, statusUrl: '/job' }
-                : { httpStatus, jobId: terminal.jobId, statusUrl: '/job' },
-          })),
-          watch: vi.fn(async () => ({ success: true as const, data: terminal })),
+          start: vi.fn(async () => {
+            events.push('start');
+            return {
+              success: true as const,
+              data:
+                httpStatus === 202
+                  ? { httpStatus, jobId: terminal.jobId, status: 'queued' as const, statusUrl: '/job' }
+                  : { httpStatus, jobId: terminal.jobId, statusUrl: '/job' },
+            };
+          }),
+          watch: vi.fn(async () => {
+            events.push('watch');
+            return { success: true as const, data: terminal };
+          }),
         },
       };
       const resolveEvidence = vi.fn(async () => ({
@@ -53,6 +67,7 @@ describe('desktop self-update panel states', () => {
       const result = await runDesktopCloudSelfUpdate(client as never, '1.58.0', {
         idempotencyKey: 'desktop-once',
         resolveEvidence,
+        onExistingJob: () => events.push('existing'),
       });
 
       expect(client.selfUpdate.start).toHaveBeenCalledWith(
@@ -61,8 +76,17 @@ describe('desktop self-update panel states', () => {
       expect(client.selfUpdate.watch).toHaveBeenCalledWith(terminal.jobId, expect.any(Object));
       expect(result).toMatchObject({ job: terminal });
       expect(result.existingStatusUrl).toBe(httpStatus === 409 ? '/job' : undefined);
+      expect(events).toEqual(httpStatus === 409 ? ['start', 'existing', 'watch'] : ['start', 'watch']);
     }
   );
+
+  it('uses plain-language release-key guidance without exposing an internal ticket', () => {
+    const message = desktopSelfUpdateError(
+      new SelfUpdateStartError('trust-not-provisioned', 400, 'self-update disabled (AP-226)')
+    );
+    expect(message).toContain("CLI's --local path");
+    expect(message).not.toMatch(/AP-\d+/);
+  });
 });
 
 function job(overrides: Partial<SelfUpdatePublicJob>): SelfUpdatePublicJob {

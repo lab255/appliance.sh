@@ -16,7 +16,13 @@ import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import type { BootstrapEvent, Cluster, ConsoleHost } from '@/lib/host';
-import { runDesktopCloudSelfUpdate, selfUpdatePhaseMessage, selfUpdateTerminalError } from '@/lib/self-update-ui';
+import {
+  desktopSelfUpdateError,
+  runDesktopCloudSelfUpdate,
+  selfUpdatePhaseMessage,
+  selfUpdateRollbackMessage,
+  selfUpdateTerminalError,
+} from '@/lib/self-update-ui';
 
 // Cloud installation detail — the lifecycle ops for one bootstrapped AWS
 // installation: update baseline, update api-server/worker, detach/reattach
@@ -124,6 +130,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   const queryClient = useQueryClient();
   const { config } = useSelectedCluster();
   const canBootstrap = Boolean(host.bootstrap);
+  const desktop = host.desktop === true;
   const canTeardown = Boolean(host.bootstrap?.teardown);
   const isSelected = config?.selectedClusterId === cluster.id;
 
@@ -181,7 +188,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   }
 
   if (provisioner === 'cloudformation-v1') {
-    return <CloudFormationLifecycleHandoff cluster={cluster} desktop={canBootstrap} />;
+    return <CloudFormationLifecycleHandoff cluster={cluster} desktop={desktop} />;
   }
 
   if (!canBootstrap) {
@@ -223,7 +230,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: Cluster; desktop: boolean }) {
+export function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: Cluster; desktop: boolean }) {
   return (
     <div className="space-y-3">
       {desktop ? (
@@ -427,6 +434,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
   const [status, setStatus] = React.useState<RunStatus>('idle');
   const [logs, setLogs] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+  const [rollbackMessage, setRollbackMessage] = React.useState<string | null>(null);
   const [awsProfile, setAwsProfile] = React.useState('');
   const [targetVersion, setTargetVersion] = React.useState('');
   const [baseConfigJson, setBaseConfigJson] = React.useState('');
@@ -467,7 +475,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
 
   const profilesQuery = useQuery({
     queryKey: ['aws-profiles'],
-    enabled: Boolean(host.bootstrap?.listAwsProfiles),
+    enabled: !cloudFormation && Boolean(host.bootstrap?.listAwsProfiles),
     queryFn: () => host.bootstrap!.listAwsProfiles!(),
   });
   const profiles = profilesQuery.data ?? [];
@@ -519,18 +527,21 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
     setStatus('running');
     setLogs([]);
     setError(null);
+    setRollbackMessage(null);
     try {
       if (cloudFormation) {
         const update = await runDesktopCloudSelfUpdate(client, targetVersion, {
           idempotencyKey: `desktop-cloud-update-${crypto.randomUUID()}`,
           intervalMs: 2_000,
           onPhase: (job) => setLogs((prev) => [...prev, selfUpdatePhaseMessage(job)]),
+          onExistingJob: (statusUrl, jobId) =>
+            setLogs((prev) => [...prev, `An update is already running at ${statusUrl}; attaching to ${jobId}.`]),
         });
-        if (update.existingStatusUrl) {
-          setLogs((prev) => [
-            ...prev,
-            `An update is already running at ${update.existingStatusUrl}; attaching to ${update.job.jobId}.`,
-          ]);
+        if (update.job.status === 'failed' && update.job.recovered) {
+          setRollbackMessage(selfUpdateRollbackMessage(update.job, runningVersion));
+          setStatus('rolled-back');
+          await clusterInfoQuery.refetch();
+          return;
         }
         if (update.job.status === 'failed') throw new Error(selfUpdateTerminalError(update.job));
         await clusterInfoQuery.refetch();
@@ -551,7 +562,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
       setStatus('succeeded');
     } catch (err) {
       setStatus('failed');
-      setError(err instanceof Error ? err.message : String(err));
+      setError(cloudFormation ? desktopSelfUpdateError(err) : err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -560,7 +571,9 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
       <div>
         <div className="text-sm font-medium">Update Appliance service</div>
         <div className="text-xs text-[var(--color-muted-foreground)]">
-          Choose a service version and update the installation.
+          {cloudFormation
+            ? 'Updates to the latest signed release; the running service does the work.'
+            : 'Choose a service version and update the installation.'}
           <details className="mt-1">
             <summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
               Technical details
@@ -638,57 +651,66 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
         </label>
       ) : null}
 
+      <label className="block space-y-1 text-xs">
+        <span className="text-[var(--color-muted-foreground)]">Target version</span>
+        <Input
+          type="text"
+          value={targetVersion}
+          onChange={(e) => setTargetVersion(e.target.value)}
+          placeholder="1.37.0"
+          disabled={status === 'running'}
+          spellCheck={false}
+          mono
+        />
+      </label>
+
       {!cloudFormation ? (
         <label className="block space-y-1 text-xs">
-          <span className="text-[var(--color-muted-foreground)]">Target version</span>
-          <Input
-            type="text"
-            value={targetVersion}
-            onChange={(e) => setTargetVersion(e.target.value)}
-            placeholder="1.37.0"
-            disabled={status === 'running'}
-            spellCheck={false}
-            mono
-          />
+          <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
+          {canEnumerateProfiles ? (
+            <select
+              value={awsProfile}
+              onChange={(e) => setAwsProfile(e.target.value)}
+              disabled={status === 'running'}
+              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
+            >
+              <option value="">— shell environment —</option>
+              {profiles.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                  {p.isSso ? '  (SSO)' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              type="text"
+              value={awsProfile}
+              onChange={(e) => setAwsProfile(e.target.value)}
+              placeholder="leave empty to use shell env"
+              disabled={status === 'running'}
+              mono
+            />
+          )}
         </label>
       ) : null}
-
-      <label className="block space-y-1 text-xs">
-        <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
-        {canEnumerateProfiles ? (
-          <select
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
-          >
-            <option value="">— shell environment —</option>
-            {profiles.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-                {p.isSso ? '  (SSO)' : ''}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <Input
-            type="text"
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            placeholder="leave empty to use shell env"
-            disabled={status === 'running'}
-            mono
-          />
-        )}
-      </label>
 
       <div className="flex items-center gap-2">
         <Button
           size="sm"
           onClick={onRun}
-          disabled={status === 'running' || !targetValid || (!cloudFormation && !overrideValid)}
+          disabled={
+            status === 'running' ||
+            !targetValid ||
+            (!cloudFormation && !overrideValid) ||
+            (cloudFormation && latestVersion === runningVersion && targetVersion === runningVersion)
+          }
         >
-          {status === 'running' ? 'Updating…' : `Update to ${targetVersion || '…'}`}
+          {status === 'running'
+            ? 'Updating…'
+            : cloudFormation && latestVersion === runningVersion && targetVersion === runningVersion
+              ? 'Up to date'
+              : `Update to ${targetVersion || '…'}`}
         </Button>
       </div>
       <InstallerOperation
@@ -696,13 +718,14 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
         status={status}
         logs={logs}
         error={error}
+        rollbackMessage={rollbackMessage}
         onRetry={() => void onRun()}
       />
     </SectionCard>
   );
 }
 
-type RunStatus = 'idle' | 'running' | 'succeeded' | 'failed';
+type RunStatus = 'idle' | 'running' | 'succeeded' | 'rolled-back' | 'failed';
 type Direction = 'promote' | 'demote';
 
 function InstallerOperation({
@@ -710,12 +733,14 @@ function InstallerOperation({
   status,
   logs,
   error,
+  rollbackMessage,
   onRetry,
 }: {
   title: string;
   status: RunStatus;
   logs: string[];
   error: string | null;
+  rollbackMessage?: string | null;
   onRetry: () => void;
 }) {
   const failureRef = React.useRef<HTMLDivElement>(null);
@@ -723,6 +748,21 @@ function InstallerOperation({
     if (status === 'failed') failureRef.current?.focus();
   }, [status]);
   if (status === 'idle') return null;
+  if (status === 'rolled-back') {
+    return (
+      <div className="space-y-2">
+        <Banner tone="warning" role="status" title="Update rolled back">
+          {rollbackMessage ?? 'The previous version is serving and healthy.'}
+        </Banner>
+        {logs.length ? (
+          <details className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs">
+            <summary className="cursor-pointer">Updating Appliance service technical details</summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono">{logs.join('\n')}</pre>
+          </details>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div ref={failureRef} tabIndex={status === 'failed' ? -1 : undefined} className="focus:outline-none">
       <LongOperation
