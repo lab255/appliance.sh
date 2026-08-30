@@ -5,7 +5,7 @@
 //! the live VM's `VZVirtioSocketDevice` on the VM's dispatch queue.
 
 use super::{error_text, QueueBound};
-use crate::guest::SHELL_VSOCK_PORT;
+use crate::guest::{ARTIFACT_VSOCK_PORT, SHELL_VSOCK_PORT};
 use crate::shell::clock_set_command;
 use block2::RcBlock;
 use dispatch2::{DispatchQueue, DispatchRetained};
@@ -30,6 +30,24 @@ pub fn spawn_relay(
     vm: &Retained<VZVirtualMachine>,
     sock_path: PathBuf,
 ) {
+    spawn_port_relay(queue, vm, sock_path, SHELL_VSOCK_PORT, "shell");
+}
+
+pub fn spawn_artifact_relay(
+    queue: &DispatchRetained<DispatchQueue>,
+    vm: &Retained<VZVirtualMachine>,
+    sock_path: PathBuf,
+) {
+    spawn_port_relay(queue, vm, sock_path, ARTIFACT_VSOCK_PORT, "artifact");
+}
+
+fn spawn_port_relay(
+    queue: &DispatchRetained<DispatchQueue>,
+    vm: &Retained<VZVirtualMachine>,
+    sock_path: PathBuf,
+    port: u32,
+    label: &'static str,
+) {
     let queue = queue.clone();
     let vm = QueueBound(vm.clone());
     std::thread::spawn(move || {
@@ -37,7 +55,7 @@ pub fn spawn_relay(
         let listener = match UnixListener::bind(&sock_path) {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("shell relay: bind {}: {e}", sock_path.display());
+                eprintln!("{label} relay: bind {}: {e}", sock_path.display());
                 return;
             }
         };
@@ -45,10 +63,10 @@ pub fn spawn_relay(
         let _ = std::fs::set_permissions(&sock_path, std::fs::Permissions::from_mode(0o600));
         for stream in listener.incoming() {
             let Ok(stream) = stream else { continue };
-            match connect_vsock(&queue, &vm) {
+            match connect_vsock(&queue, &vm, port) {
                 Ok(fd) => spawn_session(stream, fd),
                 Err(e) => {
-                    let _ = (&stream).write_all(format!("appliance shell: {e}\r\n").as_bytes());
+                    let _ = (&stream).write_all(format!("appliance {label}: {e}\r\n").as_bytes());
                 }
             }
         }
@@ -90,7 +108,7 @@ pub fn spawn_clock_sync(
     let queue = queue.clone();
     let vm = QueueBound(vm.clone());
     std::thread::spawn(move || loop {
-        let fd = match connect_vsock(&queue, &vm) {
+        let fd = match connect_vsock(&queue, &vm, SHELL_VSOCK_PORT) {
             Ok(fd) => fd,
             Err(_) => {
                 // Guest shell agent not up yet (or transient): retry
@@ -188,6 +206,7 @@ fn push_clock(fd: RawFd) -> Result<(), String> {
 fn connect_vsock(
     queue: &DispatchRetained<DispatchQueue>,
     vm: &QueueBound<Retained<VZVirtualMachine>>,
+    port: u32,
 ) -> Result<RawFd, String> {
     let (tx, rx) = mpsc::channel::<Result<RawFd, String>>();
     let vm = QueueBound(vm.0.clone());
@@ -225,7 +244,7 @@ fn connect_vsock(
                 });
             },
         );
-        unsafe { device.connectToPort_completionHandler(SHELL_VSOCK_PORT, &handler) };
+        unsafe { device.connectToPort_completionHandler(port, &handler) };
     });
     rx.recv_timeout(Duration::from_secs(10))
         .map_err(|_| "vsock connect timed out (is the guest shell agent up?)".to_string())?

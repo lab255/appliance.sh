@@ -232,6 +232,7 @@ impl VmBackend for VzBackend {
         // connection bridges to a fresh guest vsock PTY. Best-effort and
         // independent of k3s.
         shell::spawn_relay(&queue, &vm, paths.shell_sock());
+        shell::spawn_artifact_relay(&queue, &vm, paths.artifact_sock());
 
         // Push host wall-clock time into the guest at bring-up and
         // periodically. The guest clock lags the host (no NTP), and the
@@ -377,8 +378,21 @@ fn build_configuration(
             &disk_attachment,
         );
 
+        // Fixed second disk (vdb): root-only control-plane state, never a
+        // VirtioFS workload share and never part of the appliance-user disk.
+        let control_plane_attachment = VZDiskImageStorageDeviceAttachment::initWithURL_readOnly_error(
+            VZDiskImageStorageDeviceAttachment::alloc(),
+            &file_url(&paths.control_plane_disk()),
+            false,
+        )
+        .map_err(|e| anyhow!("control-plane disk attachment: {}", error_text(&e)))?;
+        let control_plane_device = VZVirtioBlockDeviceConfiguration::initWithAttachment(
+            VZVirtioBlockDeviceConfiguration::alloc(),
+            &control_plane_attachment,
+        );
+
         // Boot media (FAT volume with modloop + apkovl + k3s) as the
-        // second disk (vdb). Read-only: it's regenerated host-side.
+        // third disk (vdc). Read-only: it's regenerated host-side.
         let media_attachment = VZDiskImageStorageDeviceAttachment::initWithURL_readOnly_error(
             VZDiskImageStorageDeviceAttachment::alloc(),
             &file_url(boot_media),
@@ -390,11 +404,13 @@ fn build_configuration(
             &media_attachment,
         );
 
-        // Storage devices in vda, vdb[, vdc] order: data disk, boot media,
+        // Storage devices in vda, vdb, vdc[, ...] order: data disk,
+        // control-plane disk, boot media,
         // and — only when an agent-only VM has a verified image — the
         // prebuilt agent squashfs (vdc), read-only like the boot media.
         let mut storage: Vec<Retained<VZStorageDeviceConfiguration>> = vec![
             Retained::into_super(block_device),
+            Retained::into_super(control_plane_device),
             Retained::into_super(media_device),
         ];
         if let Some(agent_path) = agent_image {

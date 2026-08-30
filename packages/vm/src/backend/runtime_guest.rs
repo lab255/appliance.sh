@@ -228,7 +228,7 @@ fn path_for_state_comparison(path: &std::path::Path) -> std::path::PathBuf {
 /// Pure receive plan for a host-streamed artifact. Only fixed absolute guest
 /// paths are accepted; the guest checks the exact byte count and sha256 before
 /// atomically installing the partial file.
-#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
 pub(crate) fn artifact_receive_command(
     destination: &str,
     size: u64,
@@ -248,16 +248,44 @@ pub(crate) fn artifact_receive_command(
     Ok(format!(
         "set -eu\n\
          DEST='{destination}'\n\
-         PARTIAL=\"$DEST.partial\"\n\
-         trap 'rm -f \"$PARTIAL\"' EXIT HUP INT TERM\n\
-         mkdir -p \"${{DEST%/*}}\"\n\
-         cat > \"$PARTIAL\"\n\
-         ACTUAL_SIZE=$(wc -c < \"$PARTIAL\" | tr -d '[:space:]')\n\
-         [ \"$ACTUAL_SIZE\" = '{size}' ] || {{ echo \"artifact size mismatch: expected {size}, got $ACTUAL_SIZE\" >&2; exit 1; }}\n\
-         printf '%s  %s\\n' '{sha256}' \"$PARTIAL\" | sha256sum -c >/dev/null\n\
-         mv -f \"$PARTIAL\" \"$DEST\"\n\
-         trap - EXIT HUP INT TERM\n"
+         EXPECTED_SIZE='{size}'\n\
+         EXPECTED_SHA='{sha256}'\n\
+         {ARTIFACT_RECEIVE_BODY}"
     ))
+}
+
+const ARTIFACT_RECEIVE_BODY: &str = r#"PARTIAL="$DEST.partial"
+trap 'rm -f "$PARTIAL"' EXIT HUP INT TERM
+mkdir -p "${DEST%/*}"
+cat > "$PARTIAL"
+ACTUAL_SIZE=$(wc -c < "$PARTIAL" | tr -d '[:space:]')
+[ "$ACTUAL_SIZE" = "$EXPECTED_SIZE" ] || { echo "artifact size mismatch: expected $EXPECTED_SIZE, got $ACTUAL_SIZE" >&2; exit 1; }
+printf '%s  %s\n' "$EXPECTED_SHA" "$PARTIAL" | sha256sum -c >/dev/null
+chmod 0600 "$PARTIAL"
+mv -f "$PARTIAL" "$DEST"
+trap - EXIT HUP INT TERM
+"#;
+
+const CONTROL_PLANE_ARTIFACT_AGENT_HEADER: &str = r#"#!/bin/sh
+set -eu
+IFS=' ' read -r SLOT EXPECTED_SIZE EXPECTED_SHA EXTRA
+[ -z "${EXTRA:-}" ] || { echo "invalid artifact header" >&2; exit 2; }
+case "$SLOT" in
+  binary) DEST=/var/lib/appliance-control-plane/incoming/binary ;;
+  console) DEST=/var/lib/appliance-control-plane/incoming/console.tar.gz ;;
+  checksums) DEST=/var/lib/appliance-control-plane/incoming/appliance-api-server.sha256 ;;
+  properties) DEST=/var/lib/appliance-control-plane/incoming/control-plane-release.properties ;;
+  payload) DEST=/var/lib/appliance-control-plane/incoming/control-plane-release.json ;;
+  envelope) DEST=/var/lib/appliance-control-plane/incoming/control-plane-release.sig.json ;;
+  *) echo "invalid artifact slot" >&2; exit 2 ;;
+esac
+case "$EXPECTED_SIZE" in ''|*[!0-9]*) echo "invalid artifact size" >&2; exit 2;; esac
+[ "${#EXPECTED_SHA}" -eq 64 ] || { echo "invalid artifact sha256" >&2; exit 2; }
+case "$EXPECTED_SHA" in *[!0-9A-Fa-f]*) echo "invalid artifact sha256" >&2; exit 2;; esac
+"#;
+
+pub(crate) fn control_plane_artifact_agent() -> String {
+    format!("{CONTROL_PLANE_ARTIFACT_AGENT_HEADER}{ARTIFACT_RECEIVE_BODY}printf 'ok\\n'\n")
 }
 
 /// VZ shares are boot devices; drvfs payloads are acquired on demand by the
@@ -316,7 +344,6 @@ pub fn wsl_runtime_apk_install(repositories: &[&str], world: &[&str]) -> Result<
     ))
 }
 
-#[cfg(any(target_os = "windows", test))]
 pub(crate) fn shell_squote(value: &str) -> String {
     value.replace('\'', r#"'\''"#)
 }

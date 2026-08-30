@@ -582,6 +582,10 @@ impl VmPaths {
     pub fn disk(&self) -> PathBuf {
         self.dir.join("data.img")
     }
+    /// Root-only persistent control-plane state, separate from `data.img`.
+    pub fn control_plane_disk(&self) -> PathBuf {
+        self.dir.join("control-plane.img")
+    }
     pub fn console_log(&self) -> PathBuf {
         self.dir.join("console.log")
     }
@@ -637,6 +641,11 @@ impl VmPaths {
     #[cfg_attr(windows, allow(dead_code))]
     pub fn shell_sock(&self) -> PathBuf {
         self.dir.join("shell.sock")
+    }
+    /// Owner-only host relay for the raw, non-PTY artifact channel.
+    #[cfg_attr(windows, allow(dead_code))]
+    pub fn artifact_sock(&self) -> PathBuf {
+        self.dir.join("artifact.sock")
     }
     /// Owner-only control socket served by the resident Runtime host.
     /// Reconciliation processes request published forwards here so new

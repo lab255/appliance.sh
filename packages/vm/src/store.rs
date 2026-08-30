@@ -163,6 +163,26 @@ pub fn ensure_disk(spec: &VmSpec) -> Result<PathBuf> {
     Ok(disk)
 }
 
+/// Create the sparse VZ disk exclusively mounted at
+/// `/var/lib/appliance-control-plane`. WSL keeps that directory in its VHDX.
+pub fn ensure_control_plane_disk(spec: &VmSpec) -> Result<PathBuf> {
+    const CONTROL_PLANE_DISK_BYTES: u64 = 512 * 1024 * 1024;
+    let paths = VmPaths::for_name(&spec.name);
+    let disk = paths.control_plane_disk();
+    if cfg!(windows) {
+        return Ok(disk);
+    }
+    if !disk.exists() {
+        fs::create_dir_all(&paths.dir)?;
+        let file = fs::File::create(&disk)
+            .with_context(|| format!("create {}", disk.display()))?;
+        file.set_len(CONTROL_PLANE_DISK_BYTES)
+            .context("size control-plane disk")?;
+        crate::fs_acl::restrict_to_current_user(&disk)?;
+    }
+    Ok(disk)
+}
+
 /// Read a pidfile and check whether that process is still alive.
 pub fn read_live_pid(name: &str) -> Option<i32> {
     let paths = VmPaths::for_name(name);
