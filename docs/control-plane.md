@@ -238,6 +238,8 @@ asserts the underlying Windows probes.
 
 ### Remaining boundaries
 
+Control-plane image/binary update and recovery boundaries are decided in [control-plane-self-update.md](control-plane-self-update.md).
+
 Linux credential files remain cleartext at rest; owner-only mode/ACL limits
 ordinary cross-user reads but is not encryption. Desktop and CLI also do not
 share one cross-process metadata lock: each writes atomically, but a concurrent
