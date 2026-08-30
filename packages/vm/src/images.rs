@@ -121,7 +121,8 @@ const IMAGES: &[ImageDef] = &[ImageDef {
 /// Prebuilt agent image (docs/fast-spin-up.md §2): Node ≥22 + the three
 /// pinned agent CLIs baked into a read-only squashfs, built + hosted by the
 /// project (a GitHub release asset) and attached read-only as the agent-only
-/// VM's 3rd virtio-blk (vdc). Mirrors the `IMAGES` table: a per-arch URL +
+/// VM's contractual 3rd virtio-blk (vdc); the control-plane disk is appended
+/// after boot/agent/platform media and resolved by label. Mirrors `IMAGES`: a per-arch URL +
 /// committed sha256, keyed on one version const. A pin bump is one
 /// coordinated commit — this version + the two digests, alongside the
 /// adapter `install.version` (CI asserts they match — §2.7).

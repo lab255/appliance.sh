@@ -1,7 +1,7 @@
 mod backend;
 mod bringup;
-mod creds;
 mod control_plane;
+mod creds;
 mod doctor;
 mod egress;
 mod fs_acl;

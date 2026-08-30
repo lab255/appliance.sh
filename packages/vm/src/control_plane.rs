@@ -22,6 +22,7 @@ fn digest_open_file(file: &mut File) -> Result<String> {
     Ok(digest)
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 pub(crate) fn open_verified_artifact(
     path: &Path,
     expected_sha256: &str,
@@ -77,6 +78,9 @@ pub(crate) fn send_artifact(
     let mut source = open_verified_artifact(path, expected_sha256, expected_size)?;
     let mut stream = UnixStream::connect(socket_path)
         .with_context(|| format!("connect raw artifact relay {}", socket_path.display()))?;
+    let timeout = Some(std::time::Duration::from_secs(180));
+    stream.set_read_timeout(timeout)?;
+    stream.set_write_timeout(timeout)?;
     writeln!(
         stream,
         "{slot} {expected_size} {}",
@@ -96,13 +100,21 @@ pub(crate) fn send_artifact(
 mod tests {
     use super::*;
 
+    fn temp_test_root(label: &str) -> std::path::PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("ap-cp-{label}-{}-{nonce}", std::process::id()))
+    }
+
     #[cfg(unix)]
     #[test]
     fn raw_sender_preserves_header_and_bytes_with_a_fake_receiver() {
         use std::os::unix::net::UnixListener;
         use std::thread;
 
-        let root = std::env::temp_dir().join(format!("ap-cp-send-{}", std::process::id()));
+        let root = temp_test_root("send");
         std::fs::create_dir_all(&root).unwrap();
         let socket = root.join("receiver.sock");
         let source = root.join("artifact");
@@ -128,10 +140,7 @@ mod tests {
 
     #[test]
     fn sender_refuses_a_changed_open_handle_identity() {
-        let root = std::env::temp_dir().join(format!(
-            "appliance-control-plane-identity-{}",
-            std::process::id()
-        ));
+        let root = temp_test_root("identity");
         std::fs::create_dir_all(&root).unwrap();
         let source = root.join("artifact");
         std::fs::write(&source, b"changed").unwrap();

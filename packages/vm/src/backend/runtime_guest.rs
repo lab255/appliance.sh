@@ -254,7 +254,7 @@ pub(crate) fn artifact_receive_command(
     ))
 }
 
-const ARTIFACT_RECEIVE_BODY: &str = r#"PARTIAL="$DEST.partial"
+const ARTIFACT_RECEIVE_BODY: &str = r#"PARTIAL="$DEST.partial.$$"
 trap 'rm -f "$PARTIAL"' EXIT HUP INT TERM
 mkdir -p "${DEST%/*}"
 cat > "$PARTIAL"
@@ -266,12 +266,14 @@ mv -f "$PARTIAL" "$DEST"
 trap - EXIT HUP INT TERM
 "#;
 
-const CONTROL_PLANE_ARTIFACT_AGENT_HEADER: &str = r#"#!/bin/sh
+const CONTROL_PLANE_ARTIFACT_AGENT_HEADER: &str = r#"#!/bin/busybox sh
 set -eu
+# BusyBox ash `read` consumes the header one byte at a time. That invariant is
+# what leaves every artifact byte untouched on the same raw stream.
 IFS=' ' read -r SLOT EXPECTED_SIZE EXPECTED_SHA EXTRA
 [ -z "${EXTRA:-}" ] || { echo "invalid artifact header" >&2; exit 2; }
 case "$SLOT" in
-  binary) DEST=/var/lib/appliance-control-plane/incoming/binary ;;
+  binary) rm -rf /var/lib/appliance-control-plane/incoming/*; DEST=/var/lib/appliance-control-plane/incoming/binary ;;
   console) DEST=/var/lib/appliance-control-plane/incoming/console.tar.gz ;;
   checksums) DEST=/var/lib/appliance-control-plane/incoming/appliance-api-server.sha256 ;;
   properties) DEST=/var/lib/appliance-control-plane/incoming/control-plane-release.properties ;;
@@ -554,7 +556,7 @@ mod tests {
         assert_eq!(std::fs::read(&destination).unwrap(), b"payload");
         let check = std::fs::read_to_string(&digest_log).unwrap();
         assert!(check.starts_with(&digest));
-        assert!(check.ends_with("artifact.partial\n"));
+        assert!(check.contains("artifact.partial."));
 
         let rejected = root.join("stage/rejected");
         let command = artifact_receive_command(&rejected.to_string_lossy(), 8, &digest).unwrap();
@@ -581,6 +583,15 @@ mod tests {
             assert!(artifact_receive_command(destination, 1, &digest).is_err());
         }
         assert!(artifact_receive_command("/opt/appliance/artifact", 1, "not-a-digest").is_err());
+    }
+
+    #[test]
+    fn control_plane_receiver_is_busybox_pinned_and_clears_the_first_slot() {
+        let receiver = control_plane_artifact_agent();
+        assert!(receiver.starts_with("#!/bin/busybox sh\n"));
+        assert!(receiver.contains("read` consumes the header one byte at a time"));
+        assert!(receiver.contains("binary) rm -rf /var/lib/appliance-control-plane/incoming/*;"));
+        assert!(receiver.contains("PARTIAL=\"$DEST.partial.$$\""));
     }
 
     #[test]

@@ -14,8 +14,8 @@
 //! Requires the `com.apple.security.virtualization` entitlement —
 //! `scripts/sign-dev.sh` applies it ad-hoc for local builds.
 
-mod shell;
 mod runtime;
+mod shell;
 
 use super::VmBackend;
 use crate::netstack::Netstack;
@@ -378,8 +378,8 @@ fn build_configuration(
             &disk_attachment,
         );
 
-        // Fixed second disk (vdb): root-only control-plane state, never a
-        // VirtioFS workload share and never part of the appliance-user disk.
+        // Root-only control-plane state. Appended LAST below so contractual
+        // boot media vdb and optional agent squashfs vdc never move.
         let control_plane_attachment = VZDiskImageStorageDeviceAttachment::initWithURL_readOnly_error(
             VZDiskImageStorageDeviceAttachment::alloc(),
             &file_url(&paths.control_plane_disk()),
@@ -391,8 +391,8 @@ fn build_configuration(
             &control_plane_attachment,
         );
 
-        // Boot media (FAT volume with modloop + apkovl + k3s) as the
-        // third disk (vdc). Read-only: it's regenerated host-side.
+        // Boot media (FAT volume with modloop + apkovl + k3s) remains the
+        // second disk (vdb). Read-only: it's regenerated host-side.
         let media_attachment = VZDiskImageStorageDeviceAttachment::initWithURL_readOnly_error(
             VZDiskImageStorageDeviceAttachment::alloc(),
             &file_url(boot_media),
@@ -404,13 +404,11 @@ fn build_configuration(
             &media_attachment,
         );
 
-        // Storage devices in vda, vdb, vdc[, ...] order: data disk,
-        // control-plane disk, boot media,
-        // and — only when an agent-only VM has a verified image — the
-        // prebuilt agent squashfs (vdc), read-only like the boot media.
+        // Contractual order begins vda=data, vdb=boot media. Agent-only
+        // guests keep the prebuilt squashfs at vdc. Optional platform images
+        // follow, and the label-resolved control-plane disk is always LAST.
         let mut storage: Vec<Retained<VZStorageDeviceConfiguration>> = vec![
             Retained::into_super(block_device),
-            Retained::into_super(control_plane_device),
             Retained::into_super(media_device),
         ];
         if let Some(agent_path) = agent_image {
@@ -449,6 +447,7 @@ fn build_configuration(
             );
             storage.push(Retained::into_super(images_device));
         }
+        storage.push(Retained::into_super(control_plane_device));
 
         let entropy = VZVirtioEntropyDeviceConfiguration::new();
 

@@ -166,7 +166,10 @@ pub fn ensure_disk(spec: &VmSpec) -> Result<PathBuf> {
 /// Create the sparse VZ disk exclusively mounted at
 /// `/var/lib/appliance-control-plane`. WSL keeps that directory in its VHDX.
 pub fn ensure_control_plane_disk(spec: &VmSpec) -> Result<PathBuf> {
-    const CONTROL_PLANE_DISK_BYTES: u64 = 512 * 1024 * 1024;
+    // Keep current + previous + one candidate, plus extraction/headroom. The
+    // signed checksum sidecar is the sizing authority when a release is
+    // staged; the one-GiB floor keeps the initial filesystem practical.
+    let control_plane_disk_bytes = control_plane_disk_bytes();
     let paths = VmPaths::for_name(&spec.name);
     let disk = paths.control_plane_disk();
     if cfg!(windows) {
@@ -176,11 +179,44 @@ pub fn ensure_control_plane_disk(spec: &VmSpec) -> Result<PathBuf> {
         fs::create_dir_all(&paths.dir)?;
         let file = fs::File::create(&disk)
             .with_context(|| format!("create {}", disk.display()))?;
-        file.set_len(CONTROL_PLANE_DISK_BYTES)
+        file.set_len(control_plane_disk_bytes)
             .context("size control-plane disk")?;
         crate::fs_acl::restrict_to_current_user(&disk)?;
+    } else if fs::metadata(&disk)?.len() < control_plane_disk_bytes {
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&disk)?
+            .set_len(control_plane_disk_bytes)?;
     }
     Ok(disk)
+}
+
+fn control_plane_disk_bytes() -> u64 {
+    const MIB: u64 = 1024 * 1024;
+    const MINIMUM: u64 = 1024 * MIB;
+    const HEADROOM: u64 = 256 * MIB;
+    let signed_artifact_bytes = crate::guest::apiserver_assets()
+        .and_then(|assets| assets.release_evidence)
+        .and_then(|evidence| fs::read_to_string(evidence.checksums).ok())
+        .map(|checksums| {
+            checksums
+                .lines()
+                .filter_map(|line| line.split_whitespace().nth(2)?.parse::<u64>().ok())
+                .fold(0_u64, u64::saturating_add)
+        })
+        .unwrap_or(0);
+    control_plane_disk_bytes_for(signed_artifact_bytes, MINIMUM, HEADROOM, MIB)
+}
+
+fn control_plane_disk_bytes_for(
+    signed_artifact_bytes: u64,
+    minimum: u64,
+    headroom: u64,
+    alignment: u64,
+) -> u64 {
+    let required = signed_artifact_bytes.saturating_mul(3).saturating_add(headroom);
+    let rounded = required.saturating_add(alignment - 1) / alignment * alignment;
+    rounded.max(minimum)
 }
 
 /// Read a pidfile and check whether that process is still alive.
@@ -267,6 +303,13 @@ mod tests {
                 .join("vm")
         );
         std::fs::remove_dir_all(existing).unwrap();
+    }
+
+    #[test]
+    fn control_plane_disk_keeps_three_signed_releases_and_headroom() {
+        let mib = 1024 * 1024;
+        assert_eq!(control_plane_disk_bytes_for(100 * mib, 1024 * mib, 256 * mib, mib), 1024 * mib);
+        assert_eq!(control_plane_disk_bytes_for(400 * mib, 1024 * mib, 256 * mib, mib), 1456 * mib);
     }
 
     #[test]

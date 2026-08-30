@@ -1926,7 +1926,7 @@ mod tests {
     }
 
     #[test]
-    fn cluster_bootstrap_uses_only_streamed_api_artifacts() {
+    fn mv1_overlay_composes_streamed_artifacts_supervisor_update_and_pinned_key() {
         let mut s = spec("cluster");
         s.cluster = true;
         let assets = crate::guest::ApiServerAssets {
@@ -1967,6 +1967,23 @@ mod tests {
             "RELEASE_KEY_ID\" != \"ed25519:sha256:{}",
             "a".repeat(64)
         )));
+        assert!(script.contains("transport=wsl"));
+        assert!(script.contains("/run/appliance/capabilities/control-plane-update-v1"));
+        assert!(script.contains("read_pointer()"));
+        assert!(script.contains("releases/$VERSION-$SHA12"));
+        assert!(script.contains("release generation downgrade"));
+        assert!(script.contains(&format!(
+            "[ \"$KEY_ID\" = 'ed25519:sha256:{}' ]",
+            "a".repeat(64)
+        )));
+        for marker in [
+            "__CONTROL_PLANE_PROVISION__",
+            "__CONTROL_PLANE_SUPERVISOR__",
+            "__CONTROL_PLANE_UPDATE__",
+            "__PINNED_RELEASE_KEY_ID__",
+        ] {
+            assert!(!script.contains(marker), "{marker} must be substituted");
+        }
         assert!(!script.contains(r"C:\Users\Avery"));
         assert!(!script.contains("wslpath"));
         assert!(!script.contains("/mnt/c"));

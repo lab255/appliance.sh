@@ -157,9 +157,13 @@ fn ensure_modloop() -> Result<PathBuf> {
 /// Volume label of the platform-images media (the FAT wrapper around the
 /// k3s airgap tarball, attached as an extra read-only virtio-blk on k3s
 /// VMs). The guest probes `blkid` for THIS LABEL — never a device node:
-/// /dev/vdc is the agent image on agent-only VMs, and device order is an
-/// attachment detail, not a contract. A guest test locks the probe.
+/// `/dev/vdc` remains the contractual agent image on agent-only VMs. The
+/// platform image is label-resolved because its optional position is not a
+/// contract. A guest test locks these nodes to VZ's attachment order.
 pub const K3S_AIRGAP_VOLUME_LABEL: &str = "K3SIMAGES";
+
+const VZ_BOOT_MEDIA_DEVICE: &str = "/dev/vdb";
+const VZ_AGENT_IMAGE_DEVICE: &str = "/dev/vdc";
 
 /// File name the airgap tarball rides under, both on the media and in
 /// `$PERSIST/k3s/agent/images/` (k3s auto-imports anything there).
@@ -320,18 +324,21 @@ fn release_evidence_well_formed(evidence: &ApiServerReleaseEvidence) -> bool {
     let Ok(properties) = fs::read_to_string(&evidence.properties) else { return false };
     let mut key_id = None;
     let mut version = None;
+    let mut generation = None;
     let mut arch = None;
     for line in properties.lines() {
         let Some((key, value)) = line.split_once('=') else { return false };
         match key {
             "keyId" if key_id.is_none() => key_id = Some(value),
             "version" if version.is_none() => version = Some(value),
+            "generation" if generation.is_none() => generation = value.parse::<u64>().ok(),
             "arch" if arch.is_none() => arch = Some(value),
             _ => return false,
         }
     }
     if key_id.is_none_or(|value| value.is_empty() || validate_pinned_release_key_id(value).is_err())
         || version.is_none_or(str::is_empty)
+        || generation.is_none()
         || !matches!(arch, Some("x64" | "arm64"))
     {
         return false;
@@ -339,6 +346,7 @@ fn release_evidence_well_formed(evidence: &ApiServerReleaseEvidence) -> bool {
 
     let Some(key_id) = key_id else { return false };
     let Some(version) = version else { return false };
+    let Some(generation) = generation else { return false };
     let Some(arch) = arch else { return false };
     let Ok(payload_raw) = fs::read_to_string(&evidence.payload) else { return false };
     let Ok(payload) = serde_json::from_str::<serde_json::Value>(&payload_raw) else { return false };
@@ -353,6 +361,7 @@ fn release_evidence_well_formed(evidence: &ApiServerReleaseEvidence) -> bool {
     };
     if payload.get("kind").and_then(serde_json::Value::as_str) != Some("control-plane-release")
         || payload.get("version").and_then(serde_json::Value::as_str) != Some(version)
+        || payload.get("generation").and_then(serde_json::Value::as_u64) != Some(generation)
         || !artifact_matches(&binary_name, binary_row)
         || !artifact_matches("appliance-console.tar.gz", console_row)
     {
@@ -527,10 +536,19 @@ __APISERVER_PROVISION__
 
 const VZ_CONTROL_PLANE_PROVISION: &str = r#"CONTROL_PLANE_ROOT=/var/lib/appliance-control-plane
 mkdir -p "$CONTROL_PLANE_ROOT"
-if [ -z "$(blkid /dev/vdb 2>/dev/null)" ]; then
-  mkfs.ext4 -q -L appliance-control-plane /dev/vdb
+CONTROL_PLANE_DEVICE=$(blkid -L appliance-control-plane 2>/dev/null || true)
+if [ -z "$CONTROL_PLANE_DEVICE" ]; then
+  for DEVICE in /dev/vd?; do
+    [ -b "$DEVICE" ] || continue
+    DEVICE_INFO=$(blkid "$DEVICE" 2>/dev/null || true)
+    case "$DEVICE_INFO" in *'TYPE='*|*'LABEL='*) continue;; esac
+    if mkfs.ext4 -q -L appliance-control-plane "$DEVICE"; then
+      CONTROL_PLANE_DEVICE=$(blkid -L appliance-control-plane 2>/dev/null || true)
+      break
+    fi
+  done
 fi
-if mount -t ext4 -o nodev,nosuid /dev/vdb "$CONTROL_PLANE_ROOT"; then
+if [ -n "$CONTROL_PLANE_DEVICE" ] && { mount -t ext4 -o nodev,nosuid,nosymfollow "$CONTROL_PLANE_DEVICE" "$CONTROL_PLANE_ROOT" 2>/dev/null || { echo "appliance-control-plane: nosymfollow unavailable; falling back to root-only mount" >&2; mount -t ext4 -o nodev,nosuid "$CONTROL_PLANE_DEVICE" "$CONTROL_PLANE_ROOT"; }; }; then
   chown root:root "$CONTROL_PLANE_ROOT"
   chmod 0700 "$CONTROL_PLANE_ROOT"
   mkdir -p "$CONTROL_PLANE_ROOT/releases" "$CONTROL_PLANE_ROOT/incoming" /run/appliance/capabilities
@@ -747,10 +765,10 @@ __AGENT_DOCKER_STUB__
 # was attached the device is absent, and the npm self-heal below installs
 # the CLIs into /persist/npm-global instead.
 mkdir -p /opt/appliance/agents
-if mount -t squashfs -o ro /dev/vdc /opt/appliance/agents 2>/dev/null; then
+if mount -t squashfs -o ro __AGENT_IMAGE_DEVICE__ /opt/appliance/agents 2>/dev/null; then
   echo "appliance-agents: mounted prebuilt agent image (read-only) at /opt/appliance/agents"
 else
-  echo "appliance-agents: no prebuilt agent image on /dev/vdc — CLIs self-heal via npm into /persist/npm-global"
+  echo "appliance-agents: no prebuilt agent image on __AGENT_IMAGE_DEVICE__ — CLIs self-heal via npm into /persist/npm-global"
 fi
 # npm's global prefix lives on the ext4 data disk (/persist/npm-global),
 # OFF the VirtioFS workspace mount — this ends the repo pollution and the
@@ -1237,7 +1255,9 @@ __APISERVER_SEED_VERIFY__
       case "$RELEASE_VERSION" in
         ''|*[!0-9A-Za-z._+-]*) seed_warning "invalid signed release version; persistent seed refused" ;;
         *)
-          SEED_RELEASE="$CONTROL_PLANE_ROOT/releases/$RELEASE_VERSION"
+          SEED_SHA12=$(printf '%s' "$EXPECTED_BINARY_SHA" | cut -c1-12)
+          SEED_TARGET="releases/$RELEASE_VERSION-$SEED_SHA12"
+          SEED_RELEASE="$CONTROL_PLANE_ROOT/$SEED_TARGET"
           rm -rf "$SEED_RELEASE.seed"
           mkdir -p "$SEED_RELEASE.seed"
           cp "$APISERVER_DEST" "$SEED_RELEASE.seed/binary"
@@ -1250,8 +1270,10 @@ __APISERVER_SEED_VERIFY__
           if [ -d "$CONSOLE_DEST" ]; then cp -R "$CONSOLE_DEST" "$SEED_RELEASE.seed/console"; fi
           chmod -R go-rwx "$SEED_RELEASE.seed"
           if [ ! -d "$SEED_RELEASE" ]; then mv "$SEED_RELEASE.seed" "$SEED_RELEASE"; else rm -rf "$SEED_RELEASE.seed"; fi
-          ln -s "releases/$RELEASE_VERSION" "$CONTROL_PLANE_ROOT/current.new"
-          mv -Tf "$CONTROL_PLANE_ROOT/current.new" "$CONTROL_PLANE_ROOT/current"
+          printf '%s\n' "$SEED_TARGET" > "$CONTROL_PLANE_ROOT/current.new"
+          mv -f "$CONTROL_PLANE_ROOT/current.new" "$CONTROL_PLANE_ROOT/current"
+          printf '%s\n' "$RELEASE_GENERATION" > "$CONTROL_PLANE_ROOT/generation.new"
+          mv -f "$CONTROL_PLANE_ROOT/generation.new" "$CONTROL_PLANE_ROOT/generation"
           ;;
       esac
     fi
@@ -1287,8 +1309,9 @@ pub(crate) const APISERVER_SEED_VERIFY: &str = r#"  EXPECTED_BINARY_SHA=$(awk '$
   ACTUAL_BINARY_SIZE=$(wc -c < "$APISERVER_SRC" 2>/dev/null | awk '{print $1}')
   RELEASE_KEY_ID=$(awk -F= '$1 == "keyId" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
   RELEASE_VERSION=$(awk -F= '$1 == "version" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  RELEASE_GENERATION=$(awk -F= '$1 == "generation" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
   SIDECAR_ARCH=$(awk -F= '$1 == "arch" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
-  if [ -z "$RELEASE_KEY_ID" ] || [ "$RELEASE_KEY_ID" != "__PINNED_RELEASE_KEY_ID__" ] || [ -z "$RELEASE_VERSION" ] || [ "$SIDECAR_ARCH" != "$RELEASE_ARCH" ] || [ -z "$EXPECTED_BINARY_SHA" ] || [ -z "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ]; then
+  if [ -z "$RELEASE_KEY_ID" ] || [ "$RELEASE_KEY_ID" != "__PINNED_RELEASE_KEY_ID__" ] || [ -z "$RELEASE_VERSION" ] || [ -z "$RELEASE_GENERATION" ] || [ "$SIDECAR_ARCH" != "$RELEASE_ARCH" ] || [ -z "$EXPECTED_BINARY_SHA" ] || [ -z "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ]; then
     SEED_ERROR="signed control-plane seed digest/size mismatch; api-server start refused"
     SEED_OK=0
   fi
@@ -1306,16 +1329,46 @@ set -eu
 ROOT=${CONTROL_PLANE_ROOT:-/var/lib/appliance-control-plane}
 INCOMING="$ROOT/incoming"
 RUN=${APPLIANCE_CONTROL_PLANE_RUN:-/run/appliance/control-plane}
-PROPERTIES="$INCOMING/control-plane-release.properties"
-CHECKSUMS="$INCOMING/appliance-api-server.sha256"
 fail() { echo "control-plane update refused: $*" >&2; exit 1; }
 [ -f /run/appliance/capabilities/control-plane-update-v1 ] || fail "launcher capability missing"
-[ -f "$PROPERTIES" ] && [ -f "$CHECKSUMS" ] && [ -f "$INCOMING/binary" ] || fail "incomplete artifact set"
+read_pointer() {
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  POINTER=$(cat "$1" 2>/dev/null) || return 1
+  case "$POINTER" in releases/*) LEAF=${POINTER#releases/};; *) return 1;; esac
+  case "$LEAF" in ''|.|..|*/*|*[!0-9A-Za-z._+-]*) return 1;; esac
+  [ "$POINTER" = "releases/$LEAF" ] || return 1
+  printf '%s\n' "$POINTER"
+}
+CURRENT=$(read_pointer "$ROOT/current" 2>/dev/null || true)
+PREVIOUS=$(read_pointer "$ROOT/previous" 2>/dev/null || true)
+PENDING=$(read_pointer "$ROOT/pending" 2>/dev/null || true)
+for DIR in "$ROOT"/releases/*; do
+  [ -d "$DIR" ] || continue
+  REL="releases/${DIR##*/}"
+  [ "$REL" = "$CURRENT" ] || [ "$REL" = "$PREVIOUS" ] || [ "$REL" = "$PENDING" ] || rm -rf "$DIR"
+done
+NEW="$ROOT/releases/.candidate.$$"
+rm -rf "$NEW"
+mkdir -p "$NEW"
+trap 'rm -rf "$NEW"' EXIT HUP INT TERM
+for NAME in binary console.tar.gz appliance-api-server.sha256 control-plane-release.properties control-plane-release.json control-plane-release.sig.json; do
+  [ ! -L "$INCOMING/$NAME" ] || fail "$NAME may not be a symlink"
+  [ ! -f "$INCOMING/$NAME" ] || cp "$INCOMING/$NAME" "$NEW/$NAME"
+done
+rm -rf "$INCOMING"/*
+PROPERTIES="$NEW/control-plane-release.properties"
+CHECKSUMS="$NEW/appliance-api-server.sha256"
+[ -f "$PROPERTIES" ] && [ -f "$CHECKSUMS" ] && [ -f "$NEW/binary" ] || fail "incomplete artifact set"
 KEY_ID=$(awk -F= '$1 == "keyId" { print $2; exit }' "$PROPERTIES")
 VERSION=$(awk -F= '$1 == "version" { print $2; exit }' "$PROPERTIES")
+GENERATION=$(awk -F= '$1 == "generation" { print $2; exit }' "$PROPERTIES")
 ARCH=$(awk -F= '$1 == "arch" { print $2; exit }' "$PROPERTIES")
 [ -n "$KEY_ID" ] && [ "$KEY_ID" = '__PINNED_RELEASE_KEY_ID__' ] || fail "release keyId is not pinned"
 case "$VERSION" in ''|*[!0-9A-Za-z._+-]*) fail "invalid release version";; esac
+case "$GENERATION" in ''|*[!0-9]*) fail "invalid release generation";; esac
+PROMOTED_GENERATION=$(cat "$ROOT/generation" 2>/dev/null || printf '0')
+case "$PROMOTED_GENERATION" in ''|*[!0-9]*) fail "invalid persisted release generation";; esac
+[ "$GENERATION" -ge "$PROMOTED_GENERATION" ] || fail "release generation downgrade"
 case "$(uname -m)" in x86_64) EXPECTED_ARCH=x64;; aarch64|arm64) EXPECTED_ARCH=arm64;; *) EXPECTED_ARCH=unsupported;; esac
 [ "$ARCH" = "$EXPECTED_ARCH" ] || fail "release architecture mismatch"
 verify_artifact() {
@@ -1328,20 +1381,10 @@ verify_artifact() {
   [ "$ACTUAL_SIZE" = "$EXPECTED_SIZE" ] || fail "$NAME size mismatch"
   printf '%s  %s\n' "$EXPECTED_SHA" "$FILE" | sha256sum -c >/dev/null || fail "$NAME sha256 mismatch"
 }
-verify_artifact "$INCOMING/binary" appliance-api-server 1
-verify_artifact "$INCOMING/console.tar.gz" appliance-console.tar.gz 0
-[ ! -L "$INCOMING/binary" ] || fail "candidate binary may not be a symlink"
-RELEASE="$ROOT/releases/$VERSION"
-NEW="$RELEASE.new"
-rm -rf "$NEW"
-mkdir -p "$NEW"
-cp "$INCOMING/binary" "$NEW/binary"
+verify_artifact "$NEW/binary" appliance-api-server 1
+verify_artifact "$NEW/console.tar.gz" appliance-console.tar.gz 0
 chmod 0500 "$NEW/binary"
-for NAME in appliance-api-server.sha256 control-plane-release.properties control-plane-release.json control-plane-release.sig.json; do
-  [ ! -f "$INCOMING/$NAME" ] || cp "$INCOMING/$NAME" "$NEW/$NAME"
-done
-if [ -f "$INCOMING/console.tar.gz" ]; then
-  cp "$INCOMING/console.tar.gz" "$NEW/console.tar.gz"
+if [ -f "$NEW/console.tar.gz" ]; then
   mkdir -p "$NEW/console"
   if ! tar -xzf "$NEW/console.tar.gz" -C "$NEW/console" 2>/dev/null; then
     echo "control-plane update: signed console extraction failed; candidate will run headless" >&2
@@ -1349,13 +1392,29 @@ if [ -f "$INCOMING/console.tar.gz" ]; then
   fi
 fi
 chmod -R go-rwx "$NEW"
-rm -rf "$RELEASE"
-mv "$NEW" "$RELEASE"
-ln -s "releases/$VERSION" "$ROOT/pending.new"
-mv -Tf "$ROOT/pending.new" "$ROOT/pending"
+EXPECTED_SHA=$(awk '$2 == "appliance-api-server" { print $1; exit }' "$CHECKSUMS")
+SHA12=$(printf '%s' "$EXPECTED_SHA" | cut -c1-12)
+TARGET="releases/$VERSION-$SHA12"
+RELEASE="$ROOT/$TARGET"
+if [ -d "$RELEASE" ]; then
+  verify_artifact "$RELEASE/binary" appliance-api-server 1 || fail "existing release content collision"
+  rm -rf "$NEW"
+else
+  mv "$NEW" "$RELEASE"
+fi
+trap - EXIT HUP INT TERM
+if [ "$CURRENT" = "$TARGET" ]; then
+  printf '%s\n' "$GENERATION" > "$ROOT/generation.new"
+  mv -f "$ROOT/generation.new" "$ROOT/generation"
+  echo "already at $VERSION"
+  exit 0
+fi
+printf '%s\n' "$TARGET" > "$ROOT/pending.new"
+mv -f "$ROOT/pending.new" "$ROOT/pending"
 mkdir -p "$RUN"
 rm -f "$RUN/outcome"
-printf '%s\n' "$VERSION" > "$RUN/request"
+printf '%s\n' "$VERSION" > "$RUN/request.new"
+mv -f "$RUN/request.new" "$RUN/request"
 if [ -s "$RUN/server.pid" ]; then kill "$(cat "$RUN/server.pid")" 2>/dev/null || true; fi
 for _ in $(seq 1 30); do
   if [ -s "$RUN/outcome" ]; then cat "$RUN/outcome"; exit 0; fi
@@ -1373,23 +1432,57 @@ PORT=${PORT:-9091}
 FD_ROOT=${APPLIANCE_FD_ROOT:-/proc/self/fd}
 mkdir -p "$RUN"
 write_outcome() { printf '%s\n' "$*" > "$RUN/outcome.new"; mv -f "$RUN/outcome.new" "$RUN/outcome"; }
+read_pointer() {
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  POINTER=$(cat "$1" 2>/dev/null) || return 1
+  case "$POINTER" in releases/*) LEAF=${POINTER#releases/};; *) return 1;; esac
+  case "$LEAF" in ''|.|..|*/*|*[!0-9A-Za-z._+-]*) return 1;; esac
+  [ "$POINTER" = "releases/$LEAF" ] || return 1
+  printf '%s\n' "$POINTER"
+}
+write_pointer() { printf '%s\n' "$2" > "$1.new"; mv -f "$1.new" "$1"; }
+restore_previous() {
+  PREVIOUS_TARGET=$(read_pointer "$ROOT/previous" 2>/dev/null || true)
+  if [ -n "$PREVIOUS_TARGET" ] && [ -d "$ROOT/$PREVIOUS_TARGET" ]; then
+    write_pointer "$ROOT/current" "$PREVIOUS_TARGET"
+    echo "appliance-api-server: restored previous release $PREVIOUS_TARGET" >> "$LOG"
+    return 0
+  fi
+  return 1
+}
+launch_legacy() {
+  echo "appliance-api-server: persistent release unavailable — respawning legacy seed" >> "$LOG"
+  if [ "${APPLIANCE_TEST_ONCE:-0}" = 1 ]; then return 0; fi
+  /usr/local/bin/appliance-api-server >> "$LOG" 2>&1
+  sleep 2
+}
+remove_unreferenced_release() {
+  REJECTED=$1
+  [ -n "$REJECTED" ] || return 0
+  CURRENT_TARGET=$(read_pointer "$ROOT/current" 2>/dev/null || true)
+  PREVIOUS_TARGET=$(read_pointer "$ROOT/previous" 2>/dev/null || true)
+  [ "$REJECTED" = "$CURRENT_TARGET" ] || [ "$REJECTED" = "$PREVIOUS_TARGET" ] || rm -rf "$ROOT/$REJECTED"
+}
 rollback_pending() {
   VERSION=$1 REASON=$2
+  REJECTED=$(read_pointer "$ROOT/pending" 2>/dev/null || true)
   rm -f "$ROOT/pending"
+  remove_unreferenced_release "$REJECTED"
   write_outcome "rollback $VERSION $REASON"
   echo "appliance-api-server: candidate $VERSION rolled back ($REASON)" >> "$LOG"
 }
 while :; do
   MODE=current
-  LINK=$ROOT/current
-  if [ -L "$ROOT/pending" ]; then MODE=pending; LINK=$ROOT/pending; fi
-  if [ ! -L "$LINK" ]; then
-    echo "appliance-api-server: persistent release link missing — respawning legacy seed" >> "$LOG"
-    /usr/local/bin/appliance-api-server >> "$LOG" 2>&1
-    sleep 2
+  TARGET=$(read_pointer "$ROOT/current" 2>/dev/null || true)
+  PENDING_TARGET=$(read_pointer "$ROOT/pending" 2>/dev/null || true)
+  if [ -n "$PENDING_TARGET" ]; then MODE=pending; TARGET=$PENDING_TARGET; fi
+  if [ -z "$TARGET" ]; then
+    rm -f "$ROOT/current"
+    if restore_previous; then continue; fi
+    launch_legacy
+    [ "${APPLIANCE_TEST_ONCE:-0}" = 1 ] && exit 0
     continue
   fi
-  TARGET=$(readlink "$LINK")
   RELEASE="$ROOT/$TARGET"
   PROPERTIES="$RELEASE/control-plane-release.properties"
   CHECKSUMS="$RELEASE/appliance-api-server.sha256"
@@ -1397,16 +1490,25 @@ while :; do
   EXPECTED_SHA=$(awk '$2 == "appliance-api-server" { print $1; exit }' "$CHECKSUMS" 2>/dev/null)
   BINARY="$RELEASE/binary"
   if [ -z "$VERSION" ] || [ -z "$EXPECTED_SHA" ] || [ ! -f "$BINARY" ] || [ -L "$BINARY" ]; then
-    [ "$MODE" = pending ] && rollback_pending "${VERSION:-unknown}" invalid-release
+    if [ "$MODE" = pending ]; then
+      rollback_pending "${VERSION:-unknown}" invalid-release
+    else
+      rm -f "$ROOT/current"
+      remove_unreferenced_release "$TARGET"
+      if ! restore_previous; then launch_legacy; fi
+    fi
     [ "${APPLIANCE_TEST_ONCE:-0}" = 1 ] && exit 0
-    sleep 2
     continue
   fi
-  exec 9< "$BINARY" || { [ "$MODE" = pending ] && rollback_pending "$VERSION" open-failed; sleep 2; continue; }
+  if ! exec 9< "$BINARY"; then
+    if [ "$MODE" = pending ]; then rollback_pending "$VERSION" open-failed; else rm -f "$ROOT/current"; remove_unreferenced_release "$TARGET"; restore_previous || launch_legacy; fi
+    [ "${APPLIANCE_TEST_ONCE:-0}" = 1 ] && exit 0
+    continue
+  fi
   ACTUAL_SHA=$(sha256sum "$FD_ROOT/9" 2>/dev/null | awk '{print $1}')
   if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
     exec 9<&-
-    [ "$MODE" = pending ] && rollback_pending "$VERSION" bad-hash
+    if [ "$MODE" = pending ]; then rollback_pending "$VERSION" bad-hash; else rm -f "$ROOT/current"; remove_unreferenced_release "$TARGET"; restore_previous || launch_legacy; fi
     [ "${APPLIANCE_TEST_ONCE:-0}" = 1 ] && exit 0
     sleep 2
     continue
@@ -1434,11 +1536,13 @@ while :; do
       if printf '%s' "$STATUS" | grep -F '"initialized":true' >/dev/null; then REASON=wrong-version; fi
     done
     if [ "$HEALTHY" = 1 ]; then
-      OLD=$(readlink "$ROOT/current" 2>/dev/null || true)
-      if [ -n "$OLD" ]; then ln -s "$OLD" "$ROOT/previous.new"; mv -Tf "$ROOT/previous.new" "$ROOT/previous"; fi
-      ln -s "$TARGET" "$ROOT/current.new"
-      mv -Tf "$ROOT/current.new" "$ROOT/current"
+      OLD=$(read_pointer "$ROOT/current" 2>/dev/null || true)
+      if [ -n "$OLD" ]; then write_pointer "$ROOT/previous" "$OLD"; fi
+      write_pointer "$ROOT/current" "$TARGET"
       rm -f "$ROOT/pending"
+      GENERATION=$(awk -F= '$1 == "generation" { print $2; exit }' "$PROPERTIES" 2>/dev/null)
+      printf '%s\n' "$GENERATION" > "$ROOT/generation.new"
+      mv -f "$ROOT/generation.new" "$ROOT/generation"
       write_outcome "success $VERSION"
       echo "appliance-api-server: promoted $VERSION" >> "$LOG"
       if [ "${APPLIANCE_TEST_ONCE:-0}" = 1 ]; then kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; exit 0; fi
@@ -1530,6 +1634,13 @@ spec:
               number: 80
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-system
+  labels:
+    appliance.sh/control-plane: "true"
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: appliance-api-server
@@ -1595,8 +1706,33 @@ spec:
   validationActions: [Deny]
   matchResources:
     namespaceSelector:
-      matchLabels:
-        appliance.sh/workload-namespace: "true"
+      matchExpressions:
+      - key: appliance.sh/control-plane
+        operator: DoesNotExist
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: appliance-control-plane-volume-isolation
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["pods"]
+  validations:
+  - expression: "!has(object.spec.volumes) || object.spec.volumes.all(v, !has(v.hostPath) || (v.hostPath.path != '/var/lib/appliance-control-plane' && !v.hostPath.path.startsWith('/var/lib/appliance-control-plane/')))"
+    message: "the Appliance control-plane volume is not available to pods"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: appliance-control-plane-volume-isolation
+spec:
+  policyName: appliance-control-plane-volume-isolation
+  validationActions: [Deny]
 APIMANIFEST
   # Launcher: wait for k3s + the SA token, write the base config, then
   # supervise the binary. Backgrounded — k3s readiness never waits on it.
@@ -1657,7 +1793,7 @@ BASECFG
     export NODE_EXTRA_CA_CERTS="$PERSIST/k3s/server/tls/server-ca.crt"
     : > /persist/.apiserver-ready
     echo "appliance-api-server: launching (guest port __APISERVER_GUEST_PORT__)"
-    if [ -x /usr/local/bin/appliance-control-plane-supervisor ] && [ -L "$CONTROL_PLANE_ROOT/current" ]; then
+    if [ -x /usr/local/bin/appliance-control-plane-supervisor ] && [ -f "$CONTROL_PLANE_ROOT/current" ]; then
       /usr/local/bin/appliance-control-plane-supervisor
     else
       while :; do
@@ -3088,6 +3224,7 @@ fn build_apkovl_for_readiness(
             .replace("__BUILDKITD_GUEST_PORT__", &BUILDKITD_GUEST_PORT.to_string())
             .replace("__SHELL_VSOCK_PORT__", &SHELL_VSOCK_PORT.to_string())
             .replace("__ARTIFACT_VSOCK_PORT__", &ARTIFACT_VSOCK_PORT.to_string())
+            .replace("__AGENT_IMAGE_DEVICE__", VZ_AGENT_IMAGE_DEVICE)
             .replace("__APP_USER_PROVISION__", &app_user_provision)
             .replace("__DEV_PROVISION__", if dev { DEV_PROVISION } else { "" })
             .replace("__RUNTIME_PROVISION__", if runtime { RUNTIME_PROVISION } else { "" })
@@ -3419,7 +3556,8 @@ pub fn build_boot_media(
 /// media automatically once it can mount it.
 pub fn guest_cmdline() -> String {
     format!(
-        "console=hvc0 ip=dhcp alpine_repo=https://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/main modloop=/media/vdb/boot/modloop-virt"
+        "console=hvc0 ip=dhcp alpine_repo=https://dl-cdn.alpinelinux.org/alpine/{ALPINE_BRANCH}/main modloop=/media/{}/boot/modloop-virt",
+        VZ_BOOT_MEDIA_DEVICE.trim_start_matches("/dev/")
     )
 }
 
@@ -3427,7 +3565,10 @@ pub fn guest_cmdline() -> String {
 /// DHCP remains enabled for the Netstack link, but no package/rootfs bytes
 /// traverse that boundary before the supervisor is ready.
 pub fn runtime_guest_cmdline() -> String {
-    "console=hvc0 ip=dhcp alpine_repo=auto modloop=/media/vdb/boot/modloop-virt".to_string()
+    format!(
+        "console=hvc0 ip=dhcp alpine_repo=auto modloop=/media/{}/boot/modloop-virt",
+        VZ_BOOT_MEDIA_DEVICE.trim_start_matches("/dev/")
+    )
 }
 
 /// Which independently observable guest layer `host_services` gates on.
@@ -4222,12 +4363,12 @@ mod tests {
         ).unwrap();
         fs::write(
             root.join("control-plane-release.properties"),
-            format!("keyId=ed25519:sha256:{}\nversion=1.57.0\narch=x64\n", "c".repeat(64)),
+            format!("keyId=ed25519:sha256:{}\nversion=1.57.0\ngeneration=225\narch=x64\n", "c".repeat(64)),
         ).unwrap();
         fs::write(
             root.join("control-plane-release.json"),
             format!(
-                r#"{{"kind":"control-plane-release","version":"1.57.0","artifacts":[{{"name":"appliance-api-server-linux-x64","sha256":"{}","size":15}},{{"name":"appliance-console.tar.gz","sha256":"{}","size":20}}]}}"#,
+                r#"{{"kind":"control-plane-release","version":"1.57.0","generation":225,"artifacts":[{{"name":"appliance-api-server-linux-x64","sha256":"{}","size":15}},{{"name":"appliance-console.tar.gz","sha256":"{}","size":20}}]}}"#,
                 "a".repeat(64), "b".repeat(64)
             ),
         ).unwrap();
@@ -4372,7 +4513,7 @@ mod tests {
         .unwrap();
         let properties = root.join("control-plane-release.properties");
         let arch = if std::env::consts::ARCH == "aarch64" { "arm64" } else { "x64" };
-        fs::write(&properties, format!("keyId={key_id}\nversion=1.57.0\narch={arch}\n")).unwrap();
+        fs::write(&properties, format!("keyId={key_id}\nversion=1.57.0\ngeneration=225\narch={arch}\n")).unwrap();
         let script = APISERVER_SEED_VERIFY.replace("__PINNED_RELEASE_KEY_ID__", &key_id);
         let source_path = shell_path(&shell, &source);
         let checksums_path = shell_path(&shell, &checksums);
@@ -4659,6 +4800,25 @@ mod tests {
         let start = apkovl_file(&agent, "etc/local.d/appliance.start").unwrap();
         assert!(!start.contains("APPLIANCE_AIRGAP_PROBE"), "no airgap preload on agent-only VMs");
         assert!(!start.contains("__K3S_AIRGAP_PREAMBLE__"));
+    }
+
+    #[test]
+    fn vz_media_nodes_match_the_storage_attachment_contract() {
+        assert!(guest_cmdline().contains("modloop=/media/vdb/"));
+        assert!(runtime_guest_cmdline().contains("modloop=/media/vdb/"));
+
+        let agent = build_apkovl(5052, None, true, false, false, 5053, true, "agent", 8081, "", false)
+            .unwrap();
+        let start = apkovl_file(&agent, "etc/local.d/appliance.start").unwrap();
+        assert!(start.contains("mount -t squashfs -o ro /dev/vdc /opt/appliance/agents"));
+
+        let source = include_str!("backend/vz/mod.rs");
+        let data = source.find("Retained::into_super(block_device)").unwrap();
+        let boot = source.find("Retained::into_super(media_device)").unwrap();
+        let agent = source.find("storage.push(Retained::into_super(agent_device))").unwrap();
+        let platform = source.find("storage.push(Retained::into_super(images_device))").unwrap();
+        let control = source.find("storage.push(Retained::into_super(control_plane_device))").unwrap();
+        assert!(data < boot && boot < agent && agent < platform && platform < control);
     }
 
     #[test]
@@ -5167,15 +5327,19 @@ done >> "$CTR_ARGV"
             "", 8081, "token", Some(ReleaseGate { pinned_key_id: &key, evidence: None, poison: false }),
         ).unwrap();
         let start = apkovl_file(&overlay, "etc/local.d/appliance.start").unwrap();
-        assert!(start.contains("mount -t ext4 -o nodev,nosuid /dev/vdb"));
+        assert!(start.contains("blkid -L appliance-control-plane"));
+        assert!(start.contains("nosymfollow"));
+        assert!(!start.contains("mkfs.ext4 -q -L appliance-control-plane /dev/vdb"));
         assert!(start.contains("/run/appliance/capabilities/control-plane-update-v1"));
         assert!(start.contains(&format!("VSOCK-LISTEN:{ARTIFACT_VSOCK_PORT}")));
         assert!(start.contains("EXEC:/usr/local/bin/appliance-control-plane-artifact-agent,stderr"));
         assert!(start.contains("pod-security.kubernetes.io/enforce: restricted"));
         assert!(start.contains("!has(v.hostPath)"));
+        assert!(start.contains("operator: DoesNotExist"));
+        assert!(start.contains("appliance-control-plane/')))"));
         assert!(start.contains("appliance-control-plane-supervisor"));
         let receiver = apkovl_file(&overlay, "usr/local/bin/appliance-control-plane-artifact-agent").unwrap();
-        assert!(receiver.contains("PARTIAL=\"$DEST.partial\""));
+        assert!(receiver.contains("PARTIAL=\"$DEST.partial.$$\""));
         let update = apkovl_file(&overlay, "usr/local/bin/appliance-control-plane-update").unwrap();
         assert!(update.contains(&key));
         assert!(!update.contains("__PINNED_RELEASE_KEY_ID__"));
@@ -5199,24 +5363,23 @@ done >> "$CTR_ARGV"
             let releases = root.join("state/releases");
             let run = root.join("run");
             fs::create_dir_all(&bin).unwrap();
-            fs::create_dir_all(releases.join("1.0.0")).unwrap();
-            fs::create_dir_all(releases.join("2.0.0/console")).unwrap();
-            for name in ["mkdir", "rm", "ln"] { link(&bin, name, &format!("/bin/{name}")); }
-            for name in ["awk", "grep", "tr", "readlink", "seq"] { link(&bin, name, &format!("/usr/bin/{name}")); }
+            fs::create_dir_all(releases.join("1.0.0-old")).unwrap();
+            fs::create_dir_all(releases.join("2.0.0-new/console")).unwrap();
+            for name in ["mkdir", "rm", "mv", "cat"] { link(&bin, name, &format!("/bin/{name}")); }
+            for name in ["awk", "grep", "tr", "seq"] { link(&bin, name, &format!("/usr/bin/{name}")); }
             fs::write(bin.join("sha256sum"), "#!/bin/sh\nprintf '%s  %s\\n' \"$TEST_SHA\" \"$1\"\n").unwrap();
             fs::write(bin.join("wget"), "#!/bin/sh\nprintf '{\"initialized\":true,\"serverVersion\":\"%s\"}\\n' \"$HEALTH_VERSION\"\n").unwrap();
-            fs::write(bin.join("mv"), "#!/bin/sh\nif [ \"${1:-}\" = -Tf ]; then /bin/rm -f \"$3\"; exec /bin/mv -f \"$2\" \"$3\"; fi\nexec /bin/mv \"$@\"\n").unwrap();
             fs::write(bin.join("sleep"), "#!/bin/sh\nexec /bin/sleep 0.01\n").unwrap();
-            for name in ["sha256sum", "wget", "mv", "sleep"] {
+            for name in ["sha256sum", "wget", "sleep"] {
                 fs::set_permissions(bin.join(name), fs::Permissions::from_mode(0o755)).unwrap();
             }
             let binary = if crash { "#!/bin/sh\nexit 7\n" } else { "#!/bin/sh\nwhile :; do /bin/sleep 60; done\n" };
-            fs::write(releases.join("2.0.0/binary"), binary).unwrap();
-            fs::set_permissions(releases.join("2.0.0/binary"), fs::Permissions::from_mode(0o500)).unwrap();
-            fs::write(releases.join("2.0.0/control-plane-release.properties"), "version=2.0.0\n").unwrap();
-            fs::write(releases.join("2.0.0/appliance-api-server.sha256"), format!("{}  appliance-api-server  {}\n", "a".repeat(64), binary.len())).unwrap();
-            symlink("releases/1.0.0", root.join("state/current")).unwrap();
-            symlink("releases/2.0.0", root.join("state/pending")).unwrap();
+            fs::write(releases.join("2.0.0-new/binary"), binary).unwrap();
+            fs::set_permissions(releases.join("2.0.0-new/binary"), fs::Permissions::from_mode(0o500)).unwrap();
+            fs::write(releases.join("2.0.0-new/control-plane-release.properties"), "version=2.0.0\ngeneration=2\n").unwrap();
+            fs::write(releases.join("2.0.0-new/appliance-api-server.sha256"), format!("{}  appliance-api-server  {}\n", "a".repeat(64), binary.len())).unwrap();
+            fs::write(root.join("state/current"), "releases/1.0.0-old\n").unwrap();
+            fs::write(root.join("state/pending"), "releases/2.0.0-new\n").unwrap();
             let script = root.join("supervisor.sh");
             fs::write(&script, CONTROL_PLANE_SUPERVISOR).unwrap();
             let status = Command::new("/bin/sh").arg(&script)
@@ -5226,16 +5389,16 @@ done >> "$CTR_ARGV"
                 .env("APPLIANCE_TEST_ONCE", "1").env("TEST_SHA", digest).env("HEALTH_VERSION", health)
                 .status().unwrap();
             assert!(status.success());
-            let result = (fs::read_to_string(run.join("outcome")).unwrap(), fs::read_link(root.join("state/current")).unwrap().to_string_lossy().into_owned());
+            let result = (fs::read_to_string(run.join("outcome")).unwrap(), fs::read_to_string(root.join("state/current")).unwrap().trim().to_string());
             assert!(!root.join("state/pending").exists());
             fs::remove_dir_all(root).unwrap();
             result
         }
-        assert_eq!(run_case("good", "2.0.0", &"a".repeat(64), false), ("success 2.0.0\n".into(), "releases/2.0.0".into()));
-        assert_eq!(run_case("good-v-prefix", "v2.0.0", &"a".repeat(64), false), ("success 2.0.0\n".into(), "releases/2.0.0".into()));
-        assert_eq!(run_case("hash", "2.0.0", &"b".repeat(64), false), ("rollback 2.0.0 bad-hash\n".into(), "releases/1.0.0".into()));
-        assert_eq!(run_case("wrong", "9.9.9", &"a".repeat(64), false), ("rollback 2.0.0 wrong-version\n".into(), "releases/1.0.0".into()));
-        assert_eq!(run_case("crash", "2.0.0", &"a".repeat(64), true), ("rollback 2.0.0 crash\n".into(), "releases/1.0.0".into()));
+        assert_eq!(run_case("good", "2.0.0", &"a".repeat(64), false), ("success 2.0.0\n".into(), "releases/2.0.0-new".into()));
+        assert_eq!(run_case("good-v-prefix", "v2.0.0", &"a".repeat(64), false), ("success 2.0.0\n".into(), "releases/2.0.0-new".into()));
+        assert_eq!(run_case("hash", "2.0.0", &"b".repeat(64), false), ("rollback 2.0.0 bad-hash\n".into(), "releases/1.0.0-old".into()));
+        assert_eq!(run_case("wrong", "9.9.9", &"a".repeat(64), false), ("rollback 2.0.0 wrong-version\n".into(), "releases/1.0.0-old".into()));
+        assert_eq!(run_case("crash", "2.0.0", &"a".repeat(64), true), ("rollback 2.0.0 crash\n".into(), "releases/1.0.0-old".into()));
     }
 
     #[test]
