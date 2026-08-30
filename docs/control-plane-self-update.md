@@ -104,14 +104,15 @@ glass, but cannot block a later signed request. This is weaker than aliases only
 ## 3. IAM decision and draft
 
 CU1 adds conditional `SelfUpdateRole` and a stack-scoped CFN service role. Update AWS clients require assumed credentials, never the
-default chain. CU0 first removes `AdministratorAccess` from both system Lambda roles using a CloudTrail-derived, live-proven deployment
-allow-list; this is a release gate, not a residual caveat.
+default chain. CU0 first removes `AdministratorAccess` from both system Lambda roles using a statically enumerated deployment
+allow-list; this is a release gate, not a residual caveat. CloudTrail live proof is still owed before release; follow the
+[owner proof steps](cli.md#cloud-baseline-role-mode).
 
 **CU0 shipped:** `SystemRoleMode=scoped` is now the CloudFormation default.
-The api-server can read/write its data bucket and read only the bootstrap secret.
-The worker adds Pulumi state/KMS, installation ECR, and bounded user-appliance IAM/Lambda/CloudFront/Route 53/ACM/log delivery.
+The api-server can read/write only its data bucket; CloudFormation, not the Lambda, resolves the bootstrap secret.
+The worker adds Pulumi state/KMS, installation ECR, and permissions-boundary-contained user-appliance provisioning.
 Account-scoped `Resource: '*'` remains only where AWS exposes no resource-level authorization, and every case is test-allowlisted.
-Run `appliance cloud baseline-update --system-role-mode admin` only for break glass; rerun with `scoped` to restore least privilege.
+Run `appliance cloud baseline-update --system-role-mode admin --yes` only for break glass; rerun with `scoped` to restore least privilege.
 
 Its trust policy is:
 

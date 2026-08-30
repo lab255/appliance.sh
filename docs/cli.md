@@ -55,6 +55,21 @@ top-level commands remain unchanged.
 ## Cloud baseline role mode
 
 `appliance cloud baseline-update` applies the CLI's current CloudFormation template while preserving the stack's existing `ImageUri`.
-System Lambda execution roles default to `--system-role-mode scoped`. If a live deployment exposes an unenumerated AWS permission,
-`--system-role-mode admin` is the documented break-glass escape hatch; return to least privilege by rerunning the command with
-`--system-role-mode scoped` after the missing action is identified from CloudTrail.
+New stacks default to scoped roles; omitting `--system-role-mode` on an existing stack preserves its current mode. A routine
+`appliance cloud update` also sends all parameters and intentionally bundles the de-admin migration for pre-existing stacks.
+
+If a live deployment exposes an unenumerated AWS permission, `--system-role-mode admin --yes` is the loud, temporary break-glass
+escape hatch. Restore least privilege with `appliance cloud baseline-update --system-role-mode scoped` after identifying the missing
+action from CloudTrail. The baseline command polls api-server health after CloudFormation completes and prints the admin recovery
+command if a scoped update leaves the endpoint unhealthy.
+
+Before release, the owner must exercise the complete path on a disposable real install:
+
+1. Run `appliance cloud baseline-update --system-role-mode scoped`, deploy a representative sample appliance, then destroy it.
+2. Run `appliance cloud update`; confirm both system Lambdas remain healthy and their CloudWatch logs contain no `AccessDenied` or
+   `UnauthorizedOperation`.
+3. Run `appliance cloud baseline-update --system-role-mode admin --yes`, confirm `UPDATE_COMPLETE`, then run
+   `appliance cloud baseline-update --system-role-mode scoped` and confirm `UPDATE_COMPLETE` again. This exercises the conditional
+   `Policies: []` collapse and restoration path.
+4. Query CloudTrail for denied worker/api-server actions. Specifically watch for CloudFront vended-log calls to
+   `logs:PutResourcePolicy` or `logs:DescribeResourcePolicies`; do not pre-grant them without live evidence.

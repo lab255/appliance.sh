@@ -91,6 +91,7 @@ describe('appliance CloudFormation template', () => {
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
       expect(Buffer.byteLength(JSON.stringify(scopedPolicy(role)), 'utf8')).toBeLessThan(10_240);
     }
+    expect(Buffer.byteLength(JSON.stringify(boundaryPolicy()), 'utf8')).toBeLessThan(6_144);
   });
 
   it('defaults to scoped roles and makes AdministratorAccess break-glass only', () => {
@@ -117,9 +118,7 @@ describe('appliance CloudFormation template', () => {
         const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
         expect(actions).not.toContain('*');
         expect(actions.filter((action) => action.includes('*'))).toEqual(
-          actions.filter((action) =>
-            ['lambda:DisableReplication*', 'lambda:EnableReplication*'].includes(action)
-          )
+          actions.filter((action) => ['lambda:DisableReplication*', 'lambda:EnableReplication*'].includes(action))
         );
         const resources = Array.isArray(statement.Resource) ? statement.Resource : [statement.Resource];
         if (resources.includes('*')) wildcardResourceSids.push(statement.Sid);
@@ -148,6 +147,19 @@ describe('appliance CloudFormation template', () => {
       if (statement.Effect === 'Allow' && mutatesIam) expect(statement.Condition).toBeDefined();
     }
 
+    expect(statements.find((statement) => statement.Sid === 'ApplianceIamRoleBoundaryMutations')?.Condition).toEqual({
+      ArnEquals: { 'iam:PermissionsBoundary': ref('UserAppliancePermissionsBoundary') },
+    });
+    expect(statements.find((statement) => statement.Sid === 'ApplianceIamRolePolicyAttachments')?.Condition).toEqual({
+      ArnEquals: {
+        'iam:PermissionsBoundary': ref('UserAppliancePermissionsBoundary'),
+        'iam:PolicyARN': [
+          sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
+          sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'),
+        ],
+      },
+    });
+
     expect(statements.find((statement) => statement.Sid === 'DenyPermissionsBoundaryRemoval')).toMatchObject({
       Effect: 'Deny',
       Action: ['iam:DeleteRolePermissionsBoundary', 'iam:PutRolePermissionsBoundary'],
@@ -160,9 +172,7 @@ describe('appliance CloudFormation template', () => {
   });
 
   it('requires a stack-owned boundary that blocks role, own-stack, and system-function escalation', () => {
-    expect(document.getIn(['Resources', 'UserAppliancePermissionsBoundary', 'Type'])).toBe(
-      'AWS::IAM::ManagedPolicy'
-    );
+    expect(document.getIn(['Resources', 'UserAppliancePermissionsBoundary', 'Type'])).toBe('AWS::IAM::ManagedPolicy');
     const statements = boundaryPolicy().Statement;
     expect(statements.find((statement) => statement.Sid === 'AllowUserApplianceRuntimePermissions')).toMatchObject({
       Effect: 'Allow',
@@ -177,9 +187,7 @@ describe('appliance CloudFormation template', () => {
     expect(statements.find((statement) => statement.Sid === 'DenyControlPlaneStackMutation')).toMatchObject({
       Effect: 'Deny',
       Action: 'cloudformation:UpdateStack',
-      Resource: sub(
-        'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'
-      ),
+      Resource: sub('arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*'),
     });
     expect(statements.find((statement) => statement.Sid === 'DenySystemFunctionMutation')).toMatchObject({
       Effect: 'Deny',
