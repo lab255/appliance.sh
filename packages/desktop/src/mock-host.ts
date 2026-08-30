@@ -1100,6 +1100,7 @@ export function createMockHost(): ConsoleHost {
               running: vm.running,
               clusterProvisioned: vm.clusterProvisioned,
               kubeconfigReady: vm.running && vm.clusterProvisioned,
+              controlPlaneUpdateCapable: vm.running,
               phase: vm.running ? ('ready' as const) : undefined,
               dev: vm.dev,
               // Mock a shared workspace for dev VMs so the agent launcher
@@ -1156,6 +1157,10 @@ export function createMockHost(): ConsoleHost {
             vm.running = true;
             vm.clusterProvisioned = true;
             registerMockMicroVmCluster(vm);
+          },
+          async update(version?: string) {
+            await sleep(800);
+            return `control plane updated to ${version ?? 'latest'}`;
           },
           async cleanupShell() {
             // Best-effort sweep of debugger pods a shell leaves behind; a no-op in the mock.

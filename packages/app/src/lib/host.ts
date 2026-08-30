@@ -588,6 +588,9 @@ export interface MicroVmStatus {
   /** kubeconfig fetched and the host process alive — the cluster
    *  answers. Gated on `running`, so a stopped VM doesn't read ready. */
   kubeconfigReady: boolean;
+  /** The running guest was booted with the MV1 artifact listener and
+   *  control-plane supervisor, so it can update without a reboot. */
+  controlPlaneUpdateCapable: boolean;
   /** Current bring-up stage while starting; absent when not running or
    *  when the engine predates phase reporting. Lets the badge show
    *  "starting (k3s)" / "failed" instead of a blunt "running". */
@@ -837,6 +840,8 @@ export interface MicroVmInstanceHost {
   /** One-way promotion from a core sandbox to the deployment layer.
    *  Stops and re-ups the VM while preserving its persisted dev mode. */
   clusterUp(onEvent: (event: { message: string }) => void): Promise<void>;
+  /** Install a signed control-plane release in the running VM without rebooting. */
+  update(version?: string): Promise<string>;
   /** Sweep the debugger pods a dev/host shell leaves behind. Called
    *  when a shell terminal closes; best-effort. */
   cleanupShell(): Promise<void>;

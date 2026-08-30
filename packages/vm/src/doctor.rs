@@ -84,6 +84,8 @@ pub struct Report {
     /// ever been initialized?). Absent when unreachable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bootstrap_initialized: Option<bool>,
+    /// True when the boot-rendered MV1 launcher marker is present.
+    pub control_plane_update_capable: bool,
     pub findings: Vec<Finding>,
 }
 
@@ -100,6 +102,7 @@ pub fn run_vm_checks(name: &str) -> Report {
         running,
         clock_skew_seconds: None,
         bootstrap_initialized: None,
+        control_plane_update_capable: false,
         findings: Vec::new(),
     };
 
@@ -160,6 +163,10 @@ pub fn run_vm_checks(name: &str) -> Report {
     if let Some(finding) = guest_seed_warning_finding(name) {
         report.findings.push(finding);
     }
+
+    let (capable, release_finding) = guest_control_plane_release_finding(name);
+    report.control_plane_update_capable = capable;
+    report.findings.push(release_finding);
 
     // --- guest api-server reachability ------------------------------
     let agent_only = spec.as_ref().is_some_and(|s| s.agent_only);
@@ -296,6 +303,79 @@ fn classify_seed_warning(detail: &str) -> Option<Finding> {
             "restage with `appliance vm up`, then restart the VM; inspect /var/log/appliance-api-server.log if the finding remains"
                 .to_string(),
         ),
+    )
+}
+
+fn guest_control_plane_release_finding(name: &str) -> (bool, Finding) {
+    let probe = run_wrapped(
+        name,
+        r#"if [ -f /run/appliance/capabilities/control-plane-update-v1 ]; then printf 'capable=1\n'; else printf 'capable=0\n'; fi
+if [ -L /var/lib/appliance-control-plane/current ]; then
+  release=/var/lib/appliance-control-plane/$(readlink /var/lib/appliance-control-plane/current)
+  awk -F= '$1 == "version" { print "version=" $2 } $1 == "keyId" { print "keyId=" $2 }' "$release/control-plane-release.properties" 2>/dev/null
+  if [ -d "$release/console" ]; then printf 'console=present\n'; else printf 'console=absent\n'; fi
+else
+  printf 'version=missing\nconsole=absent\n'
+fi"#,
+    );
+    match probe {
+        Ok(output) => classify_control_plane_release(&output),
+        Err(error) => (
+            false,
+            Finding::new(
+                "engine:control-plane-release",
+                "Persistent control-plane release",
+                Severity::Warn,
+                format!("could not inspect the guest release: {error}"),
+            ),
+        ),
+    }
+}
+
+fn classify_control_plane_release(output: &str) -> (bool, Finding) {
+    let value = |key: &str| {
+        output
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{key}=")))
+            .unwrap_or("unknown")
+    };
+    let capable = value("capable") == "1";
+    let version = value("version");
+    let key_id = value("keyId");
+    let console = if value("console") == "present" {
+        version
+    } else {
+        "absent"
+    };
+    if !capable {
+        return (
+            false,
+            Finding::new(
+                "engine:control-plane-release",
+                "Persistent control-plane release",
+                Severity::Info,
+                format!("launcher predates MV1; current={version}, console={console}, keyId={key_id}"),
+            )
+            .remedy(
+                "restage and reboot with `appliance vm stop && appliance vm up --cluster`"
+                    .to_string(),
+            ),
+        );
+    }
+    let severity = if version == "missing" || version == "unknown" {
+        Severity::Warn
+    } else {
+        Severity::Ok
+    };
+    (
+        true,
+        Finding::new(
+            "engine:control-plane-release",
+            "Persistent control-plane release",
+            severity,
+            format!("MV1 capable; current={version}, console={console}, keyId={key_id}"),
+        )
+        .remedy("run `appliance vm update` to install a signed release without rebooting".to_string()),
     )
 }
 
@@ -560,6 +640,30 @@ mod tests {
         )
         .unwrap();
         assert_eq!(finding.severity, Severity::Warn);
+    }
+
+    #[test]
+    fn mv1_release_finding_reports_current_console_and_key() {
+        let (capable, finding) = classify_control_plane_release(
+            "capable=1\nversion=1.58.0\nkeyId=release-2026\nconsole=present\n",
+        );
+        assert!(capable);
+        assert_eq!(finding.severity, Severity::Ok);
+        let detail = finding.detail.unwrap();
+        assert!(detail.contains("current=1.58.0"));
+        assert!(detail.contains("console=1.58.0"));
+        assert!(detail.contains("keyId=release-2026"));
+        assert!(finding.remediation.unwrap().contains("vm update"));
+    }
+
+    #[test]
+    fn legacy_launcher_release_finding_requires_restage_and_reboot() {
+        let (capable, finding) = classify_control_plane_release(
+            "capable=0\nversion=missing\nconsole=absent\n",
+        );
+        assert!(!capable);
+        assert_eq!(finding.severity, Severity::Info);
+        assert!(finding.remediation.unwrap().contains("vm up"));
     }
 
     #[test]

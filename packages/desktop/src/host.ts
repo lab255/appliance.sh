@@ -407,6 +407,9 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
           };
           await invoke('microvm_cluster_up', { name: vm, onEvent: channel });
         },
+        update(version?: string) {
+          return invoke<string>('microvm_update', { name: vm, version: version ?? null });
+        },
         async cleanupShell() {
           await invoke('microvm_dev_cleanup', { name: vm });
         },

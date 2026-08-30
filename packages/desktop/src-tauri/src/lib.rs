@@ -4172,6 +4172,8 @@ struct MicroVmStatus {
     /// answers. Gated on `running` so a stopped VM (whose kubeconfig
     /// file lingers on disk) doesn't read as ready.
     kubeconfig_ready: bool,
+    /// MV1 launcher marker is reachable in this running guest.
+    control_plane_update_capable: bool,
     /// Current bring-up stage while starting: media | booting | network |
     /// cluster (+ cluster-node/cluster-images/cluster-api/ingress
     /// sub-phases) | ready | failed. `None` when not running. Lets the UI
@@ -4334,6 +4336,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             running: false,
             cluster_provisioned: false,
             kubeconfig_ready: false,
+            control_plane_update_capable: false,
             phase: None,
             phase_detail: None,
             dev: false,
@@ -4360,6 +4363,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
                 running: false,
                 cluster_provisioned: false,
                 kubeconfig_ready: false,
+                control_plane_update_capable: false,
                 phase: None,
                 phase_detail: None,
                 dev: false,
@@ -4377,6 +4381,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
             running: false,
             cluster_provisioned: false,
             kubeconfig_ready: false,
+            control_plane_update_capable: false,
             phase: None,
             phase_detail: None,
             dev: false,
@@ -4425,6 +4430,14 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
         .get("phaseDetail")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let control_plane_update_capable = if running {
+        run_status_command(&[&bin, "control-plane-capability", &name])
+            .await
+            .map(|(ok, _, _)| ok)
+            .unwrap_or(false)
+    } else {
+        false
+    };
     if running && kubeconfig_ready {
         // Keep the desktop's cluster registration in step with the
         // CLI-owned profile while the engine is up — this also catches
@@ -4443,6 +4456,7 @@ async fn microvm_status(app: AppHandle, name: Option<String>) -> MicroVmStatus {
         running,
         cluster_provisioned,
         kubeconfig_ready,
+        control_plane_update_capable,
         phase,
         phase_detail,
         dev: parsed.get("dev").and_then(|v| v.as_bool()).unwrap_or(false),
@@ -4846,6 +4860,51 @@ async fn microvm_cluster_up(
 ) -> Result<(), String> {
     let name = vm_name(name);
     run_microvm_up(app, name, false, true, None, on_event).await
+}
+
+/// Run the exact CLI update path used by `appliance vm update`. Keeping
+/// the bridge argv-only means desktop and terminal users share signed
+/// staging, transport, guest verification, health polling, and rollback.
+#[tauri::command]
+async fn microvm_update(
+    app: AppHandle,
+    name: Option<String>,
+    version: Option<String>,
+) -> Result<String, String> {
+    let name = vm_name(name);
+    let mut argv = vec![
+        "vm".to_string(),
+        "update".to_string(),
+        "--name".to_string(),
+        name,
+    ];
+    if let Some(version) = version.filter(|value| !value.trim().is_empty()) {
+        argv.extend(["--version".to_string(), version]);
+    }
+    let (mut rx, _child) = app
+        .shell()
+        .sidecar("appliance")
+        .map_err(|error| format!("Bundled appliance CLI is unavailable: {error}"))?
+        .args(argv)
+        .spawn()
+        .map_err(|error| format!("failed to spawn appliance CLI: {error}"))?;
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    let mut exit_code = None;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) => stdout.push_str(&String::from_utf8_lossy(&bytes)),
+            CommandEvent::Stderr(bytes) => stderr.push_str(&String::from_utf8_lossy(&bytes)),
+            CommandEvent::Error(message) => return Err(message),
+            CommandEvent::Terminated(payload) => exit_code = payload.code,
+            _ => {}
+        }
+    }
+    if exit_code == Some(0) {
+        Ok(stdout.trim().to_string())
+    } else {
+        Err(stderr.trim().to_string())
+    }
 }
 
 /// Shared bring-up for core, dev, and lazy cluster promotion. `dev` selects
@@ -7389,6 +7448,7 @@ pub fn run() {
             microvm_up,
             microvm_dev_up,
             microvm_cluster_up,
+            microvm_update,
             microvm_dev_cleanup,
             microvm_agent_start,
             microvm_agent_list,

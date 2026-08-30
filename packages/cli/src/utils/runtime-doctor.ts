@@ -80,6 +80,8 @@ export interface EngineChecksReport {
   clockSkewSeconds?: number;
   /** Guest api-server key store state, when reachable in-VM. */
   bootstrapInitialized?: boolean;
+  /** Boot-rendered MV1 launcher marker was found in the running guest. */
+  controlPlaneUpdateCapable?: boolean;
   findings: RuntimeFinding[];
 }
 
@@ -441,7 +443,8 @@ export function compareVersionStamp(
   cliVersion: string,
   serverVersion: string | null,
   signingKeyId: string | null = null,
-  releaseTrust: ReleaseTrustPolicy = PINNED_RELEASE_TRUST
+  releaseTrust: ReleaseTrustPolicy = PINNED_RELEASE_TRUST,
+  updateCapable = false
 ): RuntimeFinding {
   const id = 'runtime:guest-stamp';
   const title = 'Guest api-server artifacts vs CLI / running server';
@@ -485,7 +488,9 @@ export function compareVersionStamp(
       title,
       severity: trustSeverity === 'fail' ? 'fail' : 'warn',
       detail: `running api-server is ${serverVersion} but the staged artifacts are ${stampVersion} — the VM booted before the restage; ${trustDetail}`,
-      remediation: 'Restart the VM to pick up the staged binary: `appliance vm stop && appliance vm up`.',
+      remediation: updateCapable
+        ? 'Install the staged signed release without rebooting: `appliance vm update`.'
+        : 'This launcher predates in-place update. Restage and reboot: `appliance vm stop && appliance vm up --cluster`.',
     };
   }
   if (normVersion(stampVersion) !== normVersion(cliVersion)) {
@@ -974,7 +979,16 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   }
 
   // 4. Guest artifact stamp vs CLI vs running server (check e).
-  findings.push(compareVersionStamp(readGuestStamp(), VERSION, serverVersion, readGuestSigningKeyId()));
+  findings.push(
+    compareVersionStamp(
+      readGuestStamp(),
+      VERSION,
+      serverVersion,
+      readGuestSigningKeyId(),
+      PINNED_RELEASE_TRUST,
+      engine?.controlPlaneUpdateCapable === true
+    )
+  );
 
   // 5. Duplicate ingress claims (check c) — skip-not-fail without kubectl.
   const ingress = probeIngress(vm);
