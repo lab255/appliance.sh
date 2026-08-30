@@ -19,11 +19,17 @@ Parameters:
     Default: scoped
     AllowedValues: [scoped, admin]
     Description: Scoped least-privilege system roles by default; admin is an operator break-glass escape hatch
+  SelfUpdatePolicy:
+    Type: String
+    Default: off
+    AllowedValues: [off, notify, auto]
+    Description: Opt-in scheduled signed image update checks; baseline updates always remain operator-driven
 
 Conditions:
   HasImage: !Not [!Equals [!Ref ImageUri, '']]
   UseAdminSystemRoles: !Equals [!Ref SystemRoleMode, admin]
   UseScopedSystemRoles: !Equals [!Ref SystemRoleMode, scoped]
+  SelfUpdateScheduled: !And [!Condition HasImage, !Not [!Equals [!Ref SelfUpdatePolicy, off]]]
 
 Resources:
   StateBucket:
@@ -726,6 +732,32 @@ Resources:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName
 
+  SelfUpdateSchedulerRole:
+    Type: AWS::IAM::Role
+    Condition: SelfUpdateScheduled
+    Properties:
+      RoleName: !Sub ${InstallationName}-self-update-scheduler
+      Path: /appliance-system/
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: appliance-self-update-scheduler
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: InvokeOnlySystemWorker
+                Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt WorkerFunction.Arn
+      Tags:
+        - Key: appliance.sh/installation
+          Value: !Ref InstallationName
+
   ImageRepository:
     Type: AWS::ECR::Repository
     DeletionPolicy: Retain
@@ -789,6 +821,7 @@ Resources:
           APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
           APPLIANCE_STACK_ID: !Ref AWS::StackId
           SELF_UPDATE_ROLE_ARN: !If [UseScopedSystemRoles, !GetAtt SelfUpdateRole.Arn, '']
+          SELF_UPDATE_POLICY: !Ref SelfUpdatePolicy
           PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
           PULUMI_CONFIG_PASSPHRASE: ''
           APPLIANCE_TRUST_PROXY: 'true'
@@ -809,6 +842,21 @@ Resources:
       FunctionName: !Ref WorkerFunction
       FunctionUrlAuthType: NONE
       Principal: '*'
+
+  SelfUpdateSchedule:
+    Type: AWS::Scheduler::Schedule
+    Condition: SelfUpdateScheduled
+    Properties:
+      Description: Daily signed Appliance control-plane image update check
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 60
+      ScheduleExpression: rate(1 day)
+      State: ENABLED
+      Target:
+        Arn: !GetAtt WorkerFunction.Arn
+        RoleArn: !GetAtt SelfUpdateSchedulerRole.Arn
+        Input: '{"kind":"self-update-check"}'
 
   ApiServerLogGroup:
     Type: AWS::Logs::LogGroup
@@ -838,6 +886,7 @@ Resources:
           APPLIANCE_DATA_BUCKET: !Ref DataBucket
           APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
           SELF_UPDATE_ROLE_ARN: !If [UseScopedSystemRoles, !GetAtt SelfUpdateRole.Arn, '']
+          SELF_UPDATE_POLICY: !Ref SelfUpdatePolicy
           PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
           PULUMI_CONFIG_PASSPHRASE: ''
           APPLIANCE_TRUST_PROXY: 'true'

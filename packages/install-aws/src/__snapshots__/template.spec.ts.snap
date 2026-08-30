@@ -5,6 +5,8 @@ exports[`appliance CloudFormation template > snapshots and enforces the stack-po
   "DataBucket",
   "SelfUpdateCloudFormationRole",
   "SelfUpdateRole",
+  "SelfUpdateSchedule",
+  "SelfUpdateSchedulerRole",
   "StateBucket",
   "StateKmsAlias",
   "StateKmsKey",
