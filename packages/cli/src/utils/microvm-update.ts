@@ -2,17 +2,17 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { VERSION, verifyReleaseEnvelope, type ReleaseArtifact, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
 import {
-  PINNED_RELEASE_TRUST,
-  VERSION,
-  verifyReleaseEnvelope,
-  type ReleaseArtifact,
-  type ReleaseTrustPolicy,
-} from '@appliance.sh/sdk';
-import { guestAssetsDir, stageFromRelease } from './api-server-artifact.js';
+  guestAssetsDir,
+  publishOfflineVerifiedRelease,
+  releaseTrustFromEnvironment,
+  stageFromRelease,
+} from './api-server-artifact.js';
+import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
 import { readVmPorts, vmBinary } from './microvm-up.js';
 
-const DISABLED = 'self-update disabled until the production key is pinned (AP-226)';
+const PROCESS_TIMEOUT_MS = 180_000;
 
 export interface MicroVmSwapRequest {
   name: string;
@@ -36,12 +36,21 @@ export interface MicroVmUpdateOptions {
   now?: Date;
   destinationDir?: string;
   transport?: MicroVmUpdateTransport;
+  onPhase?: (phase: MicroVmUpdatePhase) => void;
 }
+
+export type MicroVmUpdatePhase =
+  | 'checking VM capability'
+  | 'downloading'
+  | 'verifying signature'
+  | 'shipping artifacts'
+  | 'swapping + health check';
 
 export interface MicroVmUpdateResult {
   oldVersion: string;
   newVersion: string;
   keyId: string;
+  alreadyAt: boolean;
 }
 
 function artifact(payload: { artifacts: ReleaseArtifact[] }, name: ReleaseArtifact['name']): ReleaseArtifact {
@@ -73,13 +82,18 @@ function highWater(directory: string): number | undefined {
 export function defaultMicroVmUpdateTransport(fetcher: typeof fetch = fetch): MicroVmUpdateTransport {
   return {
     async capability(name) {
-      const result = spawnSync(vmBinary(), ['control-plane-capability', name], { encoding: 'utf8' });
+      const result = spawnSync(vmBinary(), ['control-plane-capability', name], {
+        encoding: 'utf8',
+        timeout: PROCESS_TIMEOUT_MS,
+      });
       return { ok: result.status === 0, detail: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim() };
     },
     async runningVersion(name) {
       try {
         const port = readVmPorts(name).hostPort;
-        const response = await fetcher(`http://api.appliance.localhost:${port}/bootstrap/status`);
+        const response = await fetcher(`http://api.appliance.localhost:${port}/bootstrap/status`, {
+          signal: AbortSignal.timeout(10_000),
+        });
         if (!response.ok) return null;
         const body = (await response.json()) as { serverVersion?: unknown };
         return typeof body.serverVersion === 'string' ? body.serverVersion.replace(/^v/, '') : null;
@@ -102,49 +116,28 @@ export function defaultMicroVmUpdateTransport(fetcher: typeof fetch = fetch): Mi
         '--console-size',
         String(request.console.size),
       ];
-      const result = spawnSync(vmBinary(), args, { encoding: 'utf8' });
+      const result = spawnSync(vmBinary(), args, { encoding: 'utf8', timeout: PROCESS_TIMEOUT_MS });
       return { ok: result.status === 0, detail: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim() };
     },
   };
 }
 
 export async function updateMicroVm(options: MicroVmUpdateOptions): Promise<MicroVmUpdateResult> {
-  const trust = options.trust ?? PINNED_RELEASE_TRUST;
+  const trust = options.trust ?? releaseTrustFromEnvironment();
   const keyIds = Object.keys(trust.keys);
-  if (keyIds.length === 0) throw new Error(DISABLED);
+  if (keyIds.length === 0) {
+    throw new Error(
+      `in-place update is disabled until the production release key is pinned — restart the Dev Machine to pick up ` +
+        `the staged release: \`appliance vm stop --name ${options.name} && appliance vm up --name ${options.name} --cluster\``
+    );
+  }
   if (keyIds.length !== 1) throw new Error('self-update requires exactly one active pinned release key');
 
   const version = (options.version ?? VERSION).replace(/^v/, '');
   const arch = options.arch ?? (process.arch === 'arm64' ? 'arm64' : 'x64');
   const destination = options.destinationDir ?? guestAssetsDir();
-  await stageFromRelease({
-    version,
-    arch,
-    destinationDir: destination,
-    fetcher: options.fetcher,
-    trust,
-    now: options.now,
-  });
-
-  const verified = await verifyReleaseEnvelope(
-    JSON.parse(fs.readFileSync(path.join(destination, 'control-plane-release.json'), 'utf8')),
-    JSON.parse(fs.readFileSync(path.join(destination, 'control-plane-release.sig.json'), 'utf8')),
-    trust,
-    { now: options.now, highestGeneration: highWater(destination) }
-  );
-  if (verified.payload.version !== version) {
-    throw new Error(`signed release version ${verified.payload.version} does not match requested ${version}`);
-  }
-  const binary = artifact(verified.payload, `appliance-api-server-linux-${arch}`);
-  const console = artifact(verified.payload, 'appliance-console.tar.gz');
-  if (binary.arch !== arch || console.arch !== 'any') {
-    throw new Error(`signed release architecture does not match this ${arch} host`);
-  }
-  verifyFile(path.join(destination, 'appliance-api-server'), binary);
-  verifyFile(path.join(destination, 'appliance-console.tar.gz'), console);
-
-  // Only after every signed byte is verified do we touch the running VM.
   const transport = options.transport ?? defaultMicroVmUpdateTransport(options.fetcher);
+  options.onPhase?.('checking VM capability');
   const capability = await transport.capability(options.name);
   if (!capability.ok) {
     throw new Error(
@@ -153,11 +146,73 @@ export async function updateMicroVm(options: MicroVmUpdateOptions): Promise<Micr
     );
   }
   const oldVersion = (await transport.runningVersion(options.name)) ?? 'unknown';
-  const swap = await transport.swap({ name: options.name, stageDir: destination, binary, console });
-  if (!swap.ok) throw new Error(`microVM control-plane update rolled back: ${swap.detail}`);
-  const running = (await transport.runningVersion(options.name)) ?? version;
-  if (running.replace(/^v/, '') !== version) {
-    throw new Error(`guest reported update success but is running ${running}, expected ${version}`);
+
+  const stagingRoot = path.join(path.dirname(destination), '.control-plane-update-staging');
+  ensurePrivateDirectory(stagingRoot);
+  const stage = fs.mkdtempSync(path.join(stagingRoot, 'release-'));
+  restrictWindowsAcl(stage, { directory: true });
+  try {
+    await stageFromRelease({
+      version,
+      arch,
+      destinationDir: stage,
+      fetcher: options.fetcher,
+      trust,
+      now: options.now,
+      highestGeneration: highWater(destination),
+      onPhase: (phase) => options.onPhase?.(phase),
+    });
+
+    const verified = await verifyReleaseEnvelope(
+      JSON.parse(fs.readFileSync(path.join(stage, 'control-plane-release.json'), 'utf8')),
+      JSON.parse(fs.readFileSync(path.join(stage, 'control-plane-release.sig.json'), 'utf8')),
+      trust,
+      { now: options.now, highestGeneration: highWater(destination) }
+    );
+    if (verified.payload.version !== version) {
+      throw new Error(`signed release version ${verified.payload.version} does not match requested ${version}`);
+    }
+    const binary = artifact(verified.payload, `appliance-api-server-linux-${arch}`);
+    const console = artifact(verified.payload, 'appliance-console.tar.gz');
+    if (binary.arch !== arch || console.arch !== 'any') {
+      throw new Error(`signed release architecture does not match this ${arch} host`);
+    }
+    verifyFile(path.join(stage, 'appliance-api-server'), binary);
+    verifyFile(path.join(stage, 'appliance-console.tar.gz'), console);
+
+    options.onPhase?.('shipping artifacts');
+    options.onPhase?.('swapping + health check');
+    const swap = await transport.swap({ name: options.name, stageDir: stage, binary, console });
+    if (!swap.ok) {
+      throw new Error(
+        `update rolled back — the previous control plane (v${oldVersion}) is still running and serving: ${swap.detail}`
+      );
+    }
+    const running = await transport.runningVersion(options.name);
+    if (!running) throw new Error(`guest reported update success but its running version could not be confirmed`);
+    if (running.replace(/^v/, '') !== version) {
+      throw new Error(`guest reported update success but is running ${running}, expected ${version}`);
+    }
+    await publishOfflineVerifiedRelease({
+      sourceDir: stage,
+      destinationDir: destination,
+      version,
+      arch,
+      trust,
+      now: options.now,
+      highestGeneration: highWater(destination),
+    });
+    return {
+      oldVersion,
+      newVersion: version,
+      keyId: verified.envelope.keyId,
+      alreadyAt: swap.detail.split(/\r?\n/u).some((line) => line.trim().startsWith('already at ')),
+    };
+  } finally {
+    fs.rmSync(stage, { recursive: true, force: true });
   }
-  return { oldVersion, newVersion: version, keyId: verified.envelope.keyId };
+}
+
+export function microVmSelfUpdateEnabled(trust: ReleaseTrustPolicy = releaseTrustFromEnvironment()): boolean {
+  return Object.keys(trust.keys).length > 0;
 }

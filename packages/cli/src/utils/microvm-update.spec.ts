@@ -64,25 +64,34 @@ describe('microVM in-place control-plane update', () => {
     }) as typeof fetch;
   }
 
-  function transport(capable = true): MicroVmUpdateTransport & { swaps: string[] } {
+  function transport(
+    options: {
+      capable?: boolean;
+      swap?: { ok: boolean; detail: string };
+      runningAfter?: string | null;
+    } = {}
+  ): MicroVmUpdateTransport & { swaps: string[] } {
     let versionReads = 0;
     return {
       swaps: [],
       async capability() {
+        const capable = options.capable ?? true;
         return { ok: capable, detail: capable ? 'transport=wsl' : 'missing' };
       },
       async runningVersion() {
-        return versionReads++ === 0 ? '1.57.0' : '1.58.0';
+        if (versionReads++ === 0) return '1.57.0';
+        return Object.hasOwn(options, 'runningAfter') ? (options.runningAfter ?? null) : '1.58.0';
       },
       async swap(request) {
         this.swaps.push(request.binary.sha256);
-        return { ok: true, detail: 'success 1.58.0' };
+        return options.swap ?? { ok: true, detail: 'success 1.58.0' };
       },
     };
   }
 
   it('verifies signed bytes before transport and advances the running version', async () => {
     const channel = transport();
+    const phases: string[] = [];
     await expect(
       updateMicroVm({
         name: 'appliance',
@@ -93,9 +102,18 @@ describe('microVM in-place control-plane update', () => {
         now: new Date('2026-08-30T00:00:00Z'),
         fetcher: await fetcher(),
         transport: channel,
+        onPhase: (phase) => phases.push(phase),
       })
     ).resolves.toMatchObject({ oldVersion: '1.57.0', newVersion: '1.58.0' });
     expect(channel.swaps).toEqual([digest(binary)]);
+    expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
+    expect(phases).toEqual([
+      'checking VM capability',
+      'downloading',
+      'verifying signature',
+      'shipping artifacts',
+      'swapping + health check',
+    ]);
   });
 
   it('refuses while the production trust pin is empty', async () => {
@@ -108,11 +126,13 @@ describe('microVM in-place control-plane update', () => {
         fetcher: vi.fn() as unknown as typeof fetch,
         transport: channel,
       })
-    ).rejects.toThrow('self-update disabled until the production key is pinned (AP-226)');
+    ).rejects.toThrow(
+      'in-place update is disabled until the production release key is pinned — restart the Dev Machine'
+    );
     expect(channel.swaps).toEqual([]);
   });
 
-  it('refuses an unsupported/wrong host architecture before transport', async () => {
+  it('refuses an unsupported/wrong host architecture before opening the artifact channel', async () => {
     const channel = transport();
     await expect(
       updateMicroVm({
@@ -130,7 +150,8 @@ describe('microVM in-place control-plane update', () => {
   });
 
   it('tells old launchers to restage and reboot instead of opening the artifact channel', async () => {
-    const channel = transport(false);
+    const channel = transport({ capable: false });
+    const releaseFetcher = vi.fn(await fetcher()) as unknown as typeof fetch;
     await expect(
       updateMicroVm({
         name: 'legacy',
@@ -139,10 +160,62 @@ describe('microVM in-place control-plane update', () => {
         destinationDir: destination,
         trust,
         now: new Date('2026-08-30T00:00:00Z'),
-        fetcher: await fetcher(),
+        fetcher: releaseFetcher,
         transport: channel,
       })
     ).rejects.toThrow('appliance vm up --name legacy --cluster');
     expect(channel.swaps).toEqual([]);
+    expect(releaseFetcher).not.toHaveBeenCalled();
+  });
+
+  it('reports rollback once and leaves next-boot staging unchanged', async () => {
+    const channel = transport({ swap: { ok: false, detail: 'rollback 1.58.0 crash' } });
+    await expect(
+      updateMicroVm({
+        name: 'appliance',
+        version: '1.58.0',
+        arch: 'x64',
+        destinationDir: destination,
+        trust,
+        now: new Date('2026-08-30T00:00:00Z'),
+        fetcher: await fetcher(),
+        transport: channel,
+      })
+    ).rejects.toThrow(
+      'update rolled back — the previous control plane (v1.57.0) is still running and serving: rollback 1.58.0 crash'
+    );
+    expect(fs.existsSync(path.join(destination, 'appliance-api-server'))).toBe(false);
+  });
+
+  it('refuses a post-swap running-version mismatch', async () => {
+    const channel = transport({ runningAfter: '1.57.0' });
+    await expect(
+      updateMicroVm({
+        name: 'appliance',
+        version: '1.58.0',
+        arch: 'x64',
+        destinationDir: destination,
+        trust,
+        now: new Date('2026-08-30T00:00:00Z'),
+        fetcher: await fetcher(),
+        transport: channel,
+      })
+    ).rejects.toThrow('guest reported update success but is running 1.57.0, expected 1.58.0');
+  });
+
+  it('refuses success when the running version cannot be confirmed', async () => {
+    const channel = transport({ runningAfter: null });
+    await expect(
+      updateMicroVm({
+        name: 'appliance',
+        version: '1.58.0',
+        arch: 'x64',
+        destinationDir: destination,
+        trust,
+        now: new Date('2026-08-30T00:00:00Z'),
+        fetcher: await fetcher(),
+        transport: channel,
+      })
+    ).rejects.toThrow('running version could not be confirmed');
   });
 });

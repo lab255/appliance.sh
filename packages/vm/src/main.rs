@@ -696,10 +696,14 @@ fn run_control_plane_update(
     )?;
     let outcome = output
         .lines()
-        .find(|line| line.starts_with("success ") || line.starts_with("rollback "))
+        .find(|line| {
+            line.starts_with("success ")
+                || line.starts_with("rollback ")
+                || line.starts_with("already at ")
+        })
         .map(str::trim)
         .unwrap_or_else(|| output.trim());
-    if code != 0 || !outcome.starts_with("success ") {
+    if code != 0 || !(outcome.starts_with("success ") || outcome.starts_with("already at ")) {
         bail!("guest control-plane update failed: {outcome}");
     }
     println!("{outcome}");
