@@ -101,7 +101,7 @@ Resources:
     Properties:
       Description: Maximum permissions for worker-created user appliance Lambda roles
       ManagedPolicyName: !Sub ${InstallationName}-user-appliance-boundary
-      Path: /appliance/
+      Path: /appliance-system/
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -115,8 +115,28 @@ Resources:
             Resource: '*'
           - Sid: DenyControlPlaneStackMutation
             Effect: Deny
-            Action: cloudformation:UpdateStack
+            NotAction:
+              - cloudformation:Describe*
+              - cloudformation:Get*
+              - cloudformation:List*
+              - cloudformation:Detect*
+              - cloudformation:Validate*
             Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+          - Sid: DenyBoundaryPolicyMutation
+            Effect: Deny
+            Action:
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:SetDefaultPolicyVersion
+              - iam:TagPolicy
+              - iam:UntagPolicy
+            # Spell out the ARN to avoid a CloudFormation self-reference cycle.
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance-system/${InstallationName}-user-appliance-boundary
+          - Sid: DenyAssumeOutsideApplianceRoles
+            Effect: Deny
+            Action: sts:AssumeRole
+            NotResource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
           - Sid: DenySystemFunctionMutation
             Effect: Deny
             Action:
@@ -148,7 +168,9 @@ Resources:
               - lambda:UpdateFunctionUrlConfig
             Resource:
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*
 
   SystemApiServerRole:
     Type: AWS::IAM::Role
@@ -212,7 +234,7 @@ Resources:
       Policies:
         - !If
           - UseScopedSystemRoles
-          - PolicyName: appliance-system-worker
+          - PolicyName: appliance-system-worker-runtime
             PolicyDocument:
               Version: '2012-10-17'
               Statement:
@@ -286,6 +308,13 @@ Resources:
                     - cloudformation:GetResourceRequestStatus
                     - cloudformation:UpdateResource
                   Resource: '*'
+          - !Ref AWS::NoValue
+        - !If
+          - UseScopedSystemRoles
+          - PolicyName: appliance-system-worker-provisioning
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
                 - Sid: ApplianceIamRoleRead
                   Effect: Allow
                   Action:
@@ -294,6 +323,7 @@ Resources:
                     - iam:ListAttachedRolePolicies
                     - iam:ListInstanceProfilesForRole
                     - iam:ListRolePolicies
+                    - iam:ListRoleTags
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
                 - Sid: ApplianceIamRoleBoundaryMutations
                   Effect: Allow
@@ -332,8 +362,6 @@ Resources:
                   Action: iam:TagRole
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
                   Condition:
-                    ArnEquals:
-                      iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
                     StringEquals:
                       aws:RequestTag/appliance:managed: 'true'
                 - Sid: ApplianceIamPassRole
@@ -342,18 +370,24 @@ Resources:
                     - iam:PassRole
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
                   Condition:
-                    ArnEquals:
-                      iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
                     StringEquals:
-                      iam:PassedToService:
-                        - lambda.amazonaws.com
-                        - edgelambda.amazonaws.com
+                      iam:PassedToService: lambda.amazonaws.com
                 - Sid: DenyPermissionsBoundaryRemoval
                   Effect: Deny
                   Action:
                     - iam:DeleteRolePermissionsBoundary
                     - iam:PutRolePermissionsBoundary
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+                - Sid: DenyBoundaryPolicyMutation
+                  Effect: Deny
+                  Action:
+                    - iam:CreatePolicyVersion
+                    - iam:DeletePolicy
+                    - iam:DeletePolicyVersion
+                    - iam:SetDefaultPolicyVersion
+                    - iam:TagPolicy
+                    - iam:UntagPolicy
+                  Resource: !Ref UserAppliancePermissionsBoundary
                 - Sid: ApplianceIamPolicyRead
                   Effect: Allow
                   Action:
@@ -441,7 +475,9 @@ Resources:
                     - lambda:UpdateFunctionUrlConfig
                   Resource:
                     - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server
+                    - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*
                     - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker
+                    - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*
                 - Sid: LambdaEdgeReplication
                   Effect: Allow
                   Action:
