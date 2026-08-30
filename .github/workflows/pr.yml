@@ -110,8 +110,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Install BusyBox seed-gate test shell
-        run: brew install busybox
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:

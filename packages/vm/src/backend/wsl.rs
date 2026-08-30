@@ -969,7 +969,7 @@ fi
 /// shared `guest::APISERVER_COMMON`.
 const WSL_APISERVER_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
-# no docker anywhere. APISERVER_SEED_COPY verifies this streamed stage.
+# no docker anywhere. The shared api-server seed gate verifies this streamed stage.
 mkdir -p /persist/appliance /usr/local/bin /etc/appliance
 APISERVER_SRC=/opt/appliance/artifacts/appliance-api-server
 CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
@@ -1106,7 +1106,7 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
                 .unwrap_or_default();
             format!(
                 "{WSL_APISERVER_COPY}{}{}",
-                crate::guest::APISERVER_SEED_COPY,
+                crate::guest::apiserver_seed_copy(),
                 crate::guest::APISERVER_COMMON
             )
                 .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
@@ -1863,7 +1863,9 @@ mod tests {
         ));
         assert!(script.contains("sha256sum \"$APISERVER_SRC\""));
         assert!(script.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
-        assert!(!script.contains("jq -r"));
+        let seed_gate = crate::guest::apiserver_seed_copy();
+        assert!(!seed_gate.contains("__APISERVER_SEED_VERIFY__"));
+        assert!(!seed_gate.contains("jq"));
         assert!(script.contains(&format!(
             "RELEASE_KEY_ID\" != \"ed25519:sha256:{}",
             "a".repeat(64)

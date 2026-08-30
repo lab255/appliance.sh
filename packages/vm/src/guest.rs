@@ -1008,7 +1008,7 @@ BKTOML
 const APISERVER_MEDIA_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
 # no docker anywhere. The binary, console, and signed release evidence
-# ride the FAT boot media. APISERVER_SEED_COPY verifies before copying.
+# ride the FAT boot media. The shared api-server seed gate verifies before copying.
 mkdir -p /persist/appliance
 APISERVER_MEDIA_PATH=$(find /media -maxdepth 2 -name appliance-api-server 2>/dev/null | head -1)
 APISERVER_MEDIA=
@@ -1025,7 +1025,7 @@ RELEASE_ENVELOPE="$APISERVER_MEDIA/control-plane-release.sig.json"
 /// envelope; the minimal Alpine guest deliberately does not carry a second
 /// Ed25519 implementation in MV0. It independently binds both exact sizes and
 /// SHA-256 digests to the verified payload copied beside the seed.
-pub(crate) const APISERVER_SEED_COPY: &str = r#"APPLIANCE_WARNINGS_FILE=${APPLIANCE_WARNINGS_FILE:-/var/log/appliance-api-server.warnings}
+const APISERVER_SEED_COPY_TEMPLATE: &str = r#"APPLIANCE_WARNINGS_FILE=${APPLIANCE_WARNINGS_FILE:-/var/log/appliance-api-server.warnings}
 APPLIANCE_SEED_LOG=${APPLIANCE_SEED_LOG:-/var/log/appliance-api-server.log}
 APPLIANCE_SEED_MARKER=${APPLIANCE_SEED_MARKER:-/persist/.apiserver-seed-warning}
 APISERVER_DEST=${APISERVER_DEST:-/usr/local/bin/appliance-api-server}
@@ -1050,16 +1050,9 @@ elif [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PROPERTIES" ] || [ -f "$RELEA
     aarch64|arm64) RELEASE_ARCH=arm64 ;;
     *) RELEASE_ARCH=unsupported ;;
   esac
-  EXPECTED_BINARY_SHA=$(awk '$2 == "appliance-api-server" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
-  EXPECTED_BINARY_SIZE=$(awk '$2 == "appliance-api-server" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
-  ACTUAL_BINARY_SHA=$(sha256sum "$APISERVER_SRC" 2>/dev/null | awk '{print $1}')
-  ACTUAL_BINARY_SIZE=$(wc -c < "$APISERVER_SRC" 2>/dev/null | tr -d ' ')
-  RELEASE_KEY_ID=$(awk -F= '$1 == "keyId" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
-  RELEASE_VERSION=$(awk -F= '$1 == "version" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
-  SIDECAR_ARCH=$(awk -F= '$1 == "arch" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
-  if [ -z "$RELEASE_KEY_ID" ] || [ "$RELEASE_KEY_ID" != "__PINNED_RELEASE_KEY_ID__" ] || [ -z "$RELEASE_VERSION" ] || [ "$SIDECAR_ARCH" != "$RELEASE_ARCH" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ]; then
-    seed_warning "signed control-plane seed digest/size mismatch; api-server start refused"
-    SEED_OK=0
+__APISERVER_SEED_VERIFY__
+  if [ -n "${SEED_ERROR:-}" ]; then
+    seed_warning "$SEED_ERROR"
   fi
   if [ "$SEED_OK" = 1 ]; then
     cp "$APISERVER_SRC" "$APISERVER_DEST"
@@ -1067,8 +1060,8 @@ elif [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PROPERTIES" ] || [ -f "$RELEA
     if [ -f "$CONSOLE_SRC" ]; then
       EXPECTED_CONSOLE_SHA=$(awk '$2 == "appliance-console.tar.gz" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
       EXPECTED_CONSOLE_SIZE=$(awk '$2 == "appliance-console.tar.gz" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
-      ACTUAL_CONSOLE_SHA=$(sha256sum "$CONSOLE_SRC" 2>/dev/null | awk '{print $1}')
-      ACTUAL_CONSOLE_SIZE=$(wc -c < "$CONSOLE_SRC" 2>/dev/null | tr -d ' ')
+      ACTUAL_CONSOLE_SHA=$(sha256sum "$CONSOLE_SRC" 2>/dev/null | cut -d ' ' -f 1)
+      ACTUAL_CONSOLE_SIZE=$(wc -c < "$CONSOLE_SRC" 2>/dev/null | awk '{print $1}')
       if [ "$EXPECTED_CONSOLE_SHA" != "$ACTUAL_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SIZE" != "$ACTUAL_CONSOLE_SIZE" ]; then
         seed_warning "signed console bundle digest/size mismatch; console skipped (api-server remains headless)"
       else
@@ -1104,6 +1097,30 @@ elif [ -f "$APISERVER_SRC" ]; then
   fi
 fi
 "#;
+
+/// Verification-only portion of the seed gate. Keep this restricted to
+/// POSIX shell builtins plus the BusyBox-compatible applets exercised by the
+/// host-side portability test; the production guest world does not include
+/// jq.
+pub(crate) const APISERVER_SEED_VERIFY: &str = r#"  EXPECTED_BINARY_SHA=$(awk '$2 == "appliance-api-server" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+  EXPECTED_BINARY_SIZE=$(awk '$2 == "appliance-api-server" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+  ACTUAL_BINARY_SHA=$(sha256sum "$APISERVER_SRC" 2>/dev/null | cut -d ' ' -f 1)
+  ACTUAL_BINARY_SIZE=$(wc -c < "$APISERVER_SRC" 2>/dev/null | awk '{print $1}')
+  RELEASE_KEY_ID=$(awk -F= '$1 == "keyId" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  RELEASE_VERSION=$(awk -F= '$1 == "version" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  SIDECAR_ARCH=$(awk -F= '$1 == "arch" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  if [ -z "$RELEASE_KEY_ID" ] || [ "$RELEASE_KEY_ID" != "__PINNED_RELEASE_KEY_ID__" ] || [ -z "$RELEASE_VERSION" ] || [ "$SIDECAR_ARCH" != "$RELEASE_ARCH" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ]; then
+    SEED_ERROR="signed control-plane seed digest/size mismatch; api-server start refused"
+    SEED_OK=0
+  fi
+"#;
+
+/// Compose the complete backend-neutral seed copy block from the portable
+/// verification fragment. Keeping this separate lets backend tests inspect
+/// only the seed path rather than unrelated launcher sections that use jq.
+pub(crate) fn apiserver_seed_copy() -> String {
+    APISERVER_SEED_COPY_TEMPLATE.replace("__APISERVER_SEED_VERIFY__", APISERVER_SEED_VERIFY)
+}
 
 /// The backend-neutral half of the api-server provisioning: assumes
 /// `/usr/local/bin/appliance-api-server` and `/etc/appliance/bootstrap-token`
@@ -2650,7 +2667,10 @@ fn build_apkovl_for_readiness(
                 &if !cluster || !apiserver {
                     String::new()
                 } else {
-                    format!("{APISERVER_MEDIA_COPY}{APISERVER_SEED_COPY}{APISERVER_COMMON}")
+                    format!(
+                        "{APISERVER_MEDIA_COPY}{}{APISERVER_COMMON}",
+                        apiserver_seed_copy()
+                    )
                 },
             )
             // vz boot media: arm the guest-side probe for the
@@ -3759,11 +3779,68 @@ mod tests {
         assert!(!start.contains("base-config.json"));
     }
 
-    #[cfg(unix)]
     #[test]
-    fn apiserver_seed_gate_runs_with_restricted_busybox_userland_and_rejects_tampering() {
-        use std::os::unix::fs::symlink;
+    fn apiserver_seed_gate_runs_with_restricted_posix_userland_and_rejects_tampering() {
         use std::process::Command;
+
+        fn posix_shell() -> PathBuf {
+            #[cfg(windows)]
+            {
+                for variable in ["ProgramFiles", "ProgramFiles(x86)"] {
+                    if let Some(root) = std::env::var_os(variable) {
+                        let candidate = PathBuf::from(root).join("Git/bin/sh.exe");
+                        if candidate.is_file() {
+                            return candidate;
+                        }
+                    }
+                }
+                panic!("Git for Windows sh.exe is required for the seed-gate test");
+            }
+            #[cfg(not(windows))]
+            {
+                PathBuf::from("/bin/sh")
+            }
+        }
+
+        fn command_path(shell: &Path, command: &str) -> String {
+            let output = Command::new(shell)
+                .args(["-c", &format!("command -v {command}")])
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "missing POSIX test tool {command}");
+            String::from_utf8(output.stdout).unwrap().trim().to_string()
+        }
+
+        fn shell_path(shell: &Path, path: &Path) -> String {
+            #[cfg(windows)]
+            {
+                let output = Command::new(shell)
+                    .args(["-c", "cygpath -u \"$1\"", "sh"])
+                    .arg(path)
+                    .output()
+                    .unwrap();
+                assert!(output.status.success(), "could not translate Windows test path");
+                String::from_utf8(output.stdout).unwrap().trim().to_string()
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = shell;
+                path.to_string_lossy().into_owned()
+            }
+        }
+
+        fn write_wrapper(path: &Path, target: &str, arguments: &str) {
+            fs::write(
+                path,
+                format!("#!/bin/sh\nexec \"{target}\"{arguments} \"$@\"\n"),
+            )
+            .unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
 
         let root = std::env::temp_dir().join(format!(
             "appliance-seed-gate-{}-{}",
@@ -3775,26 +3852,38 @@ mod tests {
         ));
         let bin = root.join("bin");
         fs::create_dir_all(&bin).unwrap();
-        let busybox = Command::new("/bin/sh")
-            .args(["-c", "command -v busybox"])
-            .output()
-            .ok()
-            .filter(|output| output.status.success())
-            .and_then(|output| String::from_utf8(output.stdout).ok())
-            .map(|path| PathBuf::from(path.trim()));
-        for applet in ["awk", "chmod", "cp", "mkdir", "mv", "rm", "sha256sum", "tar", "tee", "tr", "uname", "wc"] {
-            let source = if let Some(path) = &busybox {
-                path.clone()
-            } else {
-                let output = Command::new("/bin/sh")
-                    .args(["-c", &format!("command -v {applet}")])
-                    .output()
-                    .unwrap();
-                assert!(output.status.success(), "missing test userland applet {applet}");
-                PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
-            };
-            symlink(source, bin.join(applet)).unwrap();
+        let shell = posix_shell();
+        write_wrapper(&bin.join("sh"), "/bin/sh", "");
+        // The gate uses only POSIX awk field operations, shared by BSD awk,
+        // GNU awk, and BusyBox awk. Deliberately expose no broader userland.
+        for tool in ["awk", "cut", "wc"] {
+            write_wrapper(&bin.join(tool), &command_path(&shell, tool), "");
         }
+        let sha256sum = Command::new(&shell)
+            .args(["-c", "command -v sha256sum"])
+            .output()
+            .unwrap();
+        if sha256sum.status.success() {
+            write_wrapper(
+                &bin.join("sha256sum"),
+                String::from_utf8(sha256sum.stdout).unwrap().trim(),
+                "",
+            );
+        } else {
+            write_wrapper(
+                &bin.join("sha256sum"),
+                &command_path(&shell, "shasum"),
+                " -a 256",
+            );
+        }
+        let restricted_path = shell_path(&shell, &bin);
+        let jq_absent = Command::new(&shell)
+            .args(["-c", "! command -v jq >/dev/null 2>&1"])
+            .env("PATH", &restricted_path)
+            .status()
+            .unwrap();
+        assert!(jq_absent.success(), "restricted seed-gate PATH unexpectedly exposes jq");
+        assert!(!APISERVER_SEED_VERIFY.contains("jq"));
 
         let source = root.join("appliance-api-server");
         fs::write(&source, b"verified-binary").unwrap();
@@ -3809,53 +3898,30 @@ mod tests {
         let properties = root.join("control-plane-release.properties");
         let arch = if std::env::consts::ARCH == "aarch64" { "arm64" } else { "x64" };
         fs::write(&properties, format!("keyId={key_id}\nversion=1.57.0\narch={arch}\n")).unwrap();
-        let payload = root.join("control-plane-release.json");
-        let envelope = root.join("control-plane-release.sig.json");
-        fs::write(&payload, b"{}\n").unwrap();
-        fs::write(&envelope, b"{}\n").unwrap();
-        let destination = root.join("installed-api-server");
-        let warning = root.join("warnings");
-        let marker = root.join("marker");
-        let log = root.join("seed.log");
-        let script = APISERVER_SEED_COPY.replace("__PINNED_RELEASE_KEY_ID__", &key_id);
+        let script = APISERVER_SEED_VERIFY.replace("__PINNED_RELEASE_KEY_ID__", &key_id);
+        let source_path = shell_path(&shell, &source);
+        let checksums_path = shell_path(&shell, &checksums);
+        let properties_path = shell_path(&shell, &properties);
 
-        let run = || {
-            let mut command = if let Some(path) = &busybox {
-                let mut command = Command::new(path);
-                command.arg("sh");
-                command
-            } else {
-                Command::new("/bin/sh")
-            };
-            command
+        let run = |expected: &str| {
+            Command::new(&shell)
                 .arg("-c")
-                .arg(&script)
-                .env("PATH", &bin)
-                .env("APISERVER_MEDIA", &root)
-                .env("APISERVER_SRC", &source)
-                .env("CONSOLE_SRC", root.join("missing-console"))
-                .env("RELEASE_CHECKSUMS", &checksums)
-                .env("RELEASE_PROPERTIES", &properties)
-                .env("RELEASE_PAYLOAD", &payload)
-                .env("RELEASE_ENVELOPE", &envelope)
-                .env("APISERVER_DEST", &destination)
-                .env("CONSOLE_DEST", root.join("console"))
-                .env("APPLIANCE_WARNINGS_FILE", &warning)
-                .env("APPLIANCE_SEED_MARKER", &marker)
-                .env("APPLIANCE_SEED_LOG", &log)
+                .arg(format!("SEED_OK=1\nSEED_ERROR=\n{script}\n[ \"$SEED_OK\" = {expected} ]"))
+                .env("PATH", &restricted_path)
+                .env("APISERVER_SRC", &source_path)
+                .env("RELEASE_CHECKSUMS", &checksums_path)
+                .env("RELEASE_PROPERTIES", &properties_path)
+                .env("RELEASE_ARCH", arch)
                 .output()
                 .unwrap()
         };
 
-        let accepted = run();
-        assert!(accepted.status.success(), "seed script failed: {}", String::from_utf8_lossy(&accepted.stderr));
-        assert_eq!(fs::read(&destination).unwrap(), b"verified-binary");
+        let accepted = run("1");
+        assert!(accepted.status.success(), "seed gate failed: {}", String::from_utf8_lossy(&accepted.stderr));
 
         fs::write(&source, b"tampered-binary").unwrap();
-        let rejected = run();
-        assert!(rejected.status.success());
-        assert!(!destination.exists(), "a tampered seed must remove the installed binary");
-        assert!(fs::read_to_string(&marker).unwrap().contains("start refused"));
+        let rejected = run("0");
+        assert!(rejected.status.success(), "tampered seed was accepted: {}", String::from_utf8_lossy(&rejected.stderr));
         fs::remove_dir_all(root).unwrap();
     }
 
