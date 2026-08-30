@@ -181,6 +181,17 @@ describe('appliance CloudFormation template', () => {
       Effect: 'Deny',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySystemFunctionMutation,
     });
+    const applianceFunctionActions = statements.find((statement) => statement.Sid === 'ApplianceFunctions')?.Action;
+    const deniedSystemFunctionActions = statements.find(
+      (statement) => statement.Sid === 'DenySystemFunctionMutation'
+    )?.Action;
+    const allowedMutations = (
+      Array.isArray(applianceFunctionActions) ? applianceFunctionActions : [applianceFunctionActions]
+    ).filter(
+      (action): action is string =>
+        Boolean(action) && !action.startsWith('lambda:Get') && !action.startsWith('lambda:List')
+    );
+    expect(deniedSystemFunctionActions).toEqual(allowedMutations);
   });
 
   it('requires a stack-owned boundary that blocks role, own-stack, and system-function escalation', () => {
