@@ -229,4 +229,52 @@ describe('registry HTTP ECR mirror', () => {
     await run(fixture);
     expect(fixture.stats().maxChunk).toBeLessThanOrEqual(64 * 1024);
   });
+
+  it('skips an immutable target tag that already binds the resolved digest', async () => {
+    const fixture = registryFixture();
+    const sourceManifest = fixture.manifests.get('amd64')!;
+    const result = await mirrorImageToEcr({
+      sourceImage: 'ghcr.io/org/app:latest',
+      targetRepositoryUrl: TARGET,
+      architecture: 'x86_64',
+      targetCredentials: { username: 'AWS', password: 'secret' },
+      fetch: fixture.fetch,
+      describeTargetTag: async () => digest(sourceManifest),
+    });
+    expect(result).toMatchObject({ digest: digest(sourceManifest), uploadedBlobs: 0, reusedBlobs: 0 });
+    expect(fixture.stats().pushedManifest).toHaveLength(0);
+  });
+
+  it('fails a mutable source tag with actionable digest/new-tag guidance', async () => {
+    const fixture = registryFixture();
+    await expect(
+      mirrorImageToEcr({
+        sourceImage: 'ghcr.io/org/app:latest',
+        targetRepositoryUrl: TARGET,
+        architecture: 'x86_64',
+        targetCredentials: { username: 'AWS', password: 'secret' },
+        fetch: fixture.fetch,
+        describeTargetTag: async () => `sha256:${'f'.repeat(64)}`,
+      })
+    ).rejects.toThrow('tag latest already exists with a different digest; use --image <ref>@sha256:… or a new tag');
+    expect(fixture.stats().pushedManifest).toHaveLength(0);
+  });
+
+  it('uses a digest-derived target tag for digest sources', async () => {
+    const fixture = registryFixture();
+    const sourceDigest = digest(fixture.manifests.get('amd64')!);
+    let describedTag = '';
+    await mirrorImageToEcr({
+      sourceImage: `ghcr.io/org/app@${sourceDigest}`,
+      targetRepositoryUrl: TARGET,
+      architecture: 'x86_64',
+      targetCredentials: { username: 'AWS', password: 'secret' },
+      fetch: fixture.fetch,
+      describeTargetTag: async (tag) => {
+        describedTag = tag;
+        return undefined;
+      },
+    });
+    expect(describedTag).toBe(sourceDigest.replace(':', '-'));
+  });
 });

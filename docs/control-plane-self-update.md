@@ -1,7 +1,20 @@
 # Control-plane self-update (AP-218)
 
-**Status:** CU1 shipped by AP-219; CU2 trigger re-pointing and the microVM path remain follow-on work. Scope is the control-plane
+**Status:** CU1 shipped by AP-219 and CU2 shipped by AP-220; the microVM path remains follow-on work. Scope is the control-plane
 image/binary only. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
+
+## CU2 shipped (AP-220)
+
+The SDK now provides typed `selfUpdate.start/status/watch` methods over the CU1 route and shares the public job contract with the
+server. The CLI resolves a named/latest release, downloads and verifies its signed evidence offline, starts the job, streams phase
+changes, reports before/after `serverVersion`, and emits per-phase durations plus terminal `totalMs` under `--json`. Polling tolerates
+transient service replacement errors and remains bounded by a deadline/abort signal. `409` is attachable with `--follow`; failed
+healthy recovery reports the prior-image re-pin, while exhausted recovery points to `--local`.
+
+Desktop CloudFormation-v1 profiles call this SDK route through the selected cluster client and render queued, mirror, CloudFormation,
+health, recovered, and failed states in the existing panel. The sidecar remains only for legacy installs during the two-release
+deprecation window. `--local` preserves the operator-machine mirror/UpdateStack path. Production self-update remains deliberately
+disabled until AP-226 pins the production key.
 
 ## CU1 shipped (AP-219)
 
@@ -73,7 +86,8 @@ payload binds that digest to the cloud-image artifact, version, architecture, ge
 
 The server verifies the Ed25519 envelope and current signed blacklist before persistence, creates a CAS-protected job, and returns
 `202 {jobId,status:"queued",statusUrl}`. `GET /api/v1/self-update/:jobId` has the same admin/owner-tenant gates and returns phase,
-verified target/prior identity, timestamps, recovery state, and redacted error. Jobs live in S3 ObjectStore, not Lambda memory.
+verified target/prior identity, timestamps, per-phase durations, recovery state, and redacted error. Jobs live in S3 ObjectStore, not
+Lambda memory.
 
 Idempotency is keyed by `(callerKeyId, tenantId, idempotencyKey)`, never a global client string. A live lease has `expiresAt` and
 `heartbeatAt`; a claimed lease also has a random `holder` fencing epoch. Heartbeat and finish CAS against that holder, so an invocation
@@ -102,8 +116,9 @@ only after that image is built and delivered; CU1 pins it and CU2 acceptance ver
 Before `crane cp`, the worker uses the new production release trust (not `PINNED_CATALOGUE_TRUST`) to verify the RFC-8785 envelope,
 keyId SHA-256 pin, generation floor/high-water mark, validity, blacklist, artifact kind/arch, and exact GHCR manifest digest. Verification
 needs no transparency/network service. Only that digest is copied to installation ECR under `system-<version>`; the repository
-lifecycle expires only `build-` workload tags, so updater `system-` and installer `sha256-` tags are never lifecycle candidates. Tags are immutable. `ecr:DescribeImages` resolves the mirrored tag back
-to a digest, which must equal the signed digest and is persisted before `UpdateStack`. Signature, expiry, rollback-generation,
+lifecycle expires only old `build-` workload tags plus untagged manifests older than seven days, so updater `system-`, installer
+`sha256-`, and release-version tags are never lifecycle candidates. Tags are immutable. `ecr:DescribeImages` resolves the mirrored tag
+back to a digest, which must equal the signed digest and is persisted before `UpdateStack`. Signature, expiry, rollback-generation,
 blacklist, or digest mismatch fails before ECR/CFN mutation.
 
 The worker never materializes the image in Lambda's 4-GiB filesystem. First it describes the stack, rejects blank `ImageUri`, and
@@ -242,7 +257,7 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
 ## 4. Triggers and client re-pointing
 
 - **CU1:** ship the admin route/job and production-key verifier. `latestGhcrTag` is advisory only; mutation names a signed manifest digest.
-- **CU2:** `appliance cloud update` calls the route and polls the job. `--local`
+- **CU2 (shipped by AP-220):** `appliance cloud update` calls the route and polls the job. `--local`
   preserves today's `runCloudSystemUpdate` for break glass. Cloud baseline update
   remains local and separately named. Desktop “Check for updates” calls the same
   SDK route only when `profile.installGeneration === 'cloudformation-v1'`; frozen legacy installs retain `updateApiServer` sidecar for
@@ -372,13 +387,47 @@ Test crane array argv/no shell, verified source-to-target digest binding, nonbla
 `UsePreviousTemplate`, only `ImageUri` new, every other parameter previous, service `RoleArn`, and exactly
 `[CAPABILITY_NAMED_IAM]`, with no stack-policy override. Parse YAML, enforce 51,200 bytes, fail if a named IAM resource lacks
 NAMED_IAM acknowledgement, snapshot caller/service-role allow-lists and stack-policy protected logical IDs, and submit an
-arbitrary-template negative test. Test operator-only `StackPolicyDuringUpdateBody`, unconditional policy installation, lifecycle
-exclusion of system tags, ECR digest resolution, exact AssumeRole shape, token-to-DOCKER_CONFIG wiring, pre-mutation failure,
+arbitrary-template negative test. Test operator-only `StackPolicyDuringUpdateBody`, unconditional policy installation, the exact
+build-tag/untagged lifecycle rules, ECR digest resolution and immutable-tag match/mismatch behavior, exact AssumeRole shape,
+token-to-DOCKER_CONFIG wiring, pre-mutation failure,
 terminal stack failures, submitted-but-unobserved recovery, exhaustion clearing its lease, resumption, and deadline reserve.
 
 CU0/CU1 live verification uses a disposable install and CloudTrail to remove admin, minimize both normal execution and CFN service-role
-actions, confirm only the scoped CFN PassRole and no GetFunction, and prove baseline/IAM/S3/KMS mutation denied. Measure p95/p99 before CU2;
-then update N→N+1, reject concurrency, kill a worker and resume, force CFN failure, force healthy-wrong-version re-pin, and retry good.
+actions, confirm only the scoped CFN PassRole and no GetFunction, and prove baseline/IAM/S3/KMS mutation denied. Then update N→N+1,
+reject concurrency, kill a worker and resume, force CFN failure, force healthy-wrong-version re-pin, and retry good.
+
+CU2's owner timing gate is live-only and feeds AP-223; unit fakes are not evidence. After AP-226 pins the production key, run three
+consecutive signed updates on a disposable CloudFormation-v1 installation with `appliance cloud update --json` (use three monotonically
+new signed releases, or another owner-approved sequence that creates three real jobs). Use only fresh, uninterrupted jobs as timing
+samples. Preserve each terminal JSON record, its `phaseDurationsMs`, and its explicit `totalMs`. For every run record:
+
+Set the three signed release versions, then capture each run as described in the [CLI cloud update reference](cli.md#cloud-update):
+
+```sh
+v1=1.58.0 v2=1.59.0 v3=1.60.0 # replace with the three live signed releases
+appliance cloud update --version "$v1" --json > run1.json
+appliance cloud update --version "$v2" --json > run2.json
+appliance cloud update --version "$v3" --json > run3.json
+jq -se 'all(.[]; (.job.resumeCount // 0) == 0)' run*.json
+jq '{mirror:(.job.phaseDurationsMs.mirroring // 0), cfn:((.job.phaseDurationsMs["submitting-update"] // 0)+(.job.phaseDurationsMs["waiting-for-stack"] // 0)), health:(.job.phaseDurationsMs["probing-health"] // 0), total:.job.totalMs}' run*.json
+jq -s 'map(.job.totalMs)|max' run*.json
+```
+
+1. mirror = `mirroring`;
+2. CloudFormation = `submitting-update + waiting-for-stack`;
+3. health = `probing-health`;
+4. target total = `totalMs` = `completedAt − startedAt`, covering every pre-complete phase, including queued, verifying, and
+   describing-stack.
+
+Mirror, CloudFormation, and health are diagnostic breakdowns, not a substitute for the target total. A resumed job has
+`resumeCount > 0` and charges lease-gap wall time to whichever phase was in flight; retain that record as recovery evidence but discard
+it from the timing sample set. The first `jq` command above must exit `0`, proving that all three sample files are uninterrupted jobs.
+Compute p95 and p99 for each component and target total; with three observations, report the nearest-rank value (the maximum) and retain
+all raw values. Acceptance requires the observed p99 target total to fit the 660-second target deadline, leaving 180 seconds to the
+840-second hard-work limit for recovery and a final 60-second reserve inside Lambda's 900-second worker budget. Also force one unhealthy
+target and preserve the recovery-phase durations to prove the previous-image re-pin uses that reserve. Record region, architecture,
+source/target versions, job ids, wall-clock timestamps, and the `--json` files in the PR/live-proof artifact set. Durations use server
+wall-clock timestamps, so note any NTP/clock step and discard an affected timing sample. Do not claim this gate from a fake or dry run.
 
 For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 warning before the pin and refusal after it, fail-closed create/restage before writing, protected staging and signed
 boot-media seed, raw VZ and same-handle WSL transfer, wrong size/hash, root-only volume/VHD, symlink/held-fd race, PSA/hostPath denial,

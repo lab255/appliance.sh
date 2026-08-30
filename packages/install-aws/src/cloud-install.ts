@@ -11,7 +11,7 @@ import {
   type Parameter,
   type Stack,
 } from '@aws-sdk/client-cloudformation';
-import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
+import { DescribeImagesCommand, ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
@@ -450,7 +450,24 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
       if (separator < 0) throw new Error('AWS ECR returned a malformed registry authorization token');
       return { username: decoded.slice(0, separator), password: decoded.slice(separator + 1) };
     },
-    mirror: (input) => mirrorImageToEcr({ ...input, fetch: request }),
+    mirror: (input) =>
+      mirrorImageToEcr({
+        ...input,
+        fetch: request,
+        describeTargetTag: async (tag) => {
+          try {
+            const repositoryName = input.targetRepositoryUrl.slice(input.targetRepositoryUrl.indexOf('/') + 1);
+            const response = await ecr.send(
+              new DescribeImagesCommand({ repositoryName, imageIds: [{ imageTag: tag }] })
+            );
+            return response.imageDetails?.[0]?.imageDigest;
+          } catch (error) {
+            const candidate = error as { name?: string };
+            if (candidate.name === 'ImageNotFoundException') return undefined;
+            throw error;
+          }
+        },
+      }),
     async writeBaseConfigIfAbsent(bucket, key, value) {
       try {
         await s3.send(

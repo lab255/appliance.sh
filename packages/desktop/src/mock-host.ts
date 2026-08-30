@@ -659,6 +659,7 @@ export function createMockHost(): ConsoleHost {
       : [];
   return {
     platform: mockPlatform(),
+    desktop: true,
     async getConfig(): Promise<HostConfig> {
       const state = readState();
       const selected = state.clusters.find((c) => c.id === state.selectedClusterId) ?? null;

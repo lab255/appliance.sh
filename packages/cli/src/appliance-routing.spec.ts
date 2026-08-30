@@ -107,6 +107,24 @@ describe('appliance umbrella routing', () => {
     expect(result.stdout).toContain('--yes');
   });
 
+  it('documents signed cloud update, follow, JSON timing, and local break glass', () => {
+    const result = appliance('cloud', 'update', '--help');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/signed in-server self-update\s+route/);
+    expect(result.stdout).toContain('--version <version>');
+    expect(result.stdout).toContain('--follow <jobId>');
+    expect(result.stdout).toContain('--json');
+    expect(result.stdout).toContain('--local');
+    expect(result.stdout).toContain('break glass');
+  });
+
+  it('rejects JSON for the local path because it has no server job record', () => {
+    const result = appliance('cloud', 'update', '--local', '--json');
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('--local has no job record; omit --json');
+    expect(result.stderr).not.toContain('at run');
+  });
+
   it('requires explicit confirmation before restoring AdministratorAccess', () => {
     const result = appliance('cloud', 'baseline-update', '--system-role-mode', 'admin');
     expect(result.status).not.toBe(0);

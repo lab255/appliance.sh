@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   runCloudBaselineUpdate,
+  runCloudRouteUpdate,
   runCloudSystemUpdate,
   runCloudTeardown,
   type CloudLifecycleDependencies,
 } from './cloud-lifecycle.js';
+import type { SelfUpdatePublicJob } from '@appliance.sh/sdk';
 
 const profile = {
   installGeneration: 'cloudformation-v1' as const,
@@ -75,6 +77,83 @@ function dependencies(): CloudLifecycleDependencies {
 }
 
 describe('CloudFormation lifecycle', () => {
+  it('starts and watches the in-server route while reporting before/after server versions', async () => {
+    const terminal = selfUpdateJob('succeeded');
+    const client = {
+      getClusterInfo: vi
+        .fn()
+        .mockResolvedValueOnce({ success: true, data: { serverVersion: '1.57.0' } })
+        .mockResolvedValueOnce({ success: true, data: { serverVersion: '1.58.0' } }),
+      selfUpdate: {
+        start: vi.fn(async () => ({
+          success: true as const,
+          data: { httpStatus: 202 as const, jobId: terminal.jobId, status: 'queued' as const, statusUrl: '/job' },
+        })),
+        watch: vi.fn(async (_jobId: string, options: { onPhase?: (job: SelfUpdatePublicJob) => void }) => {
+          options.onPhase?.(terminal);
+          return { success: true as const, data: terminal };
+        }),
+      },
+    };
+    const onPhase = vi.fn();
+    await expect(
+      runCloudRouteUpdate(
+        {
+          targetDigest: terminal.target.digest,
+          release: { payload: {} as never, envelope: {} as never },
+          idempotencyKey: 'once',
+          onPhase,
+        },
+        client as never
+      )
+    ).resolves.toMatchObject({
+      outcome: 'terminal',
+      previousServerVersion: '1.57.0',
+      currentServerVersion: '1.58.0',
+      job: terminal,
+    });
+    expect(client.selfUpdate.start).toHaveBeenCalledOnce();
+    expect(onPhase).toHaveBeenCalledWith(terminal);
+  });
+
+  it('returns a live-lease conflict without polling', async () => {
+    const client = {
+      getClusterInfo: vi.fn(async () => ({ success: true, data: { serverVersion: '1.57.0' } })),
+      selfUpdate: {
+        start: vi.fn(async () => ({
+          success: true as const,
+          data: { httpStatus: 409 as const, jobId: 'existing', statusUrl: '/api/v1/self-update/existing' },
+        })),
+        watch: vi.fn(),
+      },
+    };
+    const result = await runCloudRouteUpdate(
+      { targetDigest: `sha256:${'a'.repeat(64)}`, release: {} as never, idempotencyKey: 'once' },
+      client as never
+    );
+    expect(result).toMatchObject({
+      outcome: 'conflict',
+      jobId: 'existing',
+      statusUrl: '/api/v1/self-update/existing',
+      start: { jobId: 'existing' },
+    });
+    expect(client.selfUpdate.watch).not.toHaveBeenCalled();
+  });
+
+  it('follows an existing job without starting another one', async () => {
+    const terminal = selfUpdateJob('failed');
+    const client = {
+      getClusterInfo: vi.fn(async () => ({ success: true, data: { serverVersion: '1.57.0' } })),
+      selfUpdate: {
+        start: vi.fn(),
+        watch: vi.fn(async () => ({ success: true as const, data: terminal })),
+      },
+    };
+    await runCloudRouteUpdate({ followJobId: terminal.jobId }, client as never);
+    expect(client.selfUpdate.start).not.toHaveBeenCalled();
+    expect(client.selfUpdate.watch).toHaveBeenCalledWith(terminal.jobId, expect.any(Object));
+  });
+
   it('mirrors, updates the one shared ImageUri, then health-checks', async () => {
     const deps = dependencies();
     await runCloudSystemUpdate({ profile, installationName: 'prod', sourceImage: 'ghcr.io/appliance/api:v2' }, deps);
@@ -217,3 +296,23 @@ describe('CloudFormation lifecycle', () => {
     expect(deps.destroyEdge).not.toHaveBeenCalled();
   });
 });
+
+function selfUpdateJob(status: 'succeeded' | 'failed'): SelfUpdatePublicJob {
+  return {
+    jobId: 'selfupdate_1',
+    status,
+    phase: 'complete',
+    target: {
+      digest: `sha256:${'a'.repeat(64)}`,
+      version: '1.58.0',
+      generation: 2,
+      source: `ghcr.io/lab255/appliance-api-server@sha256:${'a'.repeat(64)}`,
+    },
+    timestamps: {
+      createdAt: '2026-08-30T00:00:00Z',
+      updatedAt: '2026-08-30T00:01:00Z',
+      heartbeatAt: '2026-08-30T00:01:00Z',
+      leaseExpiresAt: '2026-08-30T00:02:00Z',
+    },
+  };
+}

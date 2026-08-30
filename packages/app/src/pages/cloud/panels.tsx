@@ -16,6 +16,13 @@ import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import type { BootstrapEvent, Cluster, ConsoleHost } from '@/lib/host';
+import {
+  desktopSelfUpdateError,
+  runDesktopCloudSelfUpdate,
+  selfUpdatePhaseMessage,
+  selfUpdateRollbackMessage,
+  selfUpdateTerminalError,
+} from '@/lib/self-update-ui';
 
 // Cloud installation detail — the lifecycle ops for one bootstrapped AWS
 // installation: update baseline, update api-server/worker, detach/reattach
@@ -123,6 +130,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   const queryClient = useQueryClient();
   const { config } = useSelectedCluster();
   const canBootstrap = Boolean(host.bootstrap);
+  const desktop = host.desktop === true;
   const canTeardown = Boolean(host.bootstrap?.teardown);
   const isSelected = config?.selectedClusterId === cluster.id;
 
@@ -180,7 +188,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   }
 
   if (provisioner === 'cloudformation-v1') {
-    return <CloudFormationLifecycleHandoff />;
+    return <CloudFormationLifecycleHandoff cluster={cluster} desktop={desktop} />;
   }
 
   if (!canBootstrap) {
@@ -222,15 +230,19 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function CloudFormationLifecycleHandoff() {
+export function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: Cluster; desktop: boolean }) {
   return (
     <div className="space-y-3">
-      <SectionCard
-        title="Update cloud installation"
-        description="This installation is managed by CloudFormation. Run updates with the Appliance CLI."
-      >
-        <CommandSnippet command="appliance cloud update" />
-      </SectionCard>
+      {desktop ? (
+        <UpdateApiServerPanel cluster={cluster} cloudFormation />
+      ) : (
+        <SectionCard
+          title="Update cloud installation"
+          description="Run the signed self-update from the Appliance desktop or CLI."
+        >
+          <CommandSnippet command="appliance cloud update" />
+        </SectionCard>
+      )}
       <SectionCard
         tone="danger"
         title="Destroy cloud installation"
@@ -240,6 +252,15 @@ function CloudFormationLifecycleHandoff() {
       </SectionCard>
     </div>
   );
+}
+
+export function defaultSelfUpdateTarget(
+  latestVersion: string | null,
+  runningVersion: string | null,
+  latestPending: boolean
+): string | null {
+  if (latestVersion) return latestVersion;
+  return latestPending ? null : runningVersion;
 }
 
 function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
@@ -414,7 +435,7 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
+function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cluster; cloudFormation?: boolean }) {
   const host = useHost();
   const client = useApplianceClient();
   const { config } = useSelectedCluster();
@@ -422,6 +443,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
   const [status, setStatus] = React.useState<RunStatus>('idle');
   const [logs, setLogs] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+  const [rollbackMessage, setRollbackMessage] = React.useState<string | null>(null);
   const [awsProfile, setAwsProfile] = React.useState('');
   const [targetVersion, setTargetVersion] = React.useState('');
   const [baseConfigJson, setBaseConfigJson] = React.useState('');
@@ -438,7 +460,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
     },
     retry: false,
   });
-  const runningVersion = clusterInfoQuery.data?.version ?? null;
+  const runningVersion = clusterInfoQuery.data?.serverVersion ?? clusterInfoQuery.data?.version ?? null;
 
   // Latest semver tag on ghcr.io/appliance-sh/api-server. Best-effort:
   // if the lookup fails (no network, package private, etc.) the user
@@ -456,13 +478,13 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
   // running version (so the user can re-pin), else empty.
   React.useEffect(() => {
     if (targetVersion) return;
-    if (latestVersion) setTargetVersion(latestVersion);
-    else if (runningVersion) setTargetVersion(runningVersion);
-  }, [latestVersion, runningVersion, targetVersion]);
+    const defaultTarget = defaultSelfUpdateTarget(latestVersion, runningVersion, latestQuery.isPending);
+    if (defaultTarget) setTargetVersion(defaultTarget);
+  }, [latestQuery.isPending, latestVersion, runningVersion, targetVersion]);
 
   const profilesQuery = useQuery({
     queryKey: ['aws-profiles'],
-    enabled: Boolean(host.bootstrap?.listAwsProfiles),
+    enabled: !cloudFormation && Boolean(host.bootstrap?.listAwsProfiles),
     queryFn: () => host.bootstrap!.listAwsProfiles!(),
   });
   const profiles = profilesQuery.data ?? [];
@@ -504,9 +526,9 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
 
   const onRun = async () => {
     if (!targetValid) return;
-    if (!overrideValid) return;
-    if (!host.bootstrap?.updateApiServer) return;
-    if (!apiKey) {
+    if (!cloudFormation && !overrideValid) return;
+    if (!cloudFormation && !host.bootstrap?.updateApiServer) return;
+    if (!client || !apiKey) {
       setStatus('failed');
       setError('No API key loaded for this cluster — switch to it first.');
       return;
@@ -514,8 +536,28 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
     setStatus('running');
     setLogs([]);
     setError(null);
+    setRollbackMessage(null);
     try {
-      await host.bootstrap.updateApiServer(
+      if (cloudFormation) {
+        const update = await runDesktopCloudSelfUpdate(client, targetVersion, {
+          idempotencyKey: `desktop-cloud-update-${crypto.randomUUID()}`,
+          intervalMs: 2_000,
+          onPhase: (job) => setLogs((prev) => [...prev, selfUpdatePhaseMessage(job)]),
+          onExistingJob: (statusUrl, jobId) =>
+            setLogs((prev) => [...prev, `An update is already running at ${statusUrl}; attaching to ${jobId}.`]),
+        });
+        if (update.job.status === 'failed' && update.job.recovered) {
+          setRollbackMessage(selfUpdateRollbackMessage(runningVersion));
+          setStatus('rolled-back');
+          await clusterInfoQuery.refetch();
+          return;
+        }
+        if (update.job.status === 'failed') throw new Error(selfUpdateTerminalError(update.job));
+        await clusterInfoQuery.refetch();
+        setStatus('succeeded');
+        return;
+      }
+      await host.bootstrap!.updateApiServer(
         {
           apiServerUrl: cluster.apiServerUrl,
           apiKey,
@@ -529,7 +571,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
       setStatus('succeeded');
     } catch (err) {
       setStatus('failed');
-      setError(err instanceof Error ? err.message : String(err));
+      setError(cloudFormation ? desktopSelfUpdateError(err) : err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -538,13 +580,17 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
       <div>
         <div className="text-sm font-medium">Update Appliance service</div>
         <div className="text-xs text-[var(--color-muted-foreground)]">
-          Choose a service version and update the installation.
+          {cloudFormation
+            ? 'Updates to the latest signed release; the running service does the work.'
+            : 'Choose a service version and update the installation.'}
           <details className="mt-1">
             <summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
               Technical details
             </summary>
             <p className="mt-1">
-              Copies the selected registry image into ECR, then updates the worker and service Lambdas in order.
+              {cloudFormation
+                ? 'The running service verifies signed release evidence, mirrors the bound digest, updates CloudFormation, probes health, and automatically re-pins the previous image on failure.'
+                : 'Copies the selected registry image into ECR, then updates the worker and service Lambdas in order.'}
             </p>
           </details>
         </div>
@@ -584,7 +630,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
         </div>
       </div>
 
-      {clusterInfoUnavailable ? (
+      {!cloudFormation && clusterInfoUnavailable ? (
         <label className="block space-y-1 text-xs">
           <span className="text-[var(--color-muted-foreground)]">
             APPLIANCE_BASE_CONFIG (paste JSON — fallback when /cluster-info isn&apos;t available)
@@ -627,38 +673,53 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
         />
       </label>
 
-      <label className="block space-y-1 text-xs">
-        <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
-        {canEnumerateProfiles ? (
-          <select
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
-          >
-            <option value="">— shell environment —</option>
-            {profiles.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-                {p.isSso ? '  (SSO)' : ''}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <Input
-            type="text"
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            placeholder="leave empty to use shell env"
-            disabled={status === 'running'}
-            mono
-          />
-        )}
-      </label>
+      {!cloudFormation ? (
+        <label className="block space-y-1 text-xs">
+          <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
+          {canEnumerateProfiles ? (
+            <select
+              value={awsProfile}
+              onChange={(e) => setAwsProfile(e.target.value)}
+              disabled={status === 'running'}
+              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
+            >
+              <option value="">— shell environment —</option>
+              {profiles.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                  {p.isSso ? '  (SSO)' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              type="text"
+              value={awsProfile}
+              onChange={(e) => setAwsProfile(e.target.value)}
+              placeholder="leave empty to use shell env"
+              disabled={status === 'running'}
+              mono
+            />
+          )}
+        </label>
+      ) : null}
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onRun} disabled={status === 'running' || !targetValid || !overrideValid}>
-          {status === 'running' ? 'Updating…' : `Update to ${targetVersion || '…'}`}
+        <Button
+          size="sm"
+          onClick={onRun}
+          disabled={
+            status === 'running' ||
+            !targetValid ||
+            (!cloudFormation && !overrideValid) ||
+            (cloudFormation && latestVersion === runningVersion && targetVersion === runningVersion)
+          }
+        >
+          {status === 'running'
+            ? 'Updating…'
+            : cloudFormation && latestVersion === runningVersion && targetVersion === runningVersion
+              ? 'Up to date'
+              : `Update to ${targetVersion || '…'}`}
         </Button>
       </div>
       <InstallerOperation
@@ -666,13 +727,14 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
         status={status}
         logs={logs}
         error={error}
+        rollbackMessage={rollbackMessage}
         onRetry={() => void onRun()}
       />
     </SectionCard>
   );
 }
 
-type RunStatus = 'idle' | 'running' | 'succeeded' | 'failed';
+type RunStatus = 'idle' | 'running' | 'succeeded' | 'rolled-back' | 'failed';
 type Direction = 'promote' | 'demote';
 
 function InstallerOperation({
@@ -680,12 +742,14 @@ function InstallerOperation({
   status,
   logs,
   error,
+  rollbackMessage,
   onRetry,
 }: {
   title: string;
   status: RunStatus;
   logs: string[];
   error: string | null;
+  rollbackMessage?: string | null;
   onRetry: () => void;
 }) {
   const failureRef = React.useRef<HTMLDivElement>(null);
@@ -693,6 +757,21 @@ function InstallerOperation({
     if (status === 'failed') failureRef.current?.focus();
   }, [status]);
   if (status === 'idle') return null;
+  if (status === 'rolled-back') {
+    return (
+      <div className="space-y-2">
+        <Banner tone="warning" role="status" title="Update rolled back">
+          {rollbackMessage ?? 'The previous version is serving and healthy.'}
+        </Banner>
+        {logs.length ? (
+          <details className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs">
+            <summary className="cursor-pointer">Updating Appliance service technical details</summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono">{logs.join('\n')}</pre>
+          </details>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div ref={failureRef} tabIndex={status === 'failed' ? -1 : undefined} className="focus:outline-none">
       <LongOperation

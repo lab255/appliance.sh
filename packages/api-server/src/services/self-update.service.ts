@@ -5,6 +5,10 @@ import {
   verifyReleaseEnvelope,
   z,
   type ReleaseEnvelope,
+  type SelfUpdatePhase,
+  type SelfUpdatePhaseDurations,
+  type SelfUpdatePublicJob,
+  type SelfUpdateStatus,
   type SigningCredentials,
 } from '@appliance.sh/sdk';
 import { getStorageService, type StorageService } from './storage.service';
@@ -24,19 +28,6 @@ export const selfUpdateRequestSchema = z.strictObject({
 });
 
 export const selfUpdateWorkerEventSchema = z.strictObject({ jobId: z.string().min(1) });
-
-export type SelfUpdateStatus = 'queued' | 'running' | 'succeeded' | 'failed';
-export type SelfUpdatePhase =
-  | 'queued'
-  | 'verifying'
-  | 'describing-stack'
-  | 'mirroring'
-  | 'submitting-update'
-  | 'waiting-for-stack'
-  | 'probing-health'
-  | 'submitting-recovery'
-  | 'waiting-for-recovery'
-  | 'complete';
 
 export interface SelfUpdateLease {
   expiresAt: string;
@@ -64,6 +55,10 @@ export interface SelfUpdateJob {
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
+  /** Additive CU2 fields; absent on schema-v0/N-1 records. */
+  phaseStartedAt?: string;
+  phaseDurationsMs?: SelfUpdatePhaseDurations;
+  resumeCount?: number;
   previousImage?: string;
   targetImage?: string;
   stackId?: string;
@@ -83,26 +78,6 @@ interface ControlState {
 interface IdempotencyBinding {
   jobId: string;
   createdAt: string;
-}
-
-export interface SelfUpdatePublicJob {
-  jobId: string;
-  status: SelfUpdateStatus;
-  phase: SelfUpdatePhase;
-  target: { digest: string; version: string; generation: number; source: string };
-  previousImage?: string;
-  targetImage?: string;
-  timestamps: {
-    createdAt: string;
-    updatedAt: string;
-    startedAt?: string;
-    completedAt?: string;
-    heartbeatAt: string;
-    leaseExpiresAt: string;
-  };
-  error?: string;
-  recovered?: boolean;
-  recoveryState?: SelfUpdateJob['recoveryState'];
 }
 
 export class SelfUpdateConflictError extends Error {
@@ -222,6 +197,10 @@ export class SelfUpdateService {
       lease,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
+      startedAt: now.toISOString(),
+      phaseStartedAt: now.toISOString(),
+      phaseDurationsMs: {},
+      resumeCount: 0,
     };
     if (!(await this.storage.setIfAbsent(SELF_UPDATE_JOBS, job.id, job))) {
       throw new Error('self-update job id collision');
@@ -279,7 +258,12 @@ export class SelfUpdateService {
         lease: { ...lease, jobId, idempotencyHash: job.idempotencyHash },
       };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
-      await this.updateJob(jobId, (current) => ({ ...current, lease, updatedAt: this.now().toISOString() }));
+      await this.updateJob(jobId, (current) => ({
+        ...current,
+        lease,
+        resumeCount: (current.resumeCount ?? 0) + 1,
+        updatedAt: this.now().toISOString(),
+      }));
       await this.dispatchForResume(job, caller);
       job = await this.get(jobId);
       return job;
@@ -306,9 +290,8 @@ export class SelfUpdateService {
       const next = { ...control.value, lease: { ...active, ...lease } };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
       return this.updateJob(jobId, (current) => ({
-        ...current,
+        ...transitionPhase(current, current.phase === 'queued' ? 'verifying' : current.phase, this.now()),
         status: 'running',
-        phase: current.phase === 'queued' ? 'verifying' : current.phase,
         lease,
         startedAt: current.startedAt ?? this.now().toISOString(),
         updatedAt: this.now().toISOString(),
@@ -335,9 +318,8 @@ export class SelfUpdateService {
       };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
       return this.updateJob(jobId, (job) => ({
-        ...(job.lease.holder === holder ? job : throwLeaseStolen(jobId)),
+        ...transitionPhase(job.lease.holder === holder ? job : throwLeaseStolen(jobId), phase, this.now()),
         ...patch,
-        phase,
         lease: {
           ...lease,
           claimedAt: job.lease.claimedAt,
@@ -352,9 +334,8 @@ export class SelfUpdateService {
   async finish(jobId: string, patch: Partial<SelfUpdateJob>, holder?: string): Promise<SelfUpdateJob> {
     if (holder) await this.assertHolder(jobId, holder);
     const finished = await this.updateJob(jobId, (job) => ({
-      ...(holder && job.lease.holder !== holder ? throwLeaseStolen(jobId) : job),
+      ...transitionPhase(holder && job.lease.holder !== holder ? throwLeaseStolen(jobId) : job, 'complete', this.now()),
       ...patch,
-      phase: 'complete',
       completedAt: this.now().toISOString(),
       updatedAt: this.now().toISOString(),
     }));
@@ -363,6 +344,7 @@ export class SelfUpdateService {
   }
 
   publicJob(job: SelfUpdateJob): SelfUpdatePublicJob {
+    const totalMs = terminalDurationMs(job);
     return {
       jobId: job.id,
       status: job.status,
@@ -383,6 +365,9 @@ export class SelfUpdateService {
         heartbeatAt: job.lease.heartbeatAt,
         leaseExpiresAt: job.lease.expiresAt,
       },
+      ...(job.phaseDurationsMs ? { phaseDurationsMs: job.phaseDurationsMs } : {}),
+      ...(totalMs !== undefined ? { totalMs } : {}),
+      ...(job.resumeCount !== undefined ? { resumeCount: job.resumeCount } : {}),
       ...(job.error ? { error: job.error } : {}),
       ...(job.recovered !== undefined ? { recovered: job.recovered } : {}),
       ...(job.recoveryState ? { recoveryState: job.recoveryState } : {}),
@@ -410,9 +395,8 @@ export class SelfUpdateService {
     const job = await this.get(jobId);
     if (!job || isTerminal(job)) return;
     await this.updateJob(jobId, (current) => ({
-      ...current,
+      ...transitionPhase(current, 'complete', this.now()),
       status: 'failed',
-      phase: 'complete',
       recoveryState: 'unknown',
       error: 'worker lease expired before completion; final infrastructure state is unknown',
       completedAt: this.now().toISOString(),
@@ -489,6 +473,29 @@ function isLeaseLive(lease: SelfUpdateLease, now: Date): boolean {
 
 function isTerminal(job: SelfUpdateJob): boolean {
   return job.status === 'succeeded' || job.status === 'failed';
+}
+
+function transitionPhase(job: SelfUpdateJob, phase: SelfUpdatePhase, now: Date): SelfUpdateJob {
+  if (job.phase === phase) return job;
+  const phaseStartedAt = Date.parse(job.phaseStartedAt ?? job.updatedAt ?? job.createdAt);
+  const elapsed = Number.isFinite(phaseStartedAt) ? Math.max(0, now.getTime() - phaseStartedAt) : 0;
+  return {
+    ...job,
+    phase,
+    phaseStartedAt: now.toISOString(),
+    phaseDurationsMs: {
+      ...(job.phaseDurationsMs ?? {}),
+      [job.phase]: (job.phaseDurationsMs?.[job.phase] ?? 0) + elapsed,
+    },
+  };
+}
+
+function terminalDurationMs(job: SelfUpdateJob): number | undefined {
+  if (!job.startedAt || !job.completedAt) return undefined;
+  const startedAt = Date.parse(job.startedAt);
+  const completedAt = Date.parse(job.completedAt);
+  if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt)) return undefined;
+  return Math.max(0, completedAt - startedAt);
 }
 
 function throwLeaseStolen(jobId: string): never {

@@ -333,22 +333,52 @@ describe('appliance CloudFormation template', () => {
     expect(policy.Statement).toContainEqual({ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' });
   });
 
-  it('expires only workload build tags so system image tags never match the lifecycle rule', () => {
+  it('bounds workload and provenance tags plus untagged manifests without matching release tags', () => {
+    expect(APPLIANCE_CLOUDFORMATION_TEMPLATE).toContain(
+      'workload builds and both mirror paths push image manifests, never OCI indexes or attestations'
+    );
+    expect(APPLIANCE_CLOUDFORMATION_TEMPLATE).toContain(
+      'superseded control-plane manifests remain bounded instead of being pinned forever'
+    );
     const lifecycle = JSON.parse(
       String(
         document.getIn(['Resources', 'ImageRepository', 'Properties', 'LifecyclePolicy', 'LifecyclePolicyText'])
       ).trim()
     ) as { rules: Array<{ rulePriority: number; selection: Record<string, unknown> }> };
     expect(lifecycle.rules).toEqual([
-      expect.objectContaining({
+      {
         rulePriority: 1,
+        description: 'Keep the newest 50 workload build images',
         selection: {
           tagStatus: 'tagged',
           tagPrefixList: ['build-'],
           countType: 'imageCountMoreThan',
           countNumber: 50,
         },
-      }),
+        action: { type: 'expire' },
+      },
+      {
+        rulePriority: 2,
+        description: 'Keep the newest 10 source provenance images',
+        selection: {
+          tagStatus: 'tagged',
+          tagPrefixList: ['src-'],
+          countType: 'imageCountMoreThan',
+          countNumber: 10,
+        },
+        action: { type: 'expire' },
+      },
+      {
+        rulePriority: 3,
+        description: 'Expire orphaned untagged manifests after 7 days',
+        selection: {
+          tagStatus: 'untagged',
+          countType: 'sinceImagePushed',
+          countUnit: 'days',
+          countNumber: 7,
+        },
+        action: { type: 'expire' },
+      },
     ]);
     expect(lifecycle.rules).not.toContainEqual(
       expect.objectContaining({ selection: expect.objectContaining({ tagPrefixList: ['system-'] }) })

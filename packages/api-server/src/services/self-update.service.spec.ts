@@ -151,7 +151,7 @@ describe('SelfUpdateService durable route state', () => {
     await service.heartbeat(first.job.id, claimed.lease.holder!, 'waiting-for-stack', { stackId: 'stack-id' });
     nowMs += 61_000;
     const resumed = await service.getAndResume(first.job.id, { keyId: 'admin-a', secret: 'secret' });
-    expect(resumed).toMatchObject({ phase: 'waiting-for-stack', stackId: 'stack-id' });
+    expect(resumed).toMatchObject({ phase: 'waiting-for-stack', stackId: 'stack-id', resumeCount: 1 });
     expect(dispatcher.dispatch).toHaveBeenCalledTimes(2);
   });
 
@@ -174,6 +174,56 @@ describe('SelfUpdateService durable route state', () => {
     const created = await service.create(evidence(), { keyId: 'admin-a', tenantId: 'default', secret: 'secret' });
     await expect(service.claim(created.job.id)).resolves.toMatchObject({ status: 'running' });
     await expect(service.claim(created.job.id)).rejects.toThrow('already claimed');
+  });
+
+  it('records additive per-phase durations in the public job', async () => {
+    const created = await service.create(evidence(), {
+      keyId: 'admin-a',
+      tenantId: 'default',
+      secret: 'secret',
+    });
+    nowMs += 1_000;
+    const claimed = await service.claim(created.job.id);
+    nowMs += 2_000;
+    await service.heartbeat(created.job.id, claimed.lease.holder!, 'mirroring');
+    nowMs += 3_000;
+    await service.heartbeat(created.job.id, claimed.lease.holder!, 'waiting-for-stack');
+    nowMs += 4_000;
+    const finished = await service.finish(created.job.id, { status: 'succeeded' }, claimed.lease.holder!);
+
+    expect(service.publicJob(finished)).toMatchObject({
+      totalMs: 10_000,
+      phaseDurationsMs: {
+        queued: 1_000,
+        verifying: 2_000,
+        mirroring: 3_000,
+        'waiting-for-stack': 4_000,
+      },
+    });
+  });
+
+  it('charges an expired-lease resume gap to the in-flight phase', async () => {
+    const created = await service.create(evidence(), {
+      keyId: 'admin-a',
+      tenantId: 'default',
+      secret: 'secret',
+    });
+    const first = await service.claim(created.job.id);
+    nowMs += 2_000;
+    await service.heartbeat(created.job.id, first.lease.holder!, 'waiting-for-stack');
+    nowMs += 61_000;
+    await service.getAndResume(created.job.id, { keyId: 'admin-a', secret: 'secret' });
+    const resumed = await service.claim(created.job.id);
+    nowMs += 3_000;
+    await service.heartbeat(created.job.id, resumed.lease.holder!, 'probing-health');
+    nowMs += 1_000;
+    const finished = await service.finish(created.job.id, { status: 'succeeded' }, resumed.lease.holder!);
+
+    expect(service.publicJob(finished)).toMatchObject({
+      totalMs: 67_000,
+      resumeCount: 1,
+      phaseDurationsMs: { 'waiting-for-stack': 64_000 },
+    });
   });
 
   it('fences a zombie worker after an expired lease is resumed and re-claimed', async () => {

@@ -25,7 +25,6 @@ import {
   createAwsCloudLifecycleDependencies,
   runCloudBaselineUpdate,
   runCloudInstall,
-  runCloudSystemUpdate,
   runCloudTeardown,
   type CloudLifecycleProfile,
 } from '@appliance.sh/install-aws';
@@ -184,32 +183,10 @@ async function main(): Promise<void> {
         break;
       }
       case 'update-api-server': {
-        const install = parsed.input.installation;
-        if (resolveInstallGeneration(install?.installGeneration) === 'cloudformation-v1') {
-          if (!install) throw new Error('CloudFormation update is missing installation metadata');
-          const deps = createAwsCloudInstallDependencies({
-            region: install.awsRegion,
-            awsProfile: parsed.input.awsProfile,
-            writeProfile: () => undefined,
-            log: (message) => onEvent({ type: 'log', level: 'info', message }),
-          });
-          await runCloudSystemUpdate(
-            {
-              profile: {
-                ...install,
-                apiUrl: parsed.input.apiServerUrl,
-                keyId: parsed.input.apiKey.id,
-                secret: parsed.input.apiKey.secret,
-              },
-              installationName: install.cloudFormationStackName.replace(/^appliance-/, ''),
-              sourceImage: `${parsed.input.imageBase ?? 'ghcr.io/appliance-sh/api-server'}:${parsed.input.targetVersion}`,
-              awsProfile: parsed.input.awsProfile,
-            },
-            deps
-          );
-        } else {
-          await runApiServerUpdate(parsed.input, { ...(parsed.options ?? {}), onEvent });
-        }
+        // CU2 routes CloudFormation-v1 profiles directly through the SDK in
+        // the renderer. This argv-based sidecar remains only for legacy
+        // installs during the two-release deprecation window.
+        await runApiServerUpdate(parsed.input, { ...(parsed.options ?? {}), onEvent });
         emit({ type: 'result', result: {} });
         break;
       }

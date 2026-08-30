@@ -153,7 +153,7 @@ export function FriendlyError({
         </Link>
       ) : null}
       {raw && raw !== line ? (
-        <LogPane className="mt-2" height="compact" label="Technical details">
+        <LogPane className="mt-2" height="compact" label="Technical details" copyText={raw}>
           {raw}
         </LogPane>
       ) : null}

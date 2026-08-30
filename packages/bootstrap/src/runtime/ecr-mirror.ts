@@ -34,6 +34,8 @@ interface MirrorOptions {
  */
 export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   const { sourceImage, ecrRepositoryUrl, tag, region, awsProfile, emit } = opts;
+  const digestSource = sourceDigest(sourceImage);
+  const targetTag = digestSource ? digestSource.replace(':', '-') : tag;
 
   // Pin to the host's native platform so we end up with a
   // single-platform local image. Containerd image-store users would
@@ -42,6 +44,10 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   // rejects that as `media type ... not supported` since it only
   // accepts single image manifests, not OCI indexes.
   pullImage(sourceImage, emit, hostDockerPlatform());
+  const locallyResolvedDigest = digestSource ?? digestFromUri(imageRepoDigest(sourceImage));
+  if (!locallyResolvedDigest) {
+    throw new Error(`could not resolve the pulled source digest for ${sourceImage}; use --image <ref>@sha256:…`);
+  }
 
   emit?.({ type: 'log', level: 'info', message: `requesting ECR auth in ${region}` });
   // Constructing credentials explicitly when a profile is set keeps
@@ -68,7 +74,47 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
 
   login(registryHost, username, password);
 
-  const remoteTag = `${ecrRepositoryUrl}:${tag}`;
+  const repositoryName = parseEcrRepositoryName(ecrRepositoryUrl);
+  if (!repositoryName) throw new Error(`Malformed ECR repository URL: ${ecrRepositoryUrl}`);
+  const describeTag = async (imageTag: string): Promise<string | undefined> => {
+    try {
+      const existing = await ecr.send(new DescribeImagesCommand({ repositoryName, imageIds: [{ imageTag }] }));
+      return existing.imageDetails?.[0]?.imageDigest;
+    } catch (error) {
+      if ((error as { name?: string }).name === 'ImageNotFoundException') return undefined;
+      throw error;
+    }
+  };
+
+  // ECR stores the single-platform manifest digest produced by `docker
+  // push --platform`, not the source index digest. A source-derived
+  // auxiliary tag records that mapping without relying on the two
+  // different digest domains being equal. It also repairs a first run
+  // that pushed the target tag but was interrupted before recording
+  // provenance.
+  const provenanceTag = sourceProvenanceTag(locallyResolvedDigest);
+  const remoteProvenanceTag = `${ecrRepositoryUrl}:${provenanceTag}`;
+  let provenanceDigest = await describeTag(provenanceTag);
+  if (!provenanceDigest) {
+    tagImage(sourceImage, remoteProvenanceTag);
+    pushImage(remoteProvenanceTag, emit, hostDockerPlatform());
+    provenanceDigest = await describeTag(provenanceTag);
+    if (!provenanceDigest) throw new Error(`ECR did not report the pushed provenance tag ${provenanceTag}`);
+  }
+
+  const existingDigest = await describeTag(targetTag);
+  if (existingDigest) {
+    return resolveExistingMirror({
+      ecrRepositoryUrl,
+      targetTag,
+      existingDigest,
+      provenanceDigest,
+      digestSource: Boolean(digestSource),
+      emit,
+    });
+  }
+
+  const remoteTag = `${ecrRepositoryUrl}:${targetTag}`;
   tagImage(sourceImage, remoteTag);
   // Push a single-platform manifest. With containerd image store
   // enabled, the local image may be wrapped in an OCI index even
@@ -81,7 +127,8 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   // Lambda holding whatever digest the *first* deploy resolved —
   // subsequent pushes that overwrite the tag don't trigger Pulumi
   // to update the function's image (the URI string didn't change),
-  // and the Lambda keeps running the stale digest.
+  // and the Lambda can keep running the stale digest. CU2 repositories are
+  // immutable, so we preflight the target tag above and never overwrite it.
   //
   // Source of truth is ECR itself, not local docker: with containerd
   // image store + multi-arch local images, `docker inspect`'s
@@ -89,23 +136,25 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   // exist in ECR after a single-platform push. Asking ECR via
   // DescribeImages always returns the digest of the manifest we
   // actually uploaded.
-  const repositoryName = parseEcrRepositoryName(ecrRepositoryUrl);
-  if (repositoryName) {
-    try {
-      const r = await ecr.send(new DescribeImagesCommand({ repositoryName, imageIds: [{ imageTag: tag }] }));
-      const digest = r.imageDetails?.[0]?.imageDigest;
-      if (digest) {
-        const digestUri = `${ecrRepositoryUrl}@${digest}`;
-        emit?.({ type: 'log', level: 'info', message: `ECR digest URI: ${digestUri}` });
-        return digestUri;
-      }
-    } catch (err) {
-      emit?.({
-        type: 'log',
-        level: 'warn',
-        message: `failed to query ECR for digest of ${remoteTag}: ${err instanceof Error ? err.message : String(err)}`,
-      });
+  let pushedDigest: string | undefined;
+  try {
+    pushedDigest = await describeTag(targetTag);
+  } catch (err) {
+    emit?.({
+      type: 'log',
+      level: 'warn',
+      message: `failed to query ECR for digest of ${remoteTag}: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+  if (pushedDigest) {
+    if (pushedDigest !== provenanceDigest) {
+      throw new Error(
+        `ECR returned ${pushedDigest} for ${targetTag}, but source provenance resolved to ${provenanceDigest}; refusing an ambiguous mirror`
+      );
     }
+    const digestUri = `${ecrRepositoryUrl}@${pushedDigest}`;
+    emit?.({ type: 'log', level: 'info', message: `ECR digest URI: ${digestUri}` });
+    return digestUri;
   }
 
   // Fallback to docker's local view if ECR query failed (e.g. IAM
@@ -127,6 +176,47 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
     message: `could not resolve digest for ${remoteTag}; falling back to tag-only URI`,
   });
   return remoteTag;
+}
+
+export function sourceDigest(image: string): string | undefined {
+  const match = image.match(/@(sha256:[0-9a-f]{64})$/);
+  return match?.[1];
+}
+
+export function sourceProvenanceTag(digest: string): string {
+  return `src-${digest.replace(':', '-')}`;
+}
+
+export function resolveExistingMirror(input: {
+  ecrRepositoryUrl: string;
+  targetTag: string;
+  existingDigest: string;
+  provenanceDigest: string;
+  digestSource: boolean;
+  emit?: (e: BootstrapEvent) => void;
+}): string {
+  if (input.existingDigest === input.provenanceDigest) {
+    const digestUri = `${input.ecrRepositoryUrl}@${input.existingDigest}`;
+    input.emit?.({
+      type: 'log',
+      level: 'info',
+      message: `ECR tag ${input.targetTag} already matches the source manifest; using ${digestUri}`,
+    });
+    return digestUri;
+  }
+  if (!input.digestSource) {
+    throw new Error(
+      `tag ${input.targetTag} already exists with a different digest; use --image <ref>@sha256:… or a new tag`
+    );
+  }
+  throw new Error(
+    `digest-derived tag ${input.targetTag} already exists with a different digest; refusing immutable ECR write`
+  );
+}
+
+function digestFromUri(uri: string | null): string | undefined {
+  const match = uri?.match(/@(sha256:[0-9a-f]{64})$/);
+  return match?.[1];
 }
 
 /**

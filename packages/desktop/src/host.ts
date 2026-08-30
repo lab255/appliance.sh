@@ -69,6 +69,7 @@ interface NativeCatalogueCache {
 // through a Node sidecar the Rust side spawns — progress events
 // stream back over a Tauri Channel.
 export const tauriHost: Omit<ConsoleHost, 'platform'> = {
+  desktop: true,
   async getConfig(): Promise<HostConfig> {
     return invoke<HostConfig>('get_config');
   },
