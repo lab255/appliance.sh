@@ -19,6 +19,7 @@ import {
 } from './utils/microvm-up.js';
 import { runVmCapture } from './utils/sandbox.js';
 import { wslModeCommandArgs } from './utils/runtime-wsl-egress.js';
+import { updateMicroVm } from './utils/microvm-update.js';
 
 // `appliance vm` — the microVM runtime engine (appliance-vm), the sole
 // local runtime now that bare k3d has been removed. Workloads run inside
@@ -109,6 +110,24 @@ function parsePositiveInt(value: string): number {
   }
   return n;
 }
+
+program
+  .command('update')
+  .description('update the running microVM control plane in place (no reboot)')
+  .option('--name <name>', 'VM name', DEFAULT_VM_NAME)
+  .option('--version <version>', 'target signed release version')
+  .action(async (opts: { name: string; version?: string }) => {
+    try {
+      const result = await updateMicroVm({ name: opts.name, version: opts.version });
+      console.log(
+        `${chalk.green('✓')} control plane ${result.oldVersion} → ${result.newVersion} ` +
+          chalk.dim(`(${result.keyId})`)
+      );
+    } catch (error) {
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+      process.exit(1);
+    }
+  });
 
 // ---- passthrough lifecycle ---------------------------------------------
 
