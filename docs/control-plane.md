@@ -90,6 +90,15 @@ host-local.
 
 ## 2. New api-server endpoints (E4.1)
 
+| Endpoint                                 | Authentication                | Scope                                                                |
+| ---------------------------------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `GET /api/v1/workloads`                  | signed key                    | Kubernetes workload snapshot                                         |
+| `GET /api/v1/environments/:id/workloads` | signed key                    | Environment-filtered Kubernetes workload snapshot                    |
+| `GET /api/v1/pods/:name/logs`            | signed key                    | Snapshot or streaming Kubernetes logs                                |
+| `POST /api/v1/self-update`               | signed owner-tenant admin key | Verify evidence, persist/lease, and dispatch a cloud self-update job |
+| `GET /api/v1/self-update/:jobId`         | signed owner-tenant admin key | Read durable phase/result and resume an expired-lease cloud job      |
+| `GET /healthz`                           | none                          | Process liveness only                                                |
+
 The server already talks to the cluster via `@kubernetes/client-node`
 (`CoreV1Api` + `AppsV1Api`, authed with its ServiceAccount token) inside
 `packages/infra/src/lib/local/LocalContainerDeploymentService.ts:141-158,642`,

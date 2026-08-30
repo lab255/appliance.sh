@@ -1,7 +1,28 @@
 # Control-plane self-update (AP-218)
 
-**Status:** S1 written decision, re-baselined on `main` at `673be14`. This is a design, not an implementation. Scope is the
-control-plane image/binary only: cloud first, then microVM. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
+**Status:** CU1 shipped by AP-219; CU2 trigger re-pointing and the microVM path remain follow-on work. Scope is the control-plane
+image/binary only. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
+
+## CU1 shipped (AP-219)
+
+The cloud server now exposes owner-admin signed POST/GET self-update routes, persists idempotent CAS-leased jobs in the ObjectStore,
+re-signs job-id-only worker dispatch, independently verifies production release evidence, mirrors the bound digest with pinned crane,
+and performs previous-template `ImageUri`-only CloudFormation update/recovery. Scoped self-update and CloudFormation service roles plus
+the protected-resource stack policy bound the mutation surface. The AP-225 adapter fails closed until MV0's production trust exports
+are present; CU2 only re-points the CLI/desktop/SDK to these routes and supplies signed release evidence. CU1 does not change existing
+client triggers.
+
+Owner live proof, on a disposable installation:
+
+1. Capture CloudTrail for both the worker-assumed self-update role and the CloudFormation service role; minimize both allow-lists and
+   confirm the only `iam:PassRole` is the scoped CFN role with `iam:PassedToService=cloudformation.amazonaws.com`.
+2. Attempt arbitrary-template baseline, IAM, S3, and KMS mutations and confirm the stack policy/service role denies all of them; confirm
+   no `lambda:GetFunction` appears.
+3. Perform a signed N→N+1 update, then submit a concurrent different idempotency key and observe `409` only while the lease is live.
+4. Kill the worker during stack wait and prove GET polling resumes after lease expiry without re-injecting target controls.
+5. Force a CloudFormation resource failure and confirm rollback/events are recorded; force a healthy wrong-version response and confirm
+   the worker re-pins the previous image.
+6. Retry a good signed release after each failure and confirm terminal/exhausted jobs no longer hold the installation lock.
 
 ## 0. Ground truth at `673be14`
 
