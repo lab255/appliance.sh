@@ -1,6 +1,6 @@
 # Control-plane self-update (AP-218)
 
-**Status:** CU1 shipped by AP-219 and CU2 shipped by AP-220; the microVM path remains follow-on work. Scope is the control-plane
+**Status:** CU1 shipped by AP-219, CU2 by AP-220, and CU3 by AP-221; the microVM path remains follow-on work. Scope is the control-plane
 image/binary only. Cloud baseline changes remain operator-side in `runCloudBaselineUpdate`.
 
 ## CU2 shipped (AP-220)
@@ -263,10 +263,25 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
   SDK route only when `profile.installGeneration === 'cloudformation-v1'`; frozen legacy installs retain `updateApiServer` sidecar for
   the two-release window. `updateBaseline` stays host-side (`packages/app/src/lib/host.ts:212-242`;
   `packages/cli/src/appliance-cloud-update.ts:20-25`).
-- **CU3:** an opt-in EventBridge rule invokes the worker. Policy is `off` (no
-  check), `notify` (persist/surface `availableVersion`, never mutate), or `auto`
-  (enqueue the same image job). EventBridge carries only a pre-provisioned scheduler `jobId`; the worker CAS-claims that persisted
-  owner policy before checking signed release metadata. `auto` applies IMAGE updates only; baseline remains notification/operator-side.
+- **CU3 (shipped by AP-221):** an opt-in EventBridge Scheduler schedule invokes the worker daily with the fixed payload
+  `{"kind":"self-update-check"}`. Policy is `off` by default (the schedule and its execution role are absent), `notify` (verify the
+  latest signed release and persist an update-available marker), or `auto` (create and dispatch the same verified, leased image job as
+  the owner-admin route). The event carries no job, digest, version, image URI, or release origin. The scheduler execution role can
+  invoke only the installation worker. `auto` applies image updates only; baseline changes remain operator-side. Empty production pins
+  and `SystemRoleMode=admin` both log a reason and exit without fetching or mutating.
+
+CU3 owner runbook (after AP-226 provisions production trust), on a disposable installation:
+
+1. Run `appliance cloud update --policy notify`; confirm the stack parameter is `notify`, the schedule exists, and a completed check
+   writes `self-update-availability/cloud.json` in the data bucket. Confirm signed `cluster-info` returns only
+   `{version,generation}` while unauthenticated `/bootstrap/status` returns only `selfUpdateAvailable:true`.
+2. Run `appliance cloud update` while idle and confirm it prints `Update available: vX`; use the desktop **Update now** action and
+   confirm it starts the ordinary CU2 route job.
+3. Run `appliance cloud update --policy auto`; on the next check, observe one `self-update-jobs/` record with caller
+   `system-self-update-scheduler` and idempotency `scheduled:<digest>`. Re-run the fixed check and confirm no duplicate job is created;
+   a different live lease must log a skip.
+4. Run `appliance cloud update --policy off`; confirm the schedule and scheduler role are removed, both functions report policy `off`,
+   and no baseline resource changed during any scheduled image update.
 
 ## 5. microVM mechanism (MV1)
 

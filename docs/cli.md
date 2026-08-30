@@ -64,7 +64,13 @@ appliance cloud update [--version 1.58.0]
 appliance cloud update --follow selfupdate_123
 appliance cloud update --json
 appliance cloud update --local [--image <registry/ref>] [--arch amd64|arm64] [--aws-profile <name>]
+appliance cloud update --policy off|notify|auto [--aws-profile <name>]
 ```
+
+`--policy` is an operator baseline update that preserves the running `ImageUri` explicitly and sends `UsePreviousValue` for unrelated
+stack parameters. `off` is the default and removes the schedule; `notify` surfaces a signed available release without mutation;
+`auto` creates the same verified image-only job used by this command. Scheduled checks never apply baseline changes. When a notify
+marker exists, an idle `appliance cloud update` prints its version and uses it as the default signed release target.
 
 `409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. Successful and failed
 terminal `--json` output has the stable top-level shape
