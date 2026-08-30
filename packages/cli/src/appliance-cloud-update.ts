@@ -32,6 +32,7 @@ interface Options {
   arch?: string;
   awsProfile?: string;
   policy?: SelfUpdatePolicy;
+  checkNow: boolean;
 }
 
 const program = new Command();
@@ -43,7 +44,8 @@ program
   .option('--image <reference>', 'source image for --local only')
   .option('--arch <architecture>', 'amd64 or arm64 for --local')
   .option('--aws-profile <name>', 'AWS credential profile for --local or --policy')
-  .option('--policy <policy>', 'set scheduled image-update policy: off, notify, or auto')
+  .option('--policy <policy>', 'set scheduled image-update policy (checked ~daily): off, notify, or auto')
+  .option('--check-now', 'run a signed scheduled image-update check now', false)
   .option('--json', 'print the terminal job including per-phase durations as JSON', false)
   .action(run);
 
@@ -53,9 +55,29 @@ async function run(options: Options): Promise<void> {
   }
   if (
     options.policy &&
-    (options.local || options.follow || options.version || options.image || options.arch || options.json)
+    (options.local ||
+      options.follow ||
+      options.version ||
+      options.image ||
+      options.arch ||
+      options.json ||
+      options.checkNow)
   ) {
     throw new Error('--policy cannot be combined with update target, follow, local, architecture, or JSON options');
+  }
+  if (
+    options.checkNow &&
+    (options.local ||
+      options.follow ||
+      options.version ||
+      options.image ||
+      options.arch ||
+      options.json ||
+      options.awsProfile)
+  ) {
+    throw new Error(
+      '--check-now cannot be combined with update target, follow, local, architecture, JSON, or AWS options'
+    );
   }
   if (options.local && options.follow) throw new Error('--follow cannot be combined with --local');
   if (options.local && options.json) throw new Error('--local has no job record; omit --json');
@@ -128,14 +150,23 @@ async function run(options: Options): Promise<void> {
     product: 'cli',
     timeout: 30_000,
   });
+  if (options.checkNow) {
+    const checked = await client.selfUpdate.check();
+    if (!checked.success) throw checked.error;
+    console.log(chalk.cyan(`Scheduled self-update check: ${checkDecisionCopy(checked.data)}`));
+    return;
+  }
   const clusterInfo = await client.getClusterInfo();
   const available = clusterInfo.success ? clusterInfo.data.selfUpdate?.available : undefined;
-  if (!options.json && available) {
-    console.log(chalk.cyan(`Update available: v${available.version} (generation ${available.generation}).`));
+  const evidence = options.follow ? undefined : await resolveReleaseEvidence({ version: options.version });
+  if (!options.json && evidence) {
+    const provenance = options.version
+      ? 'requested signed release'
+      : available?.version === evidence.version
+        ? 'from the scheduled notify check'
+        : 'latest signed release';
+    console.log(chalk.cyan(`Updating to v${evidence.version} (${provenance}).`));
   }
-  const evidence = options.follow
-    ? undefined
-    : await resolveReleaseEvidence({ version: options.version ?? available?.version });
   const formatPhaseLines = createPhaseLineFormatter();
   const result = await runCloudRouteUpdate(
     {
@@ -185,6 +216,16 @@ async function run(options: Options): Promise<void> {
     return;
   }
   throw new Error(terminalFailureMessage(result.job));
+}
+
+export function checkDecisionCopy(check: { decision: string; reason: string }): string {
+  if (check.reason === 'no-pinned-release-trust') {
+    return 'scheduled checks are inactive: this build has no pinned release trust';
+  }
+  if (check.reason === 'unscoped-role') {
+    return 'scheduled checks are inactive: enable scoped roles with appliance cloud baseline-update --system-role-mode scoped';
+  }
+  return `${check.decision} (${check.reason})`;
 }
 
 program.parseAsync(process.argv).catch((error: unknown) => {

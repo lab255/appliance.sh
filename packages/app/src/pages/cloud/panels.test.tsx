@@ -3,7 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { HostProvider } from '@/providers/host-provider';
 import type { Cluster, ConsoleHost } from '@/lib/host';
-import { CloudFormationLifecycleHandoff, defaultSelfUpdateTarget, SelfUpdateAvailableNotice } from './panels';
+import {
+  CloudFormationLifecycleHandoff,
+  defaultSelfUpdateTarget,
+  SelfUpdateAvailableNotice,
+  selfUpdateLastCheckCopy,
+  shouldShowSelfUpdateAvailable,
+} from './panels';
 
 const cluster: Cluster = {
   id: 'cloud-1',
@@ -60,5 +66,28 @@ describe('CloudFormation update handoff', () => {
     expect(html).toContain('Update available (v1.58.0)');
     expect(html).toContain('Update now');
     expect(html).toContain('scheduled notify check');
+  });
+
+  it('suppresses a stale marker once that version is running', () => {
+    expect(shouldShowSelfUpdateAvailable('1.58.0', '1.58.0')).toBe(false);
+    expect(shouldShowSelfUpdateAvailable('1.58.0', '1.57.0')).toBe(true);
+  });
+
+  it('renders actionable inactive and auto-updated last-check copy', () => {
+    expect(
+      selfUpdateLastCheckCopy('notify', {
+        at: '2026-08-31T00:00:00.000Z',
+        decision: 'no-trust',
+        reason: 'no-pinned-release-trust',
+      })
+    ).toContain('this build has no pinned release trust');
+    expect(
+      selfUpdateLastCheckCopy('auto', {
+        at: '2026-08-31T00:00:00.000Z',
+        decision: 'auto-created',
+        reason: 'auto-created',
+        version: '1.58.0',
+      })
+    ).toContain('updated to v1.58.0');
   });
 });

@@ -1,7 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createApplianceClient, PINNED_RELEASE_TRUST, VERSION, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
+import {
+  createApplianceClient,
+  PINNED_RELEASE_TRUST,
+  VERSION,
+  type ClusterInfoResponse,
+  type ReleaseTrustPolicy,
+} from '@appliance.sh/sdk';
 import { apiServerUrlForHostPort, IN_CLUSTER_API_SERVER_HOSTNAME, mintApiKey } from '@appliance.sh/helper';
 import { readProfiles, removeProfile, upsertProfile, type Profile } from './profile-store.js';
 import {
@@ -66,6 +72,8 @@ export interface RuntimeDoctorReport {
   ok: boolean;
   /** The running api-server's version, when the signed probe reached it. */
   serverVersion?: string;
+  /** Raw signed cluster-info scheduled-update state for owner runbooks. */
+  selfUpdate?: ClusterInfoResponse['selfUpdate'];
 }
 
 // ---- engine plumbing ------------------------------------------------------
@@ -233,7 +241,7 @@ export function classifyProfileBinding(profileName: string, apiUrl: string, engi
 
 /** What the signed cluster-info probe came back with. */
 export type SignedProbe =
-  | { kind: 'ok'; serverVersion: string | null }
+  | { kind: 'ok'; serverVersion: string | null; selfUpdate?: ClusterInfoResponse['selfUpdate'] }
   | { kind: 'http'; status: number }
   | { kind: 'network-error'; message: string };
 
@@ -331,6 +339,54 @@ export function triangulateAuth(input: AuthProbeInput): RuntimeFinding {
     remediation:
       'Update/rebuild appliance-vm so `doctor` can probe the guest clock (it separates a dead key from clock skew), or restart the VM (`appliance vm stop && appliance vm up`) and re-run.',
   };
+}
+
+export function scheduledSelfUpdateFinding(state: ClusterInfoResponse['selfUpdate'] | undefined): RuntimeFinding {
+  const base = { id: 'runtime:self-update', title: 'Scheduled cloud self-update' };
+  if (!state) {
+    return { ...base, severity: 'info', detail: 'status unavailable on this server version' };
+  }
+  const check = state.lastCheck;
+  const checked = check?.at ? `last checked ${check.at}` : 'not checked yet';
+  if (state.policy === 'off') return { ...base, severity: 'info', detail: 'off' };
+  if (check?.reason === 'no-pinned-release-trust') {
+    return {
+      ...base,
+      severity: 'warn',
+      detail: 'scheduled checks are inactive: this build has no pinned release trust',
+      remediation: 'Install a build with production release trust pinned before enabling scheduled updates.',
+    };
+  }
+  if (check?.reason === 'unscoped-role') {
+    return {
+      ...base,
+      severity: 'warn',
+      detail: 'scheduled checks are inactive: the installation uses unscoped admin system roles',
+      remediation: 'Run `appliance cloud baseline-update --system-role-mode scoped`.',
+    };
+  }
+  if (state.available) {
+    return { ...base, severity: 'info', detail: `Update available: v${state.available.version} — ${checked}` };
+  }
+  if (check?.decision === 'auto-created' || check?.decision === 'auto-reused') {
+    return {
+      ...base,
+      severity: 'ok',
+      detail: `${checked} — updated to v${check.version ?? 'unknown'}`,
+    };
+  }
+  if (check?.decision === 'current') {
+    return { ...base, severity: 'ok', detail: `${checked} — up to date` };
+  }
+  if (check?.decision === 'error') {
+    return {
+      ...base,
+      severity: 'warn',
+      detail: `${checked} — the check failed`,
+      remediation: 'Run `appliance cloud update --check-now`, then inspect the worker log if it fails again.',
+    };
+  }
+  return { ...base, severity: 'info', detail: `${state.policy} — ${checked}${check ? ` (${check.reason})` : ''}` };
 }
 
 // ---- (c) duplicate ingress (pure) ------------------------------------------
@@ -744,7 +800,11 @@ async function probeSigned(apiUrl: string, keyId: string, secret: string): Promi
     const client = createApplianceClient({ baseUrl: apiUrl, credentials: { keyId, secret } });
     const result = await client.getClusterInfo();
     if (result.success) {
-      return { kind: 'ok', serverVersion: result.data.serverVersion ?? result.data.version ?? null };
+      return {
+        kind: 'ok',
+        serverVersion: result.data.serverVersion ?? result.data.version ?? null,
+        ...(result.data.selfUpdate ? { selfUpdate: result.data.selfUpdate } : {}),
+      };
     }
     const match = /HTTP (\d{3})/.exec(result.error.message);
     if (match) return { kind: 'http', status: Number(match[1]) };
@@ -923,6 +983,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   const resolved = resolveVmProfile(vm, profilesFile);
   const tokenPresent = fs.existsSync(bootstrapTokenPath(vm));
   let serverVersion: string | null = null;
+  let selfUpdate: ClusterInfoResponse['selfUpdate'] | undefined;
   if (!resolved) {
     findings.push({
       id: 'runtime:api-key',
@@ -965,7 +1026,10 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
       const signed = bootstrapReachable
         ? await probeSigned(apiUrl, keyId, secret)
         : ({ kind: 'network-error', message: 'skipped (server unreachable)' } as SignedProbe);
-      if (signed.kind === 'ok') serverVersion = signed.serverVersion;
+      if (signed.kind === 'ok') {
+        serverVersion = signed.serverVersion;
+        selfUpdate = signed.selfUpdate;
+      }
       let authFinding = triangulateAuth({
         bootstrapReachable,
         signed,
@@ -976,6 +1040,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
         authFinding = await applyRemintFix(vm, resolved.name, resolved.profile, keyId, authFinding, fixes);
       }
       findings.push(authFinding);
+      if (signed.kind === 'ok') findings.push(scheduledSelfUpdateFinding(signed.selfUpdate));
     }
   }
 
@@ -1023,6 +1088,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
     fixes,
     ok: findings.every((f) => f.severity !== 'fail'),
     ...(serverVersion ? { serverVersion } : {}),
+    ...(selfUpdate ? { selfUpdate } : {}),
   };
 }
 

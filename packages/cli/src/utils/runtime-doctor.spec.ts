@@ -14,6 +14,7 @@ import {
   parseEngineListing,
   portOfApiUrl,
   renderBindingFinding,
+  scheduledSelfUpdateFinding,
   softenMissingDefaultVm,
   triangulateAuth,
   type AuthProbeInput,
@@ -354,6 +355,44 @@ describe('triangulateAuth', () => {
     const f = triangulateAuth({ ...base, signed: { kind: 'http', status: 500 } });
     expect(f.severity).toBe('warn');
     expect(f.detail).toContain('500');
+  });
+});
+
+describe('scheduled self-update doctor finding', () => {
+  it('makes missing trust and unscoped roles actionable', () => {
+    expect(
+      scheduledSelfUpdateFinding({
+        policy: 'notify',
+        lastCheck: { at: '2026-08-31T00:00:00.000Z', decision: 'no-trust', reason: 'no-pinned-release-trust' },
+      }).detail
+    ).toBe('scheduled checks are inactive: this build has no pinned release trust');
+    expect(
+      scheduledSelfUpdateFinding({
+        policy: 'auto',
+        lastCheck: { at: '2026-08-31T00:00:00.000Z', decision: 'unscoped-role', reason: 'unscoped-role' },
+      }).remediation
+    ).toContain('--system-role-mode scoped');
+  });
+
+  it('prints notify availability without generation and auto results with the version', () => {
+    const notify = scheduledSelfUpdateFinding({
+      policy: 'notify',
+      lastCheck: { at: '2026-08-31T00:00:00.000Z', decision: 'notify', reason: 'notify-marked' },
+      available: { version: '1.58.0', generation: 8 },
+    });
+    expect(notify.detail).toContain('Update available: v1.58.0');
+    expect(notify.detail).not.toContain('generation');
+
+    const auto = scheduledSelfUpdateFinding({
+      policy: 'auto',
+      lastCheck: {
+        at: '2026-08-31T00:00:00.000Z',
+        decision: 'auto-created',
+        reason: 'auto-created',
+        version: '1.58.0',
+      },
+    });
+    expect(auto.detail).toContain('updated to v1.58.0');
   });
 });
 

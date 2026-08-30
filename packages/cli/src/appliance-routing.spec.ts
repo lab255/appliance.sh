@@ -116,6 +116,8 @@ describe('appliance umbrella routing', () => {
     expect(result.stdout).toContain('--json');
     expect(result.stdout).toContain('--local');
     expect(result.stdout).toContain('--policy <policy>');
+    expect(result.stdout).toContain('--check-now');
+    expect(result.stdout).toContain('checked ~daily');
     expect(result.stdout).toContain('off, notify, or auto');
     expect(result.stdout).toContain('break glass');
   });
@@ -135,6 +137,10 @@ describe('appliance umbrella routing', () => {
     const mixed = appliance('cloud', 'update', '--policy', 'notify', '--json');
     expect(mixed.status).toBe(1);
     expect(mixed.stderr).toContain('--policy cannot be combined');
+
+    const checkMixed = appliance('cloud', 'update', '--check-now', '--json');
+    expect(checkMixed.status).toBe(1);
+    expect(checkMixed.stderr).toContain('--check-now cannot be combined');
   });
 
   it('requires explicit confirmation before restoring AdministratorAccess', () => {

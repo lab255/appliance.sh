@@ -51,11 +51,14 @@ function preCu0Stack() {
   return { ...stack, outputs };
 }
 
-function dependencies(): CloudLifecycleDependencies {
+function dependencies(stackOverride = stack): CloudLifecycleDependencies {
   return {
     getAccountId: vi.fn(async () => profile.awsAccountId),
-    getStack: vi.fn(async () => stack),
-    deployStack: vi.fn(async () => ({ ...stack, parameters: { ...stack.parameters, ImageUri: 'repo@sha256:new' } })),
+    getStack: vi.fn(async () => stackOverride),
+    deployStack: vi.fn(async () => ({
+      ...stackOverride,
+      parameters: { ...stackOverride.parameters, ImageUri: 'repo@sha256:new' },
+    })),
     getRegistryCredentials: vi.fn(async () => ({ username: 'AWS', password: 'token' })),
     mirror: vi.fn(async () => ({
       imageUri: 'repo@sha256:new',
@@ -247,6 +250,17 @@ describe('CloudFormation lifecycle', () => {
     expect(deps.deployStack).toHaveBeenCalledWith(
       expect.objectContaining({ selfUpdatePolicy: 'notify', preserveParameters: true, imageUri: 'repo@sha256:old' })
     );
+  });
+
+  it.each(['notify', 'auto'] as const)('refuses policy %s while system roles are admin', async (selfUpdatePolicy) => {
+    const deps = dependencies({
+      ...stack,
+      parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
+    });
+    await expect(runCloudBaselineUpdate({ profile, selfUpdatePolicy }, deps)).rejects.toThrow(
+      'appliance cloud baseline-update --system-role-mode scoped'
+    );
+    expect(deps.deployStack).not.toHaveBeenCalled();
   });
 
   it('baseline update reports the admin recovery command when post-update health fails', async () => {

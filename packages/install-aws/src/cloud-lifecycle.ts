@@ -216,6 +216,14 @@ export async function runCloudBaselineUpdate(
   const stack = await deps.getStack(options.profile.cloudFormationStackName);
   if (!stack.exists) throw new Error(`CloudFormation stack ${options.profile.cloudFormationStackName} does not exist`);
   if (!stack.parameters.ImageUri) throw new Error('CloudFormation stack has no ImageUri to preserve');
+  if (
+    (options.selfUpdatePolicy === 'notify' || options.selfUpdatePolicy === 'auto') &&
+    stack.parameters.SystemRoleMode === 'admin'
+  ) {
+    throw new Error(
+      `Scheduled ${options.selfUpdatePolicy} checks require scoped system roles; run appliance cloud baseline-update --system-role-mode scoped`
+    );
+  }
   const updated = await deps.deployStack({
     stackName: options.profile.cloudFormationStackName,
     installationName:
