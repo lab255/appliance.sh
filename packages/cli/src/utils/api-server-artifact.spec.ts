@@ -2,8 +2,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PINNED_RELEASE_TRUST, VERSION, signReleaseEnvelope, type ReleaseEnvelope } from '@appliance.sh/sdk';
+import { getPublicKeyAsync } from '@noble/ed25519';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { VERSION, signReleaseEnvelope, type ReleaseEnvelope, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
 
 import { ensureApiServerArtifacts, guestAssetsDir, stageFromRelease } from './api-server-artifact.js';
 
@@ -70,7 +71,7 @@ describe('ensureApiServerArtifacts with APPLIANCE_API_SERVER_BINARY', () => {
     fs.writeFileSync(stampFile(), `${VERSION}:${GUEST_ARCH}`);
     process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('fresh-dev-build');
 
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
 
     expect(fs.readFileSync(staged(), 'utf8')).toBe('fresh-dev-build');
     expect(fs.readFileSync(stampFile(), 'utf8')).toMatch(/^override:/);
@@ -79,18 +80,18 @@ describe('ensureApiServerArtifacts with APPLIANCE_API_SERVER_BINARY', () => {
   it('short-circuits on an unchanged override, restages on a changed one', async () => {
     const bin = overrideBinary('build-one');
     process.env.APPLIANCE_API_SERVER_BINARY = bin;
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
 
     // Drift the staged copy: an unchanged override must not rewrite it.
     fs.chmodSync(staged(), 0o600);
     fs.writeFileSync(staged(), 'tampered');
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
     expect(fs.readFileSync(staged(), 'utf8')).toBe('tampered');
 
     // A rebuilt override (new size + mtime) restages.
     fs.writeFileSync(bin, 'build-two!');
     fs.utimesSync(bin, new Date(), new Date(Date.now() + 5000));
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
     expect(fs.readFileSync(staged(), 'utf8')).toBe('build-two!');
   });
 
@@ -98,7 +99,7 @@ describe('ensureApiServerArtifacts with APPLIANCE_API_SERVER_BINARY', () => {
     fs.writeFileSync(path.join(work, 'appliance-console.tar.gz'), 'tar-bytes');
     process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('bin');
 
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
 
     expect(fs.readFileSync(stagedConsole(), 'utf8')).toBe('tar-bytes');
   });
@@ -110,7 +111,7 @@ describe('ensureApiServerArtifacts with APPLIANCE_API_SERVER_BINARY', () => {
     fs.writeFileSync(stagedConsole(), 'old-release-console');
     process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('bin');
 
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
 
     expect(fs.existsSync(stagedConsole())).toBe(false);
   });
@@ -119,15 +120,20 @@ describe('ensureApiServerArtifacts with APPLIANCE_API_SERVER_BINARY', () => {
     const tar = path.join(work, 'appliance-console.tar.gz');
     fs.writeFileSync(tar, 'console-one');
     process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('bin');
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
 
     // Only the tarball changes (new size + mtime) — the binary stamp
     // alone would short-circuit and keep the stale console.
     fs.writeFileSync(tar, 'console-two!');
     fs.utimesSync(tar, new Date(), new Date(Date.now() + 5000));
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: true });
 
     expect(fs.readFileSync(stagedConsole(), 'utf8')).toBe('console-two!');
+  });
+
+  it('refuses a release-build override without explicit unsigned acknowledgement', async () => {
+    process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('bin');
+    await expect(ensureApiServerArtifacts()).rejects.toThrow('development-only override');
   });
 });
 
@@ -137,8 +143,15 @@ describe('stageFromRelease signed metadata gate', () => {
   const binary = Buffer.from('signed-x64-binary');
   const armBinary = Buffer.from('signed-arm64-binary');
   const consoleBundle = Buffer.from('signed-console-tarball');
+  let devTrust: ReleaseTrustPolicy;
 
   const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+  beforeAll(async () => {
+    const publicKey = await getPublicKeyAsync(releaseDevFixturePrivateKey);
+    const keyId = `ed25519:sha256:${digest(publicKey)}`;
+    devTrust = { keys: { [keyId]: `ed25519:${Buffer.from(publicKey).toString('base64url')}` }, generationFloor: 1 };
+  });
 
   function payload(): ReleaseEnvelope {
     return {
@@ -208,7 +221,7 @@ describe('stageFromRelease signed metadata gate', () => {
       arch: 'x64',
       destinationDir: destination,
       fetcher,
-      trust: PINNED_RELEASE_TRUST,
+      trust: devTrust,
       now: new Date('2026-08-30T00:00:00Z'),
     });
 
@@ -222,7 +235,7 @@ describe('stageFromRelease signed metadata gate', () => {
     );
   });
 
-  it('refuses an unsigned pre-MV0 release without touching staged assets', async () => {
+  it('refuses an unsigned release once a trust key is pinned without touching staged assets', async () => {
     fs.writeFileSync(path.join(destination, 'appliance-api-server'), 'existing');
     await expect(
       stageFromRelease({
@@ -230,9 +243,21 @@ describe('stageFromRelease signed metadata gate', () => {
         arch: 'x64',
         destinationDir: destination,
         fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
+        trust: devTrust,
       })
-    ).rejects.toThrow('unsigned (pre-MV0 release)');
+    ).rejects.toThrow('pinned release trust requires signed metadata');
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'), 'utf8')).toBe('existing');
+  });
+
+  it('stages an unsigned pre-MV0 release while the production pin set is empty', async () => {
+    await stageFromRelease({
+      version: '1.56.0',
+      arch: 'x64',
+      destinationDir: destination,
+      fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
+    });
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('UNSIGNED PRE-MV0 RELEASE'));
+    expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
   });
 
   it('--allow-unsigned warns loudly in a dev build', async () => {
@@ -243,6 +268,7 @@ describe('stageFromRelease signed metadata gate', () => {
       fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
       allowUnsigned: true,
       cliVersion: '0.0.0-dev',
+      trust: devTrust,
     });
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('UNSIGNED DEV STAGING ENABLED'));
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
@@ -257,6 +283,7 @@ describe('stageFromRelease signed metadata gate', () => {
         fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
         allowUnsigned: true,
         cliVersion: 'v1.57.0',
+        trust: devTrust,
       })
     ).rejects.toThrow('--allow-unsigned is refused by release build');
   });
@@ -276,10 +303,64 @@ describe('stageFromRelease signed metadata gate', () => {
           'appliance-api-server-linux-x64': Buffer.from('tampered'),
           'appliance-console.tar.gz': consoleBundle,
         }),
-        trust: PINNED_RELEASE_TRUST,
+        trust: devTrust,
         now: new Date('2026-08-30T00:00:00Z'),
       })
     ).rejects.toThrow('failed signed size/SHA-256 verification');
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'), 'utf8')).toBe('existing');
+  });
+
+  it('falls back offline only after re-verifying staged metadata and bytes', async () => {
+    const release = payload();
+    const envelope = await signReleaseEnvelope(release, releaseDevFixturePrivateKey);
+    await stageFromRelease({
+      version: '1.57.0',
+      arch: 'x64',
+      destinationDir: destination,
+      fetcher: fakeFetcher({
+        'control-plane-release.json': JSON.stringify(release),
+        'control-plane-release.sig.json': JSON.stringify(envelope),
+        'appliance-api-server-linux-x64': binary,
+        'appliance-console.tar.gz': consoleBundle,
+      }),
+      trust: devTrust,
+      now: new Date('2026-08-30T00:00:00Z'),
+    });
+    const offline = (async () => {
+      throw new Error('offline');
+    }) as typeof fetch;
+    await expect(
+      stageFromRelease({
+        version: '1.57.0',
+        arch: 'x64',
+        destinationDir: destination,
+        fetcher: offline,
+        trust: devTrust,
+        now: new Date('2026-08-30T00:00:00Z'),
+      })
+    ).resolves.toBeUndefined();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('offline-verified'));
+    expect(fs.readFileSync(path.join(destination, 'release-generation.high-water'), 'utf8').trim()).toBe('225');
+  });
+
+  it('rejects an offline staged binary after byte tampering when trust is pinned', async () => {
+    const release = payload();
+    const envelope = await signReleaseEnvelope(release, releaseDevFixturePrivateKey);
+    fs.writeFileSync(path.join(destination, 'control-plane-release.json'), JSON.stringify(release));
+    fs.writeFileSync(path.join(destination, 'control-plane-release.sig.json'), JSON.stringify(envelope));
+    fs.writeFileSync(path.join(destination, 'appliance-api-server'), 'tampered');
+    const offline = (async () => {
+      throw new Error('offline');
+    }) as typeof fetch;
+    await expect(
+      stageFromRelease({
+        version: '1.57.0',
+        arch: 'x64',
+        destinationDir: destination,
+        fetcher: offline,
+        trust: devTrust,
+        now: new Date('2026-08-30T00:00:00Z'),
+      })
+    ).rejects.toThrow('metadata download failed');
   });
 });

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createApplianceClient, VERSION } from '@appliance.sh/sdk';
+import { createApplianceClient, PINNED_RELEASE_TRUST, VERSION, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
 import { apiServerUrlForHostPort, IN_CLUSTER_API_SERVER_HOSTNAME, mintApiKey } from '@appliance.sh/helper';
 import { readProfiles, removeProfile, upsertProfile, type Profile } from './profile-store.js';
 import {
@@ -440,7 +440,8 @@ export function compareVersionStamp(
   stamp: string | null,
   cliVersion: string,
   serverVersion: string | null,
-  signingKeyId: string | null = null
+  signingKeyId: string | null = null,
+  releaseTrust: ReleaseTrustPolicy = PINNED_RELEASE_TRUST
 ): RuntimeFinding {
   const id = 'runtime:guest-stamp';
   const title = 'Guest api-server artifacts vs CLI / running server';
@@ -461,16 +462,28 @@ export function compareVersionStamp(
         'guest binary staged from an APPLIANCE_API_SERVER_BINARY override (dev build) — version comparison skipped',
     };
   }
-  const releaseTrust = signingKeyId
+  const pinnedKeys = Object.keys(releaseTrust.keys);
+  const recognizedKey =
+    signingKeyId !== null && Object.prototype.hasOwnProperty.call(releaseTrust.keys, signingKeyId);
+  const trustDetail = recognizedKey
     ? `staged asset signed by keyId ${signingKeyId}`
-    : 'staged asset unsigned (pre-MV0 release)';
+    : signingKeyId
+      ? `staged asset signed by an unrecognized key ${signingKeyId}`
+      : pinnedKeys.length === 0
+        ? 'staged asset unsigned pre-MV0 release; self-update disabled'
+        : 'staged asset is unsigned even though production release trust is pinned';
+  const trustSeverity: Severity | null = recognizedKey
+    ? null
+    : signingKeyId || pinnedKeys.length === 0
+      ? 'warn'
+      : 'fail';
   const stampVersion = stamp.split(':')[0] ?? '';
   if (serverVersion && normVersion(serverVersion) !== normVersion(stampVersion)) {
     return {
       id,
       title,
-      severity: 'warn',
-      detail: `running api-server is ${serverVersion} but the staged artifacts are ${stampVersion} — the VM booted before the restage; ${releaseTrust}`,
+      severity: trustSeverity === 'fail' ? 'fail' : 'warn',
+      detail: `running api-server is ${serverVersion} but the staged artifacts are ${stampVersion} — the VM booted before the restage; ${trustDetail}`,
       remediation: 'Restart the VM to pick up the staged binary: `appliance vm stop && appliance vm up`.',
     };
   }
@@ -478,18 +491,18 @@ export function compareVersionStamp(
     return {
       id,
       title,
-      severity: 'warn',
-      detail: `staged guest artifacts are ${stampVersion} but this CLI is ${cliVersion}; ${releaseTrust}`,
+      severity: trustSeverity === 'fail' ? 'fail' : 'warn',
+      detail: `staged guest artifacts are ${stampVersion} but this CLI is ${cliVersion}; ${trustDetail}`,
       remediation: 'Run `appliance vm up` — it restages the matching artifacts before boot.',
     };
   }
   return {
     id,
     title,
-    severity: 'ok',
+    severity: trustSeverity ?? 'ok',
     detail: serverVersion
-      ? `CLI ${cliVersion} = staged ${stampVersion} = running ${serverVersion}; ${releaseTrust}`
-      : `CLI ${cliVersion} = staged ${stampVersion} (running server version unknown); ${releaseTrust}`,
+      ? `CLI ${cliVersion} = staged ${stampVersion} = running ${serverVersion}; ${trustDetail}`
+      : `CLI ${cliVersion} = staged ${stampVersion} (running server version unknown); ${trustDetail}`,
   };
 }
 

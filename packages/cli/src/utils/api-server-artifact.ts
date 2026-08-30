@@ -63,6 +63,10 @@ function releaseChecksumsPath(): string {
   return path.join(guestAssetsDir(), 'appliance-api-server.sha256');
 }
 
+function releasePropertiesPath(): string {
+  return path.join(guestAssetsDir(), 'control-plane-release.properties');
+}
+
 /** Repo layout probe, resolved relative to this module's emitted file
  *  (dist/utils → the repo's packages dir) — mirrors microvm-up's
  *  repoVmBinaryCandidates. Null under the bun single binary. */
@@ -116,6 +120,12 @@ export async function ensureApiServerArtifacts(options: { allowUnsigned?: boolea
   ensurePrivateDirectory(guestAssetsDir());
 
   if (override) {
+    if (isReleaseBuild() && !options.allowUnsigned) {
+      throw new Error(
+        'APPLIANCE_API_SERVER_BINARY is a development-only override in release builds; pass --allow-unsigned to acknowledge the risk explicitly'
+      );
+    }
+    if (isReleaseBuild()) warnUnsigned('APPLIANCE_API_SERVER_BINARY override');
     console.log(chalk.cyan(`» staging api-server guest binary from ${override}`));
     atomicStageFile(stagedBinaryPath(), fs.readFileSync(override));
     // Console bundle: staged when a tarball ships next to the override
@@ -131,7 +141,7 @@ export async function ensureApiServerArtifacts(options: { allowUnsigned?: boolea
       fs.rmSync(stagedConsolePath(), { force: true });
       console.log(chalk.dim('no console bundle next to the override binary — the VM serves API only'));
     }
-    clearReleaseEvidence();
+    clearReleaseEvidence(guestAssetsDir());
     atomicStageFile(versionStampPath(), Buffer.from(stamp));
     return;
   }
@@ -203,7 +213,7 @@ async function stageFromRepo(packagesDir: string): Promise<void> {
       chalk.dim('console bundle not built (pnpm --filter @appliance.sh/console build) — the VM serves API only')
     );
   }
-  clearReleaseEvidence();
+  clearReleaseEvidence(guestAssetsDir());
 }
 
 export interface StageFromReleaseOptions {
@@ -227,6 +237,9 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
   const base = `${options.releaseBase ?? RELEASE_BASE}/v${version}`;
   const destination = options.destinationDir ?? guestAssetsDir();
   const releaseName = `control-plane release v${version}`;
+  const trust = options.trust ?? PINNED_RELEASE_TRUST;
+  const hasPinnedKeys = Object.keys(trust.keys).length > 0;
+  const highestGeneration = maxDefined(options.highestGeneration, stagedHighestGeneration(destination));
   let payloadResponse: Response;
   let signatureResponse: Response;
   try {
@@ -235,24 +248,30 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
       releaseFetch(fetcher, `${base}/control-plane-release.sig.json`),
     ]);
   } catch (cause) {
+    if (await useOfflineStagedRelease(destination, version, arch, trust, options.now, highestGeneration)) return;
+    if (!hasPinnedKeys && useOfflineUnsignedStage(destination, releaseName, cause)) return;
     throw new Error(`${releaseName} metadata download failed; no guest assets were written: ${errorDetail(cause)}`);
   }
 
   if (!payloadResponse.ok || !signatureResponse.ok) {
-    if (!options.allowUnsigned) {
-      throw new Error(
-        `${releaseName} is unsigned (pre-MV0 release); refusing to stage it before writing any guest assets`
-      );
+    if (await useOfflineStagedRelease(destination, version, arch, trust, options.now, highestGeneration)) return;
+    if (!hasPinnedKeys) {
+      warnUnsigned(`${releaseName}; self-update disabled`);
+      try {
+        await stageUnsignedRelease(base, version, arch, destination, fetcher);
+      } catch (cause) {
+        if (useOfflineUnsignedStage(destination, releaseName, cause)) return;
+        throw cause;
+      }
+      return;
     }
+    if (!options.allowUnsigned)
+      throw new Error(`${releaseName} is unsigned; pinned release trust requires signed metadata`);
     const cliVersion = options.cliVersion ?? VERSION;
     if (isReleaseBuild(cliVersion)) {
       throw new Error(`--allow-unsigned is refused by release build ${cliVersion}; ${releaseName} was not staged`);
     }
-    console.warn(
-      chalk.bgRed.white.bold(
-        ` WARNING: UNSIGNED DEV STAGING ENABLED for ${releaseName}; authenticity and rollback protection are disabled `
-      )
-    );
+    warnUnsigned(`${releaseName}; authenticity and rollback protection are disabled`, true);
     await stageUnsignedRelease(base, version, arch, destination, fetcher);
     return;
   }
@@ -267,9 +286,9 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
   }
   let verified;
   try {
-    verified = await verifyReleaseEnvelope(rawPayload, rawEnvelope, options.trust ?? PINNED_RELEASE_TRUST, {
+    verified = await verifyReleaseEnvelope(rawPayload, rawEnvelope, trust, {
       now: options.now,
-      highestGeneration: options.highestGeneration ?? stagedHighestGeneration(destination),
+      highestGeneration,
     });
   } catch (cause) {
     throw new Error(
@@ -281,21 +300,50 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
       `${releaseName} metadata names version ${verified.payload.version}; refusing cross-version staging before writing`
     );
   }
-  const binaryName = `appliance-api-server-linux-${arch}` as const;
-  const binary = releaseArtifact(verified.payload.artifacts, binaryName, arch, releaseName);
-  const consoleArtifact = releaseArtifact(verified.payload.artifacts, 'appliance-console.tar.gz', 'any', releaseName);
+  const { binary, consoleArtifact } = releaseArtifacts(verified.payload.artifacts, arch, releaseName);
   console.log(chalk.cyan(`» downloading verified api-server guest assets (${releaseName}, ${arch})`));
   const [binaryBytes, consoleBytes] = await Promise.all([
     fetchArtifact(fetcher, `${base}/${binary.name}`, binary, releaseName),
     fetchArtifact(fetcher, `${base}/${consoleArtifact.name}`, consoleArtifact, releaseName),
   ]);
 
-  // Everything above is in memory and verified. Only now may staging mutate.
+  stageVerifiedRelease(destination, arch, verified, binary, binaryBytes, consoleArtifact, consoleBytes);
+  raiseHighWater(destination, verified.payload.generation);
+  console.log(chalk.dim(`staged release signed by keyId ${verified.envelope.keyId}`));
+}
+
+function releaseArtifacts(
+  artifacts: ReleaseArtifact[],
+  arch: 'x64' | 'arm64',
+  releaseName: string
+): { binary: ReleaseArtifact; consoleArtifact: ReleaseArtifact } {
+  const binaryName = `appliance-api-server-linux-${arch}` as const;
+  return {
+    binary: releaseArtifact(artifacts, binaryName, arch, releaseName),
+    consoleArtifact: releaseArtifact(artifacts, 'appliance-console.tar.gz', 'any', releaseName),
+  };
+}
+
+function stageVerifiedRelease(
+  destination: string,
+  arch: 'x64' | 'arm64',
+  verified: Awaited<ReturnType<typeof verifyReleaseEnvelope>>,
+  binary: ReleaseArtifact,
+  binaryBytes: Buffer,
+  consoleArtifact: ReleaseArtifact,
+  consoleBytes: Buffer | null
+): void {
   ensurePrivateDirectory(destination);
   atomicStageFile(path.join(destination, 'appliance-api-server'), binaryBytes);
-  atomicStageFile(path.join(destination, 'appliance-console.tar.gz'), consoleBytes);
-  const checksums = `${binary.sha256}  appliance-api-server\n${consoleArtifact.sha256}  appliance-console.tar.gz\n`;
-  atomicStageFile(path.join(destination, 'appliance-api-server.sha256'), Buffer.from(checksums));
+  if (consoleBytes) atomicStageFile(path.join(destination, 'appliance-console.tar.gz'), consoleBytes);
+  else removeStagedFile(path.join(destination, 'appliance-console.tar.gz'));
+  const checksumRows = [
+    `${binary.sha256}  appliance-api-server  ${binary.size}`,
+    `${consoleArtifact.sha256}  appliance-console.tar.gz  ${consoleArtifact.size}`,
+  ];
+  const properties = `keyId=${verified.envelope.keyId}\nversion=${verified.payload.version}\narch=${arch}\n`;
+  atomicStageFile(path.join(destination, 'appliance-api-server.sha256'), Buffer.from(`${checksumRows.join('\n')}\n`));
+  atomicStageFile(path.join(destination, 'control-plane-release.properties'), Buffer.from(properties));
   atomicStageFile(
     path.join(destination, 'control-plane-release.json'),
     Buffer.from(`${JSON.stringify(verified.payload)}\n`)
@@ -304,7 +352,59 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
     path.join(destination, 'control-plane-release.sig.json'),
     Buffer.from(`${JSON.stringify(verified.envelope)}\n`)
   );
-  console.log(chalk.dim(`staged release signed by keyId ${verified.envelope.keyId}`));
+}
+
+async function useOfflineStagedRelease(
+  destination: string,
+  version: string,
+  arch: 'x64' | 'arm64',
+  trust: ReleaseTrustPolicy,
+  now: Date | undefined,
+  highestGeneration: number | undefined
+): Promise<boolean> {
+  const payloadPath = path.join(destination, 'control-plane-release.json');
+  const envelopePath = path.join(destination, 'control-plane-release.sig.json');
+  const binaryPath = path.join(destination, 'appliance-api-server');
+  if (![payloadPath, envelopePath, binaryPath].every((file) => fs.existsSync(file))) return false;
+  try {
+    const verified = await verifyReleaseEnvelope(
+      JSON.parse(fs.readFileSync(payloadPath, 'utf8')),
+      JSON.parse(fs.readFileSync(envelopePath, 'utf8')),
+      trust,
+      { now, highestGeneration }
+    );
+    if (verified.payload.version !== version) return false;
+    const { binary, consoleArtifact } = releaseArtifacts(
+      verified.payload.artifacts,
+      arch,
+      `locally staged control-plane release v${version}`
+    );
+    const binaryBytes = fs.readFileSync(binaryPath);
+    verifyArtifactBytes(binaryBytes, binary, 'locally staged control-plane release');
+    const consolePath = path.join(destination, 'appliance-console.tar.gz');
+    const consoleBytes = fs.existsSync(consolePath) ? fs.readFileSync(consolePath) : null;
+    if (consoleBytes) verifyArtifactBytes(consoleBytes, consoleArtifact, 'locally staged control-plane release');
+    stageVerifiedRelease(destination, arch, verified, binary, binaryBytes, consoleArtifact, consoleBytes);
+    raiseHighWater(destination, verified.payload.generation);
+    console.warn(
+      chalk.yellow(`Network metadata unavailable; using offline-verified control-plane release v${version}.`)
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function useOfflineUnsignedStage(destination: string, releaseName: string, cause: unknown): boolean {
+  if (!fs.existsSync(path.join(destination, 'appliance-api-server'))) return false;
+  clearReleaseEvidence(destination);
+  warnUnsigned(`${releaseName}; self-update disabled; using existing staged bytes after ${errorDetail(cause)}`);
+  return true;
+}
+
+function warnUnsigned(subject: string, development = false): void {
+  const label = development ? 'UNSIGNED DEV STAGING ENABLED' : 'UNSIGNED PRE-MV0 RELEASE';
+  console.warn(chalk.bgRed.white.bold(` WARNING: ${label}: ${subject} `));
 }
 
 export function isReleaseBuild(version: string = VERSION): boolean {
@@ -346,9 +446,7 @@ async function stageUnsignedRelease(
   atomicStageFile(path.join(destination, 'appliance-api-server'), binary);
   if (consoleBytes?.length) atomicStageFile(path.join(destination, 'appliance-console.tar.gz'), consoleBytes);
   else fs.rmSync(path.join(destination, 'appliance-console.tar.gz'), { force: true });
-  for (const file of ['control-plane-release.json', 'control-plane-release.sig.json', 'appliance-api-server.sha256']) {
-    fs.rmSync(path.join(destination, file), { force: true });
-  }
+  clearReleaseEvidence(destination);
 }
 
 async function fetchArtifact(
@@ -360,13 +458,16 @@ async function fetchArtifact(
   const response = await releaseFetch(fetcher, url);
   if (!response.ok) throw new Error(`${releaseName} asset ${artifact.name} download failed: HTTP ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());
+  verifyArtifactBytes(bytes, artifact, releaseName);
+  return bytes;
+}
+
+function verifyArtifactBytes(bytes: Uint8Array, artifact: ReleaseArtifact, releaseName: string): void {
   const digest = createHash('sha256').update(bytes).digest('hex');
-  if (bytes.length !== artifact.size || digest !== artifact.sha256) {
+  if (bytes.length !== artifact.size || digest !== artifact.sha256)
     throw new Error(
       `${releaseName} asset ${artifact.name} failed signed size/SHA-256 verification (expected ${artifact.size}/${artifact.sha256}, got ${bytes.length}/${digest}); no guest assets were written`
     );
-  }
-  return bytes;
 }
 
 function releaseFetch(fetcher: typeof fetch, url: string): Promise<Response> {
@@ -379,20 +480,36 @@ function errorDetail(cause: unknown): string {
 
 function stagedHighestGeneration(directory: string): number | undefined {
   try {
-    const payload = JSON.parse(fs.readFileSync(path.join(directory, 'control-plane-release.json'), 'utf8')) as {
-      generation?: unknown;
-    };
-    return typeof payload.generation === 'number' && Number.isSafeInteger(payload.generation) && payload.generation >= 0
-      ? payload.generation
-      : undefined;
+    const value = Number(fs.readFileSync(path.join(directory, 'release-generation.high-water'), 'utf8').trim());
+    return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
   } catch {
     return undefined;
   }
 }
 
-function clearReleaseEvidence(): void {
-  for (const file of [releasePayloadPath(), releaseSignaturePath(), releaseChecksumsPath()]) {
-    fs.rmSync(file, { force: true });
+function maxDefined(...values: Array<number | undefined>): number | undefined {
+  const present = values.filter((value): value is number => value !== undefined);
+  return present.length ? Math.max(...present) : undefined;
+}
+
+function raiseHighWater(directory: string, generation: number): void {
+  const current = stagedHighestGeneration(directory) ?? 0;
+  if (generation > current)
+    atomicStageFile(path.join(directory, 'release-generation.high-water'), Buffer.from(`${generation}\n`));
+}
+
+function clearReleaseEvidence(directory: string): void {
+  const defaults = directory === guestAssetsDir();
+  const files = defaults
+    ? [releasePayloadPath(), releaseSignaturePath(), releaseChecksumsPath(), releasePropertiesPath()]
+    : [
+        'control-plane-release.json',
+        'control-plane-release.sig.json',
+        'appliance-api-server.sha256',
+        'control-plane-release.properties',
+      ].map((file) => path.join(directory, file));
+  for (const file of files) {
+    removeStagedFile(file);
   }
 }
 
@@ -404,10 +521,28 @@ function hardenStagedFile(file: string): void {
 function atomicStageFile(file: string, bytes: Uint8Array): void {
   const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(temporary, bytes, { mode: 0o600, flag: 'wx' });
-  hardenStagedFile(temporary);
+  try {
+    removeStagedFile(file);
+    fs.renameSync(temporary, file);
+    hardenStagedFile(file);
+  } catch (cause) {
+    try {
+      fs.chmodSync(temporary, 0o600);
+      fs.rmSync(temporary, { force: true });
+    } catch {
+      // Preserve the original staging failure.
+    }
+    throw cause;
+  }
+}
+
+function removeStagedFile(file: string): void {
+  try {
+    fs.chmodSync(file, 0o600);
+  } catch {
+    // Missing files and Windows ACL enforcement are handled by rmSync.
+  }
   fs.rmSync(file, { force: true });
-  fs.renameSync(temporary, file);
-  hardenStagedFile(file);
 }
 
 function tarGzDirectory(dir: string, dest: string): Promise<void> {
