@@ -181,7 +181,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   }
 
   if (provisioner === 'cloudformation-v1') {
-    return <CloudFormationLifecycleHandoff cluster={cluster} />;
+    return <CloudFormationLifecycleHandoff cluster={cluster} desktop={canBootstrap} />;
   }
 
   if (!canBootstrap) {
@@ -223,10 +223,19 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function CloudFormationLifecycleHandoff({ cluster }: { cluster: Cluster }) {
+function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: Cluster; desktop: boolean }) {
   return (
     <div className="space-y-3">
-      <UpdateApiServerPanel cluster={cluster} cloudFormation />
+      {desktop ? (
+        <UpdateApiServerPanel cluster={cluster} cloudFormation />
+      ) : (
+        <SectionCard
+          title="Update cloud installation"
+          description="Run the signed self-update from the Appliance desktop or CLI."
+        >
+          <CommandSnippet command="appliance cloud update" />
+        </SectionCard>
+      )}
       <SectionCard
         tone="danger"
         title="Destroy cloud installation"
