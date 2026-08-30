@@ -1427,7 +1427,7 @@ while :; do
       sleep 5
       if ! kill -0 "$PID" 2>/dev/null; then REASON=crash; break; fi
       STATUS=$(wget -qO- "http://127.0.0.1:$PORT/bootstrap/status" 2>/dev/null | tr -d '[:space:]')
-      if printf '%s' "$STATUS" | grep -F '"initialized":true' >/dev/null && printf '%s' "$STATUS" | grep -F "\"serverVersion\":\"$VERSION\"" >/dev/null; then
+      if printf '%s' "$STATUS" | grep -F '"initialized":true' >/dev/null && { printf '%s' "$STATUS" | grep -F "\"serverVersion\":\"$VERSION\"" >/dev/null || printf '%s' "$STATUS" | grep -F "\"serverVersion\":\"v$VERSION\"" >/dev/null; }; then
         HEALTHY=1
         break
       fi
@@ -5232,6 +5232,7 @@ done >> "$CTR_ARGV"
             result
         }
         assert_eq!(run_case("good", "2.0.0", &"a".repeat(64), false), ("success 2.0.0\n".into(), "releases/2.0.0".into()));
+        assert_eq!(run_case("good-v-prefix", "v2.0.0", &"a".repeat(64), false), ("success 2.0.0\n".into(), "releases/2.0.0".into()));
         assert_eq!(run_case("hash", "2.0.0", &"b".repeat(64), false), ("rollback 2.0.0 bad-hash\n".into(), "releases/1.0.0".into()));
         assert_eq!(run_case("wrong", "9.9.9", &"a".repeat(64), false), ("rollback 2.0.0 wrong-version\n".into(), "releases/1.0.0".into()));
         assert_eq!(run_case("crash", "2.0.0", &"a".repeat(64), true), ("rollback 2.0.0 crash\n".into(), "releases/1.0.0".into()));
