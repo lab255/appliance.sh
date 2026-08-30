@@ -218,10 +218,13 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
 ## 5. microVM mechanism (MV1)
 
 **MV1 shipped (AP-222):** capable VZ and WSL guests now have the protected persistent release volume, raw artifact transport,
-same-open-handle verification, atomic whole-release promotion, two-minute versioned health gate, and automatic rollback described below.
+same-open-handle verification, atomic pointer-file promotion, two-minute versioned health gate, and automatic rollback described below.
 `appliance vm update` and the Desktop compatibility banner use the same signed host transport. VMs booted by an older launcher are
 detected before transfer and retain the signed restage-and-reboot path. Production self-update remains intentionally disabled until
 AP-226 fills `PINNED_RELEASE_TRUST` with the offline release key.
+For owner testing only, a non-release build may load the same trust-policy JSON shape from
+`APPLIANCE_RELEASE_TRUST_FILE=<path>`. Release builds ignore that variable with a loud warning and retain the empty/production pin set;
+the escape hatch never permits unsigned in-place replacement.
 
 **MV0 shipped (AP-225):** release assets now include `SHA256SUMS`, `control-plane-release.json`, and
 `control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
@@ -251,9 +254,11 @@ both VZ and WSL independently compare the selected binary's hash/size/architectu
 This protects the seed copy after host
 staging; it is not a second signature-verification boundary.
 
-`appliance vm update [--name NAME] [--version VERSION]` downloads binary, console, `SHA256SUMS`, payload, and envelope to an ACL'd,
-non-user-writable host staging directory. It verifies the envelope offline, production key id, generation, validity, blacklist,
-version/architecture, and both hashes before opening the VM channel. The guest independently checks exact byte count and signed hash.
+`appliance vm update [--name NAME] [--version VERSION]` first performs the launcher-capability probe, then downloads binary, console,
+`SHA256SUMS`, payload, and envelope to an ACL'd temporary staging directory. It verifies the envelope offline, production key id,
+generation, validity, blacklist, version/architecture, and both hashes before opening the artifact channel. The guest independently
+checks exact byte count and signed hash. The host publishes the verified release into next-boot `guest-assets` only after the running
+guest reports successful promotion and the target version; rollback leaves next-boot media unchanged.
 
 The shell listener cannot become a raw receiver because socat allocates its PTY before `SHELL_AGENT` parses input
 (`packages/vm/src/guest.rs:320-324,1234-1250`). MV1 adds a second `VSOCK-LISTEN:ARTIFACT_VSOCK_PORT` using non-PTY `EXEC:` and reuses
@@ -262,16 +267,26 @@ same-open-handle hash/stream contract but changes api-server/console from `expec
 (`packages/vm/src/backend/wsl.rs:623-704`). MV1 must widen that receive helper's current Windows/test-only cfg for VZ
 (`packages/vm/src/backend/runtime_guest.rs:228`).
 
-VZ gains a small root-only persistent control-plane volume mounted at `/var/lib/appliance-control-plane`, separate from `/persist`
-(the agent HOME/data disk) and never exposed by hostPath. WSL uses an ACL'd directory on its distro VHD, never drvfs. Releases contain
-`{binary, console.tar.gz, console/}`; `current`, `previous`, and `pending` point to whole release directories and change by atomic rename,
-so `APPLIANCE_CONSOLE_DIR` and binary promote together rather than skew.
+VZ gains a root-only persistent control-plane volume mounted at `/var/lib/appliance-control-plane`, separate from `/persist`
+(the agent HOME/data disk) and never exposed by hostPath. It is appended after the contractual vda data, vdb boot-media, and optional
+vdc agent devices, resolved by the `appliance-control-plane` filesystem label, and sized from three copies of the signed artifact sizes
+plus headroom with a 1 GiB minimum. Formatting is allowed only for a device on which `blkid` reports neither type nor label. The mount
+tries `nodev,nosuid,nosymfollow`, logs and falls back to `nodev,nosuid` only when the guest mount implementation rejects `nosymfollow`.
+WSL uses an ACL'd directory on its distro VHD, never drvfs.
+
+Releases live in content-addressed `releases/<version>-<binary-sha12>/` directories containing
+`{binary, console.tar.gz, console/}`. `current`, `previous`, and `pending` are one-line relative pointer files, restricted to
+`releases/[0-9A-Za-z._+-]+` and flipped with a same-directory `mv -f` rename supported by BusyBox. Existing matching content is reused;
+the updater never removes a directory referenced by any pointer. The promoted signed generation is persisted beside the pointers and
+the guest refuses any lower generation. This promotes `APPLIANCE_CONSOLE_DIR` and binary together without destroying rollback state.
 
 Extend `APISERVER_COMMON` into a supervisor: open the candidate without following symlinks, verify its signed SHA-256 through that held
 fd immediately before executing `/proc/self/fd/<fd>`, launch with the candidate console, and poll guest-loopback `/bootstrap/status`
 for two minutes requiring the target version. Success promotes the directory; exit/bad health restores `previous` and respawns. Keep
-the old release until a later successful update. User namespaces enforce PSA `restricted` plus admission denial of `hostPath`; the
-control-plane volume is outside workload and agent-reachable mounts.
+the old release until a later successful update. Workload namespaces enforce PSA `restricted`; a default-deny
+ValidatingAdmissionPolicy blocks hostPath outside explicitly labelled control-plane namespaces, and a second cluster-wide rule rejects
+every hostPath at or below `/var/lib/appliance-control-plane`, including in privileged namespaces. Older Kubernetes versions that do not
+apply ValidatingAdmissionPolicy retain PSA but are reported as a doctor warning rather than being claimed as equivalently protected.
 
 Boot-media/WSL copy is seed-only and never overwrites `current`; quarantine, selector-less routing, and SA wiring remain independent.
 Because the artifact listener and supervisor are rendered by the host CLI at boot, VMs created before MV1 cannot update in place. A
@@ -293,6 +308,8 @@ pass identical supervisor tests.
 | Pre-MV0 release                                             | empty production pin / missing envelope  | allow initial seed with loud warning and disable self-update; refuse after AP-226 pins trust | install a signed post-MV0 release |
 | Old launcher after MV0                                      | capability probe                         | no in-place transfer                                                                         | signed restage+reboot             |
 | microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap                                                                  | old release, retry command        |
+| microVM lower signed generation                             | guest persisted generation high-water    | refuse candidate before pending pointer                                                      | newer signed release              |
+| microVM malformed/dangling pointer                          | strict relative pointer parser           | remove rejected unreferenced release; restore `previous`, else run the legacy seed           | doctor, then signed update        |
 | microVM corrupt/missing console with valid binary           | guest console hash/extract check         | warn and run headless; never delete the api-server binary                                    | restage the same signed release   |
 | microVM candidate crash/probe timeout                       | supervisor                               | restore `previous`, respawn                                                                  | `appliance vm update`             |
 | microVM reboot with stale media                             | persistent current exists                | ignore media seed                                                                            | persistent supervisor             |

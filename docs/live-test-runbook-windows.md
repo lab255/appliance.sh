@@ -793,10 +793,14 @@ total in R06 and record R70–R72.
 
 Before final teardown, run the same signed N → crashing N+1 → healthy N+1
 sequence from [the main runbook](live-test-runbook.md#mv1-control-plane-update-proof-ap-222--input-to-ap-223).
+Steps 1–4 have the same trust precondition: production pin, or a development
+build plus `APPLIANCE_RELEASE_TRUST_FILE` containing the test-key trust JSON.
+Release builds ignore that escape hatch and must show the documented
+fail-closed restart path instead.
 Use `appliance-vm.exe stop appliance` followed by `appliance-vm.exe start
 appliance` for the stale-media restart. Record that the WSL distro PID remains
 unchanged for each in-place attempt, rollback restores N, the healthy retry
-promotes N+1, and the distro-VHD `current` survives the stale-media restart.
+promotes N+1, and the distro-VHD one-line `current` pointer file survives the stale-media restart.
 The control-plane tree must be Linux-owned inside the managed distro and no
 copy may appear under `/mnt/*` or another drvfs mount. Attach the doctor JSON
 showing staged version, signed keyId, persistent current, console, and running
