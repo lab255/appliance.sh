@@ -1,6 +1,8 @@
 import { getPublicKeyAsync } from '@noble/ed25519';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  PINNED_RELEASE_TRUST,
+  RELEASE_MAX_VALIDITY_MS,
   releaseEnvelopeSchema,
   signReleaseEnvelope,
   verifyReleaseEnvelope,
@@ -43,6 +45,10 @@ function release(overrides: Partial<ReleaseEnvelope> = {}): ReleaseEnvelope {
 const now = new Date('2026-08-30T00:00:00Z');
 
 describe('control-plane release trust', () => {
+  it('ships no release trust root before AP-226', () => {
+    expect(Object.keys(PINNED_RELEASE_TRUST.keys)).toHaveLength(0);
+  });
+
   it('accepts a valid release envelope', async () => {
     const payload = release();
     const envelope = await signReleaseEnvelope(payload, privateKey);
@@ -97,6 +103,15 @@ describe('control-plane release trust', () => {
     ).rejects.toMatchObject({
       code: 'expired',
     });
+  });
+
+  it('rejects validity windows above the release RFC cap', async () => {
+    const payload = release({
+      expires: new Date(Date.parse('2026-08-29T00:00:00Z') + RELEASE_MAX_VALIDITY_MS + 1).toISOString(),
+    });
+    await expect(
+      verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), trust, { now })
+    ).rejects.toMatchObject({ code: 'invalid-validity' });
   });
 
   it('rejects a signer from the verified blacklist', async () => {

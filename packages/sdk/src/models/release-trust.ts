@@ -17,6 +17,8 @@ const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
 const manifestDigest = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const rfc3339 = z.iso.datetime({ offset: true });
 
+export const RELEASE_MAX_VALIDITY_MS = 400 * 24 * 60 * 60 * 1000;
+
 const releaseArtifactSchema = z.strictObject({
   name: z.enum(['appliance-api-server-linux-x64', 'appliance-api-server-linux-arm64', 'appliance-console.tar.gz']),
   arch: z.enum(['x64', 'arm64', 'any']),
@@ -78,14 +80,10 @@ export interface ReleaseTrustPolicy {
   blacklistedKeyIds?: readonly string[] | ReadonlySet<string>;
 }
 
-// Public-only development fixture and production pin placeholder: replaced by
-// AP-226 with the offline production release keyId and public key.
-export const RELEASE_DEV_FIXTURE_PUBLIC_KEY = 'ed25519:GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE';
-export const RELEASE_DEV_FIXTURE_KEY_ID =
-  'ed25519:sha256:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092';
-
+// AP-226 replaces this empty production pin set with the offline release
+// public key and its SHA-256 keyId. Never ship a deterministic development key.
 export const PINNED_RELEASE_TRUST: ReleaseTrustPolicy = Object.freeze({
-  keys: Object.freeze({ [RELEASE_DEV_FIXTURE_KEY_ID]: RELEASE_DEV_FIXTURE_PUBLIC_KEY }),
+  keys: Object.freeze({}),
   generationFloor: 1,
 });
 
@@ -105,7 +103,14 @@ export async function verifyReleaseEnvelope(
   if (!envelopeResult.success)
     throw new CatalogueTrustError('invalid-schema', 'release signature envelope is malformed');
   const publicKey = trust.keys[envelopeResult.data.keyId];
-  if (!publicKey) throw new CatalogueTrustError('unknown-key', 'release signer is not pinned');
+  if (!publicKey) {
+    throw new CatalogueTrustError(
+      'unknown-key',
+      Object.keys(trust.keys).length === 0
+        ? 'release signing trust is not provisioned; AP-226 must pin the production key'
+        : 'release signer is not pinned'
+    );
+  }
   checkTrustedKeyBlacklist(envelopeResult.data.keyId, trust.blacklistedKeyIds, 'release signer');
   const envelope = (await verifySignatureEnvelope(
     untrustedPayload,
@@ -127,7 +132,7 @@ export async function verifyReleaseEnvelope(
     'release'
   );
   const now = options.now ?? new Date();
-  checkTrustValidity(payload.notBefore, payload.expires, Number.MAX_SAFE_INTEGER, now, false, 'release', 'release');
+  checkTrustValidity(payload.notBefore, payload.expires, RELEASE_MAX_VALIDITY_MS, now, false, 'release', 'release');
   return { payload, envelope, verifiedAt: now.toISOString() };
 }
 
