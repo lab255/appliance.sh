@@ -26,16 +26,18 @@ const MAX_CAS_ATTEMPTS = 12;
 
 /**
  * Reserved in-process principal for EventBridge checks. It is deliberately
- * not stored in api-keys and its placeholder secret is never used to sign an
- * HTTP request: HttpSelfUpdateDispatcher keeps this caller on the worker and
- * hands the persisted job id to the same executor used by the signed route.
+ * not stored in api-keys. Its secret getter throws so any future path that
+ * tries to turn it into an HTTP credential fails closed. The dispatcher must
+ * short-circuit this key id before signing.
  */
 export const SYSTEM_SCHEDULED_SELF_UPDATE_CALLER = Object.freeze({
   keyId: 'system-self-update-scheduler',
   tenantId: DEFAULT_TENANT,
   role: 'admin' as const,
   kind: 'system' as const,
-  secret: 'local-dispatch-only',
+  get secret(): never {
+    throw new Error('scheduled self-update system principal has no signing secret');
+  },
 });
 
 export const selfUpdateRequestSchema = z.strictObject({
@@ -175,6 +177,9 @@ export class SelfUpdateService {
     principal: { keyId: string; tenantId: string; secret: string },
     idempotencyKey?: string
   ): Promise<{ job: SelfUpdateJob; reused: boolean }> {
+    if (principal.tenantId !== DEFAULT_TENANT) {
+      throw new Error('control-plane self-update requires the owner tenant');
+    }
     const initialState = await this.getControlState();
     const verified = await this.verifier(input.release.payload, input.release.envelope, PINNED_RELEASE_TRUST, {
       now: this.now(),
@@ -255,7 +260,12 @@ export class SelfUpdateService {
         jobId: job.id,
         createdAt: now.toISOString(),
       });
-      await this.dispatchOrFail(job, { keyId: principal.keyId, secret: principal.secret });
+      await this.dispatchOrFail(
+        job,
+        principal.keyId === SYSTEM_SCHEDULED_SELF_UPDATE_CALLER.keyId
+          ? SYSTEM_SCHEDULED_SELF_UPDATE_CALLER
+          : { keyId: principal.keyId, secret: principal.secret }
+      );
       return { job: (await this.get(job.id)) ?? job, reused: false };
     }
     await this.storage.delete(SELF_UPDATE_JOBS, job.id);

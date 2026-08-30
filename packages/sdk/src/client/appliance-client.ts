@@ -13,6 +13,7 @@ import { VERSION } from '../version';
 import {
   SelfUpdateStartError,
   type SelfUpdatePublicJob,
+  type SelfUpdateCheckResponse,
   type SelfUpdateStartInput,
   type SelfUpdateStartResponse,
   type SelfUpdateWatchOptions,
@@ -109,6 +110,12 @@ export interface ClusterInfoResponse {
   /** Scheduled cloud image-update policy and owner-visible notify marker. */
   selfUpdate?: {
     policy: 'off' | 'notify' | 'auto';
+    lastCheck?: {
+      at: string;
+      decision: string;
+      reason: string;
+      version?: string;
+    };
     available?: { version: string; generation: number };
   };
 }
@@ -254,6 +261,8 @@ export class ApplianceClient {
 
   /** Signed control-plane self-update API and terminal-state polling helper. */
   readonly selfUpdate = {
+    check: (): Promise<Result<SelfUpdateCheckResponse>> =>
+      this.request<SelfUpdateCheckResponse>('POST', '/api/v1/self-update/check', {}),
     start: (input: SelfUpdateStartInput): Promise<Result<SelfUpdateStartResponse>> => this.startSelfUpdate(input),
     status: (jobId: string): Promise<Result<SelfUpdatePublicJob>> =>
       this.request<SelfUpdatePublicJob>('GET', `/api/v1/self-update/${encodeURIComponent(jobId)}`),

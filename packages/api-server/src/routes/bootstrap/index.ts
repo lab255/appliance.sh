@@ -83,9 +83,8 @@ bootstrapRoutes.get('/status', async (req, res) => {
     let selfUpdateAvailable = false;
     if (selfUpdatePolicy() === 'notify') {
       try {
-        selfUpdateAvailable = Boolean(
-          await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getAvailable())
-        );
+        const marker = await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getAvailable());
+        selfUpdateAvailable = Boolean(marker && marker.version !== VERSION);
       } catch (error) {
         // This optional boolean must never break the bootstrap health probe.
         logger.warn('bootstrap self-update marker unavailable', { error: redactSelfUpdateError(error).message });

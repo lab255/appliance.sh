@@ -94,6 +94,23 @@ describe('self-update client', () => {
     vi.unstubAllGlobals();
   });
 
+  it('sends an empty signed check-now request and returns its decision', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ decision: 'current', reason: 'up-to-date' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createApplianceClient({
+      baseUrl: 'https://api.test',
+      credentials: { keyId: 'k1', secret: 'secret' },
+    });
+
+    await expect(client.selfUpdate.check()).resolves.toEqual({
+      success: true,
+      data: { decision: 'current', reason: 'up-to-date' },
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/api/v1/self-update/check');
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).body).toBe('{}');
+    expect(sentHeaders(fetchMock).signature).toBeDefined();
+  });
+
   const digest = `sha256:${'a'.repeat(64)}`;
   const evidence = {
     payload: {

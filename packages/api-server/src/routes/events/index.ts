@@ -23,6 +23,10 @@ eventRoutes.post('/', async (req, res) => {
     return;
   }
   const outcome = await getSelfUpdateSchedulerService().check();
-  logger.info('worker self-update check completed', { outcome });
+  logger.info('worker self-update check completed', {
+    decision: outcome.decision,
+    reason: outcome.reason,
+    ...(outcome.version ? { version: outcome.version } : {}),
+  });
   res.status(200).json({ ok: true });
 });

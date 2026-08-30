@@ -18,7 +18,12 @@ describe('Lambda pass-through self-update events', () => {
   afterEach(() => resetSelfUpdateSchedulerServiceForTests());
 
   it('accepts only the fixed target-free scheduled check', async () => {
-    const check = vi.fn(async () => 'notify' as const);
+    const check = vi.fn(async () => ({
+      at: '2026-08-31T00:00:00.000Z',
+      decision: 'notify' as const,
+      reason: 'notify-marked',
+      version: '1.58.0',
+    }));
     setSelfUpdateSchedulerServiceForTests({ check } as never);
 
     const response = await request(app()).post('/events').send({ kind: 'self-update-check' });

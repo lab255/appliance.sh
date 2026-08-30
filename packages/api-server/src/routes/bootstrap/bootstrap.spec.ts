@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import { VERSION } from '@appliance.sh/sdk';
 
 const mockApiKeyService = vi.hoisted(() => ({
   create: vi.fn(),
@@ -232,6 +233,16 @@ describe('Bootstrap routes', () => {
       expect(res.text).not.toContain('9.9.9');
       expect(res.text).not.toContain('sha256:');
       expect(res.text).not.toContain('generation');
+    });
+
+    it('suppresses a stale availability boolean after that version is running', async () => {
+      process.env.SELF_UPDATE_POLICY = 'notify';
+      setSelfUpdateSchedulerServiceForTests({
+        getAvailable: async () => ({ version: VERSION }),
+      } as never);
+      const res = await request(createTestApp()).get('/bootstrap/status');
+      expect(res.status).toBe(200);
+      expect(res.body.selfUpdateAvailable).toBe(false);
     });
   });
 });

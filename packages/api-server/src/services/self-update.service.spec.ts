@@ -6,11 +6,14 @@ import {
   SELF_UPDATE_CONTROL,
   SELF_UPDATE_IDEMPOTENCY,
   SELF_UPDATE_JOBS,
+  SYSTEM_SCHEDULED_SELF_UPDATE_CALLER,
+  HttpSelfUpdateDispatcher,
   SelfUpdateConflictError,
   SelfUpdateService,
   type SelfUpdateDispatcher,
   type ReleaseVerifier,
 } from './self-update.service';
+import { resetSelfUpdateExecutorForTests, setSelfUpdateExecutorForTests } from './self-update-executor.service';
 
 class MemoryStore implements ObjectStore {
   readonly values = new Map<string, { value: string; version: number }>();
@@ -93,6 +96,23 @@ describe('SelfUpdateService durable route state', () => {
     service = new SelfUpdateService({ storage, dispatcher, verifier, now: () => new Date(nowMs) });
   });
 
+  it('gives the reserved scheduler principal no readable signing secret', () => {
+    expect(() => SYSTEM_SCHEDULED_SELF_UPDATE_CALLER.secret).toThrow('has no signing secret');
+  });
+
+  it('dispatches the reserved principal in process before any secret read', async () => {
+    const execute = vi.fn(async () => 'complete' as const);
+    setSelfUpdateExecutorForTests({ execute } as never);
+    try {
+      await expect(
+        new HttpSelfUpdateDispatcher().dispatch('selfupdate_system', SYSTEM_SCHEDULED_SELF_UPDATE_CALLER)
+      ).resolves.toBeUndefined();
+      expect(execute).toHaveBeenCalledWith('selfupdate_system');
+    } finally {
+      resetSelfUpdateExecutorForTests();
+    }
+  });
+
   it('persists verified evidence and dispatches only the generated job id', async () => {
     const created = await service.create(
       evidence(),
@@ -111,7 +131,7 @@ describe('SelfUpdateService durable route state', () => {
     expect(JSON.stringify(await storage.get(SELF_UPDATE_JOBS, created.job.id))).toContain('fixture');
   });
 
-  it('binds idempotency to caller and tenant and rejects only a different request behind a live lease', async () => {
+  it('binds idempotency to the owner caller and rejects non-owner tenants before verification', async () => {
     const first = await service.create(evidence(), { keyId: 'admin-a', tenantId: 'default', secret: 'secret' }, 'same');
     const repeat = await service.create(
       evidence(),
@@ -126,7 +146,7 @@ describe('SelfUpdateService durable route state', () => {
     ).rejects.toEqual(expect.objectContaining({ name: 'SelfUpdateConflictError', jobId: first.job.id }));
     await expect(
       service.create(evidence(), { keyId: 'admin-a', tenantId: 'owner-2', secret: 'secret' }, 'same')
-    ).rejects.toBeInstanceOf(SelfUpdateConflictError);
+    ).rejects.toThrow('control-plane self-update requires the owner tenant');
   });
 
   it('CAS-takes an expired lease and marks the abandoned job failed/unknown', async () => {

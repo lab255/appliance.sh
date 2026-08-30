@@ -101,7 +101,8 @@ describe('scheduled self-update check', () => {
 
   it('does nothing when policy is off', async () => {
     const { scheduler, resolveLatest, create } = service('off');
-    await expect(scheduler.check()).resolves.toBe('off');
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'off', reason: 'policy-off' });
+    await expect(scheduler.getLastCheck()).resolves.toMatchObject({ decision: 'off', reason: 'policy-off' });
     expect(resolveLatest).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
   });
@@ -111,7 +112,10 @@ describe('scheduled self-update check', () => {
     const { scheduler, resolveLatest } = service('auto', {
       trust: { keys: {}, generationFloor: 0, blacklistedKeyIds: [] } as never,
     });
-    await expect(scheduler.check()).resolves.toBe('no-trust');
+    await expect(scheduler.check()).resolves.toMatchObject({
+      decision: 'no-trust',
+      reason: 'no-pinned-release-trust',
+    });
     expect(info).toHaveBeenCalledWith('self-update-check skipped: no pinned release trust');
     expect(resolveLatest).not.toHaveBeenCalled();
   });
@@ -120,7 +124,7 @@ describe('scheduled self-update check', () => {
     delete process.env.SELF_UPDATE_ROLE_ARN;
     const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
     const { scheduler, resolveLatest } = service('auto');
-    await expect(scheduler.check()).resolves.toBe('unscoped-role');
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'unscoped-role', reason: 'unscoped-role' });
     expect(info).toHaveBeenCalledWith(
       'self-update-check skipped: scoped self-update role unavailable (SystemRoleMode=admin)'
     );
@@ -131,7 +135,11 @@ describe('scheduled self-update check', () => {
     const { scheduler, resolveLatest, resolveRunning, create } = service('auto', {
       resolveLatest: vi.fn(async () => evidence('1.57.0', OLD_DIGEST, 7)),
     });
-    await expect(scheduler.check()).resolves.toBe('current');
+    await expect(scheduler.check()).resolves.toMatchObject({
+      decision: 'current',
+      reason: 'up-to-date',
+      version: '1.57.0',
+    });
     expect(resolveLatest).not.toHaveBeenCalled();
     expect(resolveRunning).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
@@ -141,13 +149,21 @@ describe('scheduled self-update check', () => {
     const { scheduler, create } = service('auto', {
       resolveLatest: vi.fn(async () => evidence('1.56.0', NEW_DIGEST, 6)),
     });
-    await expect(scheduler.check()).resolves.toBe('older-generation');
+    await expect(scheduler.check()).resolves.toMatchObject({
+      decision: 'older-generation',
+      reason: 'older-generation',
+      version: '1.56.0',
+    });
     expect(create).not.toHaveBeenCalled();
   });
 
   it('persists the complete marker in notify mode', async () => {
     const { scheduler, create } = service('notify');
-    await expect(scheduler.check()).resolves.toBe('notify');
+    await expect(scheduler.check()).resolves.toMatchObject({
+      decision: 'notify',
+      reason: 'notify-marked',
+      version: '1.58.0',
+    });
     await expect(scheduler.getAvailable()).resolves.toEqual({
       version: '1.58.0',
       digest: NEW_DIGEST,
@@ -157,14 +173,24 @@ describe('scheduled self-update check', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('clears availability only when the successful executor applied its digest', async () => {
+    const { scheduler } = service('notify');
+    await scheduler.check();
+    await expect(scheduler.clearAvailableIfDigest(OLD_DIGEST)).resolves.toBe(false);
+    await expect(scheduler.getAvailable()).resolves.toMatchObject({ digest: NEW_DIGEST });
+    await expect(scheduler.clearAvailableIfDigest(NEW_DIGEST)).resolves.toBe(true);
+    await expect(scheduler.getAvailable()).resolves.toBeNull();
+  });
+
   it('creates auto jobs through the verified service path with the explicit system caller', async () => {
     const { scheduler, create } = service('auto');
-    await expect(scheduler.check()).resolves.toBe('auto-created');
-    expect(create).toHaveBeenCalledWith(
-      { targetDigest: NEW_DIGEST, release: evidence('1.58.0', NEW_DIGEST, 8).release },
-      SYSTEM_SCHEDULED_SELF_UPDATE_CALLER,
-      `scheduled:${NEW_DIGEST}`
-    );
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'auto-created', reason: 'auto-created' });
+    expect(create.mock.calls[0]?.[0]).toEqual({
+      targetDigest: NEW_DIGEST,
+      release: evidence('1.58.0', NEW_DIGEST, 8).release,
+    });
+    expect(create.mock.calls[0]?.[1]).toBe(SYSTEM_SCHEDULED_SELF_UPDATE_CALLER);
+    expect(create.mock.calls[0]?.[2]).toBe(`scheduled:${NEW_DIGEST}`);
   });
 
   it('uses the same digest idempotency key on repeated checks and resumes a reused nonterminal job', async () => {
@@ -173,17 +199,18 @@ describe('scheduled self-update check', () => {
       job: job('one'),
       reused: true,
     });
-    await expect(scheduler.check()).resolves.toBe('auto-created');
-    await expect(scheduler.check()).resolves.toBe('auto-reused');
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'auto-created' });
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'auto-reused' });
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls.map((call) => call[2])).toEqual([`scheduled:${NEW_DIGEST}`, `scheduled:${NEW_DIGEST}`]);
-    expect(resume).toHaveBeenCalledWith('one', SYSTEM_SCHEDULED_SELF_UPDATE_CALLER);
+    expect(resume.mock.calls[0]?.[0]).toBe('one');
+    expect(resume.mock.calls[0]?.[1]).toBe(SYSTEM_SCHEDULED_SELF_UPDATE_CALLER);
   });
 
   it('skips a live lease conflict without surfacing an invocation error', async () => {
     const { scheduler, create } = service('auto');
     create.mockRejectedValue(new SelfUpdateConflictError('selfupdate_live'));
-    await expect(scheduler.check()).resolves.toBe('lease-conflict');
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'lease-conflict', reason: 'lease-conflict' });
   });
 
   it('redacts unexpected errors and exits successfully', async () => {
@@ -193,9 +220,46 @@ describe('scheduled self-update check', () => {
         throw new Error('failed arn:aws:iam::111111111111:role/private');
       }),
     });
-    await expect(scheduler.check()).resolves.toBe('error');
+    await expect(scheduler.check()).resolves.toMatchObject({ decision: 'error', reason: 'error' });
     const logged = errorLog.mock.calls[0]?.[1] as Error;
     expect(logged.message).not.toContain('111111111111');
     expect(logged.message).not.toContain('private');
+  });
+
+  it('memoizes availability reads for unauthenticated bootstrap polling', async () => {
+    const { scheduler, store } = service('notify');
+    const get = vi.spyOn(store, 'get');
+    await scheduler.getAvailable();
+    await scheduler.getAvailable();
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('threads registry and release origins through the injected fetcher', async () => {
+    const requested: string[] = [];
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.startsWith('https://registry.test/token')) {
+        return new Response(JSON.stringify({ token: 'token' }), { status: 200 });
+      }
+      if (url === 'https://registry.test/v2/custom/image/tags/list') {
+        return new Response(JSON.stringify({ tags: ['1.58.0'] }), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+    const { scheduler } = service('notify', {
+      resolveLatest: undefined,
+      resolveRunning: undefined,
+      fetcher: fetcher as typeof globalThis.fetch,
+      releaseBase: 'https://releases.test/download',
+      registryTokenEndpoint: 'https://registry.test/token',
+      registryEndpoint: 'https://registry.test/v2',
+      image: 'custom/image',
+    });
+    await scheduler.check();
+    expect(requested).toContain('https://registry.test/token?scope=repository:custom/image:pull');
+    expect(requested).toContain('https://registry.test/v2/custom/image/tags/list');
+    expect(requested).toContain('https://releases.test/download/v1.58.0/control-plane-release.json');
+    expect(requested).toContain('https://releases.test/download/v1.58.0/control-plane-release.sig.json');
   });
 });

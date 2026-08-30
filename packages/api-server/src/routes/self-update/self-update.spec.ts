@@ -35,7 +35,8 @@ function appFor(
   },
   role: 'admin' | 'member',
   tenantId: string,
-  keyId = 'admin'
+  keyId = 'admin',
+  dispatchCheck = vi.fn()
 ) {
   const app = express();
   app.use(express.json());
@@ -49,7 +50,7 @@ function appFor(
     '/api/v1/self-update',
     requireAdmin,
     requireOwnerTenant,
-    createSelfUpdateRoutes(() => service as never)
+    createSelfUpdateRoutes(() => service as never, dispatchCheck)
   );
   return app;
 }
@@ -134,6 +135,19 @@ describe('self-update routes', () => {
     const get = await request(app).get(`/api/v1/self-update/${job.id}`);
     expect(get.status).toBe(200);
     expect(get.body).toEqual({ jobId: job.id, status: 'queued', phase: 'queued' });
+  });
+
+  it('dispatches an owner-signed fixed check and returns only decision and reason', async () => {
+    const dispatchCheck = vi.fn(async () => ({ decision: 'current', reason: 'up-to-date' }));
+    const app = appFor(service, 'admin', 'default', 'admin', dispatchCheck);
+    const response = await request(app).post('/api/v1/self-update/check').send({});
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ decision: 'current', reason: 'up-to-date' });
+    expect(dispatchCheck).toHaveBeenCalledWith({ keyId: 'admin', secret: 'secret' });
+
+    const injected = await request(app).post('/api/v1/self-update/check').send({ targetDigest: digest });
+    expect(injected.status).toBe(400);
+    expect(dispatchCheck).toHaveBeenCalledOnce();
   });
 
   it.each(['POST', 'GET'])('rejects member %s with 403', async (method) => {

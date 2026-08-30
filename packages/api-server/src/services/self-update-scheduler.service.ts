@@ -31,7 +31,7 @@ export interface SelfUpdateAvailableMarker {
   seenAt: string;
 }
 
-export type SelfUpdateCheckOutcome =
+export type SelfUpdateCheckDecision =
   | 'off'
   | 'no-trust'
   | 'unscoped-role'
@@ -43,10 +43,21 @@ export type SelfUpdateCheckOutcome =
   | 'lease-conflict'
   | 'error';
 
-const SELF_UPDATE_AVAILABILITY = 'self-update-availability';
+export interface SelfUpdateLastCheck {
+  at: string;
+  decision: SelfUpdateCheckDecision | 'not-checked';
+  reason: string;
+  version?: string;
+}
+
+export const SELF_UPDATE_AVAILABILITY = 'self-update-availability';
+export const SELF_UPDATE_LAST_CHECK = 'self-update-last-check';
 const AVAILABILITY_ID = 'cloud';
+const LAST_CHECK_ID = 'cloud';
+const AVAILABILITY_CACHE_MS = 60_000;
 const GHCR_TOKEN_ENDPOINT = 'https://ghcr.io/token';
 const GHCR_REGISTRY_ENDPOINT = 'https://ghcr.io/v2';
+const RELEASE_BASE = 'https://github.com/lab255/appliance.sh/releases/download';
 const DEFAULT_IMAGE = 'appliance-sh/api-server';
 const SEMVER_TAG = /^\d+\.\d+\.\d+$/;
 
@@ -64,6 +75,11 @@ export interface SelfUpdateSchedulerDependencies {
   trust?: ReleaseTrustPolicy;
   resolveLatest?: (trust: ReleaseTrustPolicy) => Promise<ResolvedReleaseEvidence>;
   resolveRunning?: (trust: ReleaseTrustPolicy) => Promise<ResolvedReleaseEvidence>;
+  fetcher?: typeof globalThis.fetch;
+  releaseBase?: string;
+  registryTokenEndpoint?: string;
+  registryEndpoint?: string;
+  image?: string;
   now?: () => Date;
   policy?: () => SelfUpdatePolicy;
 }
@@ -81,6 +97,7 @@ export class SelfUpdateSchedulerService {
   private readonly resolveRunning: (trust: ReleaseTrustPolicy) => Promise<ResolvedReleaseEvidence>;
   private readonly now: () => Date;
   private readonly policy: () => SelfUpdatePolicy;
+  private availabilityCache?: { expiresAt: number; value: SelfUpdateAvailableMarker | null };
 
   constructor(deps: SelfUpdateSchedulerDependencies = {}) {
     const aws = deps.aws ?? createAwsSelfUpdateDependencies();
@@ -88,40 +105,77 @@ export class SelfUpdateSchedulerService {
     this.jobs = deps.jobs ?? getSelfUpdateService();
     this.aws = aws;
     this.trust = deps.trust ?? PINNED_RELEASE_TRUST;
-    this.resolveLatest = deps.resolveLatest ?? resolveLatestReleaseEvidence;
-    this.resolveRunning = deps.resolveRunning ?? ((trust) => fetchReleaseEvidence({ version: VERSION, trust }));
+    const fetcher = deps.fetcher ?? globalThis.fetch;
+    const releaseBase = deps.releaseBase ?? RELEASE_BASE;
+    this.resolveLatest =
+      deps.resolveLatest ??
+      ((trust) =>
+        resolveLatestReleaseEvidence(trust, {
+          fetcher,
+          releaseBase,
+          tokenEndpoint: deps.registryTokenEndpoint ?? GHCR_TOKEN_ENDPOINT,
+          registryEndpoint: deps.registryEndpoint ?? GHCR_REGISTRY_ENDPOINT,
+          image: deps.image ?? DEFAULT_IMAGE,
+        }));
+    this.resolveRunning =
+      deps.resolveRunning ?? ((trust) => fetchReleaseEvidence({ version: VERSION, trust, fetcher, releaseBase }));
     this.now = deps.now ?? (() => new Date());
     this.policy = deps.policy ?? (() => selfUpdatePolicy());
   }
 
-  async check(): Promise<SelfUpdateCheckOutcome> {
+  async check(): Promise<SelfUpdateLastCheck> {
     return runWithTenant(DEFAULT_TENANT, () => this.checkOwnerTenant());
   }
 
   async getAvailable(): Promise<SelfUpdateAvailableMarker | null> {
-    return this.storage.get<SelfUpdateAvailableMarker>(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID);
+    return runWithTenant(DEFAULT_TENANT, async () => {
+      const timestamp = this.now().getTime();
+      if (this.availabilityCache && this.availabilityCache.expiresAt > timestamp) {
+        return this.availabilityCache.value;
+      }
+      const value = await this.storage.get<SelfUpdateAvailableMarker>(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID);
+      this.availabilityCache = { expiresAt: timestamp + AVAILABILITY_CACHE_MS, value };
+      return value;
+    });
   }
 
-  private async checkOwnerTenant(): Promise<SelfUpdateCheckOutcome> {
+  async getLastCheck(): Promise<SelfUpdateLastCheck | null> {
+    return runWithTenant(DEFAULT_TENANT, () =>
+      this.storage.get<SelfUpdateLastCheck>(SELF_UPDATE_LAST_CHECK, LAST_CHECK_ID)
+    );
+  }
+
+  async clearAvailableIfDigest(targetDigest: string): Promise<boolean> {
+    return runWithTenant(DEFAULT_TENANT, async () => {
+      const marker = await this.storage.get<SelfUpdateAvailableMarker>(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID);
+      if (marker?.digest !== targetDigest) return false;
+      await this.clearAvailable();
+      return true;
+    });
+  }
+
+  private async checkOwnerTenant(): Promise<SelfUpdateLastCheck> {
     const policy = this.policy();
     if (policy === 'off') {
       logger.info('self-update-check skipped: policy off');
-      return 'off';
+      return this.record('off', 'policy-off');
     }
     if (Object.keys(this.trust.keys).length === 0) {
       logger.info('self-update-check skipped: no pinned release trust');
-      return 'no-trust';
+      return this.record('no-trust', 'no-pinned-release-trust');
     }
 
     const roleArn = process.env.SELF_UPDATE_ROLE_ARN;
     const stackId = process.env.APPLIANCE_STACK_ID;
     if (!roleArn || !stackId) {
       logger.info('self-update-check skipped: scoped self-update role unavailable (SystemRoleMode=admin)');
-      return 'unscoped-role';
+      return this.record('unscoped-role', 'unscoped-role');
     }
 
+    let version: string | undefined;
     try {
       const latest = await this.resolveLatest(this.trust);
+      version = latest.version;
       const credentials = await this.aws.assumeRole(roleArn, 'self-update-check');
       const stack = await this.aws.describeStack(credentials, stackId);
       const runningDigest = imageDigest(parameterValue(stack, 'ImageUri'));
@@ -130,7 +184,7 @@ export class SelfUpdateSchedulerService {
       if (latest.targetDigest === runningDigest) {
         await this.clearAvailable();
         logger.info('self-update-check current', { policy, version: latest.version });
-        return 'current';
+        return this.record('current', 'up-to-date', latest.version);
       }
 
       const running = await this.resolveRunning(this.trust);
@@ -147,13 +201,13 @@ export class SelfUpdateSchedulerService {
             latestGeneration,
             runningGeneration,
           });
-          return 'older-generation';
+          return this.record('older-generation', 'older-generation', latest.version);
         }
         logger.info('self-update-check skipped: release generation is not newer', {
           policy,
           generation: latestGeneration,
         });
-        return 'current';
+        return this.record('current', 'up-to-date', latest.version);
       }
 
       const marker: SelfUpdateAvailableMarker = {
@@ -164,12 +218,16 @@ export class SelfUpdateSchedulerService {
       };
       if (policy === 'notify') {
         await this.storage.set(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID, marker);
+        this.availabilityCache = {
+          expiresAt: this.now().getTime() + AVAILABILITY_CACHE_MS,
+          value: marker,
+        };
         logger.info('self-update-check update available', {
           policy,
           version: marker.version,
           generation: marker.generation,
         });
-        return 'notify';
+        return this.record('notify', 'notify-marked', latest.version);
       }
 
       await this.clearAvailable();
@@ -189,22 +247,45 @@ export class SelfUpdateSchedulerService {
           version: latest.version,
           generation: latestGeneration,
         });
-        return created.reused ? 'auto-reused' : 'auto-created';
+        return this.record(
+          created.reused ? 'auto-reused' : 'auto-created',
+          created.reused ? 'auto-reused' : 'auto-created',
+          latest.version
+        );
       } catch (error) {
         if (error instanceof SelfUpdateConflictError) {
           logger.info('self-update-check skipped: live self-update lease', { policy, jobId: error.jobId });
-          return 'lease-conflict';
+          return this.record('lease-conflict', 'lease-conflict', latest.version);
         }
         throw error;
       }
     } catch (error) {
       logger.error('self-update-check failed', redactSelfUpdateError(error), { policy });
-      return 'error';
+      return this.record('error', 'error', version);
     }
   }
 
   private async clearAvailable(): Promise<void> {
     await this.storage.delete(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID);
+    this.availabilityCache = {
+      expiresAt: this.now().getTime() + AVAILABILITY_CACHE_MS,
+      value: null,
+    };
+  }
+
+  private async record(
+    decision: SelfUpdateCheckDecision,
+    reason: string,
+    version?: string
+  ): Promise<SelfUpdateLastCheck> {
+    const check: SelfUpdateLastCheck = {
+      at: this.now().toISOString(),
+      decision,
+      reason,
+      ...(version ? { version } : {}),
+    };
+    await this.storage.set(SELF_UPDATE_LAST_CHECK, LAST_CHECK_ID, check);
+    return check;
   }
 }
 
@@ -217,17 +298,31 @@ function imageDigest(imageUri: string | undefined): string | undefined {
   return digest;
 }
 
-async function resolveLatestReleaseEvidence(trust: ReleaseTrustPolicy): Promise<ResolvedReleaseEvidence> {
-  const version = await latestGhcrTag();
-  return fetchReleaseEvidence({ version, trust });
+async function resolveLatestReleaseEvidence(
+  trust: ReleaseTrustPolicy,
+  options: {
+    fetcher: typeof globalThis.fetch;
+    releaseBase: string;
+    tokenEndpoint: string;
+    registryEndpoint: string;
+    image: string;
+  }
+): Promise<ResolvedReleaseEvidence> {
+  const version = await latestGhcrTag(options);
+  return fetchReleaseEvidence({ version, trust, fetcher: options.fetcher, releaseBase: options.releaseBase });
 }
 
-async function latestGhcrTag(fetcher: typeof globalThis.fetch = globalThis.fetch): Promise<string> {
-  const tokenResponse = await fetcher(`${GHCR_TOKEN_ENDPOINT}?scope=repository:${DEFAULT_IMAGE}:pull`);
+async function latestGhcrTag(options: {
+  fetcher: typeof globalThis.fetch;
+  tokenEndpoint: string;
+  registryEndpoint: string;
+  image: string;
+}): Promise<string> {
+  const tokenResponse = await options.fetcher(`${options.tokenEndpoint}?scope=repository:${options.image}:pull`);
   if (!tokenResponse.ok) throw new Error(`GHCR token endpoint returned HTTP ${tokenResponse.status}`);
   const token = (await tokenResponse.json()) as { token?: unknown };
   if (typeof token.token !== 'string' || !token.token) throw new Error('GHCR token endpoint returned no token');
-  const tagsResponse = await fetcher(`${GHCR_REGISTRY_ENDPOINT}/${DEFAULT_IMAGE}/tags/list`, {
+  const tagsResponse = await options.fetcher(`${options.registryEndpoint}/${options.image}/tags/list`, {
     headers: { authorization: `Bearer ${token.token}` },
   });
   if (!tagsResponse.ok) throw new Error(`GHCR tags endpoint returned HTTP ${tagsResponse.status}`);

@@ -9,8 +9,10 @@ import {
   getSelfUpdateSchedulerService,
   selfUpdatePolicy,
   type SelfUpdateAvailableMarker,
+  type SelfUpdateLastCheck,
 } from '../../services/self-update-scheduler.service';
 import { redactSelfUpdateError } from '../../services/self-update-redaction';
+import { DEFAULT_TENANT, runWithTenant } from '../../services/tenant-context';
 
 export interface ClusterInfo {
   /**
@@ -71,6 +73,7 @@ export interface ClusterInfo {
   /** Scheduled cloud image update policy and signed notify marker. */
   selfUpdate: {
     policy: 'off' | 'notify' | 'auto';
+    lastCheck: SelfUpdateLastCheck;
     available?: { version: string; generation: number };
   };
 }
@@ -99,13 +102,29 @@ function readWarnings(): string[] | undefined {
 
 async function readAvailableMarker(): Promise<SelfUpdateAvailableMarker | null> {
   try {
-    return await getSelfUpdateSchedulerService().getAvailable();
+    return await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getAvailable());
   } catch (error) {
     logger.warn('cluster-info self-update marker unavailable', {
       error: redactSelfUpdateError(error).message,
     });
     return null;
   }
+}
+
+async function readLastCheck(policy: ClusterInfo['selfUpdate']['policy']): Promise<SelfUpdateLastCheck> {
+  try {
+    const stored = await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getLastCheck());
+    if (stored) return stored;
+  } catch (error) {
+    logger.warn('cluster-info self-update last check unavailable', {
+      error: redactSelfUpdateError(error).message,
+    });
+  }
+  return {
+    at: '',
+    decision: 'not-checked',
+    reason: policy === 'off' ? 'policy-off' : 'not-checked',
+  };
 }
 
 export const clusterInfoRoutes: Router = Router();
@@ -116,7 +135,11 @@ clusterInfoRoutes.get('/', async (req, res) => {
     const externalUrl = getExternalConsoleUrl();
     const warnings = readWarnings();
     const policy = selfUpdatePolicy();
-    const available = policy === 'notify' ? await readAvailableMarker() : null;
+    // Availability is owner-operator state. Member keys still receive the
+    // policy and last-check health, but cannot read the actionable marker.
+    const storedAvailable = policy === 'notify' && req.apiKeyRole === 'admin' ? await readAvailableMarker() : null;
+    const available = storedAvailable?.version === VERSION ? null : storedAvailable;
+    const lastCheck = await readLastCheck(policy);
     const body: ClusterInfo = {
       version: VERSION,
       // The RESPONSE copy is sanitized; `baseConfig` itself (the full
@@ -130,6 +153,7 @@ clusterInfoRoutes.get('/', async (req, res) => {
       ...(warnings ? { warnings } : {}),
       selfUpdate: {
         policy,
+        lastCheck,
         ...(available ? { available: { version: available.version, generation: available.generation } } : {}),
       },
     };

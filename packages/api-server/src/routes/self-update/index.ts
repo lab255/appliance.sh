@@ -1,4 +1,5 @@
 import { Router, type RequestHandler } from 'express';
+import { signRequest, z, type SigningCredentials } from '@appliance.sh/sdk';
 import { DEFAULT_TENANT } from '../../services/tenant-context';
 import { apiKeyService } from '../../services/api-key.service';
 import {
@@ -11,6 +12,29 @@ import { logger } from '../../logger';
 import { redactSelfUpdateError } from '../../services/self-update-redaction';
 
 export { redactSelfUpdateError } from '../../services/self-update-redaction';
+
+export interface SelfUpdateCheckResponse {
+  decision: string;
+  reason: string;
+}
+
+export type SelfUpdateCheckDispatcher = (caller: SigningCredentials) => Promise<SelfUpdateCheckResponse>;
+
+const emptyCheckSchema = z.strictObject({});
+
+export async function dispatchSelfUpdateCheck(caller: SigningCredentials): Promise<SelfUpdateCheckResponse> {
+  const workerUrl = process.env.WORKER_URL;
+  if (!workerUrl) throw new Error('WORKER_URL is required for a self-update check');
+  const url = `${workerUrl.replace(/\/$/, '')}/api/internal/self-update/check`;
+  const body = JSON.stringify({ kind: 'self-update-check' });
+  const baseHeaders = { 'content-type': 'application/json' };
+  const signed = await signRequest(caller, { method: 'POST', url, headers: baseHeaders, body });
+  const response = await fetch(url, { method: 'POST', headers: { ...baseHeaders, ...signed }, body });
+  if (!response.ok) throw new Error(`worker self-update check returned HTTP ${response.status}`);
+  const parsed = z.strictObject({ decision: z.string(), reason: z.string() }).safeParse(await response.json());
+  if (!parsed.success) throw new Error('worker self-update check returned an invalid response');
+  return parsed.data;
+}
 
 export const requireOwnerTenant: RequestHandler = (req, res, next) => {
   if (req.tenantId !== DEFAULT_TENANT) {
@@ -26,8 +50,36 @@ export const requireOwnerTenant: RequestHandler = (req, res, next) => {
   next();
 };
 
-export function createSelfUpdateRoutes(resolveService: () => SelfUpdateService = getSelfUpdateService): Router {
+export function createSelfUpdateRoutes(
+  resolveService: () => SelfUpdateService = getSelfUpdateService,
+  dispatchCheck: SelfUpdateCheckDispatcher = dispatchSelfUpdateCheck
+): Router {
   const router = Router();
+
+  router.post('/check', async (req, res) => {
+    if (!emptyCheckSchema.safeParse(req.body).success) {
+      res.status(400).json({ error: 'Self-update check accepts no target controls' });
+      return;
+    }
+    if (!req.apiKeyId) {
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
+    }
+    const caller = await apiKeyService.getByKeyId(req.apiKeyId);
+    if (!caller) {
+      res.status(401).json({ error: 'Api key not found' });
+      return;
+    }
+    try {
+      res.json(await dispatchCheck({ keyId: caller.id, secret: caller.secret }));
+    } catch (error) {
+      logger.error('dispatch self-update check failed', redactSelfUpdateError(error), {
+        requestId: req.requestId,
+        keyId: req.apiKeyId,
+      });
+      res.status(502).json({ error: 'Failed to run self-update check' });
+    }
+  });
 
   router.post('/', async (req, res) => {
     if (!process.env.SELF_UPDATE_ROLE_ARN) {

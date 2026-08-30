@@ -13,12 +13,17 @@ import {
   setSelfUpdateExecutorForTests,
   type SelfUpdateExecutor,
 } from '../../services/self-update-executor.service';
+import {
+  resetSelfUpdateSchedulerServiceForTests,
+  setSelfUpdateSchedulerServiceForTests,
+} from '../../services/self-update-scheduler.service';
 
 function appFor(keyId = 'admin', tenantId = 'default') {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
     req.apiKeyId = keyId;
+    req.apiKeyRole = 'admin';
     req.tenantId = tenantId;
     next();
   });
@@ -46,6 +51,42 @@ describe('POST /api/internal/jobs/self-update', () => {
   afterEach(() => {
     resetSelfUpdateServiceForTests();
     resetSelfUpdateExecutorForTests();
+    resetSelfUpdateSchedulerServiceForTests();
+  });
+
+  it('runs only a fixed target-free owner-admin check', async () => {
+    const check = vi.fn(async () => ({
+      at: '2026-08-31T00:00:00.000Z',
+      decision: 'notify',
+      reason: 'notify-marked',
+    }));
+    setSelfUpdateSchedulerServiceForTests({ check } as never);
+
+    const accepted = await request(appFor()).post('/api/internal/self-update/check').send({
+      kind: 'self-update-check',
+    });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body).toEqual({ decision: 'notify', reason: 'notify-marked' });
+    expect(check).toHaveBeenCalledOnce();
+
+    const injected = await request(appFor())
+      .post('/api/internal/self-update/check')
+      .send({
+        kind: 'self-update-check',
+        targetDigest: `sha256:${'a'.repeat(64)}`,
+      });
+    expect(injected.status).toBe(400);
+    expect(check).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a signed non-owner check', async () => {
+    const check = vi.fn();
+    setSelfUpdateSchedulerServiceForTests({ check } as never);
+    const response = await request(appFor('admin', 'tenant-b'))
+      .post('/api/internal/self-update/check')
+      .send({ kind: 'self-update-check' });
+    expect(response.status).toBe(403);
+    expect(check).not.toHaveBeenCalled();
   });
 
   it('accepts jobId only and loads the persisted job before execution', async () => {

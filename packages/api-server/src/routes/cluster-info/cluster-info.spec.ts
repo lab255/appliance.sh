@@ -11,8 +11,12 @@ import {
   setSelfUpdateSchedulerServiceForTests,
 } from '../../services/self-update-scheduler.service';
 
-function createTestApp() {
+function createTestApp(role: 'admin' | 'member' = 'admin') {
   const app = express();
+  app.use((req, _res, next) => {
+    req.apiKeyRole = role;
+    next();
+  });
   app.use('/api/v1/cluster-info', clusterInfoRoutes);
   return app;
 }
@@ -28,7 +32,7 @@ describe('GET /api/v1/cluster-info', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
-    setSelfUpdateSchedulerServiceForTests({ getAvailable: async () => null } as never);
+    setSelfUpdateSchedulerServiceForTests({ getAvailable: async () => null, getLastCheck: async () => null } as never);
   });
 
   afterEach(() => {
@@ -46,14 +50,66 @@ describe('GET /api/v1/cluster-info', () => {
         generation: 8,
         seenAt: '2026-08-31T00:00:00.000Z',
       }),
+      getLastCheck: async () => ({
+        at: '2026-08-31T00:00:00.000Z',
+        decision: 'notify',
+        reason: 'notify-marked',
+        version: '1.58.0',
+      }),
     } as never);
 
     const res = await request(createTestApp()).get('/api/v1/cluster-info');
 
     expect(res.status).toBe(200);
-    expect(res.body.selfUpdate).toEqual({ policy: 'notify', available: { version: '1.58.0', generation: 8 } });
+    expect(res.body.selfUpdate).toEqual({
+      policy: 'notify',
+      lastCheck: {
+        at: '2026-08-31T00:00:00.000Z',
+        decision: 'notify',
+        reason: 'notify-marked',
+        version: '1.58.0',
+      },
+      available: { version: '1.58.0', generation: 8 },
+    });
     expect(res.text).not.toContain('sha256:');
     expect(res.text).not.toContain('seenAt');
+  });
+
+  it('does not expose the actionable marker to member keys', async () => {
+    process.env.APPLIANCE_BASE_CONFIG = JSON.stringify(K8S_BASE);
+    process.env.SELF_UPDATE_POLICY = 'notify';
+    let markerReads = 0;
+    setSelfUpdateSchedulerServiceForTests({
+      getAvailable: async () => {
+        markerReads += 1;
+        return { version: '1.58.0' };
+      },
+      getLastCheck: async () => null,
+    } as never);
+
+    const res = await request(createTestApp('member')).get('/api/v1/cluster-info');
+
+    expect(res.status).toBe(200);
+    expect(res.body.selfUpdate.available).toBeUndefined();
+    expect(markerReads).toBe(0);
+  });
+
+  it('suppresses a stale marker whose version is already running', async () => {
+    process.env.APPLIANCE_BASE_CONFIG = JSON.stringify(K8S_BASE);
+    process.env.SELF_UPDATE_POLICY = 'notify';
+    setSelfUpdateSchedulerServiceForTests({
+      getAvailable: async () => ({
+        version: VERSION,
+        digest: `sha256:${'a'.repeat(64)}`,
+        generation: 8,
+        seenAt: '2026-08-31T00:00:00.000Z',
+      }),
+      getLastCheck: async () => null,
+    } as never);
+
+    const res = await request(createTestApp()).get('/api/v1/cluster-info');
+    expect(res.status).toBe(200);
+    expect(res.body.selfUpdate.available).toBeUndefined();
   });
 
   it('reports serverVersion and uploadBuilds=true on a kubernetes base with a builder', async () => {
@@ -67,6 +123,10 @@ describe('GET /api/v1/cluster-info', () => {
     expect(res.status).toBe(200);
     expect(res.body.serverVersion).toBe(VERSION);
     expect(res.body.capabilities).toEqual({ uploadBuilds: true });
+    expect(res.body.selfUpdate).toEqual({
+      policy: 'off',
+      lastCheck: { at: '', decision: 'not-checked', reason: 'policy-off' },
+    });
   });
 
   it('reports an advisory minClientVersion', async () => {
