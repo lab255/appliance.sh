@@ -124,7 +124,7 @@ Pulumi resources whose URNs end in `-apiServer-public-function-url` and `-worker
 redeploy, run `pulumi login s3://<state-bucket>`, locate the edge stack with `pulumi stack ls --all`, and remove exactly those two URNs
 with `pulumi state delete --stack <edge-stack-ref> --yes '<urn>'`. This edits Pulumi state only:
 do not delete the AWS permissions, and do not remove the separate `-edge-router-invoke-permission` resource. Confirm both legacy URNs
-are absent from `pulumi state ls --stack <edge-stack-ref>` before redeploying; the CFN grants remain authoritative.
+are absent from `pulumi stack --show-urns --stack <edge-stack-ref>` before redeploying; the CFN grants remain authoritative.
 
 Its trust policy is:
 

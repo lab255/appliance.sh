@@ -237,7 +237,7 @@ Resources:
           - UseAdminSystemRoles
           - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
           - !Ref AWS::NoValue
-      # CU1 marker: add sts:AssumeRole on SelfUpdateRole here only after that role exists.
+      # CU1 marker: SystemWorkerProvisioningPolicy is 5,456/6,144 characters worst-case; add sts:AssumeRole on SelfUpdateRole only after it exists, using a third managed policy if needed.
       # CU1 marker: a stack policy Deny Update:* on both system roles becomes load-bearing with the CFN service role.
       Policies:
         - !If
