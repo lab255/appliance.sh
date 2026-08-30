@@ -129,8 +129,8 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
 
     // A signed request to a NONE-auth Function URL is still evaluated
     // against the signer's IAM identity. The edge role therefore needs an
-    // identity-policy grant in addition to each function's public NONE
-    // resource policy below.
+    // identity-policy grant in addition to each CFN-owned function's public
+    // NONE resource policy.
     new aws.iam.RolePolicy(
       `${name}-edge-router-system-invoke`,
       {
@@ -175,20 +175,6 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
       },
       providerOpts
     );
-
-    for (const [kind, fn] of Object.entries(substrate.systemFunctions)) {
-      new aws.lambda.Permission(
-        `${name}-${kind}-public-function-url`,
-        {
-          function: fn.name,
-          action: 'lambda:InvokeFunctionUrl',
-          principal: '*',
-          functionUrlAuthType: 'NONE',
-          statementId: `AllowPublic${kind === 'apiServer' ? 'ApiServer' : 'Worker'}FunctionUrl`,
-        },
-        providerOpts
-      );
-    }
 
     const distributionLogs = new aws.cloudwatch.LogGroup(
       `${name}-distribution-logs`,

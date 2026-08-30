@@ -151,8 +151,14 @@ describe('ApplianceEdgeBase', () => {
           resource.inputs.action === 'lambda:InvokeFunctionUrl' &&
           resource.inputs.principal === '*'
       );
-      expect(publicUrlPermissions).toHaveLength(2);
-      expect(publicUrlPermissions.every((resource) => resource.inputs.functionUrlAuthType === 'NONE')).toBe(true);
+      expect(publicUrlPermissions).toEqual([]);
+      const edgeInvokePermissions = resources.filter(
+        (resource) =>
+          resource.type === 'aws:lambda/permission:Permission' &&
+          resource.inputs.action === 'lambda:InvokeFunction' &&
+          resource.inputs.principal === 'edgelambda.amazonaws.com'
+      );
+      expect(edgeInvokePermissions).toHaveLength(1);
 
       const records = resources
         .filter((resource) => resource.type === 'aws:route53/record:Record')
