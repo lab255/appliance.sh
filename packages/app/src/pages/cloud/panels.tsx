@@ -254,6 +254,15 @@ export function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: 
   );
 }
 
+export function defaultSelfUpdateTarget(
+  latestVersion: string | null,
+  runningVersion: string | null,
+  latestPending: boolean
+): string | null {
+  if (latestVersion) return latestVersion;
+  return latestPending ? null : runningVersion;
+}
+
 function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
   const host = useHost();
   const client = useApplianceClient();
@@ -469,9 +478,9 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
   // running version (so the user can re-pin), else empty.
   React.useEffect(() => {
     if (targetVersion) return;
-    if (latestVersion) setTargetVersion(latestVersion);
-    else if (runningVersion) setTargetVersion(runningVersion);
-  }, [latestVersion, runningVersion, targetVersion]);
+    const defaultTarget = defaultSelfUpdateTarget(latestVersion, runningVersion, latestQuery.isPending);
+    if (defaultTarget) setTargetVersion(defaultTarget);
+  }, [latestQuery.isPending, latestVersion, runningVersion, targetVersion]);
 
   const profilesQuery = useQuery({
     queryKey: ['aws-profiles'],

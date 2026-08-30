@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { HostProvider } from '@/providers/host-provider';
 import type { Cluster, ConsoleHost } from '@/lib/host';
-import { CloudFormationLifecycleHandoff } from './panels';
+import { CloudFormationLifecycleHandoff, defaultSelfUpdateTarget } from './panels';
 
 const cluster: Cluster = {
   id: 'cloud-1',
@@ -33,6 +33,12 @@ function render(desktop: boolean): string {
 }
 
 describe('CloudFormation update handoff', () => {
+  it('prefers latest and waits for lookup before falling back to the running version', () => {
+    expect(defaultSelfUpdateTarget(null, '1.57.0', true)).toBeNull();
+    expect(defaultSelfUpdateTarget('1.58.0', '1.57.0', false)).toBe('1.58.0');
+    expect(defaultSelfUpdateTarget(null, '1.57.0', false)).toBe('1.57.0');
+  });
+
   it('renders the CLI command outside the desktop shell', () => {
     const html = render(false);
     expect(html).toContain('appliance cloud update');
