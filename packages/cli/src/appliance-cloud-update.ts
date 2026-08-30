@@ -3,7 +3,8 @@
 import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { createApplianceClient } from '@appliance.sh/sdk';
+import { createApplianceClient, SelfUpdateStartError } from '@appliance.sh/sdk';
+import { resolveReleaseEvidence, SELF_UPDATE_DISABLED_AP226 } from '@appliance.sh/bootstrap';
 import {
   createAwsCloudInstallDependencies,
   defaultSourceImage,
@@ -13,8 +14,12 @@ import {
 import { getActiveProfileOverride } from './utils/credentials.js';
 import { resolveProfileSecret } from './utils/credential-store.js';
 import { readProfiles, resolveProfile } from './utils/profile-store.js';
-import { resolveReleaseEvidence } from './utils/release-evidence.js';
-import { phaseMessage, terminalFailureMessage } from './utils/cloud-update-output.js';
+import {
+  cloudUpdateJson,
+  cloudUpdateExitCode,
+  createPhaseLineFormatter,
+  terminalFailureMessage,
+} from './utils/cloud-update-output.js';
 
 interface Options {
   version?: string;
@@ -40,6 +45,7 @@ program
 
 async function run(options: Options): Promise<void> {
   if (options.local && options.follow) throw new Error('--follow cannot be combined with --local');
+  if (options.local && options.json) throw new Error('--local has no job record; omit --json');
   if (options.local && options.version)
     throw new Error('--version selects signed route evidence; use --image with --local');
   if (!options.local && options.image)
@@ -94,6 +100,7 @@ async function run(options: Options): Promise<void> {
     timeout: 30_000,
   });
   const evidence = options.follow ? undefined : await resolveReleaseEvidence({ version: options.version });
+  const formatPhaseLines = createPhaseLineFormatter();
   const result = await runCloudRouteUpdate(
     {
       ...(options.follow ? { followJobId: options.follow } : {}),
@@ -104,19 +111,24 @@ async function run(options: Options): Promise<void> {
             idempotencyKey: `cloud-update-${randomUUID()}`,
           }
         : {}),
-      onPhase: options.json ? undefined : (job) => console.log(chalk.dim(phaseMessage(job))),
+      onPhase: options.json
+        ? undefined
+        : (job) => {
+            for (const line of formatPhaseLines(job)) console.log(chalk.cyan(line));
+          },
     },
     client
   );
 
   if (options.json) {
-    process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (result.outcome === 'terminal' && result.job.status === 'failed') process.exitCode = 1;
+    process.stdout.write(`${cloudUpdateJson(result)}\n`);
+    process.exitCode = cloudUpdateExitCode(result);
     return;
   }
   if (result.outcome === 'conflict') {
     console.log(chalk.yellow(`A self-update is already running: ${result.start.statusUrl}`));
     console.log(chalk.yellow(`Follow it with: appliance cloud update --follow ${result.start.jobId}`));
+    process.exitCode = cloudUpdateExitCode(result);
     return;
   }
   if (result.job.status === 'succeeded') {
@@ -127,7 +139,30 @@ async function run(options: Options): Promise<void> {
     );
     return;
   }
+  if (result.job.recovered) {
+    console.log(
+      chalk.yellow(
+        `Update rolled back — v${result.previousServerVersion ?? 'unknown'} is serving and healthy after the target failed.`
+      )
+    );
+    process.exitCode = 1;
+    return;
+  }
   throw new Error(terminalFailureMessage(result.job));
 }
 
-program.parse(process.argv);
+program.parseAsync(process.argv).catch((error: unknown) => {
+  console.error(chalk.red(userFacingError(error)));
+  if (!process.exitCode) process.exitCode = 1;
+});
+
+function userFacingError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message === SELF_UPDATE_DISABLED_AP226 ||
+    (error instanceof SelfUpdateStartError && error.code === 'trust-not-provisioned')
+  ) {
+    return 'Self-update is disabled until the production release key is pinned — use appliance cloud update --local as the break-glass path until then.';
+  }
+  return message;
+}

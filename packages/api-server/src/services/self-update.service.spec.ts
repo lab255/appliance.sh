@@ -191,11 +191,37 @@ describe('SelfUpdateService durable route state', () => {
     nowMs += 4_000;
     const finished = await service.finish(created.job.id, { status: 'succeeded' }, claimed.lease.holder!);
 
-    expect(service.publicJob(finished).phaseDurationsMs).toEqual({
-      queued: 1_000,
-      verifying: 2_000,
-      mirroring: 3_000,
-      'waiting-for-stack': 4_000,
+    expect(service.publicJob(finished)).toMatchObject({
+      totalMs: 10_000,
+      phaseDurationsMs: {
+        queued: 1_000,
+        verifying: 2_000,
+        mirroring: 3_000,
+        'waiting-for-stack': 4_000,
+      },
+    });
+  });
+
+  it('charges an expired-lease resume gap to the in-flight phase', async () => {
+    const created = await service.create(evidence(), {
+      keyId: 'admin-a',
+      tenantId: 'default',
+      secret: 'secret',
+    });
+    const first = await service.claim(created.job.id);
+    nowMs += 2_000;
+    await service.heartbeat(created.job.id, first.lease.holder!, 'waiting-for-stack');
+    nowMs += 61_000;
+    await service.getAndResume(created.job.id, { keyId: 'admin-a', secret: 'secret' });
+    const resumed = await service.claim(created.job.id);
+    nowMs += 3_000;
+    await service.heartbeat(created.job.id, resumed.lease.holder!, 'probing-health');
+    nowMs += 1_000;
+    const finished = await service.finish(created.job.id, { status: 'succeeded' }, resumed.lease.holder!);
+
+    expect(service.publicJob(finished)).toMatchObject({
+      totalMs: 67_000,
+      phaseDurationsMs: { 'waiting-for-stack': 64_000 },
     });
   });
 

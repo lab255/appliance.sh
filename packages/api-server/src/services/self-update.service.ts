@@ -196,6 +196,7 @@ export class SelfUpdateService {
       lease,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
+      startedAt: now.toISOString(),
       phaseStartedAt: now.toISOString(),
       phaseDurationsMs: {},
     };
@@ -336,6 +337,7 @@ export class SelfUpdateService {
   }
 
   publicJob(job: SelfUpdateJob): SelfUpdatePublicJob {
+    const totalMs = terminalDurationMs(job);
     return {
       jobId: job.id,
       status: job.status,
@@ -357,6 +359,7 @@ export class SelfUpdateService {
         leaseExpiresAt: job.lease.expiresAt,
       },
       ...(job.phaseDurationsMs ? { phaseDurationsMs: job.phaseDurationsMs } : {}),
+      ...(totalMs !== undefined ? { totalMs } : {}),
       ...(job.error ? { error: job.error } : {}),
       ...(job.recovered !== undefined ? { recovered: job.recovered } : {}),
       ...(job.recoveryState ? { recoveryState: job.recoveryState } : {}),
@@ -477,6 +480,14 @@ function transitionPhase(job: SelfUpdateJob, phase: SelfUpdatePhase, now: Date):
       [job.phase]: (job.phaseDurationsMs?.[job.phase] ?? 0) + elapsed,
     },
   };
+}
+
+function terminalDurationMs(job: SelfUpdateJob): number | undefined {
+  if (!job.startedAt || !job.completedAt) return undefined;
+  const startedAt = Date.parse(job.startedAt);
+  const completedAt = Date.parse(job.completedAt);
+  if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt)) return undefined;
+  return Math.max(0, completedAt - startedAt);
 }
 
 function throwLeaseStolen(jobId: string): never {

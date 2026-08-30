@@ -1,7 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { signReleaseEnvelope, type ReleaseEnvelope, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
-import { resolveReleaseEvidence, SELF_UPDATE_DISABLED_AP226 } from './release-evidence.js';
+import { resolveReleaseEvidence, SELF_UPDATE_DISABLED_AP226 } from '@appliance.sh/bootstrap';
 
 beforeAll(() => {
   if (!globalThis.crypto) Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
