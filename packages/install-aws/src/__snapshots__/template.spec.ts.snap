@@ -1,0 +1,658 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > api-server scoped policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "DataBucket.Arn",
+      },
+      "Sid": "DataBucketMetadata",
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "\${DataBucket.Arn}/*",
+      },
+      "Sid": "DataBucketObjects",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker IAM and Lambda provisioning managed policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:ListRolePolicies",
+        "iam:ListRoleTags",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamRoleRead",
+    },
+    {
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRolePolicy",
+        "iam:PutRolePolicy",
+      ],
+      "Condition": {
+        "ArnEquals": {
+          "iam:PermissionsBoundary": {
+            "tag": "!Ref",
+            "value": "UserAppliancePermissionsBoundary",
+          },
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamRoleBoundaryMutations",
+    },
+    {
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+      ],
+      "Condition": {
+        "ArnEquals": {
+          "iam:PermissionsBoundary": {
+            "tag": "!Ref",
+            "value": "UserAppliancePermissionsBoundary",
+          },
+          "iam:PolicyARN": [
+            {
+              "tag": "!Sub",
+              "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
+            },
+            {
+              "tag": "!Sub",
+              "value": "arn:\${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            },
+          ],
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamRolePolicyAttachments",
+    },
+    {
+      "Action": [
+        "iam:DeleteRole",
+        "iam:UntagRole",
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamRoleMetadataMutations",
+    },
+    {
+      "Action": "iam:TagRole",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamRoleTagging",
+    },
+    {
+      "Action": [
+        "iam:PassRole",
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamPassRole",
+    },
+    {
+      "Action": "iam:PutRolePermissionsBoundary",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PermissionsBoundary": {
+            "tag": "!Ref",
+            "value": "UserAppliancePermissionsBoundary",
+          },
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "AllowPermissionsBoundaryAdoption",
+    },
+    {
+      "Action": "iam:DeleteRolePermissionsBoundary",
+      "Effect": "Deny",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "DenyPermissionsBoundaryRemoval",
+    },
+    {
+      "Action": [
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy",
+      ],
+      "Effect": "Deny",
+      "Resource": {
+        "tag": "!Ref",
+        "value": "UserAppliancePermissionsBoundary",
+      },
+      "Sid": "DenyBoundaryPolicyMutation",
+    },
+    {
+      "Action": [
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyTags",
+        "iam:ListPolicyVersions",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
+      },
+      "Sid": "ApplianceIamPolicyRead",
+    },
+    {
+      "Action": "iam:CreatePolicy",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
+      },
+      "Sid": "ApplianceIamPolicyCreate",
+    },
+    {
+      "Action": [
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:UntagPolicy",
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
+      },
+      "Sid": "ApplianceIamPolicyMutations",
+    },
+    {
+      "Action": "iam:TagPolicy",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
+      },
+      "Sid": "ApplianceIamPolicyTagging",
+    },
+    {
+      "Action": "iam:CreateServiceLinkedRole",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "replicator.lambda.amazonaws.com",
+            "logger.cloudfront.amazonaws.com",
+          ],
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/aws-service-role/*",
+      },
+      "Sid": "LambdaEdgeServiceLinkedRoles",
+    },
+    {
+      "Action": [
+        "lambda:AddPermission",
+        "lambda:CreateFunction",
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:DeleteFunction",
+        "lambda:DeleteFunctionUrlConfig",
+        "lambda:GetFunction",
+        "lambda:GetFunctionCodeSigningConfig",
+        "lambda:GetFunctionConfiguration",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:GetPolicy",
+        "lambda:ListTags",
+        "lambda:ListVersionsByFunction",
+        "lambda:PublishVersion",
+        "lambda:RemovePermission",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:UpdateFunctionUrlConfig",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:*",
+      },
+      "Sid": "ApplianceFunctions",
+    },
+    {
+      "Action": "lambda:GetLayerVersion",
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:layer:*:*",
+      },
+      "Sid": "ApplianceLayers",
+    },
+    {
+      "Action": [
+        "lambda:AddPermission",
+        "lambda:CreateFunction",
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:DeleteFunction",
+        "lambda:DeleteFunctionUrlConfig",
+        "lambda:PublishVersion",
+        "lambda:RemovePermission",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:UpdateFunctionUrlConfig",
+      ],
+      "Effect": "Deny",
+      "Resource": [
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-api-server",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-api-server:*",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-worker",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:lambda:*:\${AWS::AccountId}:function:\${InstallationName}-worker:*",
+        },
+      ],
+      "Sid": "DenySystemFunctionMutation",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker edge-service provisioning managed policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": [
+        "lambda:DisableReplication*",
+        "lambda:EnableReplication*",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:lambda:us-east-1:\${AWS::AccountId}:function:*:*",
+      },
+      "Sid": "LambdaEdgeReplication",
+    },
+    {
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:CreateDistributionWithTags",
+        "cloudfront:CreateOriginAccessControl",
+        "cloudfront:ListCachePolicies",
+        "cloudfront:ListOriginAccessControls",
+        "cloudfront:ListOriginRequestPolicies",
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "CloudFrontAccountOperations",
+    },
+    {
+      "Action": [
+        "cloudfront:DeleteDistribution",
+        "cloudfront:DeleteOriginAccessControl",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:GetOriginAccessControl",
+        "cloudfront:GetOriginAccessControlConfig",
+        "cloudfront:ListTagsForResource",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:UpdateOriginAccessControl",
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:cloudfront::\${AWS::AccountId}:distribution/*",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:cloudfront::\${AWS::AccountId}:origin-access-control/*",
+        },
+      ],
+      "Sid": "ApplianceCloudFrontResources",
+    },
+    {
+      "Action": [
+        "cloudfront:GetCachePolicy",
+        "cloudfront:GetOriginRequestPolicy",
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:cloudfront::aws:cache-policy/*",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:cloudfront::aws:origin-request-policy/*",
+        },
+      ],
+      "Sid": "AwsManagedCloudFrontPolicies",
+    },
+    {
+      "Action": "route53:CreateHostedZone",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "Route53CreateHostedZone",
+    },
+    {
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:ChangeTagsForResource",
+        "route53:DeleteHostedZone",
+        "route53:GetHostedZone",
+        "route53:ListResourceRecordSets",
+        "route53:ListTagsForResource",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:route53:::hostedzone/*",
+      },
+      "Sid": "ApplianceHostedZones",
+    },
+    {
+      "Action": "route53:GetChange",
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:route53:::change/*",
+      },
+      "Sid": "Route53Changes",
+    },
+    {
+      "Action": "acm:RequestCertificate",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AcmRequestCertificate",
+    },
+    {
+      "Action": [
+        "acm:AddTagsToCertificate",
+        "acm:DeleteCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListTagsForCertificate",
+        "acm:RemoveTagsFromCertificate",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:acm:*:\${AWS::AccountId}:certificate/*",
+      },
+      "Sid": "ApplianceCertificates",
+    },
+    {
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DeleteRetentionPolicy",
+        "logs:ListTagsForResource",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:logs:*:\${AWS::AccountId}:log-group:/appliance/*",
+      },
+      "Sid": "ApplianceLogGroups",
+    },
+    {
+      "Action": [
+        "logs:DescribeDeliveries",
+        "logs:DescribeDeliveryDestinations",
+        "logs:DescribeDeliverySources",
+        "logs:DescribeLogGroups",
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "LogsAccountDiscovery",
+    },
+    {
+      "Action": [
+        "logs:CreateDelivery",
+        "logs:DeleteDelivery",
+        "logs:DeleteDeliveryDestination",
+        "logs:DeleteDeliverySource",
+        "logs:GetDelivery",
+        "logs:GetDeliveryDestination",
+        "logs:GetDeliverySource",
+        "logs:ListTagsForResource",
+        "logs:PutDeliveryDestination",
+        "logs:PutDeliverySource",
+        "logs:TagResource",
+        "logs:UntagResource",
+        "logs:UpdateDeliveryConfiguration",
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:logs:*:\${AWS::AccountId}:delivery:*",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:logs:*:\${AWS::AccountId}:delivery-destination:*",
+        },
+        {
+          "tag": "!Sub",
+          "value": "arn:\${AWS::Partition}:logs:*:\${AWS::AccountId}:delivery-source:*",
+        },
+      ],
+      "Sid": "ApplianceLogDeliveryResources",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker runtime scoped policy 1`] = `
+{
+  "Statement": [
+    {
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "DataBucket.Arn",
+      },
+      "Sid": "DataBucketMetadata",
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "\${DataBucket.Arn}/*",
+      },
+      "Sid": "DataBucketObjects",
+    },
+    {
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "StateBucket.Arn",
+      },
+      "Sid": "PulumiStateBucketMetadata",
+    },
+    {
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "\${StateBucket.Arn}/*",
+      },
+      "Sid": "PulumiStateObjects",
+    },
+    {
+      "Action": [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "StateKmsKey.Arn",
+      },
+      "Sid": "PulumiSecretsKey",
+    },
+    {
+      "Action": "ecr:GetAuthorizationToken",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "EcrAuthorization",
+    },
+    {
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:GetRepositoryPolicy",
+        "ecr:InitiateLayerUpload",
+        "ecr:ListImages",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart",
+      ],
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!GetAtt",
+        "value": "ImageRepository.Arn",
+      },
+      "Sid": "InstallationRepository",
+    },
+    {
+      "Action": "sts:GetCallerIdentity",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AccountIdentity",
+    },
+    {
+      "Action": [
+        "cloudformation:CreateResource",
+        "cloudformation:DeleteResource",
+        "cloudformation:GetResource",
+        "cloudformation:GetResourceRequestStatus",
+        "cloudformation:UpdateResource",
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AwsNativeCloudControl",
+    },
+  ],
+  "Version": "2012-10-17",
+}
+`;

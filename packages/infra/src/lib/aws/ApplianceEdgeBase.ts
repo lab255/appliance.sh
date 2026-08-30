@@ -43,6 +43,7 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
     const wildcardDomain = `*.${domainName}`;
     this.apiServerPublicUrl = `https://api.${domainName}`;
     const providerOpts = { parent: this, provider: opts?.globalProvider };
+    const boundaryArn = substrate.userAppliancePermissionsBoundaryArn;
 
     if (args.domain.zone.mode === 'create') {
       this.zone = new aws.route53.Zone(`${name}-zone`, { name: domainName }, providerOpts);
@@ -104,9 +105,15 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
     this.edgeRouterRole = new aws.iam.Role(
       `${name}-edge-router-role`,
       {
+        path: `/appliance/${name}/`,
         assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
           Service: ['lambda.amazonaws.com', 'edgelambda.amazonaws.com'],
         }),
+        permissionsBoundary: boundaryArn,
+        tags: {
+          'appliance:managed': 'true',
+          'appliance:stack-name': name,
+        },
       },
       providerOpts
     );
@@ -122,8 +129,8 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
 
     // A signed request to a NONE-auth Function URL is still evaluated
     // against the signer's IAM identity. The edge role therefore needs an
-    // identity-policy grant in addition to each function's public NONE
-    // resource policy below.
+    // identity-policy grant in addition to each CFN-owned function's public
+    // NONE resource policy.
     new aws.iam.RolePolicy(
       `${name}-edge-router-system-invoke`,
       {
@@ -168,20 +175,6 @@ export class ApplianceEdgeBase extends pulumi.ComponentResource {
       },
       providerOpts
     );
-
-    for (const [kind, fn] of Object.entries(substrate.systemFunctions)) {
-      new aws.lambda.Permission(
-        `${name}-${kind}-public-function-url`,
-        {
-          function: fn.name,
-          action: 'lambda:InvokeFunctionUrl',
-          principal: '*',
-          functionUrlAuthType: 'NONE',
-          statementId: `AllowPublic${kind === 'apiServer' ? 'ApiServer' : 'Worker'}FunctionUrl`,
-        },
-        providerOpts
-      );
-    }
 
     const distributionLogs = new aws.cloudwatch.LogGroup(
       `${name}-distribution-logs`,

@@ -18,6 +18,7 @@ const substrateOutputs = {
   SystemApiServerRoleArn: 'arn:aws:iam::111:role/api',
   SystemWorkerRoleArn: 'arn:aws:iam::111:role/worker',
   BootstrapTokenSecretArn: 'arn:aws:secretsmanager:us-east-1:111:secret:bootstrap',
+  UserAppliancePermissionsBoundaryArn: 'arn:aws:iam::111:policy/appliance-system/test-user-appliance-boundary',
 };
 const functionOutputs = {
   WorkerFunctionName: 'worker',
@@ -27,6 +28,7 @@ const functionOutputs = {
   ApiServerFunctionArn: 'arn:aws:lambda:us-east-1:111:function:api',
   ApiServerFunctionUrl: 'https://api.lambda-url.us-east-1.on.aws/',
 };
+const { UserAppliancePermissionsBoundaryArn: _boundaryOutput, ...preCu0SubstrateOutputs } = substrateOutputs;
 
 function harness(
   options: {
@@ -35,6 +37,7 @@ function harness(
     interruptAfter?: string;
     healthFails?: boolean;
     existingBaseConfig?: Record<string, unknown>;
+    preCu0Snapshot?: boolean;
   } = {}
 ) {
   const calls: string[] = [];
@@ -46,7 +49,10 @@ function harness(
         accountId: '111',
         region: 'us-east-1',
         parameters: { ImageUri: options.previousImage ?? '' },
-        outputs: { ...substrateOutputs, ...(options.previousImage ? functionOutputs : {}) },
+        outputs: {
+          ...(options.preCu0Snapshot ? preCu0SubstrateOutputs : substrateOutputs),
+          ...(options.previousImage ? functionOutputs : {}),
+        },
       }
     : { exists: false, parameters: {}, outputs: {} };
   let interruptAfter = options.interruptAfter;
@@ -92,11 +98,23 @@ function harness(
       };
     },
     async writeBaseConfigIfAbsent(_bucket, _key, value) {
-      expect(value).toMatchObject({ provisioner: 'cloudformation-v1', aws: { dataBucketName: 'data-bucket' } });
+      expect(value).toMatchObject({
+        provisioner: 'cloudformation-v1',
+        aws: {
+          dataBucketName: 'data-bucket',
+          userAppliancePermissionsBoundaryArn: 'arn:aws:iam::111:policy/appliance-system/test-user-appliance-boundary',
+        },
+      });
       mark('base-config');
       if (baseConfigObject) return false;
       baseConfigObject = value as Record<string, unknown>;
       return true;
+    },
+    async updateBaseConfigBoundary(_bucket, _key, boundaryArn) {
+      const config = baseConfigObject as { aws?: Record<string, unknown> } | undefined;
+      if (!config?.aws) throw new Error('missing base config');
+      config.aws.userAppliancePermissionsBoundaryArn = boundaryArn;
+      mark('boundary-config');
     },
     async getSecret() {
       mark('secret');
@@ -230,7 +248,32 @@ describe('CloudFormation cloud installer', () => {
 
     await runCloudInstall(input, h.deps);
 
-    expect(h.baseConfig()).toEqual(epoch2);
+    expect(h.baseConfig()).toEqual({
+      ...epoch2,
+      aws: {
+        ...epoch2.aws,
+        userAppliancePermissionsBoundaryArn: 'arn:aws:iam::111:policy/appliance-system/test-user-appliance-boundary',
+      },
+    });
+  });
+
+  it('resumes a pre-CU0 stack and migrates its existing base config after the template update', async () => {
+    const h = harness({
+      existing: true,
+      previousImage: 'repo@sha256:old',
+      preCu0Snapshot: true,
+      existingBaseConfig: { provisioner: 'cloudformation-v1', aws: { region: 'us-east-1' } },
+    });
+
+    await runCloudInstall(input, h.deps);
+
+    expect(h.calls).toContain('image-stack');
+    expect(h.calls).toContain('boundary-config');
+    expect(h.baseConfig()).toMatchObject({
+      aws: {
+        userAppliancePermissionsBoundaryArn: 'arn:aws:iam::111:policy/appliance-system/test-user-appliance-boundary',
+      },
+    });
   });
 
   it('reports account and region mismatches before changing the stack', async () => {

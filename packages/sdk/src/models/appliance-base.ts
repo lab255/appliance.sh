@@ -272,6 +272,10 @@ export const applianceBaseConfig = z
         stateBucketArn: z.string().optional(),
         ecrRepositoryUrl: z.string().optional(),
         kmsAliasName: z.string().optional(),
+        // CFN-owned boundary applied to every worker-created user appliance
+        // execution role. Consumers use this output verbatim rather than
+        // reconstructing an ARN from an implementation-specific path.
+        userAppliancePermissionsBoundaryArn: z.string().optional(),
         // Canonical signed-request authority after the edge epoch.
         // Until present, installer traffic uses the raw api-server
         // Function URL from systemFunctions.apiServer.url.

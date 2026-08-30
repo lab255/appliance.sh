@@ -12,15 +12,15 @@ import {
 } from '@aws-sdk/client-cloudformation';
 import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { ApplianceBaseType, VERSION } from '@appliance.sh/sdk';
 import { mirrorImageToEcr, type MirrorImageOptions, type MirrorImageResult } from './ecr-mirror.js';
 import { APPLIANCE_CLOUDFORMATION_TEMPLATE } from './template.js';
-import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture } from './types.js';
+import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
-const BASE_CONFIG_KEY = 'system/base-config.json';
+export const BASE_CONFIG_KEY = 'system/base-config.json';
 const DEFAULT_HEALTH_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_HEALTH_POLL_MS = 5_000;
 
@@ -62,11 +62,14 @@ export interface CloudInstallDependencies {
     installationName: string;
     imageUri: string;
     architecture: ImageArchitecture;
+    systemRoleMode?: SystemRoleMode;
   }): Promise<StackSnapshot>;
   getRegistryCredentials(): Promise<{ username: string; password: string }>;
   mirror(options: MirrorImageOptions): Promise<MirrorImageResult>;
   /** Create epoch 1 only when no base-config object exists. Returns false when already initialized. */
   writeBaseConfigIfAbsent(bucket: string, key: string, value: unknown): Promise<boolean>;
+  /** Preserve the current epoch while refreshing the CFN-owned boundary output. */
+  updateBaseConfigBoundary(bucket: string, key: string, boundaryArn: string): Promise<void>;
   getSecret(secretArn: string): Promise<string>;
   getBootstrapStatus(apiUrl: string): Promise<{ initialized: boolean }>;
   mintApiKey(apiUrl: string, token: string, name: string): Promise<{ id: string; secret: string }>;
@@ -94,6 +97,7 @@ export function resolveCloudOutputs(snapshot: StackSnapshot): ApplianceCloudOutp
     apiServerRoleArn: output(snapshot, 'SystemApiServerRoleArn'),
     workerRoleArn: output(snapshot, 'SystemWorkerRoleArn'),
     bootstrapTokenSecretArn: output(snapshot, 'BootstrapTokenSecretArn'),
+    userAppliancePermissionsBoundaryArn: snapshot.outputs.UserAppliancePermissionsBoundaryArn,
   };
   if (snapshot.outputs.ApiServerFunctionUrl) {
     resolved.apiServer = {
@@ -117,6 +121,8 @@ export function substrateBaseConfig(
 ): Record<string, unknown> {
   if (!outputs.apiServer || !outputs.worker)
     throw new Error('System function outputs are unavailable before image deployment');
+  if (!outputs.userAppliancePermissionsBoundaryArn)
+    throw new Error('User appliance permissions boundary output is unavailable before the CU0 template update');
   return {
     name: installationName,
     type: ApplianceBaseType.ApplianceAwsPublic,
@@ -130,6 +136,7 @@ export function substrateBaseConfig(
       kmsKeyArn: outputs.kmsKeyArn,
       kmsAliasName: outputs.kmsAliasName,
       ecrRepositoryUrl: outputs.imageRepositoryUrl,
+      userAppliancePermissionsBoundaryArn: outputs.userAppliancePermissionsBoundaryArn,
       systemRoleArns: { apiServer: outputs.apiServerRoleArn, worker: outputs.workerRoleArn },
       systemFunctions: { apiServer: outputs.apiServer, worker: outputs.worker },
     },
@@ -218,11 +225,18 @@ export async function runCloudInstall(
   const complete = await deps.deployStack({ ...options, imageUri: mirrored.imageUri });
   const outputs = resolveCloudOutputs(complete);
   const apiUrl = normalizeApiUrl(outputs.apiServer!.url);
-  await deps.writeBaseConfigIfAbsent(
+  const initializedBaseConfig = await deps.writeBaseConfigIfAbsent(
     outputs.dataBucketName,
     BASE_CONFIG_KEY,
     substrateBaseConfig(options.installationName, options.region, outputs)
   );
+  if (!initializedBaseConfig) {
+    await deps.updateBaseConfigBoundary(
+      outputs.dataBucketName,
+      BASE_CONFIG_KEY,
+      outputs.userAppliancePermissionsBoundaryArn!
+    );
+  }
 
   let status: { initialized: boolean };
   try {
@@ -372,6 +386,7 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
         { ParameterKey: 'InstallationName', ParameterValue: input.installationName },
         { ParameterKey: 'ImageUri', ParameterValue: input.imageUri },
         { ParameterKey: 'ImageArchitecture', ParameterValue: input.architecture },
+        { ParameterKey: 'SystemRoleMode', ParameterValue: input.systemRoleMode ?? 'scoped' },
       ];
       const current = await getStack(input.stackName);
       if (!current.exists) {
@@ -437,6 +452,25 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
         if (candidate.name === 'PreconditionFailed' || candidate.$metadata?.httpStatusCode === 412) return false;
         throw error;
       }
+    },
+    async updateBaseConfigBoundary(bucket, key, boundaryArn) {
+      const current = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      if (!current.Body) throw new Error(`Base config s3://${bucket}/${key} has no body`);
+      const parsed = JSON.parse(await current.Body.transformToString()) as Record<string, unknown>;
+      const aws = parsed.aws;
+      if (!aws || typeof aws !== 'object' || Array.isArray(aws)) {
+        throw new Error(`Base config s3://${bucket}/${key} has no AWS configuration`);
+      }
+      parsed.aws = { ...aws, userAppliancePermissionsBoundaryArn: boundaryArn };
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: JSON.stringify(parsed),
+          ContentType: 'application/json',
+          IfMatch: current.ETag,
+        })
+      );
     },
     async getSecret(secretArn) {
       const response = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));

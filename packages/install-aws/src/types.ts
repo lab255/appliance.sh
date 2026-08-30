@@ -1,5 +1,6 @@
 export type ImageArchitecture = 'x86_64' | 'arm64';
 export type RegistryArchitecture = 'amd64' | 'arm64';
+export type SystemRoleMode = 'scoped' | 'admin';
 
 export interface SystemFunctionOutput {
   name: string;
@@ -18,6 +19,8 @@ export interface ApplianceCloudOutputs {
   apiServerRoleArn: string;
   workerRoleArn: string;
   bootstrapTokenSecretArn: string;
+  /** Added by the CU0 template; absent from pre-1.58 stack snapshots. */
+  userAppliancePermissionsBoundaryArn?: string;
   apiServer?: SystemFunctionOutput;
   worker?: SystemFunctionOutput;
 }

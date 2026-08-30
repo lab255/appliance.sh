@@ -104,8 +104,27 @@ glass, but cannot block a later signed request. This is weaker than aliases only
 ## 3. IAM decision and draft
 
 CU1 adds conditional `SelfUpdateRole` and a stack-scoped CFN service role. Update AWS clients require assumed credentials, never the
-default chain. CU0 first removes `AdministratorAccess` from both system Lambda roles using a CloudTrail-derived, live-proven deployment
-allow-list; this is a release gate, not a residual caveat.
+default chain. CU0 first removes `AdministratorAccess` from both system Lambda roles using a statically enumerated deployment
+allow-list; this is a release gate, not a residual caveat. CloudTrail live proof is still owed before release; follow the
+[owner proof steps](cli.md#cloud-baseline-role-mode).
+
+**CU0 shipped:** `SystemRoleMode=scoped` is now the CloudFormation default.
+The api-server can read/write only its data bucket; CloudFormation, not the Lambda, resolves the bootstrap secret.
+The worker adds Pulumi state/KMS, installation ECR, and permissions-boundary-contained user-appliance provisioning.
+Its runtime grant stays inline; IAM/Lambda and edge-service provisioning use separate scoped managed policies under `/appliance-system/`.
+Tests resolve worst-case names and partitions against IAM's 10,240-character aggregate inline and 6,144-character managed-policy limits, preserving CU1 headroom.
+That boundary lives under `/appliance-system/`, outside the worker's mutable `/appliance/` policy namespace.
+It denies its own policy mutation, non-appliance role assumption, all non-read operations on the control-plane stack, and mutations of both qualified and unqualified system functions.
+Pre-CU0 appliance roles adopt only this boundary on their first redeploy; deletion, replacement, and trust-policy mutation are not granted.
+Account-scoped `Resource: '*'` remains only where AWS exposes no resource-level authorization, and every case is test-allowlisted.
+Run `appliance cloud baseline-update --system-role-mode admin --yes` only for break glass; rerun with `scoped` to restore least privilege.
+
+Upgrade transition: CloudFormation owns the api-server and worker Function URL permissions. Pre-CU0 edge stacks may still track redundant
+Pulumi resources whose URNs end in `-apiServer-public-function-url` and `-worker-public-function-url`; before the first scoped edge
+redeploy, run `pulumi login s3://<state-bucket>`, locate the edge stack with `pulumi stack ls --all`, and remove exactly those two URNs
+with `pulumi state delete --stack <edge-stack-ref> --yes '<urn>'`. This edits Pulumi state only:
+do not delete the AWS permissions, and do not remove the separate `-edge-router-invoke-permission` resource. Confirm both legacy URNs
+are absent from `pulumi stack --show-urns --stack <edge-stack-ref>` before redeploying; the CFN grants remain authoritative.
 
 Its trust policy is:
 

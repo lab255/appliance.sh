@@ -3,12 +3,13 @@ import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { createApplianceClient, DeploymentStatus } from '@appliance.sh/sdk';
 import {
   createAwsCloudInstallDependencies,
+  BASE_CONFIG_KEY,
   defaultSourceImage,
   resolveCloudOutputs,
   type CloudInstallDependencies,
   type StackSnapshot,
 } from './cloud-install.js';
-import type { CloudInstallProfileMetadata, ImageArchitecture } from './types.js';
+import type { CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
 export interface CloudLifecycleProfile extends CloudInstallProfileMetadata {
   apiUrl: string;
@@ -22,6 +23,14 @@ export interface CloudUpdateOptions {
   sourceImage?: string;
   architecture?: ImageArchitecture;
   awsProfile?: string;
+  healthTimeoutMs?: number;
+  healthPollMs?: number;
+}
+
+export interface CloudBaselineUpdateOptions {
+  profile: CloudLifecycleProfile;
+  installationName?: string;
+  systemRoleMode?: SystemRoleMode;
   healthTimeoutMs?: number;
   healthPollMs?: number;
 }
@@ -61,6 +70,18 @@ async function healthPoll(
   throw new Error(`api-server health check failed: ${last}`);
 }
 
+async function syncPermissionsBoundary(deps: CloudInstallDependencies, stack: StackSnapshot): Promise<void> {
+  const outputs = resolveCloudOutputs(stack);
+  if (!outputs.userAppliancePermissionsBoundaryArn) {
+    throw new Error('Updated CloudFormation stack is missing required output UserAppliancePermissionsBoundaryArn');
+  }
+  await deps.updateBaseConfigBoundary(
+    outputs.dataBucketName,
+    BASE_CONFIG_KEY,
+    outputs.userAppliancePermissionsBoundaryArn
+  );
+}
+
 export async function runCloudSystemUpdate(
   options: CloudUpdateOptions,
   deps: CloudInstallDependencies
@@ -92,7 +113,9 @@ export async function runCloudSystemUpdate(
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: mirrored.imageUri,
     architecture,
+    systemRoleMode: stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped',
   });
+  await syncPermissionsBoundary(deps, updated);
   try {
     await healthPoll(deps, options.profile.apiUrl, options.healthTimeoutMs, options.healthPollMs);
   } catch (error) {
@@ -104,7 +127,7 @@ export async function runCloudSystemUpdate(
 }
 
 export async function runCloudBaselineUpdate(
-  options: Pick<CloudUpdateOptions, 'profile' | 'installationName'>,
+  options: CloudBaselineUpdateOptions,
   deps: CloudInstallDependencies
 ): Promise<StackSnapshot> {
   assertCloudProfile(options.profile);
@@ -114,13 +137,23 @@ export async function runCloudBaselineUpdate(
   const stack = await deps.getStack(options.profile.cloudFormationStackName);
   if (!stack.exists) throw new Error(`CloudFormation stack ${options.profile.cloudFormationStackName} does not exist`);
   if (!stack.parameters.ImageUri) throw new Error('CloudFormation stack has no ImageUri to preserve');
-  return deps.deployStack({
+  const updated = await deps.deployStack({
     stackName: options.profile.cloudFormationStackName,
     installationName:
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: stack.parameters.ImageUri,
     architecture: stack.parameters.ImageArchitecture === 'arm64' ? 'arm64' : 'x86_64',
+    systemRoleMode: options.systemRoleMode ?? (stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped'),
   });
+  await syncPermissionsBoundary(deps, updated);
+  try {
+    await healthPoll(deps, options.profile.apiUrl, options.healthTimeoutMs, options.healthPollMs);
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}. If scoped IAM caused the outage, rerun with \`appliance cloud baseline-update --system-role-mode admin --yes\`.`
+    );
+  }
+  return updated;
 }
 
 function profileInstallName(profile: CloudLifecycleProfile): string {

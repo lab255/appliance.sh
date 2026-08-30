@@ -99,6 +99,22 @@ describe('appliance umbrella routing', () => {
     expect(appliance('list', '--help').stdout).toBe(appliance('app', 'list', '--help').stdout);
   });
 
+  it('routes cloud baseline-update and documents the scoped/admin escape hatch', () => {
+    const result = appliance('cloud', 'baseline-update', '--help');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('--system-role-mode <mode>');
+    expect(result.stdout).toContain('scoped or admin');
+    expect(result.stdout).toContain('--yes');
+  });
+
+  it('requires explicit confirmation before restoring AdministratorAccess', () => {
+    const result = appliance('cloud', 'baseline-update', '--system-role-mode', 'admin');
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('AdministratorAccess break-glass mode requested');
+    expect(result.stderr).toContain('Restore with: appliance cloud baseline-update --system-role-mode scoped');
+    expect(result.stderr).toContain('without --yes confirmation');
+  });
+
   it('routes implemented runtime aliases to the shared command implementation', () => {
     const namespaced = appliance('runtime', 'run');
     const aliased = appliance('run');

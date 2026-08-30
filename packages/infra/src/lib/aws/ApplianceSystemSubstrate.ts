@@ -22,6 +22,7 @@ export interface ApplianceSystemSubstrateConfig {
   kmsKeyArn: string;
   kmsAliasName: string;
   ecrRepositoryUrl: string;
+  userAppliancePermissionsBoundaryArn: string;
   systemRoleArns: {
     apiServer: string;
     worker: string;
@@ -42,6 +43,7 @@ export class ApplianceSystemSubstrate implements ApplianceSystemSubstrateConfig 
   readonly kmsKeyArn: string;
   readonly kmsAliasName: string;
   readonly ecrRepositoryUrl: string;
+  readonly userAppliancePermissionsBoundaryArn: string;
   readonly systemRoleArns: Readonly<{ apiServer: string; worker: string }>;
   readonly systemFunctions: Readonly<{
     apiServer: Readonly<ApplianceSystemFunctionInput>;
@@ -58,6 +60,10 @@ export class ApplianceSystemSubstrate implements ApplianceSystemSubstrateConfig 
     this.kmsKeyArn = required(config.kmsKeyArn, 'kmsKeyArn');
     this.kmsAliasName = required(config.kmsAliasName, 'kmsAliasName');
     this.ecrRepositoryUrl = required(config.ecrRepositoryUrl, 'ecrRepositoryUrl');
+    this.userAppliancePermissionsBoundaryArn = required(
+      config.userAppliancePermissionsBoundaryArn,
+      'userAppliancePermissionsBoundaryArn'
+    );
     this.systemRoleArns = Object.freeze({
       apiServer: required(config.systemRoleArns.apiServer, 'systemRoleArns.apiServer'),
       worker: required(config.systemRoleArns.worker, 'systemRoleArns.worker'),
@@ -84,6 +90,11 @@ export class ApplianceSystemSubstrate implements ApplianceSystemSubstrateConfig 
     if (!aws.kmsKeyArn) throw new Error('CFN base config is missing aws.kmsKeyArn');
     if (!aws.kmsAliasName) throw new Error('CFN base config is missing aws.kmsAliasName');
     if (!aws.ecrRepositoryUrl) throw new Error('CFN base config is missing aws.ecrRepositoryUrl');
+    if (!aws.userAppliancePermissionsBoundaryArn) {
+      throw new Error(
+        'This installation predates scoped user-appliance role boundaries. Run `appliance cloud baseline-update` before deploying or updating the edge.'
+      );
+    }
     if (!aws.systemRoleArns) throw new Error('CFN base config is missing aws.systemRoleArns');
     if (!aws.systemFunctions) throw new Error('CFN base config is missing aws.systemFunctions');
 
@@ -99,6 +110,7 @@ export class ApplianceSystemSubstrate implements ApplianceSystemSubstrateConfig 
       // though Pulumi currently needs only the key ARN.
       kmsAliasName: aws.kmsAliasName,
       ecrRepositoryUrl: aws.ecrRepositoryUrl,
+      userAppliancePermissionsBoundaryArn: aws.userAppliancePermissionsBoundaryArn,
       systemRoleArns: aws.systemRoleArns,
       systemFunctions: aws.systemFunctions,
     });
@@ -118,6 +130,7 @@ export class ApplianceSystemSubstrate implements ApplianceSystemSubstrateConfig 
         kmsKeyArn: this.kmsKeyArn,
         kmsAliasName: this.kmsAliasName,
         ecrRepositoryUrl: this.ecrRepositoryUrl,
+        userAppliancePermissionsBoundaryArn: this.userAppliancePermissionsBoundaryArn,
         systemRoleArns: this.systemRoleArns,
         systemFunctions: this.systemFunctions,
       },

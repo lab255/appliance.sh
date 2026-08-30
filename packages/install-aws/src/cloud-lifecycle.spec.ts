@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runCloudSystemUpdate, runCloudTeardown, type CloudLifecycleDependencies } from './cloud-lifecycle.js';
+import {
+  runCloudBaselineUpdate,
+  runCloudSystemUpdate,
+  runCloudTeardown,
+  type CloudLifecycleDependencies,
+} from './cloud-lifecycle.js';
 
 const profile = {
   installGeneration: 'cloudformation-v1' as const,
@@ -28,6 +33,8 @@ const stack = {
     SystemApiServerRoleArn: 'arn:api-role',
     SystemWorkerRoleArn: 'arn:worker-role',
     BootstrapTokenSecretArn: 'arn:secret',
+    UserAppliancePermissionsBoundaryArn:
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary',
     ApiServerFunctionName: 'api',
     ApiServerFunctionArn: 'arn:api',
     ApiServerFunctionUrl: profile.apiUrl,
@@ -36,6 +43,11 @@ const stack = {
     WorkerFunctionUrl: 'https://worker.example',
   },
 };
+
+function preCu0Stack() {
+  const { UserAppliancePermissionsBoundaryArn: _boundaryOutput, ...outputs } = stack.outputs;
+  return { ...stack, outputs };
+}
 
 function dependencies(): CloudLifecycleDependencies {
   return {
@@ -50,6 +62,7 @@ function dependencies(): CloudLifecycleDependencies {
       reusedBlobs: 0,
     })),
     writeBaseConfigIfAbsent: vi.fn(),
+    updateBaseConfigBoundary: vi.fn(),
     getSecret: vi.fn(),
     getBootstrapStatus: vi.fn(async () => ({ initialized: true })),
     mintApiKey: vi.fn(),
@@ -69,7 +82,20 @@ describe('CloudFormation lifecycle', () => {
     expect(deps.deployStack).toHaveBeenCalledWith(
       expect.objectContaining({ imageUri: 'repo@sha256:new', architecture: 'x86_64' })
     );
+    expect(deps.updateBaseConfigBoundary).toHaveBeenCalledWith(
+      'data',
+      'system/base-config.json',
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary'
+    );
+    expect(vi.mocked(deps.updateBaseConfigBoundary).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deps.getBootstrapStatus).mock.invocationCallOrder[0]!
+    );
     expect(deps.getBootstrapStatus).toHaveBeenCalledWith(profile.apiUrl);
+    expect(deps.updateBaseConfigBoundary).toHaveBeenCalledWith(
+      'data',
+      'system/base-config.json',
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary'
+    );
   });
 
   it('documents the previous digest when post-update health fails', async () => {
@@ -78,6 +104,68 @@ describe('CloudFormation lifecycle', () => {
     await expect(
       runCloudSystemUpdate({ profile, installationName: 'prod', healthTimeoutMs: 1, healthPollMs: 0 }, deps)
     ).rejects.toThrow(/repo@sha256:old/);
+  });
+
+  it('system image updates preserve an explicit admin escape hatch', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue({
+      ...stack,
+      parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
+    });
+    await runCloudSystemUpdate({ profile, installationName: 'prod' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
+  });
+
+  it('updates a pre-CU0 stack before requiring the new boundary output', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue(preCu0Stack());
+
+    await runCloudSystemUpdate({ profile, installationName: 'prod' }, deps);
+
+    expect(deps.deployStack).toHaveBeenCalledOnce();
+    expect(deps.updateBaseConfigBoundary).toHaveBeenCalledWith(
+      'data',
+      'system/base-config.json',
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary'
+    );
+  });
+
+  it('baseline update preserves ImageUri and passes the selected role mode', async () => {
+    const deps = dependencies();
+    await runCloudBaselineUpdate({ profile, installationName: 'prod', systemRoleMode: 'admin' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith({
+      stackName: profile.cloudFormationStackName,
+      installationName: 'prod',
+      imageUri: 'repo@sha256:old',
+      architecture: 'x86_64',
+      systemRoleMode: 'admin',
+    });
+    expect(deps.getBootstrapStatus).toHaveBeenCalledWith(profile.apiUrl);
+  });
+
+  it('baseline update preserves the stack role mode when the flag is omitted', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue({
+      ...stack,
+      parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
+    });
+    await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
+  });
+
+  it('baseline update defaults legacy stacks without the parameter to scoped', async () => {
+    const deps = dependencies();
+    await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'scoped' }));
+  });
+
+  it('baseline update reports the admin recovery command when post-update health fails', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getBootstrapStatus).mockRejectedValue(new Error('AccessDenied'));
+    await expect(
+      runCloudBaselineUpdate({ profile, installationName: 'prod', healthTimeoutMs: 1, healthPollMs: 0 }, deps)
+    ).rejects.toThrow('baseline-update --system-role-mode admin --yes');
+    expect(deps.deployStack).toHaveBeenCalledOnce();
   });
 
   it('destroys edge before CFN and reports retained resources', async () => {
@@ -93,6 +181,14 @@ describe('CloudFormation lifecycle', () => {
       { kind: 'KMS key', value: 'arn:kms' },
       { kind: 'ECR repository', value: stack.outputs.ImageRepositoryUrl },
     ]);
+  });
+
+  it('tears down a pre-CU0 stack without requiring the boundary output', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue(preCu0Stack());
+
+    await expect(runCloudTeardown(profile, deps)).resolves.toMatchObject({ retained: expect.any(Array) });
+    expect(deps.deleteStack).toHaveBeenCalledOnce();
   });
 
   it('never starts CFN deletion until resumable edge destruction has converged', async () => {

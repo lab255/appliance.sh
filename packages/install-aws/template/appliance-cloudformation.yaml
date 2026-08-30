@@ -14,9 +14,16 @@ Parameters:
     Type: String
     Default: x86_64
     AllowedValues: [x86_64, arm64]
+  SystemRoleMode:
+    Type: String
+    Default: scoped
+    AllowedValues: [scoped, admin]
+    Description: Scoped least-privilege system roles by default; admin is an operator break-glass escape hatch
 
 Conditions:
   HasImage: !Not [!Equals [!Ref ImageUri, '']]
+  UseAdminSystemRoles: !Equals [!Ref SystemRoleMode, admin]
+  UseScopedSystemRoles: !Equals [!Ref SystemRoleMode, scoped]
 
 Resources:
   StateBucket:
@@ -89,6 +96,82 @@ Resources:
       AliasName: !Sub alias/appliance-${InstallationName}
       TargetKeyId: !Ref StateKmsKey
 
+  UserAppliancePermissionsBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Maximum permissions for worker-created user appliance Lambda roles
+      ManagedPolicyName: !Sub ${InstallationName}-user-appliance-boundary
+      Path: /appliance-system/
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowUserApplianceRuntimePermissions
+            Effect: Allow
+            Action: '*'
+            Resource: '*'
+          - Sid: DenyIamEscalation
+            Effect: Deny
+            Action: iam:*
+            Resource: '*'
+          - Sid: DenyControlPlaneStackMutation
+            Effect: Deny
+            NotAction:
+              - cloudformation:Describe*
+              - cloudformation:Get*
+              - cloudformation:List*
+              - cloudformation:Detect*
+              - cloudformation:Validate*
+            Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+          - Sid: DenyBoundaryPolicyMutation
+            Effect: Deny
+            Action:
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:SetDefaultPolicyVersion
+              - iam:TagPolicy
+              - iam:UntagPolicy
+            # Spell out the ARN to avoid a CloudFormation self-reference cycle.
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance-system/${InstallationName}-user-appliance-boundary
+          - Sid: DenyAssumeOutsideApplianceRoles
+            Effect: Deny
+            Action: sts:AssumeRole
+            NotResource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+          - Sid: DenySystemFunctionMutation
+            Effect: Deny
+            Action:
+              - lambda:AddPermission
+              - lambda:CreateAlias
+              - lambda:CreateFunctionUrlConfig
+              - lambda:DeleteAlias
+              - lambda:DeleteFunction
+              - lambda:DeleteFunctionCodeSigningConfig
+              - lambda:DeleteFunctionConcurrency
+              - lambda:DeleteFunctionEventInvokeConfig
+              - lambda:DeleteFunctionUrlConfig
+              - lambda:DeleteProvisionedConcurrencyConfig
+              - lambda:PublishVersion
+              - lambda:PutFunctionCodeSigningConfig
+              - lambda:PutFunctionConcurrency
+              - lambda:PutFunctionEventInvokeConfig
+              - lambda:PutFunctionRecursionConfig
+              - lambda:PutFunctionScalingConfig
+              - lambda:PutProvisionedConcurrencyConfig
+              - lambda:PutRuntimeManagementConfig
+              - lambda:RemovePermission
+              - lambda:TagResource
+              - lambda:UntagResource
+              - lambda:UpdateAlias
+              - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
+              - lambda:UpdateFunctionEventInvokeConfig
+              - lambda:UpdateFunctionUrlConfig
+            Resource:
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*
+
   SystemApiServerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -101,7 +184,31 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+        - !If
+          - UseAdminSystemRoles
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+          - !Ref AWS::NoValue
+      Policies:
+        - !If
+          - UseScopedSystemRoles
+          - PolicyName: appliance-system-api-server
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Sid: DataBucketMetadata
+                  Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt DataBucket.Arn
+                - Sid: DataBucketObjects
+                  Effect: Allow
+                  Action:
+                    - s3:DeleteObject
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource: !Sub ${DataBucket.Arn}/*
+          - !Ref AWS::NoValue
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName
@@ -118,10 +225,405 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+        - !If
+          - UseScopedSystemRoles
+          - !Ref SystemWorkerProvisioningPolicy
+          - !Ref AWS::NoValue
+        - !If
+          - UseScopedSystemRoles
+          - !Ref SystemWorkerEdgeProvisioningPolicy
+          - !Ref AWS::NoValue
+        - !If
+          - UseAdminSystemRoles
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+          - !Ref AWS::NoValue
+      # CU1 marker: SystemWorkerProvisioningPolicy is 5,456/6,144 characters worst-case; add sts:AssumeRole on SelfUpdateRole only after it exists, using a third managed policy if needed.
+      # CU1 marker: a stack policy Deny Update:* on both system roles becomes load-bearing with the CFN service role.
+      Policies:
+        - !If
+          - UseScopedSystemRoles
+          - PolicyName: appliance-system-worker-runtime
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Sid: DataBucketMetadata
+                  Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt DataBucket.Arn
+                - Sid: DataBucketObjects
+                  Effect: Allow
+                  Action:
+                    - s3:DeleteObject
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource: !Sub ${DataBucket.Arn}/*
+                - Sid: PulumiStateBucketMetadata
+                  Effect: Allow
+                  Action:
+                    - s3:GetBucketLocation
+                    - s3:ListBucket
+                  Resource: !GetAtt StateBucket.Arn
+                - Sid: PulumiStateObjects
+                  Effect: Allow
+                  Action:
+                    - s3:DeleteObject
+                    - s3:GetObject
+                    - s3:PutObject
+                  Resource: !Sub ${StateBucket.Arn}/*
+                - Sid: PulumiSecretsKey
+                  Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                    - kms:DescribeKey
+                    - kms:Encrypt
+                    - kms:GenerateDataKey
+                  Resource: !GetAtt StateKmsKey.Arn
+                # ECR authorization tokens are account-scoped and do not support repository ARNs.
+                - Sid: EcrAuthorization
+                  Effect: Allow
+                  Action: ecr:GetAuthorizationToken
+                  Resource: '*'
+                - Sid: InstallationRepository
+                  Effect: Allow
+                  Action:
+                    - ecr:BatchCheckLayerAvailability
+                    - ecr:BatchGetImage
+                    - ecr:CompleteLayerUpload
+                    - ecr:DescribeImages
+                    - ecr:GetDownloadUrlForLayer
+                    - ecr:GetRepositoryPolicy
+                    - ecr:InitiateLayerUpload
+                    - ecr:ListImages
+                    - ecr:PutImage
+                    - ecr:UploadLayerPart
+                  Resource: !GetAtt ImageRepository.Arn
+                # CU1 marker: split a worker-read-only SystemImageRepository from the BuildImageRepository before self-update mirrors land.
+                # STS identity discovery has no resource-level permission model.
+                - Sid: AccountIdentity
+                  Effect: Allow
+                  Action: sts:GetCallerIdentity
+                  Resource: '*'
+                # aws-native Permission resources use Cloud Control, whose API is account-scoped.
+                # Cloud Control exposes no service-specific condition key, so TypeName cannot be restricted here.
+                - Sid: AwsNativeCloudControl
+                  Effect: Allow
+                  Action:
+                    - cloudformation:CreateResource
+                    - cloudformation:DeleteResource
+                    - cloudformation:GetResource
+                    - cloudformation:GetResourceRequestStatus
+                    - cloudformation:UpdateResource
+                  Resource: '*'
+          - !Ref AWS::NoValue
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName
+
+  SystemWorkerProvisioningPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: UseScopedSystemRoles
+    Properties:
+      Description: Scoped user-appliance provisioning permissions for the system worker
+      ManagedPolicyName: !Sub ${InstallationName}-system-worker-provisioning
+      Path: /appliance-system/
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ApplianceIamRoleRead
+            Effect: Allow
+            Action:
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListAttachedRolePolicies
+              - iam:ListInstanceProfilesForRole
+              - iam:ListRolePolicies
+              - iam:ListRoleTags
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+          - Sid: ApplianceIamRoleBoundaryMutations
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRolePolicy
+              - iam:PutRolePolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+            Condition:
+              ArnEquals:
+                iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
+          - Sid: ApplianceIamRolePolicyAttachments
+            Effect: Allow
+            Action:
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+            Condition:
+              ArnEquals:
+                iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
+                iam:PolicyARN:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+                  - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - Sid: ApplianceIamRoleMetadataMutations
+            Effect: Allow
+            Action:
+              - iam:DeleteRole
+              - iam:UntagRole
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+            Condition:
+              StringEquals:
+                aws:ResourceTag/appliance:managed: 'true'
+          - Sid: ApplianceIamRoleTagging
+            Effect: Allow
+            Action: iam:TagRole
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+            Condition:
+              StringEquals:
+                aws:RequestTag/appliance:managed: 'true'
+          - Sid: ApplianceIamPassRole
+            Effect: Allow
+            Action:
+              - iam:PassRole
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+            Condition:
+              StringEquals:
+                iam:PassedToService: lambda.amazonaws.com
+          - Sid: AllowPermissionsBoundaryAdoption
+            Effect: Allow
+            Action: iam:PutRolePermissionsBoundary
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+            Condition:
+              ArnEquals:
+                iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
+          - Sid: DenyPermissionsBoundaryRemoval
+            Effect: Deny
+            Action: iam:DeleteRolePermissionsBoundary
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+          - Sid: DenyBoundaryPolicyMutation
+            Effect: Deny
+            Action:
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:SetDefaultPolicyVersion
+              - iam:TagPolicy
+              - iam:UntagPolicy
+            Resource: !Ref UserAppliancePermissionsBoundary
+          - Sid: ApplianceIamPolicyRead
+            Effect: Allow
+            Action:
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:ListPolicyTags
+              - iam:ListPolicyVersions
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+          - Sid: ApplianceIamPolicyCreate
+            Effect: Allow
+            Action: iam:CreatePolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+            Condition:
+              StringEquals:
+                aws:RequestTag/appliance:managed: 'true'
+          - Sid: ApplianceIamPolicyMutations
+            Effect: Allow
+            Action:
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:SetDefaultPolicyVersion
+              - iam:UntagPolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+            Condition:
+              StringEquals:
+                aws:ResourceTag/appliance:managed: 'true'
+          - Sid: ApplianceIamPolicyTagging
+            Effect: Allow
+            Action: iam:TagPolicy
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+            Condition:
+              StringEquals:
+                aws:RequestTag/appliance:managed: 'true'
+          - Sid: LambdaEdgeServiceLinkedRoles
+            Effect: Allow
+            Action: iam:CreateServiceLinkedRole
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/*
+            Condition:
+              StringEquals:
+                iam:AWSServiceName:
+                  - replicator.lambda.amazonaws.com
+                  - logger.cloudfront.amazonaws.com
+          - Sid: ApplianceFunctions
+            Effect: Allow
+            Action:
+              - lambda:AddPermission
+              - lambda:CreateFunction
+              - lambda:CreateFunctionUrlConfig
+              - lambda:DeleteFunction
+              - lambda:DeleteFunctionUrlConfig
+              - lambda:GetFunction
+              - lambda:GetFunctionCodeSigningConfig
+              - lambda:GetFunctionConfiguration
+              - lambda:GetFunctionUrlConfig
+              - lambda:GetPolicy
+              - lambda:ListTags
+              - lambda:ListVersionsByFunction
+              - lambda:PublishVersion
+              - lambda:RemovePermission
+              - lambda:TagResource
+              - lambda:UntagResource
+              - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
+              - lambda:UpdateFunctionUrlConfig
+            Resource: !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:*
+          - Sid: ApplianceLayers
+            Effect: Allow
+            Action: lambda:GetLayerVersion
+            Resource: !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:layer:*:*
+          - Sid: DenySystemFunctionMutation
+            Effect: Deny
+            Action:
+              - lambda:AddPermission
+              - lambda:CreateFunction
+              - lambda:CreateFunctionUrlConfig
+              - lambda:DeleteFunction
+              - lambda:DeleteFunctionUrlConfig
+              - lambda:PublishVersion
+              - lambda:RemovePermission
+              - lambda:TagResource
+              - lambda:UntagResource
+              - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
+              - lambda:UpdateFunctionUrlConfig
+            Resource:
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker
+              - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*
+
+  SystemWorkerEdgeProvisioningPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: UseScopedSystemRoles
+    Properties:
+      Description: Scoped edge-service provisioning permissions for the system worker
+      ManagedPolicyName: !Sub ${InstallationName}-system-worker-edge-provisioning
+      Path: /appliance-system/
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: LambdaEdgeReplication
+            Effect: Allow
+            Action:
+              - lambda:DisableReplication*
+              - lambda:EnableReplication*
+            Resource: !Sub arn:${AWS::Partition}:lambda:us-east-1:${AWS::AccountId}:function:*:*
+          # CloudFront create/list operations and managed-policy discovery do not support resource ARNs.
+          - Sid: CloudFrontAccountOperations
+            Effect: Allow
+            Action:
+              - cloudfront:CreateDistribution
+              - cloudfront:CreateDistributionWithTags
+              - cloudfront:CreateOriginAccessControl
+              - cloudfront:ListCachePolicies
+              - cloudfront:ListOriginAccessControls
+              - cloudfront:ListOriginRequestPolicies
+            Resource: '*'
+          - Sid: ApplianceCloudFrontResources
+            Effect: Allow
+            Action:
+              - cloudfront:DeleteDistribution
+              - cloudfront:DeleteOriginAccessControl
+              - cloudfront:GetDistribution
+              - cloudfront:GetDistributionConfig
+              - cloudfront:GetOriginAccessControl
+              - cloudfront:GetOriginAccessControlConfig
+              - cloudfront:ListTagsForResource
+              - cloudfront:TagResource
+              - cloudfront:UntagResource
+              - cloudfront:UpdateDistribution
+              - cloudfront:UpdateOriginAccessControl
+            Resource:
+              - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*
+              - !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:origin-access-control/*
+          - Sid: AwsManagedCloudFrontPolicies
+            Effect: Allow
+            Action:
+              - cloudfront:GetCachePolicy
+              - cloudfront:GetOriginRequestPolicy
+            Resource:
+              - !Sub arn:${AWS::Partition}:cloudfront::aws:cache-policy/*
+              - !Sub arn:${AWS::Partition}:cloudfront::aws:origin-request-policy/*
+          # Hosted-zone creation has no resource ARN because the zone does not exist yet.
+          - Sid: Route53CreateHostedZone
+            Effect: Allow
+            Action: route53:CreateHostedZone
+            Resource: '*'
+          - Sid: ApplianceHostedZones
+            Effect: Allow
+            Action:
+              - route53:ChangeResourceRecordSets
+              - route53:ChangeTagsForResource
+              - route53:DeleteHostedZone
+              - route53:GetHostedZone
+              - route53:ListResourceRecordSets
+              - route53:ListTagsForResource
+            Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/*
+          - Sid: Route53Changes
+            Effect: Allow
+            Action: route53:GetChange
+            Resource: !Sub arn:${AWS::Partition}:route53:::change/*
+          # ACM certificate creation has no resource ARN before RequestCertificate returns one.
+          - Sid: AcmRequestCertificate
+            Effect: Allow
+            Action: acm:RequestCertificate
+            Resource: '*'
+          - Sid: ApplianceCertificates
+            Effect: Allow
+            Action:
+              - acm:AddTagsToCertificate
+              - acm:DeleteCertificate
+              - acm:DescribeCertificate
+              - acm:ListTagsForCertificate
+              - acm:RemoveTagsFromCertificate
+            Resource: !Sub arn:${AWS::Partition}:acm:*:${AWS::AccountId}:certificate/*
+          - Sid: ApplianceLogGroups
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:DeleteLogGroup
+              - logs:DeleteRetentionPolicy
+              - logs:ListTagsForResource
+              - logs:PutRetentionPolicy
+              - logs:TagResource
+              - logs:UntagResource
+            Resource: !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/appliance/*
+          # Logs describe APIs enumerate regional account state and do not support resource ARNs.
+          - Sid: LogsAccountDiscovery
+            Effect: Allow
+            Action:
+              - logs:DescribeDeliveries
+              - logs:DescribeDeliveryDestinations
+              - logs:DescribeDeliverySources
+              - logs:DescribeLogGroups
+            Resource: '*'
+          - Sid: ApplianceLogDeliveryResources
+            Effect: Allow
+            Action:
+              - logs:CreateDelivery
+              - logs:DeleteDelivery
+              - logs:DeleteDeliveryDestination
+              - logs:DeleteDeliverySource
+              - logs:GetDelivery
+              - logs:GetDeliveryDestination
+              - logs:GetDeliverySource
+              - logs:ListTagsForResource
+              - logs:PutDeliveryDestination
+              - logs:PutDeliverySource
+              - logs:TagResource
+              - logs:UntagResource
+              - logs:UpdateDeliveryConfiguration
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery:*
+              - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-destination:*
+              - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-source:*
 
   ImageRepository:
     Type: AWS::ECR::Repository
@@ -269,6 +771,8 @@ Outputs:
     Value: !GetAtt SystemApiServerRole.Arn
   SystemWorkerRoleArn:
     Value: !GetAtt SystemWorkerRole.Arn
+  UserAppliancePermissionsBoundaryArn:
+    Value: !Ref UserAppliancePermissionsBoundary
   BootstrapTokenSecretArn:
     Value: !Ref BootstrapTokenSecret
   WorkerFunctionName:

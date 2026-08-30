@@ -64,6 +64,11 @@ const SUBCOMMANDS: Record<string, SubcommandDef> = {
     hidden: true,
     load: () => import('./appliance-cloud-update.js'),
   },
+  'cloud-baseline-update': {
+    description: 'apply the CloudFormation baseline without changing the system image',
+    hidden: true,
+    load: () => import('./appliance-cloud-baseline-update.js'),
+  },
   build: {
     description: 'builds the appliance in the current working directory',
     load: () => import('./appliance-build.js'),
@@ -240,6 +245,7 @@ const SHORTCUTS: Record<string, { target: string; prefix: string[] }> = {
 // bootstrap` and `bootstrap` can never drift.
 const CLOUD_VERBS: Record<string, string> = {
   install: 'cloud-install',
+  'baseline-update': 'cloud-baseline-update',
   update: 'cloud-update',
   bootstrap: 'bootstrap',
   teardown: 'teardown',
@@ -296,7 +302,7 @@ const ALIAS_MAP: Record<string, string> = (() => {
 })();
 
 const HELP_ONLY: Record<string, string> = {
-  cloud: 'umbrella: `appliance cloud install|update|bootstrap|teardown`',
+  cloud: 'umbrella: `appliance cloud install|baseline-update|update|bootstrap|teardown`',
 };
 
 // Help groups commands by product surface. Names must exist in

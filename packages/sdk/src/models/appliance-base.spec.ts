@@ -155,6 +155,7 @@ describe('appliance-base-kubernetes schema', () => {
         kmsKeyArn: 'arn:aws:kms:us-east-1:123:key/key-1',
         kmsAliasName: 'alias/appliance/prod-state',
         ecrRepositoryUrl: '123.dkr.ecr.us-east-1.amazonaws.com/prod',
+        userAppliancePermissionsBoundaryArn: 'arn:aws:iam::123:policy/appliance-system/prod-user-appliance-boundary',
         systemRoleArns: {
           apiServer: 'arn:aws:iam::123:role/api',
           worker: 'arn:aws:iam::123:role/worker',
