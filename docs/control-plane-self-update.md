@@ -111,6 +111,8 @@ allow-list; this is a release gate, not a residual caveat. CloudTrail live proof
 **CU0 shipped:** `SystemRoleMode=scoped` is now the CloudFormation default.
 The api-server can read/write only its data bucket; CloudFormation, not the Lambda, resolves the bootstrap secret.
 The worker adds Pulumi state/KMS, installation ECR, and permissions-boundary-contained user-appliance provisioning.
+Its runtime grant stays inline; IAM/Lambda and edge-service provisioning use separate scoped managed policies under `/appliance-system/`.
+Tests resolve worst-case names and partitions against IAM's 10,240-character aggregate inline and 6,144-character managed-policy limits, preserving CU1 headroom.
 That boundary lives under `/appliance-system/`, outside the worker's mutable `/appliance/` policy namespace.
 It denies its own policy mutation, non-appliance role assumption, all non-read operations on the control-plane stack, and mutations of both qualified and unqualified system functions.
 Pre-CU0 appliance roles adopt only this boundary on their first redeploy; deletion, replacement, and trust-policy mutation are not granted.

@@ -90,8 +90,11 @@ export class ApplianceSystemSubstrate implements ApplianceSystemSubstrateConfig 
     if (!aws.kmsKeyArn) throw new Error('CFN base config is missing aws.kmsKeyArn');
     if (!aws.kmsAliasName) throw new Error('CFN base config is missing aws.kmsAliasName');
     if (!aws.ecrRepositoryUrl) throw new Error('CFN base config is missing aws.ecrRepositoryUrl');
-    if (!aws.userAppliancePermissionsBoundaryArn)
-      throw new Error('CFN base config is missing aws.userAppliancePermissionsBoundaryArn');
+    if (!aws.userAppliancePermissionsBoundaryArn) {
+      throw new Error(
+        'This installation predates scoped user-appliance role boundaries. Run `appliance cloud baseline-update` before deploying or updating the edge.'
+      );
+    }
     if (!aws.systemRoleArns) throw new Error('CFN base config is missing aws.systemRoleArns');
     if (!aws.systemFunctions) throw new Error('CFN base config is missing aws.systemFunctions');
 

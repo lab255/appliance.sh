@@ -38,11 +38,28 @@ function scopedPolicies(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
 }
 
 function scopedPolicy(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
-  const policies = scopedPolicies(role);
+  const policies = rolePolicyDocuments(role);
   return {
     Version: policies[0]?.Version ?? '2012-10-17',
     Statement: policies.flatMap((policy) => policy.Statement),
   };
+}
+
+const WORKER_MANAGED_POLICY_IDS = ['SystemWorkerProvisioningPolicy', 'SystemWorkerEdgeProvisioningPolicy'] as const;
+
+function workerManagedPolicies() {
+  return WORKER_MANAGED_POLICY_IDS.map(
+    (logicalId) =>
+      toJson(['Resources', logicalId, 'Properties', 'PolicyDocument']) as {
+        Version: string;
+        Statement: PolicyStatement[];
+      }
+  );
+}
+
+function rolePolicyDocuments(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
+  const inline = scopedPolicies(role);
+  return role === 'SystemWorkerRole' ? [...inline, ...workerManagedPolicies()] : inline;
 }
 
 function boundaryPolicy() {
@@ -52,14 +69,55 @@ function boundaryPolicy() {
   };
 }
 
-function resolvedPolicyBytes(policy: unknown): number {
+const WORST_CASE = {
+  partition: 'aws-us-gov',
+  accountId: '9'.repeat(12),
+  region: 'us-gov-west-1',
+  installationName: 'i'.repeat(32),
+  stackName: 's'.repeat(128),
+};
+
+const WORST_GET_ATT: Record<string, string> = {
+  'DataBucket.Arn': `arn:${WORST_CASE.partition}:s3:::${'d'.repeat(63)}`,
+  'StateBucket.Arn': `arn:${WORST_CASE.partition}:s3:::${'s'.repeat(63)}`,
+  'StateKmsKey.Arn': `arn:${WORST_CASE.partition}:kms:${WORST_CASE.region}:${WORST_CASE.accountId}:key/${'0'.repeat(36)}`,
+  'ImageRepository.Arn': `arn:${WORST_CASE.partition}:ecr:${WORST_CASE.region}:${WORST_CASE.accountId}:repository/${'r'.repeat(256)}`,
+};
+
+function worstSub(value: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (_match, token: string) => {
+    const replacements: Record<string, string> = {
+      'AWS::Partition': WORST_CASE.partition,
+      'AWS::AccountId': WORST_CASE.accountId,
+      'AWS::Region': WORST_CASE.region,
+      'AWS::StackName': WORST_CASE.stackName,
+      InstallationName: WORST_CASE.installationName,
+      ...WORST_GET_ATT,
+    };
+    const replacement = replacements[token];
+    if (!replacement) throw new Error(`No worst-case substitution for ${token}`);
+    return replacement;
+  });
+}
+
+function resolvedPolicyCharacters(policy: unknown): number {
   const resolved = JSON.stringify(policy, (_key, value: unknown) => {
     if (value && typeof value === 'object' && 'tag' in value && 'value' in value && Object.keys(value).length === 2) {
-      return (value as { value: unknown }).value;
+      const intrinsic = value as { tag: string; value: string };
+      if (intrinsic.tag === '!Sub') return worstSub(intrinsic.value);
+      if (intrinsic.tag === '!GetAtt') {
+        const replacement = WORST_GET_ATT[intrinsic.value];
+        if (!replacement) throw new Error(`No worst-case GetAtt for ${intrinsic.value}`);
+        return replacement;
+      }
+      if (intrinsic.tag === '!Ref' && intrinsic.value === 'UserAppliancePermissionsBoundary') {
+        return `arn:${WORST_CASE.partition}:iam::${WORST_CASE.accountId}:policy/appliance-system/${WORST_CASE.installationName}-user-appliance-boundary`;
+      }
+      throw new Error(`No worst-case resolution for ${intrinsic.tag} ${intrinsic.value}`);
     }
     return value;
   });
-  return Buffer.byteLength(resolved, 'utf8');
+  return resolved.length;
 }
 
 function actionsOf(statement: PolicyStatement): string[] {
@@ -120,29 +178,44 @@ describe('appliance CloudFormation template', () => {
     const templateBytes = Buffer.byteLength(APPLIANCE_CLOUDFORMATION_TEMPLATE, 'utf8');
     expect(templateBytes).toBeLessThan(CLOUDFORMATION_TEMPLATE_BODY_LIMIT);
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
-      for (const policy of scopedPolicies(role)) expect(resolvedPolicyBytes(policy)).toBeLessThan(9_000);
+      const inlineAggregate = scopedPolicies(role).reduce(
+        (characters, policy) => characters + resolvedPolicyCharacters(policy),
+        0
+      );
+      expect(inlineAggregate).toBeLessThanOrEqual(10_240);
     }
-    expect(resolvedPolicyBytes(boundaryPolicy())).toBeLessThan(6_144);
+    for (const policy of workerManagedPolicies()) {
+      expect(resolvedPolicyCharacters(policy)).toBeLessThanOrEqual(6_144);
+    }
+    expect(resolvedPolicyCharacters(boundaryPolicy())).toBeLessThanOrEqual(6_144);
   });
 
   it('defaults to scoped roles and makes AdministratorAccess break-glass only', () => {
     expect(document.getIn(['Parameters', 'SystemRoleMode', 'Default'])).toBe('scoped');
     expect(toJson(['Parameters', 'SystemRoleMode', 'AllowedValues'])).toEqual(['scoped', 'admin']);
-    for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
-      const arns = toJson(['Resources', role, 'Properties', 'ManagedPolicyArns']);
-      expect(arns).toEqual([
-        sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'),
-        ['UseAdminSystemRoles', sub('arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess'), ref('AWS::NoValue')],
-      ]);
-    }
+    expect(toJson(['Resources', 'SystemApiServerRole', 'Properties', 'ManagedPolicyArns'])).toEqual([
+      sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'),
+      ['UseAdminSystemRoles', sub('arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess'), ref('AWS::NoValue')],
+    ]);
+    expect(toJson(['Resources', 'SystemWorkerRole', 'Properties', 'ManagedPolicyArns'])).toEqual([
+      sub('arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'),
+      ['UseScopedSystemRoles', ref('SystemWorkerProvisioningPolicy'), ref('AWS::NoValue')],
+      ['UseScopedSystemRoles', ref('SystemWorkerEdgeProvisioningPolicy'), ref('AWS::NoValue')],
+      ['UseAdminSystemRoles', sub('arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess'), ref('AWS::NoValue')],
+    ]);
   });
 
   it('snapshots every scoped execution-role policy document', () => {
     expect(scopedPolicy('SystemApiServerRole')).toMatchSnapshot('api-server scoped policy');
     const workerPolicies = scopedPolicies('SystemWorkerRole');
-    expect(workerPolicies).toHaveLength(2);
+    expect(workerPolicies).toHaveLength(1);
     expect(workerPolicies[0]).toMatchSnapshot('worker runtime scoped policy');
-    expect(workerPolicies[1]).toMatchSnapshot('worker provisioning scoped policy');
+    const managedPolicies = workerManagedPolicies();
+    expect(managedPolicies).toHaveLength(2);
+    expect(managedPolicies[0]?.Statement.map(({ Sid }) => Sid)).toContain('DenySystemFunctionMutation');
+    expect(managedPolicies[1]?.Statement.map(({ Sid }) => Sid)).toContain('CloudFrontAccountOperations');
+    expect(managedPolicies[0]).toMatchSnapshot('worker IAM and Lambda provisioning managed policy');
+    expect(managedPolicies[1]).toMatchSnapshot('worker edge-service provisioning managed policy');
   });
 
   it('has no all-action grants and allowlists every unavoidable wildcard resource', () => {
@@ -305,6 +378,7 @@ describe('appliance CloudFormation template', () => {
       'StateKmsAlias',
       'SystemApiServerRole',
       'SystemWorkerRole',
+      ...WORKER_MANAGED_POLICY_IDS,
       'UserAppliancePermissionsBoundary',
       'ImageRepository',
       'BootstrapTokenSecret',

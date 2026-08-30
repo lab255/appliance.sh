@@ -33,7 +33,7 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
 }
 `;
 
-exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker provisioning scoped policy 1`] = `
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker IAM and Lambda provisioning managed policy 1`] = `
 {
   "Statement": [
     {
@@ -345,6 +345,14 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
       ],
       "Sid": "DenySystemFunctionMutation",
     },
+  ],
+  "Version": "2012-10-17",
+}
+`;
+
+exports[`appliance CloudFormation template > snapshots every scoped execution-role policy document > worker edge-service provisioning managed policy 1`] = `
+{
+  "Statement": [
     {
       "Action": [
         "lambda:DisableReplication*",

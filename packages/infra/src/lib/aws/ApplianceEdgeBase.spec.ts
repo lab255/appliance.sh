@@ -1,4 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
+import { ApplianceBaseType, applianceBaseConfig } from '@appliance.sh/sdk';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ApplianceEdgeBase } from './ApplianceEdgeBase';
 import { ApplianceSystemSubstrate } from './ApplianceSystemSubstrate';
@@ -62,6 +63,41 @@ beforeAll(async () => {
 
 beforeEach(() => {
   resources.length = 0;
+});
+
+describe('ApplianceSystemSubstrate', () => {
+  it('directs pre-boundary edge configs to baseline-update', () => {
+    const config = applianceBaseConfig.parse({
+      name: 'prod',
+      type: ApplianceBaseType.ApplianceAwsPublic,
+      provisioner: 'cloudformation-v1',
+      stateBackendUrl: 's3://prod-state',
+      aws: {
+        region: 'us-east-1',
+        stateBucketName: 'prod-state',
+        stateBucketArn: 'arn:aws:s3:::prod-state',
+        dataBucketName: 'prod-data',
+        kmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/key-1',
+        kmsAliasName: 'alias/appliance/prod-state',
+        ecrRepositoryUrl: '123456789012.dkr.ecr.us-east-1.amazonaws.com/prod',
+        systemRoleArns: { apiServer: 'arn:api-role', worker: 'arn:worker-role' },
+        systemFunctions: {
+          apiServer: {
+            name: 'prod-api',
+            arn: 'arn:aws:lambda:us-east-1:123456789012:function:prod-api',
+            url: 'https://api-id.lambda-url.us-east-1.on.aws/',
+          },
+          worker: {
+            name: 'prod-worker',
+            arn: 'arn:aws:lambda:us-east-1:123456789012:function:prod-worker',
+            url: 'https://worker-id.lambda-url.us-east-1.on.aws/',
+          },
+        },
+      },
+    });
+
+    expect(() => ApplianceSystemSubstrate.fromBaseConfig(config)).toThrow(/appliance cloud baseline-update/);
+  });
 });
 
 describe('ApplianceEdgeBase', () => {
