@@ -233,6 +233,48 @@ export interface StageFromReleaseOptions {
   highestGeneration?: number;
   allowUnsigned?: boolean;
   cliVersion?: string;
+  onPhase?: (phase: 'downloading' | 'verifying signature') => void;
+}
+
+export function releaseTrustFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+  cliVersion: string = VERSION
+): ReleaseTrustPolicy {
+  const trustFile = environment.APPLIANCE_RELEASE_TRUST_FILE?.trim();
+  if (!trustFile) return PINNED_RELEASE_TRUST;
+  if (isReleaseBuild(cliVersion)) {
+    console.warn(
+      chalk.bgRed.white.bold(
+        ' WARNING: APPLIANCE_RELEASE_TRUST_FILE is ignored by release builds; production release trust is unchanged '
+      )
+    );
+    return PINNED_RELEASE_TRUST;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(trustFile, 'utf8'));
+  } catch (cause) {
+    throw new Error(`could not read APPLIANCE_RELEASE_TRUST_FILE ${trustFile}: ${errorDetail(cause)}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('APPLIANCE_RELEASE_TRUST_FILE must contain a release trust JSON object');
+  }
+  const candidate = parsed as { keys?: unknown; generationFloor?: unknown; blacklistedKeyIds?: unknown };
+  if (
+    !candidate.keys ||
+    typeof candidate.keys !== 'object' ||
+    Array.isArray(candidate.keys) ||
+    Object.values(candidate.keys).some((value) => typeof value !== 'string') ||
+    !Number.isSafeInteger(candidate.generationFloor) ||
+    (candidate.generationFloor as number) < 0 ||
+    (candidate.blacklistedKeyIds !== undefined &&
+      (!Array.isArray(candidate.blacklistedKeyIds) ||
+        candidate.blacklistedKeyIds.some((value) => typeof value !== 'string')))
+  ) {
+    throw new Error('APPLIANCE_RELEASE_TRUST_FILE does not match the pinned release trust shape');
+  }
+  console.warn(chalk.yellow(`DEV ONLY: loading release trust from ${trustFile}`));
+  return candidate as ReleaseTrustPolicy;
 }
 
 /** Download and verify every release byte before the first staging write. */
@@ -243,7 +285,7 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
   const base = `${options.releaseBase ?? RELEASE_BASE}/v${version}`;
   const destination = options.destinationDir ?? guestAssetsDir();
   const releaseName = `control-plane release v${version}`;
-  const trust = options.trust ?? PINNED_RELEASE_TRUST;
+  const trust = options.trust ?? releaseTrustFromEnvironment(process.env, options.cliVersion ?? VERSION);
   const hasPinnedKeys = Object.keys(trust.keys).length > 0;
   const highestGeneration = maxDefined(options.highestGeneration, stagedHighestGeneration(destination));
   const localGeneration = hasMatchingReleaseStamp(destination, version, arch)
@@ -252,6 +294,7 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
   let payloadResponse: Response;
   let signatureResponse: Response;
   try {
+    options.onPhase?.('downloading');
     [payloadResponse, signatureResponse] = await Promise.all([
       releaseFetch(fetcher, `${base}/control-plane-release.json`, 10_000),
       releaseFetch(fetcher, `${base}/control-plane-release.sig.json`, 10_000),
@@ -295,6 +338,7 @@ export async function stageFromRelease(options: StageFromReleaseOptions = {}): P
   }
   let verified;
   try {
+    options.onPhase?.('verifying signature');
     verified = await verifyReleaseEnvelope(rawPayload, rawEnvelope, trust, {
       now: options.now,
       highestGeneration,
@@ -369,7 +413,7 @@ function stageVerifiedRelease(
     `${binary.sha256}  appliance-api-server  ${binary.size}`,
     `${consoleArtifact.sha256}  appliance-console.tar.gz  ${consoleArtifact.size}`,
   ];
-  const properties = `keyId=${verified.envelope.keyId}\nversion=${verified.payload.version}\narch=${arch}\n`;
+  const properties = `keyId=${verified.envelope.keyId}\nversion=${verified.payload.version}\ngeneration=${verified.payload.generation}\narch=${arch}\n`;
   atomicStageFile(path.join(destination, 'appliance-api-server.sha256'), Buffer.from(`${checksumRows.join('\n')}\n`));
   atomicStageFile(path.join(destination, 'control-plane-release.properties'), Buffer.from(properties));
   atomicStageFile(
@@ -380,6 +424,48 @@ function stageVerifiedRelease(
     path.join(destination, 'control-plane-release.sig.json'),
     Buffer.from(`${JSON.stringify(verified.envelope)}\n`)
   );
+}
+
+/** Re-verify an isolated update stage, then atomically publish it as next-boot media. */
+export async function publishOfflineVerifiedRelease(options: {
+  sourceDir: string;
+  destinationDir: string;
+  version: string;
+  arch: 'x64' | 'arm64';
+  trust: ReleaseTrustPolicy;
+  now?: Date;
+  highestGeneration?: number;
+}): Promise<void> {
+  const payloadPath = path.join(options.sourceDir, 'control-plane-release.json');
+  const envelopePath = path.join(options.sourceDir, 'control-plane-release.sig.json');
+  const verified = await verifyReleaseEnvelope(
+    JSON.parse(fs.readFileSync(payloadPath, 'utf8')),
+    JSON.parse(fs.readFileSync(envelopePath, 'utf8')),
+    options.trust,
+    { now: options.now, highestGeneration: options.highestGeneration }
+  );
+  if (verified.payload.version !== options.version) {
+    throw new Error(`isolated update stage changed version before publish (expected ${options.version})`);
+  }
+  const { binary, consoleArtifact } = releaseArtifacts(
+    verified.payload.artifacts,
+    options.arch,
+    `isolated control-plane release v${options.version}`
+  );
+  const binaryBytes = fs.readFileSync(path.join(options.sourceDir, 'appliance-api-server'));
+  const consoleBytes = fs.readFileSync(path.join(options.sourceDir, 'appliance-console.tar.gz'));
+  verifyArtifactBytes(binaryBytes, binary, 'isolated control-plane release');
+  verifyArtifactBytes(consoleBytes, consoleArtifact, 'isolated control-plane release');
+  stageVerifiedRelease(
+    options.destinationDir,
+    options.arch,
+    verified,
+    binary,
+    binaryBytes,
+    consoleArtifact,
+    consoleBytes
+  );
+  raiseHighWater(options.destinationDir, verified.payload.generation);
 }
 
 async function useOfflineStagedRelease(

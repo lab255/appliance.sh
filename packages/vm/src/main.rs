@@ -1,5 +1,6 @@
 mod backend;
 mod bringup;
+mod control_plane;
 mod creds;
 mod doctor;
 mod egress;
@@ -236,6 +237,28 @@ enum Cmd {
     /// the on-demand recovery when a client still sees clock-skew 401s
     /// (e.g. after host sleep/resume).
     SyncClock {
+        #[arg(default_value = DEFAULT_VM)]
+        name: String,
+    },
+    /// Transfer an offline-verified release and wait for promote/rollback.
+    #[command(hide = true)]
+    ControlPlaneUpdate {
+        #[arg(default_value = DEFAULT_VM)]
+        name: String,
+        #[arg(long)]
+        stage: std::path::PathBuf,
+        #[arg(long)]
+        binary_sha256: String,
+        #[arg(long)]
+        binary_size: u64,
+        #[arg(long)]
+        console_sha256: String,
+        #[arg(long)]
+        console_size: u64,
+    },
+    /// Probe MV1 launcher capability.
+    #[command(hide = true)]
+    ControlPlaneCapability {
         #[arg(default_value = DEFAULT_VM)]
         name: String,
     },
@@ -623,6 +646,70 @@ fn main() {
     }
 }
 
+fn run_control_plane_update(
+    name: &str,
+    stage: &std::path::Path,
+    binary_sha256: &str,
+    binary_size: u64,
+    console_sha256: &str,
+    console_size: u64,
+) -> Result<()> {
+    if store::read_live_pid(name).is_none() {
+        bail!("VM '{name}' is not running");
+    }
+    let files = [
+        ("binary", stage.join("appliance-api-server"), binary_sha256.to_string(), binary_size),
+        ("console", stage.join("appliance-console.tar.gz"), console_sha256.to_string(), console_size),
+        ("checksums", stage.join("appliance-api-server.sha256"), String::new(), 0),
+        ("properties", stage.join("control-plane-release.properties"), String::new(), 0),
+        ("payload", stage.join("control-plane-release.json"), String::new(), 0),
+        ("envelope", stage.join("control-plane-release.sig.json"), String::new(), 0),
+    ];
+    let files: Vec<(&str, std::path::PathBuf, String, u64)> = files
+        .into_iter()
+        .map(|(slot, path, sha, size)| {
+            if sha.is_empty() {
+                let (sha, size) = control_plane::artifact_identity(&path)?;
+                Ok((slot, path, sha, size))
+            } else {
+                Ok((slot, path, sha, size))
+            }
+        })
+        .collect::<Result<_>>()?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let socket = VmPaths::for_name(name).artifact_sock();
+        for (slot, path, sha, size) in &files {
+            control_plane::send_artifact(&socket, slot, path, sha, *size)?;
+        }
+    }
+    #[cfg(windows)]
+    backend::wsl::stream_control_plane_update(name, &files)?;
+    #[cfg(not(any(target_os = "macos", windows)))]
+    bail!("control-plane update transport is unsupported on this platform");
+
+    let (code, output) = shell::run_captured(
+        name,
+        "/usr/local/bin/appliance-control-plane-update",
+        true,
+    )?;
+    let outcome = output
+        .lines()
+        .find(|line| {
+            line.starts_with("success ")
+                || line.starts_with("rollback ")
+                || line.starts_with("already at ")
+        })
+        .map(str::trim)
+        .unwrap_or_else(|| output.trim());
+    if code != 0 || !(outcome.starts_with("success ") || outcome.starts_with("already at ")) {
+        bail!("guest control-plane update failed: {outcome}");
+    }
+    println!("{outcome}");
+    Ok(())
+}
+
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let backend = backend::platform_backend();
@@ -728,6 +815,7 @@ fn run() -> Result<()> {
             };
             store::save_spec(&spec)?;
             store::ensure_disk(&spec)?;
+            store::ensure_control_plane_disk(&spec)?;
             prefetch_boot_artifacts(&spec)?;
             println!(
                 "created VM '{name}' ({cpus} cpus, {memory} MiB, {disk} GiB disk{})",
@@ -745,6 +833,7 @@ fn run() -> Result<()> {
             }
             let spec = ensure_spec(&name)?;
             store::ensure_disk(&spec)?;
+            store::ensure_control_plane_disk(&spec)?;
             prefetch_boot_artifacts(&spec)?;
             let release_key_id = guest::pinned_release_key_id_from_env()?;
 
@@ -1049,6 +1138,42 @@ fn run() -> Result<()> {
 
         Cmd::Runtime { action } => run_runtime_command(action, backend.name()),
 
+        Cmd::ControlPlaneCapability { name } => {
+            if store::read_live_pid(&name).is_none() {
+                bail!("VM '{name}' is not running");
+            }
+            let (code, output) = shell::run_captured(
+                &name,
+                "cat /run/appliance/capabilities/control-plane-update-v1 2>/dev/null",
+                true,
+            )?;
+            if code != 0 {
+                bail!("VM '{name}' predates in-place control-plane update; run `appliance vm up --name {name}` to restage and reboot");
+            }
+            let capability = output
+                .lines()
+                .find(|line| line.contains("artifact-vsock=") || line.contains("transport=wsl"))
+                .unwrap_or("control-plane-update-v1");
+            println!("{}", capability.trim());
+            Ok(())
+        }
+
+        Cmd::ControlPlaneUpdate {
+            name,
+            stage,
+            binary_sha256,
+            binary_size,
+            console_sha256,
+            console_size,
+        } => run_control_plane_update(
+            &name,
+            &stage,
+            &binary_sha256,
+            binary_size,
+            &console_sha256,
+            console_size,
+        ),
+
         Cmd::Timings { name } => {
             let paths = VmPaths::for_name(&name);
             let history = bringup::read_history(&paths.dir);
@@ -1068,6 +1193,7 @@ fn run() -> Result<()> {
             backend.availability()?;
             let spec = ensure_spec(&name)?;
             store::ensure_disk(&spec)?;
+            store::ensure_control_plane_disk(&spec)?;
             prefetch_boot_artifacts(&spec)?;
             store::write_pidfile(&name)?;
             // Start the egress proxy alongside the VM so the desktop's

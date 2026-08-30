@@ -683,6 +683,30 @@ fn stream_guest_artifact(
     Ok(())
 }
 
+pub(crate) fn stream_control_plane_update(
+    vm: &str,
+    files: &[(&str, std::path::PathBuf, String, u64)],
+) -> Result<()> {
+    let distro = distro_name(vm);
+    for (slot, path, expected_sha256, expected_size) in files {
+        let destination = match *slot {
+            "binary" => "/var/lib/appliance-control-plane/incoming/binary",
+            "console" => "/var/lib/appliance-control-plane/incoming/console.tar.gz",
+            "checksums" => "/var/lib/appliance-control-plane/incoming/appliance-api-server.sha256",
+            "properties" => "/var/lib/appliance-control-plane/incoming/control-plane-release.properties",
+            "payload" => "/var/lib/appliance-control-plane/incoming/control-plane-release.json",
+            "envelope" => "/var/lib/appliance-control-plane/incoming/control-plane-release.sig.json",
+            other => bail!("invalid control-plane artifact slot '{other}'"),
+        };
+        let actual_size = std::fs::metadata(path)?.len();
+        if actual_size != *expected_size {
+            bail!("artifact size changed before WSL transfer {}: expected {expected_size}, got {actual_size}", path.display());
+        }
+        stream_guest_artifact(&distro, path, destination, Some(expected_sha256))?;
+    }
+    Ok(())
+}
+
 fn clear_guest_artifacts(distro: &str) -> Result<()> {
     let command = format!("rm -rf {ARTIFACT_GUEST_ROOT} && mkdir -p {ARTIFACT_GUEST_ROOT}");
     let out = wsl_cmd()
@@ -698,6 +722,20 @@ fn clear_guest_artifacts(distro: &str) -> Result<()> {
     Ok(())
 }
 
+fn signed_artifact_sha256(
+    evidence: &crate::guest::ApiServerReleaseEvidence,
+    name: &str,
+) -> Result<String> {
+    let checksums = std::fs::read_to_string(&evidence.checksums)
+        .with_context(|| format!("read {}", evidence.checksums.display()))?;
+    checksums.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        let sha = fields.next()?;
+        let artifact = fields.next()?;
+        (artifact == name).then(|| sha.to_string())
+    }).with_context(|| format!("signed checksum for {name} is missing"))
+}
+
 fn stream_boot_artifacts(
     distro: &str,
     k3s: Option<(&Path, &str)>,
@@ -709,9 +747,13 @@ fn stream_boot_artifacts(
         stream_guest_artifact(distro, path, K3S_GUEST_ARTIFACT, Some(expected_sha256))?;
     }
     if let Some(assets) = apiserver {
-        stream_guest_artifact(distro, &assets.binary, APISERVER_GUEST_ARTIFACT, None)?;
+        let binary_sha = assets.release_evidence.as_ref()
+            .map(|evidence| signed_artifact_sha256(evidence, "appliance-api-server")).transpose()?;
+        let console_sha = assets.release_evidence.as_ref()
+            .map(|evidence| signed_artifact_sha256(evidence, "appliance-console.tar.gz")).transpose()?;
+        stream_guest_artifact(distro, &assets.binary, APISERVER_GUEST_ARTIFACT, binary_sha.as_deref())?;
         if let Some(console) = &assets.console {
-            stream_guest_artifact(distro, console, CONSOLE_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, console, CONSOLE_GUEST_ARTIFACT, console_sha.as_deref())?;
         }
         if let Some(evidence) = &assets.release_evidence {
             stream_guest_artifact(distro, &evidence.checksums, APISERVER_CHECKSUMS_GUEST_ARTIFACT, None)?;
@@ -830,6 +872,8 @@ fi
 PERSIST=/persist
 mkdir -p "$PERSIST"
 
+__CONTROL_PLANE_PROVISION__
+
 # --- packages ---------------------------------------------------------
 __PACKAGE_PROVISION__
 
@@ -864,12 +908,19 @@ APPLIANCE_RUNTIME_SHARE_UNMOUNT
 cat > /usr/local/bin/runtime-principal-snat <<'APPLIANCE_RUNTIME_PRINCIPAL_SNAT'
 __RUNTIME_PRINCIPAL_SNAT__
 APPLIANCE_RUNTIME_PRINCIPAL_SNAT
+cat > /usr/local/bin/appliance-control-plane-supervisor <<'APPLIANCE_CONTROL_PLANE_SUPERVISOR'
+__CONTROL_PLANE_SUPERVISOR__
+APPLIANCE_CONTROL_PLANE_SUPERVISOR
+cat > /usr/local/bin/appliance-control-plane-update <<'APPLIANCE_CONTROL_PLANE_UPDATE'
+__CONTROL_PLANE_UPDATE__
+APPLIANCE_CONTROL_PLANE_UPDATE
 chmod 0755 \
   /usr/local/bin/appliance-runtime-supervisor \
   /usr/local/bin/appliance-runtime-compound-supervisor \
   /usr/local/bin/runtime-share-mount \
   /usr/local/bin/runtime-share-unmount \
   /usr/local/bin/runtime-principal-snat
+chmod 0700 /usr/local/bin/appliance-control-plane-supervisor /usr/local/bin/appliance-control-plane-update
 
 # --- dev environment (appliance vm dev) ---------------------------------
 __DEV_PROVISION__
@@ -1001,6 +1052,14 @@ RELEASE_ENVELOPE=/opt/appliance/artifacts/control-plane-release.sig.json
 RELEASE_POISON=/opt/appliance/artifacts/control-plane-release.invalid
 printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
 chmod 600 /etc/appliance/bootstrap-token
+"#;
+
+const WSL_CONTROL_PLANE_PROVISION: &str = r#"CONTROL_PLANE_ROOT=/var/lib/appliance-control-plane
+mkdir -p "$CONTROL_PLANE_ROOT/releases" "$CONTROL_PLANE_ROOT/incoming" /run/appliance/capabilities
+chown -R root:root "$CONTROL_PLANE_ROOT"
+chmod 0700 "$CONTROL_PLANE_ROOT" "$CONTROL_PLANE_ROOT/releases" "$CONTROL_PLANE_ROOT/incoming"
+printf 'transport=wsl\n' > /run/appliance/capabilities/control-plane-update-v1
+chmod 0600 /run/appliance/capabilities/control-plane-update-v1
 "#;
 
 /// The agent-runtime handoff for an agent-only VM on WSL. There is no
@@ -1179,6 +1238,18 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
         .replace("__PACKAGE_PROVISION__", &package_provision)
         .replace("__K3S_PROVISION__", &k3s_block)
         .replace("__APISERVER_PROVISION__", &apiserver_block)
+        .replace(
+            "__CONTROL_PLANE_PROVISION__",
+            if spec.cluster && release_gate.is_some() { WSL_CONTROL_PLANE_PROVISION } else { "" },
+        )
+        .replace("__CONTROL_PLANE_SUPERVISOR__", crate::guest::CONTROL_PLANE_SUPERVISOR)
+        .replace(
+            "__CONTROL_PLANE_UPDATE__",
+            &crate::guest::CONTROL_PLANE_UPDATE.replace(
+                "__PINNED_RELEASE_KEY_ID__",
+                release_gate.map_or("", |gate| gate.pinned_key_id),
+            ),
+        )
         .replace(
             "__AGENT_DOCKER_STUB__",
             if spec.agent_only && !spec.docker {
@@ -1855,7 +1926,7 @@ mod tests {
     }
 
     #[test]
-    fn cluster_bootstrap_uses_only_streamed_api_artifacts() {
+    fn mv1_overlay_composes_streamed_artifacts_supervisor_update_and_pinned_key() {
         let mut s = spec("cluster");
         s.cluster = true;
         let assets = crate::guest::ApiServerAssets {
@@ -1896,6 +1967,23 @@ mod tests {
             "RELEASE_KEY_ID\" != \"ed25519:sha256:{}",
             "a".repeat(64)
         )));
+        assert!(script.contains("transport=wsl"));
+        assert!(script.contains("/run/appliance/capabilities/control-plane-update-v1"));
+        assert!(script.contains("read_pointer()"));
+        assert!(script.contains("releases/$VERSION-$SHA12"));
+        assert!(script.contains("release generation downgrade"));
+        assert!(script.contains(&format!(
+            "[ \"$KEY_ID\" = 'ed25519:sha256:{}' ]",
+            "a".repeat(64)
+        )));
+        for marker in [
+            "__CONTROL_PLANE_PROVISION__",
+            "__CONTROL_PLANE_SUPERVISOR__",
+            "__CONTROL_PLANE_UPDATE__",
+            "__PINNED_RELEASE_KEY_ID__",
+        ] {
+            assert!(!script.contains(marker), "{marker} must be substituted");
+        }
         assert!(!script.contains(r"C:\Users\Avery"));
         assert!(!script.contains("wslpath"));
         assert!(!script.contains("/mnt/c"));

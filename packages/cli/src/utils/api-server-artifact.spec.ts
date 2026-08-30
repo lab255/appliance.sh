@@ -6,7 +6,12 @@ import { getPublicKeyAsync } from '@noble/ed25519';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VERSION, signReleaseEnvelope, type ReleaseEnvelope, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
 
-import { ensureApiServerArtifacts, guestAssetsDir, stageFromRelease } from './api-server-artifact.js';
+import {
+  ensureApiServerArtifacts,
+  guestAssetsDir,
+  releaseTrustFromEnvironment,
+  stageFromRelease,
+} from './api-server-artifact.js';
 
 // Redirect the guest-assets dir (~/.appliance/vm/images/guest-assets)
 // into a per-test temp home.
@@ -322,6 +327,44 @@ describe('stageFromRelease signed metadata gate', () => {
     });
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('UNSIGNED DEV STAGING ENABLED'));
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
+  });
+
+  it('honours APPLIANCE_RELEASE_TRUST_FILE only in development builds', async () => {
+    const trustFile = path.join(destination, 'release-trust.json');
+    fs.writeFileSync(trustFile, JSON.stringify(devTrust));
+    const environment = { APPLIANCE_RELEASE_TRUST_FILE: trustFile };
+
+    expect(releaseTrustFromEnvironment(environment, '0.0.0-dev')).toEqual(devTrust);
+    expect(releaseTrustFromEnvironment(environment, '1.57.0').keys).toEqual({});
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('ignored by release builds'));
+  });
+
+  it('plumbs development trust-file policy through signed release staging', async () => {
+    const trustFile = path.join(destination, 'release-trust.json');
+    fs.writeFileSync(trustFile, JSON.stringify(devTrust));
+    const release = payload();
+    const envelope = await signReleaseEnvelope(release, releaseDevFixturePrivateKey);
+    const prior = process.env.APPLIANCE_RELEASE_TRUST_FILE;
+    process.env.APPLIANCE_RELEASE_TRUST_FILE = trustFile;
+    try {
+      await stageFromRelease({
+        version: '1.57.0',
+        arch: 'x64',
+        destinationDir: path.join(destination, 'published'),
+        fetcher: fakeFetcher({
+          'control-plane-release.json': JSON.stringify(release),
+          'control-plane-release.sig.json': JSON.stringify(envelope),
+          'appliance-api-server-linux-x64': binary,
+          'appliance-console.tar.gz': consoleBundle,
+        }),
+        cliVersion: '0.0.0-dev',
+        now: new Date('2026-08-30T00:00:00Z'),
+      });
+    } finally {
+      if (prior === undefined) delete process.env.APPLIANCE_RELEASE_TRUST_FILE;
+      else process.env.APPLIANCE_RELEASE_TRUST_FILE = prior;
+    }
+    expect(fs.readFileSync(path.join(destination, 'published/appliance-api-server'))).toEqual(binary);
   });
 
   it('refuses --allow-unsigned in a release build', async () => {

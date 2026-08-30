@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
-import { isMicroVmClusterId } from '@/lib/host';
+import { useHost } from '@/providers/host-provider';
+import { isMicroVmClusterId, microVmNameFromClusterId } from '@/lib/host';
 
 // Client/server version-compat preflight for the selected cluster.
 // Reads GET /api/v1/cluster-info (same query key as the deploy wizard's
@@ -18,6 +19,11 @@ export interface ClusterCompat {
   serverVersion?: string;
   minClientVersion?: string;
   isMicroVm: boolean;
+  vmName?: string;
+  /** Host probe of the boot-rendered MV1 launcher marker. */
+  controlPlaneUpdateCapable: boolean;
+  /** Signed release trust is provisioned in this CLI build. */
+  selfUpdateEnabled: boolean;
   /** The server's advisory floor is above this app's version — update the app. */
   clientBelowMinimum: boolean;
   /** microVM control plane doesn't report a version at all: the guest
@@ -62,9 +68,18 @@ export function compareVersions(a: string, b: string): number {
 }
 
 export function useClusterCompat(): ClusterCompat {
+  const host = useHost();
   const client = useApplianceClient();
   const { cluster } = useSelectedCluster();
   const isMicroVm = Boolean(cluster && isMicroVmClusterId(cluster.id));
+  const vmName = cluster ? (microVmNameFromClusterId(cluster.id) ?? undefined) : undefined;
+
+  const vmStatusQuery = useQuery({
+    queryKey: ['microvm', vmName, 'status'],
+    enabled: Boolean(host.vm && vmName),
+    queryFn: () => host.vm!.instance(vmName).status(),
+    retry: false,
+  });
 
   const clusterInfoQuery = useQuery({
     // Shared with the deploy wizard's capability probe.
@@ -107,11 +122,14 @@ export function useClusterCompat(): ClusterCompat {
   const warnings = [...new Set(info?.warnings ?? [])];
 
   return {
-    loading: !client || clusterInfoQuery.isPending,
+    loading: !client || clusterInfoQuery.isPending || (Boolean(host.vm && vmName) && vmStatusQuery.isPending),
     clientVersion,
     serverVersion,
     minClientVersion,
     isMicroVm,
+    vmName,
+    controlPlaneUpdateCapable: vmStatusQuery.data?.controlPlaneUpdateCapable === true,
+    selfUpdateEnabled: vmStatusQuery.data?.selfUpdateEnabled === true,
     clientBelowMinimum,
     controlPlanePredatesReporting,
     versionDrift,

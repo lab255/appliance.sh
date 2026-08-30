@@ -781,3 +781,51 @@ numbers were manufactured. The DOM suite covers pending/error/focus behavior
 and metric emission; rerun the six click samples after dismissing the prompt.
 Native evidence is in `/private/tmp/ap-captures/launch/native-app-window.png`
 and `/private/tmp/ap-captures/launch/native-app-exited.png`.
+
+---
+
+## MV1 control-plane update proof (AP-222 / input to AP-223)
+
+Steps 1–4 require either the production key pinned by AP-226, or a development
+build with `APPLIANCE_RELEASE_TRUST_FILE=/absolute/path/test-release-trust.json`
+pointing to the trust JSON for the test signing key. A release build ignores
+that variable and must remain fail-closed; unsigned bytes are never an
+acceptable substitute.
+
+Here, “development build” means the CLI `VERSION` starts with `0.0.0` or
+contains `-dev`. The trust file is a JSON object shaped as
+`{"keys":{"<keyId>":"<pubkey>"},"generationFloor":N,"blacklistedKeyIds":[]}`;
+`blacklistedKeyIds` is optional.
+
+Use three post-MV0 releases signed by that trusted key: current N, a candidate
+N+1 whose api-server exits immediately, and a healthy N+1. Record
+`date`, VM PID, `/bootstrap/status`, and `appliance doctor --vm appliance`
+before and after each command. Do not run `vm stop`, `vm up`, or reboot during
+the first three steps.
+
+1. Boot N with `appliance vm up --cluster`, record the VM PID, then run
+   `appliance vm update --version <healthy-N+1>`. Pass when the PID is
+   unchanged, the command prints `N → N+1`, the API stays reachable, and
+   doctor reports host-staged version, signed keyId, persistent current,
+   promoted generation, console, and running N+1. Confirm `current` is a
+   one-line `releases/<version>-<sha12>` pointer file, not a symlink.
+2. Return to N, then run `appliance vm update --version <crashing-N+1>`.
+   Pass when the command reports rollback, the VM PID is unchanged, and
+   `/bootstrap/status` returns initialized N again.
+3. Retry the healthy N+1 release. Pass when it promotes without reboot and
+   the `previous` pointer remains N.
+4. Preserve the original N boot media and restart only the existing engine
+   VM (`appliance-vm stop appliance`, then `appliance-vm start appliance`),
+   without restaging. Pass when persistent `current` still runs N+1 and the
+   stale media does not overwrite it.
+
+Also capture the Desktop compatibility banner once with an MV1 launcher
+(`Update now`) and once with a pre-MV1 launcher (Machine-page restage/reboot).
+Attach the command transcripts, doctor JSON, banner PNGs, and console log to
+AP-223. Until AP-226 pins production trust, a release build passes this section
+only when the command prints the actionable “in-place update is disabled until
+the production release key is pinned” restart path and the banner offers the
+Machine-page restart while saying in-place updates are not enabled in this
+build. Capture those fail-closed states; the enabled inline `Update now` state
+cannot be captured until AP-226 lands or the app runs with the development
+trust described above. Run steps 1–4 only with that development trust file.

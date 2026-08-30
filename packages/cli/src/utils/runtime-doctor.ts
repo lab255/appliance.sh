@@ -12,7 +12,7 @@ import {
   resolveProfileSecret,
 } from './credential-store.js';
 import { DEFAULT_VM_NAME, LEGACY_MICROVM_PROFILE, profileForVm, resolveVmBinary, vmDir } from './microvm-up.js';
-import { guestAssetsDir } from './api-server-artifact.js';
+import { guestAssetsDir, releaseTrustFromEnvironment } from './api-server-artifact.js';
 
 // Runtime doctor: "why doesn't my ALREADY-SET-UP runtime work?" — the
 // second half of `appliance doctor`. The preflight (preflight.ts) asks
@@ -80,6 +80,8 @@ export interface EngineChecksReport {
   clockSkewSeconds?: number;
   /** Guest api-server key store state, when reachable in-VM. */
   bootstrapInitialized?: boolean;
+  /** Boot-rendered MV1 launcher marker was found in the running guest. */
+  controlPlaneUpdateCapable?: boolean;
   findings: RuntimeFinding[];
 }
 
@@ -441,7 +443,8 @@ export function compareVersionStamp(
   cliVersion: string,
   serverVersion: string | null,
   signingKeyId: string | null = null,
-  releaseTrust: ReleaseTrustPolicy = PINNED_RELEASE_TRUST
+  releaseTrust: ReleaseTrustPolicy = PINNED_RELEASE_TRUST,
+  updateCapable = false
 ): RuntimeFinding {
   const id = 'runtime:guest-stamp';
   const title = 'Guest api-server artifacts vs CLI / running server';
@@ -485,7 +488,9 @@ export function compareVersionStamp(
       title,
       severity: trustSeverity === 'fail' ? 'fail' : 'warn',
       detail: `running api-server is ${serverVersion} but the staged artifacts are ${stampVersion} — the VM booted before the restage; ${trustDetail}`,
-      remediation: 'Restart the VM to pick up the staged binary: `appliance vm stop && appliance vm up`.',
+      remediation: updateCapable
+        ? 'Install the staged signed release without rebooting: `appliance vm update`.'
+        : 'This launcher predates in-place update. Restage and reboot: `appliance vm stop && appliance vm up --cluster`.',
     };
   }
   if (normVersion(stampVersion) !== normVersion(cliVersion)) {
@@ -876,6 +881,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   const vmExplicit = opts.vmExplicit ?? opts.vm !== undefined;
   const findings: RuntimeFinding[] = [];
   const fixes: RuntimeFixOutcome[] = [];
+  const releaseTrust = releaseTrustFromEnvironment();
 
   // 1. Engine-side checks (guest clock, in-guest api-server liveness).
   //    Old/missing engines degrade to an info row, never a failure; a
@@ -974,7 +980,16 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   }
 
   // 4. Guest artifact stamp vs CLI vs running server (check e).
-  findings.push(compareVersionStamp(readGuestStamp(), VERSION, serverVersion, readGuestSigningKeyId()));
+  findings.push(
+    compareVersionStamp(
+      readGuestStamp(),
+      VERSION,
+      serverVersion,
+      readGuestSigningKeyId(),
+      releaseTrust,
+      engine?.controlPlaneUpdateCapable === true
+    )
+  );
 
   // 5. Duplicate ingress claims (check c) — skip-not-fail without kubectl.
   const ingress = probeIngress(vm);

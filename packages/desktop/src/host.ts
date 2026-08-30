@@ -407,6 +407,13 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
           };
           await invoke('microvm_cluster_up', { name: vm, onEvent: channel });
         },
+        async update(version?: string, onEvent?: (event: { message: string }) => void) {
+          const channel = new Channel<{ type: string; message?: string }>();
+          channel.onmessage = (event) => {
+            if (event?.message?.trim().startsWith('»')) onEvent?.({ message: event.message });
+          };
+          return invoke<string>('microvm_update', { name: vm, version: version ?? null, onEvent: channel });
+        },
         async cleanupShell() {
           await invoke('microvm_dev_cleanup', { name: vm });
         },

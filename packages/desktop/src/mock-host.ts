@@ -50,6 +50,8 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 //   install-from-file    file-picker installation path
 //   grant-prompt         install grant dialog with an optional mount
 //   entitlements-suggest-revoke Settings suggested-revocation list
+//   banner-mv1-disabled MV1 version drift with release trust disabled
+//   banner-legacy-reboot version drift on a pre-MV1 launcher
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
 // lines) so spinners, disabled states, and progress UI are exercised
@@ -80,7 +82,9 @@ type Scenario =
   | 'unknown-publisher'
   | 'install-from-file'
   | 'grant-prompt'
-  | 'entitlements-suggest-revoke';
+  | 'entitlements-suggest-revoke'
+  | 'banner-mv1-disabled'
+  | 'banner-legacy-reboot';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -124,6 +128,11 @@ export function mockHostEnabled(): boolean {
         configureWorkspaceScenario(scenario === 'user-mode-no-vm' ? 'user-mode-no-vm' : 'user-mode');
       }
       if (scenario === 'developer-mode') sessionStorage.setItem(APP_MODE_KEY, 'developer');
+      if (scenario === 'banner-mv1-disabled' || scenario === 'banner-legacy-reboot') {
+        sessionStorage.setItem(APP_MODE_KEY, 'developer');
+        configureWorkspaceScenario('user-mode');
+        installBannerClusterInfoFixture();
+      }
     }
   }
   return sessionStorage.getItem(ENABLED_KEY) === '1';
@@ -158,12 +167,38 @@ function scenario(): Scenario {
     s === 'unknown-publisher' ||
     s === 'install-from-file' ||
     s === 'grant-prompt' ||
-    s === 'entitlements-suggest-revoke'
+    s === 'entitlements-suggest-revoke' ||
+    s === 'banner-mv1-disabled' ||
+    s === 'banner-legacy-reboot'
     ? s
     : 'ready';
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function installBannerClusterInfoFixture(): void {
+  const fixtureWindow = window as typeof window & { __applianceBannerFixtureInstalled?: boolean };
+  if (fixtureWindow.__applianceBannerFixtureInstalled) return;
+  fixtureWindow.__applianceBannerFixtureInstalled = true;
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+    if (url.pathname === '/api/v1/cluster-info') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            version: '1.56.0',
+            serverVersion: '1.56.0',
+            minClientVersion: '1.0.0',
+            baseConfig: {},
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      );
+    }
+    return realFetch(input, init);
+  };
+}
 
 // Toggle to QA the "you're up to date" branch of the updater panel.
 const MOCK_UPDATE_AVAILABLE = true;
@@ -1100,6 +1135,8 @@ export function createMockHost(): ConsoleHost {
               running: vm.running,
               clusterProvisioned: vm.clusterProvisioned,
               kubeconfigReady: vm.running && vm.clusterProvisioned,
+              controlPlaneUpdateCapable: vm.running && scenario() !== 'banner-legacy-reboot',
+              selfUpdateEnabled: scenario() !== 'banner-mv1-disabled',
               phase: vm.running ? ('ready' as const) : undefined,
               dev: vm.dev,
               // Mock a shared workspace for dev VMs so the agent launcher
@@ -1156,6 +1193,19 @@ export function createMockHost(): ConsoleHost {
             vm.running = true;
             vm.clusterProvisioned = true;
             registerMockMicroVmCluster(vm);
+          },
+          async update(version?: string, onEvent?: (event: { message: string }) => void) {
+            for (const message of [
+              '» checking VM capability',
+              '» downloading',
+              '» verifying signature',
+              '» shipping artifacts',
+              '» swapping + health check',
+            ]) {
+              await sleep(160);
+              onEvent?.({ message });
+            }
+            return `control plane updated to ${version ?? 'latest'}`;
           },
           async cleanupShell() {
             // Best-effort sweep of debugger pods a shell leaves behind; a no-op in the mock.

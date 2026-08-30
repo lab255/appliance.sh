@@ -464,6 +464,12 @@ describe('compareVersionStamp', () => {
     expect(f.remediation).toContain('appliance vm stop && appliance vm up');
   });
 
+  it('suggests an in-place update when the MV1 launcher is capable', () => {
+    const f = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.50.0', null, { keys: {}, generationFloor: 1 }, true);
+    expect(f.remediation).toContain('appliance vm update');
+    expect(f.remediation).not.toContain('vm stop');
+  });
+
   it('suggests a RESTAGE when the stamp trails the CLI', () => {
     const f = compareVersionStamp('v1.50.0:arm64', 'v1.51.2', null);
     expect(f.severity).toBe('warn');
