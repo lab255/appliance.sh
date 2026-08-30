@@ -221,6 +221,20 @@ describe('SelfUpdateExecutor', () => {
     expect(await jobs.get(job.id)).toMatchObject({ status: 'failed', recovered: true, phase: 'complete' });
   });
 
+  it('finishes cleanly when the installation uses admin system roles', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now);
+    process.env.SELF_UPDATE_ROLE_ARN = '';
+    await expect(new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id)).resolves.toBe('complete');
+    expect(aws.deps.assumeRole).not.toHaveBeenCalled();
+    expect(await jobs.get(job.id)).toMatchObject({
+      status: 'failed',
+      recovered: true,
+      recoveryState: 'recovered',
+      error: expect.stringContaining('baseline-update --system-role-mode scoped'),
+    });
+  });
+
   it('independently re-verifies persisted evidence before AWS mutation', async () => {
     const job = await queuedJob();
     const aws = fakeAws(now);
@@ -289,8 +303,8 @@ describe('SelfUpdateExecutor', () => {
 
   it('resumes stack wait from persisted N-1-compatible job state without re-mirroring or re-submitting', async () => {
     const job = await queuedJob();
-    await jobs.claim(job.id);
-    await jobs.heartbeat(job.id, 'waiting-for-stack', {
+    const claimed = await jobs.claim(job.id);
+    await jobs.heartbeat(job.id, claimed.lease.holder!, 'waiting-for-stack', {
       previousImage: oldImage,
       targetImage,
       stackId: process.env.APPLIANCE_STACK_ID,

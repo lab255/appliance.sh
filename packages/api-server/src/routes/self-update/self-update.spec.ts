@@ -29,16 +29,18 @@ const job = {
 function appFor(
   service: {
     create: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
     getAndResume: ReturnType<typeof vi.fn>;
     publicJob: ReturnType<typeof vi.fn>;
   },
   role: 'admin' | 'member',
-  tenantId: string
+  tenantId: string,
+  keyId = 'admin'
 ) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.apiKeyId = 'admin';
+    req.apiKeyId = keyId;
     req.apiKeyRole = role;
     req.tenantId = tenantId;
     next();
@@ -55,18 +57,56 @@ function appFor(
 describe('self-update routes', () => {
   let service: {
     create: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
     getAndResume: ReturnType<typeof vi.fn>;
     publicJob: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     vi.resetAllMocks();
+    process.env.SELF_UPDATE_ROLE_ARN = 'arn:aws:iam::111111111111:role/appliance-system/self-update';
     mockApiKeyService.getByKeyId.mockResolvedValue({ id: 'admin', secret: 'secret' });
     service = {
       create: vi.fn().mockResolvedValue({ job, reused: false }),
+      get: vi.fn().mockResolvedValue(job),
       getAndResume: vi.fn().mockResolvedValue(job),
       publicJob: vi.fn().mockReturnValue({ jobId: job.id, status: job.status, phase: job.phase }),
     };
+  });
+
+  it('returns 503 before persistence when scoped system roles are disabled', async () => {
+    process.env.SELF_UPDATE_ROLE_ARN = '';
+    const response = await request(appFor(service, 'admin', 'default'))
+      .post('/api/v1/self-update')
+      .send({ targetDigest: digest, release: { payload: {}, envelope: {} } });
+    expect(response.status).toBe(503);
+    expect(response.body.error).toContain('baseline-update --system-role-mode scoped');
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('checks ownership before resume and signs resume with the original caller key', async () => {
+    const originalJob = { ...job, callerKeyId: 'original-admin' };
+    service.get.mockResolvedValue(originalJob);
+    service.getAndResume.mockResolvedValue(originalJob);
+    mockApiKeyService.getByKeyId.mockImplementation(async (keyId: string) => ({
+      id: keyId,
+      secret: `${keyId}-secret`,
+    }));
+    const response = await request(appFor(service, 'admin', 'default', 'polling-admin')).get(
+      `/api/v1/self-update/${job.id}`
+    );
+    expect(response.status).toBe(200);
+    expect(service.getAndResume).toHaveBeenCalledWith(job.id, {
+      keyId: 'original-admin',
+      secret: 'original-admin-secret',
+    });
+
+    service.get.mockResolvedValueOnce({ ...originalJob, ownerTenantId: 'another-owner' });
+    const forbidden = await request(appFor(service, 'admin', 'default', 'polling-admin')).get(
+      `/api/v1/self-update/${job.id}`
+    );
+    expect(forbidden.status).toBe(403);
+    expect(service.getAndResume).toHaveBeenCalledTimes(1);
   });
 
   it('returns POST 202 and GET status for an owner admin', async () => {

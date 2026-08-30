@@ -27,6 +27,13 @@ export function createSelfUpdateRoutes(resolveService: () => SelfUpdateService =
   const router = Router();
 
   router.post('/', async (req, res) => {
+    if (!process.env.SELF_UPDATE_ROLE_ARN) {
+      res.status(503).json({
+        error:
+          'Self-update requires scoped system roles; run appliance cloud baseline-update --system-role-mode scoped',
+      });
+      return;
+    }
     const parsed = selfUpdateRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid self-update request' });
@@ -82,13 +89,9 @@ export function createSelfUpdateRoutes(resolveService: () => SelfUpdateService =
       res.status(401).json({ error: 'Unauthenticated' });
       return;
     }
-    const caller = await apiKeyService.getByKeyId(req.apiKeyId);
-    if (!caller) {
-      res.status(401).json({ error: 'Api key not found' });
-      return;
-    }
     try {
-      const job = await resolveService().getAndResume(req.params.jobId, { keyId: caller.id, secret: caller.secret });
+      const service = resolveService();
+      let job = await service.get(req.params.jobId);
       if (!job) {
         res.status(404).json({ error: 'Self-update job not found' });
         return;
@@ -97,7 +100,20 @@ export function createSelfUpdateRoutes(resolveService: () => SelfUpdateService =
         res.status(403).json({ error: 'Self-update job belongs to another tenant' });
         return;
       }
-      res.json(resolveService().publicJob(job));
+      if (job.status !== 'failed' && job.status !== 'succeeded') {
+        const originalCaller = await apiKeyService.getByKeyId(job.callerKeyId);
+        if (originalCaller) {
+          job =
+            (await service.getAndResume(job.id, { keyId: originalCaller.id, secret: originalCaller.secret })) ?? job;
+        } else {
+          logger.warn('self-update original caller key unavailable; job remains resumable', {
+            requestId: req.requestId,
+            jobId: job.id,
+            callerKeyId: job.callerKeyId,
+          });
+        }
+      }
+      res.json(service.publicJob(job));
     } catch (error) {
       logger.error('get self-update job failed', redactSelfUpdateError(error), {
         requestId: req.requestId,

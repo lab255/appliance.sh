@@ -42,6 +42,7 @@ export interface SelfUpdateLease {
   expiresAt: string;
   heartbeatAt: string;
   claimedAt?: string;
+  holder?: string;
 }
 
 export interface SelfUpdateJob {
@@ -108,6 +109,15 @@ export class SelfUpdateConflictError extends Error {
   constructor(readonly jobId: string) {
     super(`Self-update job ${jobId} holds the live lease`);
     this.name = 'SelfUpdateConflictError';
+  }
+}
+
+export class SelfUpdateLeaseStolenError extends Error {
+  readonly code = 'lease-stolen';
+
+  constructor(readonly jobId: string) {
+    super(`Self-update lease was stolen for ${jobId}`);
+    this.name = 'SelfUpdateLeaseStolenError';
   }
 }
 
@@ -186,7 +196,12 @@ export class SelfUpdateService {
     const existingBinding = await this.storage.get<IdempotencyBinding>(SELF_UPDATE_IDEMPOTENCY, idempotencyHash);
     if (existingBinding) {
       const existing = await this.get(existingBinding.jobId);
-      if (existing) return { job: existing, reused: true };
+      if (existing) {
+        if (existing.targetDigest !== input.targetDigest || existing.generation !== verified.payload.generation) {
+          throw new SelfUpdateConflictError(existing.id);
+        }
+        return { job: existing, reused: true };
+      }
     }
 
     const now = this.now();
@@ -216,9 +231,9 @@ export class SelfUpdateService {
       const current = await this.getControlState();
       if (current.value.highestGeneration > verified.payload.generation) {
         await this.storage.delete(SELF_UPDATE_JOBS, job.id);
-        await this.verifier(input.release.payload, input.release.envelope, PINNED_RELEASE_TRUST, {
-          now: this.now(),
-          highestGeneration: current.value.highestGeneration,
+        throw Object.assign(new Error('release generation is below the persisted high-water mark'), {
+          name: 'CatalogueTrustError',
+          code: 'generation-below-floor',
         });
       }
       const active = current.value.lease;
@@ -265,7 +280,7 @@ export class SelfUpdateService {
       };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
       await this.updateJob(jobId, (current) => ({ ...current, lease, updatedAt: this.now().toISOString() }));
-      await this.dispatchOrFail(job, caller);
+      await this.dispatchForResume(job, caller);
       job = await this.get(jobId);
       return job;
     }
@@ -283,7 +298,11 @@ export class SelfUpdateService {
         throw new Error(`Self-update lease is not live for ${jobId}`);
       }
       if (active.claimedAt) throw new Error(`Self-update lease is already claimed for ${jobId}`);
-      const lease = { ...newLease(this.now()), claimedAt: active.claimedAt ?? this.now().toISOString() };
+      const lease = {
+        ...newLease(this.now()),
+        claimedAt: this.now().toISOString(),
+        holder: randomUUID(),
+      };
       const next = { ...control.value, lease: { ...active, ...lease } };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
       return this.updateJob(jobId, (current) => ({
@@ -298,36 +317,48 @@ export class SelfUpdateService {
     throw new Error('self-update worker lease contention did not converge');
   }
 
-  async heartbeat(jobId: string, phase: SelfUpdatePhase, patch: Partial<SelfUpdateJob> = {}): Promise<SelfUpdateJob> {
+  async heartbeat(
+    jobId: string,
+    holder: string,
+    phase: SelfUpdatePhase,
+    patch: Partial<SelfUpdateJob> = {}
+  ): Promise<SelfUpdateJob> {
     const lease = newLease(this.now());
     for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
       const control = await this.getControlState();
-      if (control.value.lease?.jobId !== jobId) throw new Error(`Self-update lease lost for ${jobId}`);
+      if (control.value.lease?.jobId !== jobId || control.value.lease.holder !== holder) {
+        throw new SelfUpdateLeaseStolenError(jobId);
+      }
       const next = {
         ...control.value,
         lease: { ...control.value.lease, ...lease },
       };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
       return this.updateJob(jobId, (job) => ({
-        ...job,
+        ...(job.lease.holder === holder ? job : throwLeaseStolen(jobId)),
         ...patch,
         phase,
-        lease: { ...lease, ...(job.lease.claimedAt ? { claimedAt: job.lease.claimedAt } : {}) },
+        lease: {
+          ...lease,
+          claimedAt: job.lease.claimedAt,
+          holder,
+        },
         updatedAt: this.now().toISOString(),
       }));
     }
     throw new Error('self-update heartbeat contention did not converge');
   }
 
-  async finish(jobId: string, patch: Partial<SelfUpdateJob>): Promise<SelfUpdateJob> {
+  async finish(jobId: string, patch: Partial<SelfUpdateJob>, holder?: string): Promise<SelfUpdateJob> {
+    if (holder) await this.assertHolder(jobId, holder);
     const finished = await this.updateJob(jobId, (job) => ({
-      ...job,
+      ...(holder && job.lease.holder !== holder ? throwLeaseStolen(jobId) : job),
       ...patch,
       phase: 'complete',
       completedAt: this.now().toISOString(),
       updatedAt: this.now().toISOString(),
     }));
-    await this.clearLease(jobId);
+    await this.clearLease(jobId, holder);
     return finished;
   }
 
@@ -389,10 +420,14 @@ export class SelfUpdateService {
     }));
   }
 
-  private async clearLease(jobId: string): Promise<void> {
+  private async clearLease(jobId: string, holder?: string): Promise<void> {
     for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
       const control = await this.getControlState();
-      if (control.value.lease?.jobId !== jobId) return;
+      if (control.value.lease?.jobId !== jobId) {
+        if (holder) throw new SelfUpdateLeaseStolenError(jobId);
+        return;
+      }
+      if (holder && control.value.lease.holder !== holder) throw new SelfUpdateLeaseStolenError(jobId);
       const { lease: _lease, ...next } = control.value;
       if (await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version)) return;
     }
@@ -410,6 +445,24 @@ export class SelfUpdateService {
         recoveryState: 'unknown',
         error: 'worker dispatch failed',
       });
+    }
+  }
+
+  private async dispatchForResume(job: SelfUpdateJob, caller: SigningCredentials): Promise<void> {
+    try {
+      await this.dispatcher.dispatch(job.id, caller);
+    } catch (error) {
+      logger.error('self-update worker resume dispatch failed; job remains resumable', error, {
+        jobId: job.id,
+        phase: job.phase,
+      });
+    }
+  }
+
+  private async assertHolder(jobId: string, holder: string): Promise<void> {
+    const control = await this.getControlState();
+    if (control.value.lease?.jobId !== jobId || control.value.lease.holder !== holder) {
+      throw new SelfUpdateLeaseStolenError(jobId);
     }
   }
 }
@@ -436,6 +489,10 @@ function isLeaseLive(lease: SelfUpdateLease, now: Date): boolean {
 
 function isTerminal(job: SelfUpdateJob): boolean {
   return job.status === 'succeeded' || job.status === 'failed';
+}
+
+function throwLeaseStolen(jobId: string): never {
+  throw new SelfUpdateLeaseStolenError(jobId);
 }
 
 let service: SelfUpdateService | undefined;

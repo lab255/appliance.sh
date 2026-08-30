@@ -147,11 +147,26 @@ describe('SelfUpdateService durable route state', () => {
       { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
       'resume'
     );
-    await service.claim(first.job.id);
-    await service.heartbeat(first.job.id, 'waiting-for-stack', { stackId: 'stack-id' });
+    const claimed = await service.claim(first.job.id);
+    await service.heartbeat(first.job.id, claimed.lease.holder!, 'waiting-for-stack', { stackId: 'stack-id' });
     nowMs += 61_000;
     const resumed = await service.getAndResume(first.job.id, { keyId: 'admin-a', secret: 'secret' });
     expect(resumed).toMatchObject({ phase: 'waiting-for-stack', stackId: 'stack-id' });
+    expect(dispatcher.dispatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps an expired job resumable when redispatch fails', async () => {
+    const first = await service.create(
+      evidence(),
+      { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
+      'resume-failure'
+    );
+    await service.claim(first.job.id);
+    nowMs += 61_000;
+    dispatcher.dispatch.mockRejectedValueOnce(new Error('worker unavailable'));
+    const resumed = await service.getAndResume(first.job.id, { keyId: 'admin-a', secret: 'secret' });
+    expect(resumed).toMatchObject({ status: 'running', phase: 'verifying' });
+    expect(resumed?.completedAt).toBeUndefined();
     expect(dispatcher.dispatch).toHaveBeenCalledTimes(2);
   });
 
@@ -159,6 +174,75 @@ describe('SelfUpdateService durable route state', () => {
     const created = await service.create(evidence(), { keyId: 'admin-a', tenantId: 'default', secret: 'secret' });
     await expect(service.claim(created.job.id)).resolves.toMatchObject({ status: 'running' });
     await expect(service.claim(created.job.id)).rejects.toThrow('already claimed');
+  });
+
+  it('fences a zombie worker after an expired lease is resumed and re-claimed', async () => {
+    const created = await service.create(evidence(), {
+      keyId: 'admin-a',
+      tenantId: 'default',
+      secret: 'secret',
+    });
+    const first = await service.claim(created.job.id);
+    nowMs += 61_000;
+    await service.getAndResume(created.job.id, { keyId: 'admin-a', secret: 'secret' });
+    const second = await service.claim(created.job.id);
+    expect(second.lease.holder).not.toBe(first.lease.holder);
+    await expect(service.heartbeat(created.job.id, first.lease.holder!, 'waiting-for-stack')).rejects.toMatchObject({
+      code: 'lease-stolen',
+    });
+    await expect(service.heartbeat(created.job.id, second.lease.holder!, 'waiting-for-stack')).resolves.toMatchObject({
+      lease: { holder: second.lease.holder },
+    });
+  });
+
+  it('returns a conflict when an idempotency key is reused for another digest or generation', async () => {
+    const first = await service.create(
+      evidence(),
+      { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
+      'immutable-request'
+    );
+    const otherDigest = `sha256:${'b'.repeat(64)}`;
+    await expect(
+      service.create(
+        {
+          targetDigest: otherDigest,
+          release: {
+            payload: { ...payload, image: { ...payload.image, manifestDigest: otherDigest } },
+            envelope: { fixture: true },
+          },
+        },
+        { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
+        'immutable-request'
+      )
+    ).rejects.toMatchObject({ name: 'SelfUpdateConflictError', jobId: first.job.id });
+    await expect(
+      service.create(
+        evidence({ generation: payload.generation + 1 }),
+        { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
+        'immutable-request'
+      )
+    ).rejects.toMatchObject({ name: 'SelfUpdateConflictError', jobId: first.job.id });
+  });
+
+  it('throws explicitly when the generation floor advances between verification and lease CAS', async () => {
+    const racingVerifier: ReleaseVerifier = vi.fn(async (untrusted, envelope) => {
+      await storage.set(SELF_UPDATE_CONTROL, 'cloud', { highestGeneration: payload.generation + 1 });
+      return {
+        payload: untrusted as ReleaseEnvelope,
+        envelope: envelope as ReleaseSignatureEnvelope,
+        verifiedAt: new Date(nowMs).toISOString(),
+      };
+    });
+    const racingService = new SelfUpdateService({
+      storage,
+      dispatcher,
+      verifier: racingVerifier,
+      now: () => new Date(nowMs),
+    });
+    await expect(
+      racingService.create(evidence(), { keyId: 'admin-a', tenantId: 'default', secret: 'secret' }, 'generation-race')
+    ).rejects.toMatchObject({ code: 'generation-below-floor' });
+    expect([...store.values.keys()].filter((key) => key.startsWith(`${SELF_UPDATE_JOBS}/`))).toEqual([]);
   });
 
   it('terminal jobs clear the lock, retain same-key idempotency, and never block a new key', async () => {

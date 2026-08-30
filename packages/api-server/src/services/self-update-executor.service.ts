@@ -234,6 +234,23 @@ export class SelfUpdateExecutor {
     const hardDeadline = startedAt + HARD_WORK_MS;
     let job = await this.jobs.claim(jobId);
     if (isTerminal(job)) return 'complete';
+    const holder = requireLeaseHolder(job);
+
+    const roleArn = process.env.SELF_UPDATE_ROLE_ARN;
+    if (!roleArn) {
+      await this.jobs.finish(
+        jobId,
+        {
+          status: 'failed',
+          recovered: true,
+          recoveryState: 'recovered',
+          error:
+            'self-update requires scoped system roles; run appliance cloud baseline-update --system-role-mode scoped',
+        },
+        holder
+      );
+      return 'complete';
+    }
 
     try {
       const verified = await this.verifier(job.release.payload, job.release.envelope, PINNED_RELEASE_TRUST, {
@@ -250,25 +267,28 @@ export class SelfUpdateExecutor {
         });
       }
     } catch (error) {
-      await this.jobs.finish(jobId, {
-        status: 'failed',
-        recovered: true,
-        recoveryState: 'recovered',
-        error: `release evidence rejected by worker: ${trustCode(error)}`,
-      });
+      await this.jobs.finish(
+        jobId,
+        {
+          status: 'failed',
+          recovered: true,
+          recoveryState: 'recovered',
+          error: `release evidence rejected by worker: ${trustCode(error)}`,
+        },
+        holder
+      );
       return 'complete';
     }
 
     const stackId = requireInstallValue('APPLIANCE_STACK_ID');
-    const roleArn = requireInstallValue('SELF_UPDATE_ROLE_ARN');
     const sourceIdentity = `self-update-${jobId}`;
     const credentials = await this.aws.assumeRole(roleArn, sourceIdentity);
     let stack = await this.aws.describeStack(credentials, stackId);
-    job = await this.captureStack(job, stack);
+    job = await this.captureStack(job, stack, holder);
     if (isTerminal(job)) return 'complete';
 
     if (job.phase === 'submitting-recovery' || job.phase === 'waiting-for-recovery') {
-      return this.recover(job, credentials, stack, 'resuming persisted recovery', hardDeadline);
+      return this.recover(job, holder, credentials, stack, 'resuming persisted recovery', hardDeadline);
     }
 
     const cloudFormationRoleArn = requireOutput(stack, 'SelfUpdateCloudFormationRoleArn');
@@ -280,39 +300,41 @@ export class SelfUpdateExecutor {
     try {
       if (job.phase !== 'waiting-for-stack' && job.phase !== 'probing-health') {
         if (parameterValue(stack, 'ImageUri') === targetImage) {
-          job = await this.jobs.heartbeat(jobId, 'waiting-for-stack', { targetImage });
+          job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
         } else if (
           (isUpdateInProgress(stack.status) && job.previousImage) ||
           (job.phase === 'submitting-update' && parameterValue(stack, 'ImageUri') === targetImage)
         ) {
-          job = await this.jobs.heartbeat(jobId, 'waiting-for-stack', { targetImage });
+          job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
         } else {
-          job = await this.jobs.heartbeat(jobId, 'mirroring', { targetImage });
+          job = await this.jobs.heartbeat(jobId, holder, 'mirroring', { targetImage });
           const token = await this.aws.getEcrAuthorization(credentials);
-          await this.withHeartbeat(jobId, 'mirroring', () =>
+          await this.withHeartbeat(jobId, holder, 'mirroring', () =>
             this.aws.craneCopy(job.sourceImage, targetImage, registry, token)
           );
-          job = await this.jobs.heartbeat(jobId, 'submitting-update', { targetImage });
+          job = await this.jobs.heartbeat(jobId, holder, 'submitting-update', { targetImage });
           await this.aws.updateStack(credentials, buildImageOnlyUpdate(stack, targetImage, cloudFormationRoleArn));
-          job = await this.jobs.heartbeat(jobId, 'waiting-for-stack', { targetImage });
+          job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
         }
       }
 
-      stack = await this.waitForTarget(jobId, credentials, stackId, targetStackDeadline);
+      stack = await this.waitForTarget(jobId, holder, credentials, stackId, targetStackDeadline);
       if (stack.status !== 'UPDATE_COMPLETE') {
-        return this.recover(job, credentials, stack, `CloudFormation reached ${stack.status}`, hardDeadline);
+        return this.recover(job, holder, credentials, stack, `CloudFormation reached ${stack.status}`, hardDeadline);
       }
-      await this.jobs.heartbeat(jobId, 'probing-health');
+      await this.jobs.heartbeat(jobId, holder, 'probing-health');
       const healthUrl = bootstrapStatusUrl(requireOutput(stack, 'ApiServerFunctionUrl'));
       const healthy = await this.pollHealth(
         jobId,
+        holder,
         'probing-health',
         healthUrl,
         job.targetVersion,
         Math.min(targetHealthDeadline, this.aws.now().getTime() + HEALTH_WINDOW_MS)
       );
-      if (!healthy) return this.recover(job, credentials, stack, 'target health/version probe failed', hardDeadline);
-      await this.jobs.finish(jobId, { status: 'succeeded', recovered: false, healthUrl });
+      if (!healthy)
+        return this.recover(job, holder, credentials, stack, 'target health/version probe failed', hardDeadline);
+      await this.jobs.finish(jobId, { status: 'succeeded', recovered: false, healthUrl }, holder);
       logger.info('self-update completed', {
         jobId,
         digestPrefix: job.targetDigest.slice(0, 19),
@@ -321,26 +343,31 @@ export class SelfUpdateExecutor {
       });
       return 'complete';
     } catch (error) {
+      if (isLeaseStolen(error)) return 'complete';
       if (job.phase === 'mirroring') throw error;
       stack = await this.aws.describeStack(credentials, stackId);
-      return this.recover(job, credentials, stack, safeError(error), hardDeadline);
+      return this.recover(job, holder, credentials, stack, safeError(error), hardDeadline);
     }
   }
 
-  private async captureStack(job: SelfUpdateJob, stack: SelfUpdateStack): Promise<SelfUpdateJob> {
+  private async captureStack(job: SelfUpdateJob, stack: SelfUpdateStack, holder: string): Promise<SelfUpdateJob> {
     const currentImage = parameterValue(stack, 'ImageUri');
     if (!currentImage) {
-      return this.jobs.finish(job.id, {
-        status: 'failed',
-        recovered: true,
-        recoveryState: 'recovered',
-        error: 'CloudFormation ImageUri is blank; self-update refused before mutation',
-      });
+      return this.jobs.finish(
+        job.id,
+        {
+          status: 'failed',
+          recovered: true,
+          recoveryState: 'recovered',
+          error: 'CloudFormation ImageUri is blank; self-update refused before mutation',
+        },
+        holder
+      );
     }
     const previousImage = job.previousImage ?? currentImage;
     if (job.stackId && job.stackId !== stack.stackId) throw new Error('persisted self-update stack identity changed');
     const phase = ['queued', 'verifying', 'describing-stack'].includes(job.phase) ? 'describing-stack' : job.phase;
-    return this.jobs.heartbeat(job.id, phase, {
+    return this.jobs.heartbeat(job.id, holder, phase, {
       previousImage,
       stackId: stack.stackId,
       stackName: stack.stackName,
@@ -351,13 +378,14 @@ export class SelfUpdateExecutor {
 
   private async waitForTarget(
     jobId: string,
+    holder: string,
     credentials: AssumedCredentials,
     stackId: string,
     deadline: number
   ): Promise<SelfUpdateStack> {
     let stack = await this.aws.describeStack(credentials, stackId);
     while (isUpdateInProgress(stack.status) && this.aws.now().getTime() < deadline) {
-      await this.jobs.heartbeat(jobId, 'waiting-for-stack');
+      await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack');
       await this.aws.sleep(POLL_MS);
       stack = await this.aws.describeStack(credentials, stackId);
     }
@@ -366,16 +394,17 @@ export class SelfUpdateExecutor {
 
   private async recover(
     job: SelfUpdateJob,
+    holder: string,
     credentials: AssumedCredentials,
     initialStack: SelfUpdateStack,
     reason: string,
     hardDeadline: number
   ): Promise<'complete'> {
     if (!job.previousImage) {
-      await this.exhaust(job.id, reason);
+      await this.exhaust(job.id, holder, reason);
       return 'complete';
     }
-    await this.jobs.heartbeat(job.id, 'submitting-recovery', {
+    await this.jobs.heartbeat(job.id, holder, 'submitting-recovery', {
       recovered: false,
       recoveryState: 'in-progress',
       error: safeError(reason),
@@ -383,7 +412,7 @@ export class SelfUpdateExecutor {
     let stack = initialStack;
     while (isUpdateInProgress(stack.status) && this.aws.now().getTime() < hardDeadline) {
       await this.aws.sleep(POLL_MS);
-      await this.jobs.heartbeat(job.id, 'submitting-recovery');
+      await this.jobs.heartbeat(job.id, holder, 'submitting-recovery');
       stack = await this.aws.describeStack(credentials, stack.stackId);
     }
     const roleArn = requireOutput(stack, 'SelfUpdateCloudFormationRoleArn');
@@ -404,30 +433,35 @@ export class SelfUpdateExecutor {
       }
     }
     if (!submitted) {
-      await this.exhaust(job.id, reason);
+      await this.exhaust(job.id, holder, reason);
       return 'complete';
     }
-    await this.jobs.heartbeat(job.id, 'waiting-for-recovery');
-    stack = await this.waitForRecovery(job.id, credentials, stack.stackId, hardDeadline);
+    await this.jobs.heartbeat(job.id, holder, 'waiting-for-recovery');
+    stack = await this.waitForRecovery(job.id, holder, credentials, stack.stackId, hardDeadline);
     const healthUrl = bootstrapStatusUrl(requireOutput(stack, 'ApiServerFunctionUrl'));
-    const healthy = await this.pollHealth(job.id, 'waiting-for-recovery', healthUrl, undefined, hardDeadline);
+    const healthy = await this.pollHealth(job.id, holder, 'waiting-for-recovery', healthUrl, undefined, hardDeadline);
     if ((stack.status === 'UPDATE_COMPLETE' || alreadyPinned) && healthy) {
-      await this.jobs.finish(job.id, {
-        status: 'failed',
-        recovered: true,
-        recoveryState: 'recovered',
-        error: safeError(reason),
-        healthUrl,
-      });
+      await this.jobs.finish(
+        job.id,
+        {
+          status: 'failed',
+          recovered: true,
+          recoveryState: 'recovered',
+          error: safeError(reason),
+          healthUrl,
+        },
+        holder
+      );
       return 'complete';
     }
     const events = await this.aws.describeStackEvents(credentials, stack.stackId).catch(() => []);
-    await this.exhaust(job.id, `${reason}; ${events.slice(0, 3).join('; ')}`);
+    await this.exhaust(job.id, holder, `${reason}; ${events.slice(0, 3).join('; ')}`);
     return 'complete';
   }
 
   private async waitForRecovery(
     jobId: string,
+    holder: string,
     credentials: AssumedCredentials,
     stackId: string,
     deadline: number
@@ -435,7 +469,7 @@ export class SelfUpdateExecutor {
     let stack = await this.aws.describeStack(credentials, stackId);
     while (isUpdateInProgress(stack.status) && this.aws.now().getTime() < deadline) {
       await this.aws.sleep(POLL_MS);
-      await this.jobs.heartbeat(jobId, 'waiting-for-recovery');
+      await this.jobs.heartbeat(jobId, holder, 'waiting-for-recovery');
       stack = await this.aws.describeStack(credentials, stackId);
     }
     return stack;
@@ -443,13 +477,14 @@ export class SelfUpdateExecutor {
 
   private async pollHealth(
     jobId: string,
+    holder: string,
     phase: 'probing-health' | 'waiting-for-recovery',
     url: string,
     targetVersion: string | undefined,
     deadline: number
   ): Promise<boolean> {
     while (this.aws.now().getTime() < deadline) {
-      await this.jobs.heartbeat(jobId, phase);
+      await this.jobs.heartbeat(jobId, holder, phase);
       try {
         const result = await this.aws.health(url);
         if (result.initialized && (!targetVersion || result.serverVersion === targetVersion)) return true;
@@ -461,13 +496,17 @@ export class SelfUpdateExecutor {
     return false;
   }
 
-  private async exhaust(jobId: string, error: string): Promise<void> {
-    await this.jobs.finish(jobId, {
-      status: 'failed',
-      recovered: false,
-      recoveryState: 'exhausted',
-      error: safeError(error),
-    });
+  private async exhaust(jobId: string, holder: string, error: string): Promise<void> {
+    await this.jobs.finish(
+      jobId,
+      {
+        status: 'failed',
+        recovered: false,
+        recoveryState: 'exhausted',
+        error: safeError(error),
+      },
+      holder
+    );
     logger.error('self-update recovery exhausted', new Error(safeError(error)), {
       jobId,
       phase: 'complete',
@@ -475,9 +514,14 @@ export class SelfUpdateExecutor {
     });
   }
 
-  private async withHeartbeat<T>(jobId: string, phase: 'mirroring', operation: () => Promise<T>): Promise<T> {
+  private async withHeartbeat<T>(
+    jobId: string,
+    holder: string,
+    phase: 'mirroring',
+    operation: () => Promise<T>
+  ): Promise<T> {
     const timer = setInterval(() => {
-      this.jobs.heartbeat(jobId, phase).catch(() => undefined);
+      this.jobs.heartbeat(jobId, holder, phase).catch(() => undefined);
     }, 20_000);
     timer.unref();
     try {
@@ -527,6 +571,15 @@ function safeError(error: unknown): string {
 
 function isTerminal(job: SelfUpdateJob): boolean {
   return job.status === 'failed' || job.status === 'succeeded';
+}
+
+function requireLeaseHolder(job: SelfUpdateJob): string {
+  if (!job.lease.holder) throw new Error(`Self-update job ${job.id} has no lease holder`);
+  return job.lease.holder;
+}
+
+function isLeaseStolen(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'lease-stolen');
 }
 
 let executor: SelfUpdateExecutor | undefined;
