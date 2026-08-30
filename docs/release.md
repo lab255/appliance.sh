@@ -2,13 +2,15 @@
 
 ## Control-plane release signing (AP-225 / AP-226)
 
-`release-cli-binaries.yml` always publishes the two guest api-server binaries,
-console bundle, and `SHA256SUMS`. Its separate `release-signing` environment job
-adds `control-plane-release.json` and `control-plane-release.sig.json` only when
-the signing secret is provisioned. The RFC-8785/Ed25519 envelope covers the
-artifact names, architectures, byte counts and SHA-256 values plus the sibling
-GHCR api-server multi-arch manifest digest. The workflow waits for that image
-tag using the configurable `image_digest_poll_attempts` and
+`release-cli-binaries.yml` transfers the two guest api-server binaries, console
+bundle, and `SHA256SUMS` to its separate `release-signing` environment job. That
+job uploads the guest assets in one release operation, adding
+`control-plane-release.json` and `control-plane-release.sig.json` when the
+signing secret is provisioned; a pinned CLI therefore cannot observe a guest
+binary-only window while signing is still running. The RFC-8785/Ed25519
+envelope covers the artifact names, architectures, byte counts and SHA-256
+values plus the sibling GHCR api-server multi-arch manifest digest. The workflow
+waits for that image tag using the configurable `image_digest_poll_attempts` and
 `image_digest_poll_seconds` budget. An `image_manifest_digest` override is still
 checked against `imagetools inspect`; wiring an explicit `needs:` relationship
 to the sibling image workflow remains a follow-up because GitHub workflows run

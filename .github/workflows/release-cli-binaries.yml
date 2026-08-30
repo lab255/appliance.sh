@@ -189,6 +189,7 @@ jobs:
         run: node packages/sdk/scripts/create-control-plane-release.mjs --check
 
       - name: Preserve guest assets for protected signing job
+        if: ${{ inputs.publish }}
         uses: actions/upload-artifact@v4
         with:
           name: control-plane-release-assets
@@ -240,24 +241,6 @@ jobs:
           # release in place instead of failing on a duplicate name.
           gh release upload "${TAG}" --clobber "${ASSETS[@]}"
 
-      # Guest control-plane assets live under the api-server dist, not the
-      # CLI dist — upload them in a second pass. Names must match exactly
-      # what stageFromRelease() fetches: appliance-api-server-linux-<arch>
-      # and appliance-console.tar.gz.
-      - name: Upload guest api-server binaries + console bundle
-        if: ${{ inputs.publish }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        working-directory: packages/api-server/dist/guest
-        run: |
-          set -euo pipefail
-          gh release upload "${TAG}" --clobber \
-            appliance-api-server-linux-x64 \
-            appliance-api-server-linux-arm64 \
-            appliance-console.tar.gz \
-            SHA256SUMS
-
   sign-control-plane-release:
     name: Sign control-plane release metadata
     needs: build
@@ -308,7 +291,7 @@ jobs:
           echo "available=false" >> "$GITHUB_OUTPUT"
           echo "::warning::UNSIGNED release — AP-226 not provisioned"
           echo "## ⚠️ UNSIGNED release — AP-226 not provisioned" >> "$GITHUB_STEP_SUMMARY"
-          echo "Binaries and SHA256SUMS were uploaded; no control-plane payload or envelope was published." >> "$GITHUB_STEP_SUMMARY"
+          echo "Guest binaries and SHA256SUMS will be uploaded without a control-plane payload or envelope." >> "$GITHUB_STEP_SUMMARY"
           if [ "$REQUIRE_SIGNATURE" = "true" ]; then
             echo "::error::require_signature=true but APPLIANCE_RELEASE_SIGNING_KEY is absent"
             exit 1
@@ -397,16 +380,27 @@ jobs:
           RELEASE_EXPIRES=$(date -u -d '+365 days' +%Y-%m-%dT%H:%M:%SZ) \
           node packages/sdk/scripts/create-control-plane-release.mjs
 
-      - name: Upload signed payload and envelope
-        if: ${{ steps.signing-key.outputs.available == 'true' }}
+      # Keep the guest binaries and their signed evidence out of the release
+      # until this single upload. A pinned CLI can therefore never observe a
+      # binary-only publication window while the signing job is still running.
+      - name: Upload guest release assets in one pass
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.build.outputs.tag }}
+          SIGNED: ${{ steps.signing-key.outputs.available }}
         working-directory: packages/api-server/dist/guest
-        run: >-
-          gh release upload "$TAG" --clobber
-          control-plane-release.json
-          control-plane-release.sig.json
+        run: |
+          set -euo pipefail
+          ASSETS=(
+            appliance-api-server-linux-x64
+            appliance-api-server-linux-arm64
+            appliance-console.tar.gz
+            SHA256SUMS
+          )
+          if [ "$SIGNED" = "true" ]; then
+            ASSETS+=(control-plane-release.json control-plane-release.sig.json)
+          fi
+          gh release upload "$TAG" --clobber "${ASSETS[@]}"
 
   build-credential-helper:
     name: Build + publish credential helper (${{ matrix.triple }})
