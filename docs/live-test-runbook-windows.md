@@ -789,6 +789,19 @@ read prints `strict`, `.wslconfig` is restored to NAT (or its original absent
 state), and all evidence files under `$OUT` have been retained. Put the printed
 total in R06 and record R70–R72.
 
+## MV1 in-place control-plane update addendum (AP-222)
+
+Before final teardown, run the same signed N → crashing N+1 → healthy N+1
+sequence from [the main runbook](live-test-runbook.md#mv1-control-plane-update-proof-ap-222--input-to-ap-223).
+Use `appliance-vm.exe stop appliance` followed by `appliance-vm.exe start
+appliance` for the stale-media restart. Record that the WSL distro PID remains
+unchanged for each in-place attempt, rollback restores N, the healthy retry
+promotes N+1, and the distro-VHD `current` survives the stale-media restart.
+The control-plane tree must be Linux-owned inside the managed distro and no
+copy may appear under `/mnt/*` or another drvfs mount. Attach the doctor JSON
+showing staged version, signed keyId, persistent current, console, and running
+version to AP-223.
+
 ## If a slot fails
 
 File the failure on the epic card with its slot ID. Attach the redacted `$OUT`

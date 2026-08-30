@@ -66,6 +66,7 @@ installed (colima, Docker Desktop, OrbStack), which meant:
 │   • direct kernel boot, virtio console → log file         │
 │   • virtio-blk data disk (persistent, survives delete     │
 │     of the VM definition only on explicit flag)           │
+│   • root-only persistent control-plane release volume     │
 │   • virtio-net NAT with host port forwards                │
 │   • k3s (containerd) as the workload runtime              │
 └───────────────────────────────────────────────────────────┘
@@ -174,6 +175,32 @@ point; nothing above it changes:
 6. Ingress port forwards: host `:8081 → guest :80` (ingress) and the
    NodePort window, so `<project>-<env>.appliance.localhost:8081` keeps
    working verbatim.
+
+### Update the guest control plane without rebooting
+
+For a VM created by an MV1-capable launcher, install a signed api-server and
+console release in place:
+
+```sh
+appliance vm update
+appliance vm update --name traffic --version 1.58.0
+```
+
+The CLI verifies the signed release envelope and both artifacts before opening
+the VM channel. The guest verifies byte counts and signed hashes again, starts
+the candidate from a held file descriptor, and requires an initialized
+`/bootstrap/status` response reporting the target version for up to two
+minutes. It atomically promotes binary and console together on success, or
+rolls back and respawns the prior release without rebooting.
+
+VZ keeps releases on a separate 512 MiB disk mounted root-only at
+`/var/lib/appliance-control-plane`; it is not the agent/workload `/persist`
+disk. WSL keeps the same root-only layout inside the managed distro VHD, never
+on drvfs. `current`, `previous`, and `pending` are whole-release symlinks, so
+stale boot media remains seed-only and cannot replace a successfully promoted
+`current`. VMs created before MV1 have no artifact listener or supervisor;
+`vm update` detects them and directs the operator to restage and reboot with
+`vm up`.
 
 Because `.localhost` names resolve to 127.0.0.1 everywhere, hostname
 routing needs zero new machinery — only the port forward.

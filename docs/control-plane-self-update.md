@@ -217,6 +217,12 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
 
 ## 5. microVM mechanism (MV1)
 
+**MV1 shipped (AP-222):** capable VZ and WSL guests now have the protected persistent release volume, raw artifact transport,
+same-open-handle verification, atomic whole-release promotion, two-minute versioned health gate, and automatic rollback described below.
+`appliance vm update` and the Desktop compatibility banner use the same signed host transport. VMs booted by an older launcher are
+detected before transfer and retain the signed restage-and-reboot path. Production self-update remains intentionally disabled until
+AP-226 fills `PINNED_RELEASE_TRUST` with the offline release key.
+
 **MV0 shipped (AP-225):** release assets now include `SHA256SUMS`, `control-plane-release.json`, and
 `control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
 The protected `release-signing` environment signs only when `APPLIANCE_RELEASE_SIGNING_KEY` exists; pre-AP-226 publishing remains unsigned.

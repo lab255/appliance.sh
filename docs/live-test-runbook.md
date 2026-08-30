@@ -781,3 +781,35 @@ numbers were manufactured. The DOM suite covers pending/error/focus behavior
 and metric emission; rerun the six click samples after dismissing the prompt.
 Native evidence is in `/private/tmp/ap-captures/launch/native-app-window.png`
 and `/private/tmp/ap-captures/launch/native-app-exited.png`.
+
+---
+
+## MV1 control-plane update proof (AP-222 / input to AP-223)
+
+Use three post-MV0 releases signed by the production test key: current N, a
+candidate N+1 whose api-server exits immediately, and a healthy N+1. Record
+`date`, VM PID, `/bootstrap/status`, and `appliance doctor --vm appliance`
+before and after each command. Do not run `vm stop`, `vm up`, or reboot during
+the first three steps.
+
+1. Boot N with `appliance vm up --cluster`, record the VM PID, then run
+   `appliance vm update --version <healthy-N+1>`. Pass when the PID is
+   unchanged, the command prints `N → N+1`, the API stays reachable, and
+   doctor reports staged, signed keyId, persistent current, console, and
+   running N+1.
+2. Return to N, then run `appliance vm update --version <crashing-N+1>`.
+   Pass when the command reports rollback, the VM PID is unchanged, and
+   `/bootstrap/status` returns initialized N again.
+3. Retry the healthy N+1 release. Pass when it promotes without reboot and
+   `previous` remains N.
+4. Preserve the original N boot media and restart only the existing engine
+   VM (`appliance-vm stop appliance`, then `appliance-vm start appliance`),
+   without restaging. Pass when persistent `current` still runs N+1 and the
+   stale media does not overwrite it.
+
+Also capture the Desktop compatibility banner once with an MV1 launcher
+(`Update now`) and once with a pre-MV1 launcher (Machine-page restage/reboot).
+Attach the command transcripts, doctor JSON, banner PNGs, and console log to
+AP-223. Until AP-226 pins production trust, the expected command result is the
+explicit fail-closed “self-update disabled” message; do not bypass it with an
+unsigned fixture.
