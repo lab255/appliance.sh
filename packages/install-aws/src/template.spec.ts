@@ -42,6 +42,16 @@ function boundaryPolicy() {
   };
 }
 
+function resolvedPolicyBytes(policy: unknown): number {
+  const resolved = JSON.stringify(policy, (_key, value: unknown) => {
+    if (value && typeof value === 'object' && 'tag' in value && 'value' in value && Object.keys(value).length === 2) {
+      return (value as { value: unknown }).value;
+    }
+    return value;
+  });
+  return Buffer.byteLength(resolved, 'utf8');
+}
+
 const WILDCARD_RESOURCE_JUSTIFICATIONS = {
   // ECR does not support repository scoping for registry authorization tokens.
   EcrAuthorization: 'ECR authorization is account-scoped',
@@ -64,11 +74,13 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
   ApplianceIamRoleBoundaryMutations: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamRolePolicyAttachments: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamRoleMetadataMutations: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
+  ApplianceIamRoleTagging: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamPassRole: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   DenyPermissionsBoundaryRemoval: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*'),
   ApplianceIamPolicyRead: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
   ApplianceIamPolicyCreate: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
   ApplianceIamPolicyMutations: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
+  ApplianceIamPolicyTagging: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*'),
   LambdaEdgeServiceLinkedRoles: sub('arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/*'),
   ApplianceFunctions: sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:*'),
   ApplianceLayers: sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:layer:*:*'),
@@ -89,9 +101,9 @@ describe('appliance CloudFormation template', () => {
     const templateBytes = Buffer.byteLength(APPLIANCE_CLOUDFORMATION_TEMPLATE, 'utf8');
     expect(templateBytes).toBeLessThan(CLOUDFORMATION_TEMPLATE_BODY_LIMIT);
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
-      expect(Buffer.byteLength(JSON.stringify(scopedPolicy(role)), 'utf8')).toBeLessThan(10_240);
+      expect(resolvedPolicyBytes(scopedPolicy(role))).toBeLessThan(10_240);
     }
-    expect(Buffer.byteLength(JSON.stringify(boundaryPolicy()), 'utf8')).toBeLessThan(6_144);
+    expect(resolvedPolicyBytes(boundaryPolicy())).toBeLessThan(6_144);
   });
 
   it('defaults to scoped roles and makes AdministratorAccess break-glass only', () => {

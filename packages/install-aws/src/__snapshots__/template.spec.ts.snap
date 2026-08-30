@@ -213,7 +213,6 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
     {
       "Action": [
         "iam:DeleteRole",
-        "iam:TagRole",
         "iam:UntagRole",
         "iam:UpdateAssumeRolePolicy",
       ],
@@ -228,6 +227,26 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
       },
       "Sid": "ApplianceIamRoleMetadataMutations",
+    },
+    {
+      "Action": "iam:TagRole",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PermissionsBoundary": {
+            "tag": "!Ref",
+            "value": "UserAppliancePermissionsBoundary",
+          },
+        },
+        "StringEquals": {
+          "aws:RequestTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:role/appliance/*",
+      },
+      "Sid": "ApplianceIamRoleTagging",
     },
     {
       "Action": [
@@ -300,7 +319,6 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         "iam:DeletePolicy",
         "iam:DeletePolicyVersion",
         "iam:SetDefaultPolicyVersion",
-        "iam:TagPolicy",
         "iam:UntagPolicy",
       ],
       "Condition": {
@@ -314,6 +332,20 @@ exports[`appliance CloudFormation template > snapshots both scoped execution-rol
         "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
       },
       "Sid": "ApplianceIamPolicyMutations",
+    },
+    {
+      "Action": "iam:TagPolicy",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/appliance:managed": "true",
+        },
+      },
+      "Effect": "Allow",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:iam::\${AWS::AccountId}:policy/appliance/*",
+      },
+      "Sid": "ApplianceIamPolicyTagging",
     },
     {
       "Action": "iam:CreateServiceLinkedRole",

@@ -321,13 +321,21 @@ Resources:
                   Effect: Allow
                   Action:
                     - iam:DeleteRole
-                    - iam:TagRole
                     - iam:UntagRole
                     - iam:UpdateAssumeRolePolicy
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
                   Condition:
                     StringEquals:
                       aws:ResourceTag/appliance:managed: 'true'
+                - Sid: ApplianceIamRoleTagging
+                  Effect: Allow
+                  Action: iam:TagRole
+                  Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/appliance/*
+                  Condition:
+                    ArnEquals:
+                      iam:PermissionsBoundary: !Ref UserAppliancePermissionsBoundary
+                    StringEquals:
+                      aws:RequestTag/appliance:managed: 'true'
                 - Sid: ApplianceIamPassRole
                   Effect: Allow
                   Action:
@@ -368,12 +376,18 @@ Resources:
                     - iam:DeletePolicy
                     - iam:DeletePolicyVersion
                     - iam:SetDefaultPolicyVersion
-                    - iam:TagPolicy
                     - iam:UntagPolicy
                   Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
                   Condition:
                     StringEquals:
                       aws:ResourceTag/appliance:managed: 'true'
+                - Sid: ApplianceIamPolicyTagging
+                  Effect: Allow
+                  Action: iam:TagPolicy
+                  Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/appliance/*
+                  Condition:
+                    StringEquals:
+                      aws:RequestTag/appliance:managed: 'true'
                 - Sid: LambdaEdgeServiceLinkedRoles
                   Effect: Allow
                   Action: iam:CreateServiceLinkedRole
