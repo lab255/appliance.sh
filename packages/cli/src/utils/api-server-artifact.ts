@@ -442,7 +442,7 @@ async function inspectOfflineStagedRelease(
 
 function useOfflineUnsignedStage(destination: string, releaseName: string, cause: unknown): boolean {
   if (!fs.existsSync(path.join(destination, 'appliance-api-server'))) return false;
-  clearReleaseEvidence(destination);
+  clearReleaseEvidence(destination, true);
   warnUnsigned(`${releaseName}; self-update disabled; using existing staged bytes after ${errorDetail(cause)}`);
   return true;
 }
@@ -561,7 +561,7 @@ function raiseHighWater(directory: string, generation: number): void {
     atomicStageFile(path.join(directory, 'release-generation.high-water'), Buffer.from(`${generation}\n`));
 }
 
-function clearReleaseEvidence(directory: string): void {
+function clearReleaseEvidence(directory: string, preserveUntrustedKey = false): void {
   const defaults = directory === guestAssetsDir();
   const files = defaults
     ? [releasePayloadPath(), releaseSignaturePath(), releaseChecksumsPath(), releasePropertiesPath()]
@@ -573,9 +573,19 @@ function clearReleaseEvidence(directory: string): void {
         'control-plane-release.untrusted-key-id',
       ].map((file) => path.join(directory, file));
   if (defaults) files.push(untrustedReleaseKeyPath());
+  const preservedKey = preserveUntrustedKey
+    ? (() => {
+        try {
+          return fs.readFileSync(untrustedReleaseKeyPath(directory));
+        } catch {
+          return null;
+        }
+      })()
+    : null;
   for (const file of files) {
     removeStagedFile(file);
   }
+  if (preservedKey) atomicStageFile(untrustedReleaseKeyPath(directory), preservedKey);
 }
 
 function hardenStagedFile(file: string): void {

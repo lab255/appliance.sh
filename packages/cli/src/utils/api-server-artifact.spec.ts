@@ -284,6 +284,20 @@ describe('stageFromRelease signed metadata gate', () => {
     );
     expect(fs.existsSync(path.join(destination, 'control-plane-release.json'))).toBe(false);
     expect(fs.existsSync(path.join(destination, 'control-plane-release.sig.json'))).toBe(false);
+
+    const offline = (async () => {
+      throw new Error('offline');
+    }) as typeof fetch;
+    await stageFromRelease({
+      version: '1.57.0',
+      arch: 'x64',
+      destinationDir: destination,
+      fetcher: offline,
+      trust: { keys: {}, generationFloor: 1 },
+    });
+    expect(fs.readFileSync(path.join(destination, 'control-plane-release.untrusted-key-id'), 'utf8').trim()).toBe(
+      envelope.keyId
+    );
   });
 
   it('--allow-unsigned warns loudly in a dev build', async () => {
