@@ -8,7 +8,6 @@ import {
   SELF_UPDATE_JOBS,
   SYSTEM_SCHEDULED_SELF_UPDATE_CALLER,
   HttpSelfUpdateDispatcher,
-  SelfUpdateConflictError,
   SelfUpdateService,
   type SelfUpdateDispatcher,
   type ReleaseVerifier,

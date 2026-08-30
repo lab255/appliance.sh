@@ -324,9 +324,7 @@ describe('appliance CloudFormation template', () => {
     ).toEqual({
       StringEquals: { 'aws:SourceAccount': ref('AWS::AccountId') },
       ArnLike: {
-        'aws:SourceArn': sub(
-          'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*'
-        ),
+        'aws:SourceArn': sub('arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*'),
       },
     });
   });

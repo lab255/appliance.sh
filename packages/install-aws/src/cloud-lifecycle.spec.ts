@@ -7,6 +7,7 @@ import {
   type CloudLifecycleDependencies,
 } from './cloud-lifecycle.js';
 import type { SelfUpdatePublicJob } from '@appliance.sh/sdk';
+import type { StackSnapshot } from './cloud-install.js';
 
 const profile = {
   installGeneration: 'cloudformation-v1' as const,
@@ -51,7 +52,7 @@ function preCu0Stack() {
   return { ...stack, outputs };
 }
 
-function dependencies(stackOverride = stack): CloudLifecycleDependencies {
+function dependencies(stackOverride: StackSnapshot = stack): CloudLifecycleDependencies {
   return {
     getAccountId: vi.fn(async () => profile.awsAccountId),
     getStack: vi.fn(async () => stackOverride),
