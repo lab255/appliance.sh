@@ -168,6 +168,10 @@ enum Cmd {
         /// unaffected.
         #[arg(long)]
         time_budget: Option<u64>,
+        /// Release signing keyId pinned by the invoking CLI. Hidden because
+        /// operators must not source this from release metadata themselves.
+        #[arg(long, hide = true, default_value = "")]
+        release_key_id: String,
     },
     /// Host a VM in the foreground until it stops. Used internally by
     /// `start`; handy directly when debugging a guest boot.
@@ -742,13 +746,18 @@ fn run() -> Result<()> {
             let spec = ensure_spec(&name)?;
             store::ensure_disk(&spec)?;
             prefetch_boot_artifacts(&spec)?;
+            let release_key_id = guest::pinned_release_key_id_from_env()?;
 
             // Re-exec ourselves detached to host the VM: the hypervisor
             // session lives inside a process, so something must stay
             // resident. Spawning the same binary keeps it to one
             // executable, and gives every backend identical daemon
             // semantics.
-            let child = spawn_host_process(&name, bringup::DEFAULT_BUDGET_SECS)?;
+            let child = spawn_host_process(
+                &name,
+                bringup::DEFAULT_BUDGET_SECS,
+                &release_key_id,
+            )?;
             println!("starting VM '{name}' (host pid {})", child.id());
             println!("console: appliance-vm console {name} -f");
             Ok(())
@@ -767,7 +776,9 @@ fn run() -> Result<()> {
             agent_only,
             runtime,
             time_budget,
+            release_key_id,
         } => {
+            guest::validate_pinned_release_key_id(&release_key_id)?;
             let up_started = std::time::Instant::now();
             reject_unsupported_windows_sizing(cfg!(windows), cpus, memory, None)?;
             backend.availability()?;
@@ -905,7 +916,7 @@ fn run() -> Result<()> {
                 let _ = std::fs::remove_file(paths.core_ready());
                 let _ = std::fs::remove_file(paths.guest_ip());
                 bringup::clear(&paths.dir);
-                let child = spawn_host_process(&name, timeout)?;
+                let child = spawn_host_process(&name, timeout, &release_key_id)?;
                 println!("starting VM '{name}' (host pid {})", child.id());
             }
 
@@ -2534,7 +2545,11 @@ fn reject_unsupported_windows_sizing(
 /// silently discarded stderr turns every host-side failure (a proxy
 /// port already taken, a lease that never appears) into an
 /// undebuggable timeout.
-fn spawn_host_process(name: &str, budget_secs: u64) -> Result<std::process::Child> {
+fn spawn_host_process(
+    name: &str,
+    budget_secs: u64,
+    pinned_release_key_id: &str,
+) -> Result<std::process::Child> {
     let paths = VmPaths::for_name(name);
     std::fs::create_dir_all(&paths.dir)?;
     let log = std::fs::File::create(paths.host_log()).context("create host.log")?;
@@ -2547,6 +2562,7 @@ fn spawn_host_process(name: &str, budget_secs: u64) -> Result<std::process::Chil
         // internal readiness waits size themselves off the SAME budget
         // the caller polls against instead of fixed worst-case sums.
         .env(bringup::BUDGET_ENV, budget_secs.to_string())
+        .env(guest::PINNED_RELEASE_KEY_ID_ENV, pinned_release_key_id)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::from(log))
         .stderr(std::process::Stdio::from(log_err));

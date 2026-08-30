@@ -60,6 +60,11 @@ const ARTIFACT_GUEST_ROOT: &str = "/opt/appliance/artifacts";
 const K3S_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/k3s";
 const APISERVER_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server";
 const CONSOLE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-console.tar.gz";
+const APISERVER_CHECKSUMS_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server.sha256";
+const APISERVER_PROPERTIES_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.properties";
+const APISERVER_RELEASE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.json";
+const APISERVER_ENVELOPE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.sig.json";
+const APISERVER_POISON_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.invalid";
 
 pub(crate) const WSL_CONF: &str = r#"[automount]
 enabled=false
@@ -195,11 +200,16 @@ impl VmBackend for WslBackend {
         } else {
             String::new()
         };
+        let pinned_release_key_id = crate::guest::pinned_release_key_id_from_env()?;
+        let release_gate = crate::guest::ReleaseGate::from_assets(
+            &pinned_release_key_id,
+            apiserver.as_ref(),
+        );
         let script = build_bootstrap(
             spec,
             k3s.as_ref().map(|(p, sha)| (p.as_path(), *sha)),
             egress_ca.as_deref(),
-            apiserver.as_ref(),
+            release_gate,
             &bootstrap_token,
             &runtime_repositories,
             runtime_gateway,
@@ -703,6 +713,26 @@ fn stream_boot_artifacts(
         if let Some(console) = &assets.console {
             stream_guest_artifact(distro, console, CONSOLE_GUEST_ARTIFACT, None)?;
         }
+        if let Some(evidence) = &assets.release_evidence {
+            stream_guest_artifact(distro, &evidence.checksums, APISERVER_CHECKSUMS_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, &evidence.properties, APISERVER_PROPERTIES_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, &evidence.payload, APISERVER_RELEASE_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, &evidence.envelope, APISERVER_ENVELOPE_GUEST_ARTIFACT, None)?;
+        } else if assets.evidence_poisoned {
+            let command = format!(
+                "printf '%s\\n' incomplete-or-malformed > {APISERVER_POISON_GUEST_ARTIFACT}"
+            );
+            let out = wsl_cmd()
+                .args(["-d", distro, "-u", "root", "--", "sh", "-c", &command])
+                .output()
+                .context("stream poisoned api-server release evidence marker")?;
+            if !out.status.success() {
+                bail!(
+                    "could not stream poisoned api-server release evidence marker: {}",
+                    combined_output(&out).trim()
+                );
+            }
+        }
     }
     for repository in runtime_repositories {
         let guest_directory = format!("{ARTIFACT_GUEST_ROOT}/runtime-apks/{}", repository.name);
@@ -959,31 +989,18 @@ fi
 /// shared `guest::APISERVER_COMMON`.
 const WSL_APISERVER_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
-# no docker anywhere. Copy it from the verified guest artifact stage.
+# no docker anywhere. The shared api-server seed gate verifies this streamed stage.
 mkdir -p /persist/appliance /usr/local/bin /etc/appliance
 APISERVER_SRC=/opt/appliance/artifacts/appliance-api-server
-if [ -f "$APISERVER_SRC" ]; then
-  cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
-  chmod +x /usr/local/bin/appliance-api-server
-else
-  echo "appliance-api-server: streamed binary missing at $APISERVER_SRC"
-fi
-__CONSOLE_PROVISION__
+CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
+APISERVER_MEDIA=/opt/appliance/artifacts
+RELEASE_CHECKSUMS=/opt/appliance/artifacts/appliance-api-server.sha256
+RELEASE_PROPERTIES=/opt/appliance/artifacts/control-plane-release.properties
+RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json
+RELEASE_ENVELOPE=/opt/appliance/artifacts/control-plane-release.sig.json
+RELEASE_POISON=/opt/appliance/artifacts/control-plane-release.invalid
 printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
 chmod 600 /etc/appliance/bootstrap-token
-"#;
-
-const WSL_CONSOLE_COPY: &str = r#"CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
-if [ -f "$CONSOLE_SRC" ]; then
-  rm -rf /persist/appliance/console.new
-  mkdir -p /persist/appliance/console.new
-  if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
-    rm -rf /persist/appliance/console
-    mv /persist/appliance/console.new /persist/appliance/console
-  else
-    echo "appliance-api-server: console bundle extraction failed (API still serves)"
-  fi
-fi
 "#;
 
 /// The agent-runtime handoff for an agent-only VM on WSL. There is no
@@ -1036,9 +1053,10 @@ fn build_bootstrap(
     spec: &VmSpec,
     k3s: Option<(&Path, &'static str)>,
     egress_ca_pem: Option<&str>,
-    // CLI-staged api-server artifacts + the VM's bootstrap token.
-    // `None` for agent-only VMs or when nothing was staged.
-    apiserver: Option<&crate::guest::ApiServerAssets>,
+    // CLI-staged release state + the VM's bootstrap token. `None` for
+    // agent-only VMs or when nothing was staged; the full assets are streamed
+    // separately after this pure composition step succeeds.
+    release_gate: Option<crate::guest::ReleaseGate<'_>>,
     bootstrap_token: &str,
     runtime_repositories: &[crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
@@ -1049,7 +1067,7 @@ fn build_bootstrap(
         BootstrapInputs {
             k3s,
             egress_ca_pem,
-            apiserver,
+            release_gate,
             bootstrap_token,
             runtime_repositories,
             runtime_gateway,
@@ -1061,7 +1079,7 @@ fn build_bootstrap(
 struct BootstrapInputs<'a> {
     k3s: Option<(&'a Path, &'static str)>,
     egress_ca_pem: Option<&'a str>,
-    apiserver: Option<&'a crate::guest::ApiServerAssets>,
+    release_gate: Option<crate::guest::ReleaseGate<'a>>,
     bootstrap_token: &'a str,
     runtime_repositories: &'a [crate::images::RuntimeApkRepository],
     runtime_gateway: Option<std::net::Ipv4Addr>,
@@ -1072,12 +1090,15 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
     let BootstrapInputs {
         k3s,
         egress_ca_pem,
-        apiserver,
+        release_gate,
         bootstrap_token,
         runtime_repositories,
         runtime_gateway,
         state_dir,
     } = inputs;
+    if let Some(gate) = release_gate {
+        gate.validate()?;
+    }
     let dev = spec.dev;
     let mount = spec.dev_mount.as_deref().map(strip_verbatim);
     // Project identity for the npm-global wipe: a short hash of the
@@ -1101,18 +1122,15 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
     // The api-server guest binary rides k3s VMs whose assets were
     // staged. Same substitution rules as the k3s block: injected before
     // the port markers so its nested markers expand too.
-    let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, apiserver) {
-        (false, true, false, Some(assets)) => {
-            format!("{WSL_APISERVER_COPY}{}", crate::guest::APISERVER_COMMON)
-                .replace(
-                    "__CONSOLE_PROVISION__",
-                    if assets.console.is_some() {
-                        WSL_CONSOLE_COPY
-                    } else {
-                        ""
-                    },
-                )
+    let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, release_gate) {
+        (false, true, false, Some(gate)) => {
+            format!(
+                "{WSL_APISERVER_COPY}{}{}",
+                crate::guest::apiserver_seed_copy(),
+                crate::guest::APISERVER_COMMON
+            )
                 .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
+                .replace("__PINNED_RELEASE_KEY_ID__", gate.pinned_key_id)
         }
         _ => String::new(),
     };
@@ -1484,12 +1502,16 @@ mod tests {
         runtime_repositories: &[crate::images::RuntimeApkRepository],
         runtime_gateway: Option<std::net::Ipv4Addr>,
     ) -> Result<String> {
+        let release_gate = crate::guest::ReleaseGate::from_assets(
+            "ed25519:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            apiserver,
+        );
         super::build_bootstrap_with_inputs(
             spec,
             BootstrapInputs {
                 k3s,
                 egress_ca_pem,
-                apiserver,
+                release_gate,
                 bootstrap_token,
                 runtime_repositories,
                 runtime_gateway,
@@ -1607,6 +1629,8 @@ mod tests {
         let assets = crate::guest::ApiServerAssets {
             binary: assets_dir.join("appliance-api-server"),
             console: Some(assets_dir.join("appliance-console.tar.gz")),
+            release_evidence: None,
+            evidence_poisoned: false,
         };
         let script = build_bootstrap(
             &s,
@@ -1839,6 +1863,17 @@ mod tests {
             console: Some(PathBuf::from(
                 r"C:\Users\Avery\.appliance\guest-assets\appliance-console.tar.gz",
             )),
+            release_evidence: Some(crate::guest::ApiServerReleaseEvidence {
+                checksums: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\appliance-api-server.sha256"),
+                properties: PathBuf::from(
+                    r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.properties",
+                ),
+                payload: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.json"),
+                envelope: PathBuf::from(
+                    r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.sig.json",
+                ),
+            }),
+            evidence_poisoned: false,
         };
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
         assert!(script.contains(
@@ -1847,6 +1882,20 @@ mod tests {
         assert!(script.contains(
             "CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz"
         ));
+        assert!(script.contains("RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json"));
+        assert!(script.contains("RELEASE_POISON=/opt/appliance/artifacts/control-plane-release.invalid"));
+        assert!(script.contains(
+            "RELEASE_PROPERTIES=/opt/appliance/artifacts/control-plane-release.properties"
+        ));
+        assert!(script.contains("sha256sum \"$APISERVER_SRC\""));
+        assert!(script.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
+        let seed_gate = crate::guest::apiserver_seed_copy();
+        assert!(!seed_gate.contains("__APISERVER_SEED_VERIFY__"));
+        assert!(!seed_gate.contains("jq"));
+        assert!(script.contains(&format!(
+            "RELEASE_KEY_ID\" != \"ed25519:sha256:{}",
+            "a".repeat(64)
+        )));
         assert!(!script.contains(r"C:\Users\Avery"));
         assert!(!script.contains("wslpath"));
         assert!(!script.contains("/mnt/c"));
@@ -1855,7 +1904,8 @@ mod tests {
         assets.console = None;
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
         assert!(!script.contains("__CONSOLE_PROVISION__"));
-        assert!(!script.contains("CONSOLE_SRC="));
+        assert!(script.contains("CONSOLE_SRC="));
+        assert!(script.contains("console skipped (api-server remains headless)"));
     }
 
     #[test]

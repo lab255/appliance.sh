@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { mintApiKey, waitForApiServerUrl, apiServerUrlForHostPort } from '@appliance.sh/helper';
-import { createApplianceClient, VERSION as SDK_VERSION } from '@appliance.sh/sdk';
+import { createApplianceClient, PINNED_RELEASE_TRUST, VERSION as SDK_VERSION } from '@appliance.sh/sdk';
 import { saveCredentials } from './credentials.js';
 import { readProfiles, removeProfile } from './profile-store.js';
 import { ensureApiServerArtifacts } from './api-server-artifact.js';
@@ -96,6 +96,14 @@ function vmPorts(name: string): VmPorts {
   } catch {
     return { ...DEFAULT_VM_PORTS };
   }
+}
+
+function appendReleaseTrustPin(args: string[]): void {
+  const keyIds = Object.keys(PINNED_RELEASE_TRUST.keys);
+  if (keyIds.length > 1) {
+    throw new Error('release trust contains multiple signing keys; the VM seed gate requires one active release keyId');
+  }
+  if (keyIds[0]) args.push('--release-key-id', keyIds[0]);
 }
 
 /** Repo-checkout builds of the engine binary, resolved relative to
@@ -353,6 +361,7 @@ export async function ensureVmRuntime(
   // `--dev` provisions the VM as a development environment (persisted
   // one-way, so a later plain `up` keeps it a dev VM).
   const upArgs = ['up', name, '--timeout', String(timeout), '--cluster'];
+  appendReleaseTrustPin(upArgs);
   if (resources.cpus !== undefined) upArgs.push('--cpus', String(resources.cpus));
   if (resources.memory !== undefined) upArgs.push('--memory', String(resources.memory));
   if (resources.dev) upArgs.push('--dev');
@@ -399,7 +408,7 @@ export async function runUp(
   // `showDeployHint` controls the banner's closing `Deploy:` line.
   // `appliance vm up` leaves it on; `appliance init` suppresses it so its
   // own hand-off prints the single, unambiguous next command.
-  opts: { showDeployHint?: boolean; cluster?: boolean } = {}
+  opts: { showDeployHint?: boolean; cluster?: boolean; allowUnsigned?: boolean } = {}
 ): Promise<void> {
   if (!opts.cluster) {
     if (imageOverride) {
@@ -436,7 +445,7 @@ export async function runUp(
   // 1. Stage the api-server guest artifacts BEFORE the boot so the
   //    engine embeds them into the boot media. No docker anywhere.
   try {
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: opts.allowUnsigned });
   } catch (err) {
     console.error(chalk.red((err as Error).message));
     process.exit(1);

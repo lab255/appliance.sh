@@ -230,6 +230,149 @@ pub fn ensure_k3s_airgap_media() -> Result<PathBuf> {
 pub struct ApiServerAssets {
     pub binary: PathBuf,
     pub console: Option<PathBuf>,
+    pub release_evidence: Option<ApiServerReleaseEvidence>,
+    /// At least one signed-evidence sidecar exists, but the complete set did
+    /// not pass its structural checks. Stream a poison marker so the guest
+    /// refuses the seed instead of silently treating it as pre-MV0 unsigned.
+    pub evidence_poisoned: bool,
+}
+
+pub struct ApiServerReleaseEvidence {
+    pub checksums: PathBuf,
+    pub properties: PathBuf,
+    pub payload: PathBuf,
+    pub envelope: PathBuf,
+}
+
+/// Release state needed while composing a guest seed gate. The full assets
+/// remain owned by the backend's media/streaming path; this view keeps the
+/// independently rendered trust pin beside the evidence state it governs.
+#[derive(Clone, Copy)]
+pub(crate) struct ReleaseGate<'a> {
+    pub pinned_key_id: &'a str,
+    pub evidence: Option<&'a ApiServerReleaseEvidence>,
+    pub poison: bool,
+}
+
+impl<'a> ReleaseGate<'a> {
+    pub(crate) fn from_assets(
+        pinned_key_id: &'a str,
+        assets: Option<&'a ApiServerAssets>,
+    ) -> Option<Self> {
+        assets.map(|assets| Self {
+            pinned_key_id,
+            evidence: assets.release_evidence.as_ref(),
+            poison: assets.evidence_poisoned,
+        })
+    }
+
+    pub(crate) fn validate(self) -> Result<()> {
+        validate_pinned_release_key_id(self.pinned_key_id)?;
+        if self.evidence.is_some() && self.poison {
+            bail!("api-server release evidence cannot be both verified and poisoned");
+        }
+        Ok(())
+    }
+}
+
+pub(crate) const PINNED_RELEASE_KEY_ID_ENV: &str = "APPLIANCE_PINNED_RELEASE_KEY_ID";
+
+pub(crate) fn validate_pinned_release_key_id(value: &str) -> Result<()> {
+    if value.is_empty()
+        || value.strip_prefix("ed25519:sha256:").is_some_and(|hex| {
+            hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+    {
+        return Ok(());
+    }
+    bail!("release keyId must be empty or an ed25519:sha256 pin");
+}
+
+pub(crate) fn pinned_release_key_id_from_env() -> Result<String> {
+    let value = std::env::var(PINNED_RELEASE_KEY_ID_ENV).unwrap_or_default();
+    validate_pinned_release_key_id(&value)?;
+    Ok(value)
+}
+
+fn release_evidence_well_formed(evidence: &ApiServerReleaseEvidence) -> bool {
+    let Ok(checksums) = fs::read_to_string(&evidence.checksums) else { return false };
+    let mut binary_row = None;
+    let mut console_row = None;
+    for line in checksums.lines() {
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields.len() != 3
+            || fields[0].len() != 64
+            || !fields[0].bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || fields[2].parse::<u64>().ok().filter(|size| *size > 0).is_none()
+        {
+            return false;
+        }
+        let row = (fields[0], fields[2].parse::<u64>().unwrap());
+        match fields[1] {
+            "appliance-api-server" if binary_row.is_none() => binary_row = Some(row),
+            "appliance-console.tar.gz" if console_row.is_none() => console_row = Some(row),
+            _ => return false,
+        }
+    }
+    let (Some(binary_row), Some(console_row)) = (binary_row, console_row) else { return false };
+
+    let Ok(properties) = fs::read_to_string(&evidence.properties) else { return false };
+    let mut key_id = None;
+    let mut version = None;
+    let mut arch = None;
+    for line in properties.lines() {
+        let Some((key, value)) = line.split_once('=') else { return false };
+        match key {
+            "keyId" if key_id.is_none() => key_id = Some(value),
+            "version" if version.is_none() => version = Some(value),
+            "arch" if arch.is_none() => arch = Some(value),
+            _ => return false,
+        }
+    }
+    if key_id.is_none_or(|value| value.is_empty() || validate_pinned_release_key_id(value).is_err())
+        || version.is_none_or(str::is_empty)
+        || !matches!(arch, Some("x64" | "arm64"))
+    {
+        return false;
+    }
+
+    let Some(key_id) = key_id else { return false };
+    let Some(version) = version else { return false };
+    let Some(arch) = arch else { return false };
+    let Ok(payload_raw) = fs::read_to_string(&evidence.payload) else { return false };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&payload_raw) else { return false };
+    let Some(artifacts) = payload.get("artifacts").and_then(serde_json::Value::as_array) else { return false };
+    let binary_name = format!("appliance-api-server-linux-{arch}");
+    let artifact_matches = |name: &str, row: (&str, u64)| {
+        artifacts.iter().any(|artifact| {
+            artifact.get("name").and_then(serde_json::Value::as_str) == Some(name)
+                && artifact.get("sha256").and_then(serde_json::Value::as_str) == Some(row.0)
+                && artifact.get("size").and_then(serde_json::Value::as_u64) == Some(row.1)
+        })
+    };
+    if payload.get("kind").and_then(serde_json::Value::as_str) != Some("control-plane-release")
+        || payload.get("version").and_then(serde_json::Value::as_str) != Some(version)
+        || !artifact_matches(&binary_name, binary_row)
+        || !artifact_matches("appliance-console.tar.gz", console_row)
+    {
+        return false;
+    }
+
+    let Ok(envelope_raw) = fs::read_to_string(&evidence.envelope) else { return false };
+    let Ok(envelope) = serde_json::from_str::<serde_json::Value>(&envelope_raw) else { return false };
+    envelope.get("alg").and_then(serde_json::Value::as_str) == Some("ed25519")
+        && envelope.get("role").and_then(serde_json::Value::as_str) == Some("control-plane-release")
+        && envelope.get("keyId").and_then(serde_json::Value::as_str) == Some(key_id)
+        && envelope.get("sig").and_then(serde_json::Value::as_str).is_some_and(|sig| !sig.is_empty())
+}
+
+fn classify_release_evidence(
+    evidence: ApiServerReleaseEvidence,
+) -> (Option<ApiServerReleaseEvidence>, bool) {
+    let paths = [&evidence.checksums, &evidence.properties, &evidence.payload, &evidence.envelope];
+    let any_evidence = paths.iter().any(|path| path.exists());
+    let valid = paths.iter().all(|path| path.is_file()) && release_evidence_well_formed(&evidence);
+    if valid { (Some(evidence), false) } else { (None, any_evidence) }
 }
 
 /// Locate the staged api-server artifacts, or None when the binary is
@@ -242,7 +385,22 @@ pub fn apiserver_assets() -> Option<ApiServerAssets> {
     }
     let console = dir.join("appliance-console.tar.gz");
     let console = console.is_file().then_some(console);
-    Some(ApiServerAssets { binary, console })
+    let checksums = dir.join("appliance-api-server.sha256");
+    let properties = dir.join("control-plane-release.properties");
+    let payload = dir.join("control-plane-release.json");
+    let envelope = dir.join("control-plane-release.sig.json");
+    let (release_evidence, evidence_poisoned) = classify_release_evidence(ApiServerReleaseEvidence {
+        checksums,
+        properties,
+        payload,
+        envelope,
+    });
+    Some(ApiServerAssets {
+        binary,
+        console,
+        release_evidence,
+        evidence_poisoned,
+    })
 }
 
 /// Read (or generate once) the VM's bootstrap token — the shared secret
@@ -972,25 +1130,121 @@ BKTOML
 /// WSL2 backend swaps in its own drvfs copy preamble instead.
 const APISERVER_MEDIA_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
-# no docker anywhere. The binary (and console bundle) ride the FAT boot
-# media; copy them off it like k3s above.
+# no docker anywhere. The binary, console, and signed release evidence
+# ride the FAT boot media. The shared api-server seed gate verifies before copying.
 mkdir -p /persist/appliance
-APISERVER_MEDIA=$(dirname "$(find /media -maxdepth 2 -name appliance-api-server 2>/dev/null | head -1)")
-if [ -n "$APISERVER_MEDIA" ]; then
-  cp "$APISERVER_MEDIA/appliance-api-server" /usr/local/bin/appliance-api-server
-  chmod +x /usr/local/bin/appliance-api-server
-  if [ -f "$APISERVER_MEDIA/appliance-console.tar.gz" ]; then
-    rm -rf /persist/appliance/console.new
-    mkdir -p /persist/appliance/console.new
-    if tar -xzf "$APISERVER_MEDIA/appliance-console.tar.gz" -C /persist/appliance/console.new 2>/dev/null; then
-      rm -rf /persist/appliance/console
-      mv /persist/appliance/console.new /persist/appliance/console
+APISERVER_MEDIA_PATH=$(find /media -maxdepth 2 -name appliance-api-server 2>/dev/null | head -1)
+APISERVER_MEDIA=
+[ -z "$APISERVER_MEDIA_PATH" ] || APISERVER_MEDIA=$(dirname "$APISERVER_MEDIA_PATH")
+APISERVER_SRC="$APISERVER_MEDIA/appliance-api-server"
+CONSOLE_SRC="$APISERVER_MEDIA/appliance-console.tar.gz"
+RELEASE_CHECKSUMS="$APISERVER_MEDIA/appliance-api-server.sha256"
+RELEASE_PROPERTIES="$APISERVER_MEDIA/control-plane-release.properties"
+RELEASE_PAYLOAD="$APISERVER_MEDIA/control-plane-release.json"
+RELEASE_ENVELOPE="$APISERVER_MEDIA/control-plane-release.sig.json"
+RELEASE_POISON="$APISERVER_MEDIA/control-plane-release.invalid"
+"#;
+
+/// Backend-neutral MV0 seed gate. The host already verified the Ed25519
+/// envelope; the minimal Alpine guest deliberately does not carry a second
+/// Ed25519 implementation in MV0. It independently binds both exact sizes and
+/// SHA-256 digests to the verified payload copied beside the seed.
+const APISERVER_SEED_COPY_TEMPLATE: &str = r#"APPLIANCE_WARNINGS_FILE=${APPLIANCE_WARNINGS_FILE:-/var/log/appliance-api-server.warnings}
+APPLIANCE_SEED_LOG=${APPLIANCE_SEED_LOG:-/var/log/appliance-api-server.log}
+APPLIANCE_SEED_MARKER=${APPLIANCE_SEED_MARKER:-/persist/.apiserver-seed-warning}
+APISERVER_DEST=${APISERVER_DEST:-/usr/local/bin/appliance-api-server}
+CONSOLE_DEST=${CONSOLE_DEST:-/persist/appliance/console}
+rm -f "$APPLIANCE_SEED_MARKER"
+seed_warning() {
+  MSG="$1"
+  echo "appliance-api-server: SECURITY: $MSG" | tee -a "$APPLIANCE_SEED_LOG" >&2
+  echo "$MSG" >> "$APPLIANCE_WARNINGS_FILE"
+  echo "$MSG" >> "$APPLIANCE_SEED_MARKER"
+}
+if [ -z "${APISERVER_MEDIA:-}" ]; then
+  seed_warning "boot media not found"
+elif [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PROPERTIES" ] || [ -f "$RELEASE_PAYLOAD" ] || [ -f "$RELEASE_ENVELOPE" ] || [ -f "$RELEASE_POISON" ]; then
+  SEED_OK=1
+  if [ -f "$RELEASE_POISON" ] || [ ! -f "$RELEASE_CHECKSUMS" ] || [ ! -f "$RELEASE_PROPERTIES" ] || [ ! -f "$RELEASE_PAYLOAD" ] || [ ! -f "$RELEASE_ENVELOPE" ]; then
+    seed_warning "signed control-plane seed evidence is incomplete or malformed; api-server start refused"
+    SEED_OK=0
+  fi
+  case "$(uname -m)" in
+    x86_64) RELEASE_ARCH=x64 ;;
+    aarch64|arm64) RELEASE_ARCH=arm64 ;;
+    *) RELEASE_ARCH=unsupported ;;
+  esac
+__APISERVER_SEED_VERIFY__
+  if [ -n "${SEED_ERROR:-}" ]; then
+    seed_warning "$SEED_ERROR"
+  fi
+  if [ "$SEED_OK" = 1 ]; then
+    cp "$APISERVER_SRC" "$APISERVER_DEST"
+    chmod +x "$APISERVER_DEST"
+    if [ -f "$CONSOLE_SRC" ]; then
+      EXPECTED_CONSOLE_SHA=$(awk '$2 == "appliance-console.tar.gz" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+      EXPECTED_CONSOLE_SIZE=$(awk '$2 == "appliance-console.tar.gz" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+      ACTUAL_CONSOLE_SHA=$(sha256sum "$CONSOLE_SRC" 2>/dev/null | cut -d ' ' -f 1)
+      ACTUAL_CONSOLE_SIZE=$(wc -c < "$CONSOLE_SRC" 2>/dev/null | awk '{print $1}')
+      if [ "$EXPECTED_CONSOLE_SHA" != "$ACTUAL_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SIZE" != "$ACTUAL_CONSOLE_SIZE" ]; then
+        seed_warning "signed console bundle digest/size mismatch; console skipped (api-server remains headless)"
+      else
+        rm -rf "$CONSOLE_DEST.new"
+        mkdir -p "$CONSOLE_DEST.new"
+        if tar -xzf "$CONSOLE_SRC" -C "$CONSOLE_DEST.new" 2>/dev/null; then
+          rm -rf "$CONSOLE_DEST"
+          mv "$CONSOLE_DEST.new" "$CONSOLE_DEST"
+        else
+          seed_warning "signed console bundle extraction failed; console skipped (api-server remains headless)"
+          rm -rf "$CONSOLE_DEST.new"
+        fi
+      fi
+    fi
+  else
+    rm -f "$APISERVER_DEST"
+  fi
+elif [ -f "$APISERVER_SRC" ]; then
+  # Pre-AP-226 releases and explicitly acknowledged development overrides.
+  seed_warning "unsigned pre-MV0 control-plane seed accepted; self-update disabled"
+  cp "$APISERVER_SRC" "$APISERVER_DEST"
+  chmod +x "$APISERVER_DEST"
+  if [ -f "$CONSOLE_SRC" ]; then
+    rm -rf "$CONSOLE_DEST.new"
+    mkdir -p "$CONSOLE_DEST.new"
+    if tar -xzf "$CONSOLE_SRC" -C "$CONSOLE_DEST.new" 2>/dev/null; then
+      rm -rf "$CONSOLE_DEST"
+      mv "$CONSOLE_DEST.new" "$CONSOLE_DEST"
     else
       echo "appliance-api-server: console bundle extraction failed (API still serves)"
+      rm -rf "$CONSOLE_DEST.new"
     fi
   fi
 fi
 "#;
+
+/// Verification-only portion of the seed gate. Keep this restricted to
+/// POSIX shell builtins plus the BusyBox-compatible applets exercised by the
+/// host-side portability test; the production guest world does not include
+/// jq.
+pub(crate) const APISERVER_SEED_VERIFY: &str = r#"  EXPECTED_BINARY_SHA=$(awk '$2 == "appliance-api-server" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+  EXPECTED_BINARY_SIZE=$(awk '$2 == "appliance-api-server" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+  ACTUAL_BINARY_SHA=$(sha256sum "$APISERVER_SRC" 2>/dev/null | cut -d ' ' -f 1)
+  ACTUAL_BINARY_SIZE=$(wc -c < "$APISERVER_SRC" 2>/dev/null | awk '{print $1}')
+  RELEASE_KEY_ID=$(awk -F= '$1 == "keyId" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  RELEASE_VERSION=$(awk -F= '$1 == "version" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  SIDECAR_ARCH=$(awk -F= '$1 == "arch" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  if [ -z "$RELEASE_KEY_ID" ] || [ "$RELEASE_KEY_ID" != "__PINNED_RELEASE_KEY_ID__" ] || [ -z "$RELEASE_VERSION" ] || [ "$SIDECAR_ARCH" != "$RELEASE_ARCH" ] || [ -z "$EXPECTED_BINARY_SHA" ] || [ -z "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ]; then
+    SEED_ERROR="signed control-plane seed digest/size mismatch; api-server start refused"
+    SEED_OK=0
+  fi
+"#;
+
+/// Compose the complete backend-neutral seed copy block from the portable
+/// verification fragment. Keeping this separate lets backend tests inspect
+/// only the seed path rather than unrelated launcher sections that use jq.
+pub(crate) fn apiserver_seed_copy() -> String {
+    APISERVER_SEED_COPY_TEMPLATE.replace("__APISERVER_SEED_VERIFY__", APISERVER_SEED_VERIFY)
+}
 
 /// The backend-neutral half of the api-server provisioning: assumes
 /// `/usr/local/bin/appliance-api-server` and `/etc/appliance/bootstrap-token`
@@ -2395,6 +2649,11 @@ fn build_apkovl(
     // provision block is only injected when it does.
     apiserver: bool,
 ) -> Result<Vec<u8>> {
+    let release_gate = apiserver.then_some(ReleaseGate {
+        pinned_key_id: "",
+        evidence: None,
+        poison: false,
+    });
     build_apkovl_for_readiness(
         registry_host_port,
         egress_ca_pem,
@@ -2406,7 +2665,7 @@ fn build_apkovl(
         project_id,
         host_port,
         bootstrap_token,
-        apiserver,
+        release_gate,
     )
 }
 
@@ -2422,8 +2681,11 @@ fn build_apkovl_for_readiness(
     project_id: &str,
     host_port: u16,
     bootstrap_token: &str,
-    apiserver: bool,
+    release_gate: Option<ReleaseGate<'_>>,
 ) -> Result<Vec<u8>> {
+    if let Some(gate) = release_gate {
+        gate.validate()?;
+    }
     let agent_only = readiness == HostReadiness::Agent;
     let runtime = readiness == HostReadiness::Runtime;
     let cluster = readiness == HostReadiness::K3s;
@@ -2532,10 +2794,13 @@ fn build_apkovl_for_readiness(
             // (Quinn gap #1, same as the k3s branch).
             .replace(
                 "__APISERVER_PROVISION__",
-                &if !cluster || !apiserver {
+                &if !cluster || release_gate.is_none() {
                     String::new()
                 } else {
-                    format!("{APISERVER_MEDIA_COPY}{APISERVER_COMMON}")
+                    format!(
+                        "{APISERVER_MEDIA_COPY}{}{APISERVER_COMMON}",
+                        apiserver_seed_copy()
+                    )
                 },
             )
             // vz boot media: arm the guest-side probe for the
@@ -2544,6 +2809,10 @@ fn build_apkovl_for_readiness(
             // network); the WSL bootstrap substitutes this to empty.
             .replace("__K3S_AIRGAP_PREAMBLE__", "APPLIANCE_AIRGAP_PROBE=1")
             .replace("__APISERVER_GUEST_PORT__", &API_SERVER_GUEST_PORT.to_string())
+            .replace(
+                "__PINNED_RELEASE_KEY_ID__",
+                release_gate.map_or("", |gate| gate.pinned_key_id),
+            )
             // Writer-version stamp on the guest's base config, logged by
             // the api-server on parse — makes engine/guest schema drift
             // visible in the server log (incident B follow-up).
@@ -2617,7 +2886,7 @@ fn build_apkovl_for_readiness(
     // requests against. Root-only, exactly like the host-side copy.
     // Gated like the provision block itself — agent-only VMs carry no
     // control plane and therefore no secret.
-    if cluster && apiserver && !bootstrap_token.is_empty() {
+    if cluster && release_gate.is_some() && !bootstrap_token.is_empty() {
         file("etc/appliance/bootstrap-token", 0o600, bootstrap_token.as_bytes())?;
     }
 
@@ -2680,7 +2949,11 @@ pub fn build_boot_media(
     // Host ingress port (spec.host_port) — embedded in the guest
     // api-server's base config for deploy-result URLs.
     host_port: u16,
+    // Trust pin supplied by the CLI from PINNED_RELEASE_TRUST. This is
+    // deliberately independent of the release sidecar carried on media.
+    pinned_release_key_id: &str,
 ) -> Result<BootMedia> {
+    validate_pinned_release_key_id(pinned_release_key_id)?;
     let readiness = readiness_for(agent_only, cluster, dev);
     let (alpine_arch, _) = arch_tuple()?;
     let modloop = ensure_modloop()?;
@@ -2700,6 +2973,7 @@ pub fn build_boot_media(
     // and an engine invoked without the CLI simply boots without a
     // control plane (the guest logs that honestly).
     let apiserver = if readiness == HostReadiness::K3s { apiserver_assets() } else { None };
+    let release_gate = ReleaseGate::from_assets(pinned_release_key_id, apiserver.as_ref());
     let bootstrap_token = if apiserver.is_some() {
         ensure_bootstrap_token(vm_dir)?
     } else {
@@ -2730,7 +3004,7 @@ pub fn build_boot_media(
         &project_id,
         host_port,
         &bootstrap_token,
-        apiserver.is_some(),
+        release_gate,
     )?;
 
     let modloop_data = fs::read(&modloop)?;
@@ -2744,6 +3018,22 @@ pub fn build_boot_media(
         .and_then(|a| a.console.as_ref())
         .map(fs::read)
         .transpose()?;
+    let mut release_evidence_data = Vec::new();
+    if let Some(assets) = &apiserver {
+        if let Some(evidence) = &assets.release_evidence {
+            release_evidence_data.extend([
+                ("appliance-api-server.sha256", fs::read(&evidence.checksums)?),
+                ("control-plane-release.properties", fs::read(&evidence.properties)?),
+                ("control-plane-release.json", fs::read(&evidence.payload)?),
+                ("control-plane-release.sig.json", fs::read(&evidence.envelope)?),
+            ]);
+        } else if assets.evidence_poisoned {
+            release_evidence_data.push((
+                "control-plane-release.invalid",
+                b"incomplete-or-malformed\n".to_vec(),
+            ));
+        }
+    }
 
     // Size the volume to fit contents + FAT overhead, rounded up.
     let content = modloop_data.len()
@@ -2751,6 +3041,7 @@ pub fn build_boot_media(
         + apkovl.len()
         + apiserver_data.as_ref().map_or(0, Vec::len)
         + console_data.as_ref().map_or(0, Vec::len)
+        + release_evidence_data.iter().map(|(_, data)| data.len()).sum::<usize>()
         + runtime_repositories.iter().map(|repository| {
             fs::metadata(&repository.index).map(|metadata| metadata.len() as usize).unwrap_or(0)
                 + repository.packages.iter().map(|package| {
@@ -2818,6 +3109,10 @@ pub fn build_boot_media(
         }
         if let Some(data) = &console_data {
             let mut f = root.create_file("appliance-console.tar.gz")?;
+            f.write_all(data)?;
+        }
+        for (name, data) in &release_evidence_data {
+            let mut f = root.create_file(name)?;
             f.write_all(data)?;
         }
     }
@@ -3554,12 +3849,36 @@ mod tests {
         // k3s VM with the api-server staged: media copy, base config,
         // ingress route, token launch env, respawn loop — all present,
         // no literal markers.
-        let plain = build_apkovl(5052, None, false, false, false, 5053, false, "", 8081, "tok3n", true).unwrap();
+        let pinned_key_id = format!("ed25519:sha256:{}", "a".repeat(64));
+        let plain = build_apkovl_for_readiness(
+            5052,
+            None,
+            false,
+            false,
+            false,
+            5053,
+            HostReadiness::K3s,
+            "",
+            8081,
+            "tok3n",
+            Some(ReleaseGate {
+                pinned_key_id: &pinned_key_id,
+                evidence: None,
+                poison: false,
+            }),
+        )
+        .unwrap();
         let start = apkovl_file(&plain, "etc/local.d/appliance.start").unwrap();
         assert!(!start.contains("__APISERVER_PROVISION__"), "marker must be substituted");
         assert!(!start.contains("__APISERVER_GUEST_PORT__"));
         assert!(!start.contains("__HOST_PORT__"));
-        assert!(start.contains("cp \"$APISERVER_MEDIA/appliance-api-server\" /usr/local/bin/appliance-api-server"));
+        assert!(start.contains("APISERVER_SRC=\"$APISERVER_MEDIA/appliance-api-server\""));
+        assert!(start.contains("sha256sum \"$APISERVER_SRC\""));
+        assert!(start.contains("control-plane-release.sig.json"));
+        assert!(start.contains("control-plane-release.properties"));
+        assert!(!start.contains("jq "), "the minimal api-server guest does not install jq");
+        assert!(start.contains(&format!("RELEASE_KEY_ID\" != \"{pinned_key_id}")));
+        assert!(start.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
         // Token auth against the local k3s: bun's fetch can't carry the
         // kubeconfig's client certificates, so the server gets its own
         // ServiceAccount token + the k3s CA via NODE_EXTRA_CA_CERTS.
@@ -3594,6 +3913,248 @@ mod tests {
         let start = apkovl_file(&agent, "etc/local.d/appliance.start").unwrap();
         assert!(!start.contains("__APISERVER_PROVISION__"), "marker must be substituted");
         assert!(!start.contains("base-config.json"));
+    }
+
+    #[test]
+    fn incomplete_or_malformed_release_evidence_is_poisoned() {
+        let root = std::env::temp_dir().join(format!(
+            "appliance-release-evidence-test-{}-{:?}",
+            std::process::id(), std::thread::current().id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let evidence = || ApiServerReleaseEvidence {
+            checksums: root.join("appliance-api-server.sha256"),
+            properties: root.join("control-plane-release.properties"),
+            payload: root.join("control-plane-release.json"),
+            envelope: root.join("control-plane-release.sig.json"),
+        };
+        fs::write(
+            root.join("appliance-api-server.sha256"),
+            format!(
+                "{}  appliance-api-server  15\n{}  appliance-console.tar.gz  20\n",
+                "a".repeat(64), "b".repeat(64)
+            ),
+        ).unwrap();
+        fs::write(
+            root.join("control-plane-release.properties"),
+            format!("keyId=ed25519:sha256:{}\nversion=1.57.0\narch=x64\n", "c".repeat(64)),
+        ).unwrap();
+        fs::write(
+            root.join("control-plane-release.json"),
+            format!(
+                r#"{{"kind":"control-plane-release","version":"1.57.0","artifacts":[{{"name":"appliance-api-server-linux-x64","sha256":"{}","size":15}},{{"name":"appliance-console.tar.gz","sha256":"{}","size":20}}]}}"#,
+                "a".repeat(64), "b".repeat(64)
+            ),
+        ).unwrap();
+
+        let (missing, poisoned) = classify_release_evidence(evidence());
+        assert!(missing.is_none());
+        assert!(poisoned, "one missing sidecar must not downgrade the seed to unsigned");
+
+        fs::write(root.join("control-plane-release.sig.json"), "not-json\n").unwrap();
+        let (malformed, poisoned) = classify_release_evidence(evidence());
+        assert!(malformed.is_none());
+        assert!(poisoned, "malformed sidecars must produce the guest refusal marker");
+
+        fs::write(
+            root.join("control-plane-release.sig.json"),
+            format!(
+                r#"{{"alg":"ed25519","role":"control-plane-release","keyId":"ed25519:sha256:{}","sig":"fixture"}}"#,
+                "c".repeat(64)
+            ),
+        ).unwrap();
+        let (valid, poisoned) = classify_release_evidence(evidence());
+        assert!(valid.is_some());
+        assert!(!poisoned);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn apiserver_seed_gate_runs_with_restricted_posix_userland_and_rejects_tampering() {
+        use std::process::Command;
+
+        fn posix_shell() -> PathBuf {
+            #[cfg(windows)]
+            {
+                for variable in ["ProgramFiles", "ProgramFiles(x86)"] {
+                    if let Some(root) = std::env::var_os(variable) {
+                        let candidate = PathBuf::from(root).join("Git/bin/sh.exe");
+                        if candidate.is_file() {
+                            return candidate;
+                        }
+                    }
+                }
+                panic!("Git for Windows sh.exe is required for the seed-gate test");
+            }
+            #[cfg(not(windows))]
+            {
+                PathBuf::from("/bin/sh")
+            }
+        }
+
+        fn command_path(shell: &Path, command: &str) -> String {
+            let output = Command::new(shell)
+                .args(["-c", &format!("command -v {command}")])
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "missing POSIX test tool {command}");
+            String::from_utf8(output.stdout).unwrap().trim().to_string()
+        }
+
+        fn shell_path(shell: &Path, path: &Path) -> String {
+            #[cfg(windows)]
+            {
+                let output = Command::new(shell)
+                    .args(["-c", "cygpath -u \"$1\"", "sh"])
+                    .arg(path)
+                    .output()
+                    .unwrap();
+                assert!(output.status.success(), "could not translate Windows test path");
+                String::from_utf8(output.stdout).unwrap().trim().to_string()
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = shell;
+                path.to_string_lossy().into_owned()
+            }
+        }
+
+        fn write_wrapper(path: &Path, target: &str, arguments: &str) {
+            fs::write(
+                path,
+                format!("#!/bin/sh\nexec \"{target}\"{arguments} \"$@\"\n"),
+            )
+            .unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "appliance-seed-gate-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let shell = posix_shell();
+        write_wrapper(&bin.join("sh"), "/bin/sh", "");
+        // The gate uses only POSIX awk field operations, shared by BSD awk,
+        // GNU awk, and BusyBox awk. Deliberately expose no broader userland.
+        for tool in ["awk", "cut", "wc", "rm", "tee", "uname"] {
+            write_wrapper(&bin.join(tool), &command_path(&shell, tool), "");
+        }
+        let sha256sum = Command::new(&shell)
+            .args(["-c", "command -v sha256sum"])
+            .output()
+            .unwrap();
+        if sha256sum.status.success() {
+            write_wrapper(
+                &bin.join("sha256sum"),
+                String::from_utf8(sha256sum.stdout).unwrap().trim(),
+                "",
+            );
+        } else {
+            write_wrapper(
+                &bin.join("sha256sum"),
+                &command_path(&shell, "shasum"),
+                " -a 256",
+            );
+        }
+        let restricted_path = shell_path(&shell, &bin);
+        let jq_absent = Command::new(&shell)
+            .args(["-c", "! command -v jq >/dev/null 2>&1"])
+            .env("PATH", &restricted_path)
+            .status()
+            .unwrap();
+        assert!(jq_absent.success(), "restricted seed-gate PATH unexpectedly exposes jq");
+        assert!(!APISERVER_SEED_VERIFY.contains("jq"));
+
+        let source = root.join("appliance-api-server");
+        fs::write(&source, b"verified-binary").unwrap();
+        let digest = crate::images::content_sha256_hex(b"verified-binary");
+        let key_id = format!("ed25519:sha256:{}", "a".repeat(64));
+        let checksums = root.join("appliance-api-server.sha256");
+        fs::write(
+            &checksums,
+            format!("{digest}  appliance-api-server  {}\n{}  appliance-console.tar.gz  1\n", 15, "b".repeat(64)),
+        )
+        .unwrap();
+        let properties = root.join("control-plane-release.properties");
+        let arch = if std::env::consts::ARCH == "aarch64" { "arm64" } else { "x64" };
+        fs::write(&properties, format!("keyId={key_id}\nversion=1.57.0\narch={arch}\n")).unwrap();
+        let script = APISERVER_SEED_VERIFY.replace("__PINNED_RELEASE_KEY_ID__", &key_id);
+        let source_path = shell_path(&shell, &source);
+        let checksums_path = shell_path(&shell, &checksums);
+        let properties_path = shell_path(&shell, &properties);
+
+        let run = |expected: &str| {
+            Command::new(&shell)
+                .arg("-c")
+                .arg(format!("SEED_OK=1\nSEED_ERROR=\n{script}\n[ \"$SEED_OK\" = {expected} ]"))
+                .env("PATH", &restricted_path)
+                .env("APISERVER_SRC", &source_path)
+                .env("RELEASE_CHECKSUMS", &checksums_path)
+                .env("RELEASE_PROPERTIES", &properties_path)
+                .env("RELEASE_ARCH", arch)
+                .output()
+                .unwrap()
+        };
+
+        let accepted = run("1");
+        assert!(accepted.status.success(), "seed gate failed: {}", String::from_utf8_lossy(&accepted.stderr));
+
+        fs::write(&source, b"tampered-binary").unwrap();
+        let rejected = run("0");
+        assert!(rejected.status.success(), "tampered seed was accepted: {}", String::from_utf8_lossy(&rejected.stderr));
+
+        // Exercise the complete copy/refusal path as well as the verification
+        // fragment: a digest mismatch must remove any previously installed
+        // binary and persist the warning marker the host doctor reads.
+        let payload = root.join("control-plane-release.json");
+        let envelope = root.join("control-plane-release.sig.json");
+        fs::write(&payload, "{}\n").unwrap();
+        fs::write(&envelope, "{}\n").unwrap();
+        let destination = root.join("installed-appliance-api-server");
+        let warnings = root.join("warnings");
+        let seed_log = root.join("seed.log");
+        let marker = root.join("seed-warning");
+        fs::write(&destination, b"previously-installed-binary").unwrap();
+        let full_script = apiserver_seed_copy().replace("__PINNED_RELEASE_KEY_ID__", &key_id);
+        let full_rejection = Command::new(&shell)
+            .arg("-c")
+            .arg(full_script)
+            .env("PATH", &restricted_path)
+            .env("APISERVER_MEDIA", shell_path(&shell, &root))
+            .env("APISERVER_SRC", &source_path)
+            .env("CONSOLE_SRC", shell_path(&shell, &root.join("missing-console.tar.gz")))
+            .env("RELEASE_CHECKSUMS", &checksums_path)
+            .env("RELEASE_PROPERTIES", &properties_path)
+            .env("RELEASE_PAYLOAD", shell_path(&shell, &payload))
+            .env("RELEASE_ENVELOPE", shell_path(&shell, &envelope))
+            .env("RELEASE_POISON", shell_path(&shell, &root.join("missing-release-poison")))
+            .env("APISERVER_DEST", shell_path(&shell, &destination))
+            .env("CONSOLE_DEST", shell_path(&shell, &root.join("console")))
+            .env("APPLIANCE_WARNINGS_FILE", shell_path(&shell, &warnings))
+            .env("APPLIANCE_SEED_LOG", shell_path(&shell, &seed_log))
+            .env("APPLIANCE_SEED_MARKER", shell_path(&shell, &marker))
+            .output()
+            .unwrap();
+        assert!(
+            full_rejection.status.success(),
+            "complete seed refusal failed: {}",
+            String::from_utf8_lossy(&full_rejection.stderr)
+        );
+        assert!(!destination.exists(), "tampered seed must remove the installed api-server");
+        let marker_text = fs::read_to_string(&marker).unwrap();
+        assert!(marker_text.contains("digest/size mismatch"));
+        assert!(marker_text.contains("api-server start refused"));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3976,7 +4537,7 @@ mod tests {
             "",
             8100,
             "",
-            false,
+            None,
         )
         .unwrap();
         let repositories = apkovl_file(&overlay, "etc/apk/repositories").unwrap();
@@ -4326,7 +4887,7 @@ done >> "$CTR_ARGV"
             "",
             8081,
             "",
-            false,
+            None,
         )
         .unwrap();
         let start = apkovl_file(&core, "etc/local.d/appliance.start").unwrap();
