@@ -60,6 +60,9 @@ const ARTIFACT_GUEST_ROOT: &str = "/opt/appliance/artifacts";
 const K3S_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/k3s";
 const APISERVER_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server";
 const CONSOLE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-console.tar.gz";
+const APISERVER_CHECKSUMS_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server.sha256";
+const APISERVER_RELEASE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.json";
+const APISERVER_ENVELOPE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.sig.json";
 
 pub(crate) const WSL_CONF: &str = r#"[automount]
 enabled=false
@@ -703,6 +706,11 @@ fn stream_boot_artifacts(
         if let Some(console) = &assets.console {
             stream_guest_artifact(distro, console, CONSOLE_GUEST_ARTIFACT, None)?;
         }
+        if let Some(evidence) = &assets.release_evidence {
+            stream_guest_artifact(distro, &evidence.checksums, APISERVER_CHECKSUMS_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, &evidence.payload, APISERVER_RELEASE_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, &evidence.envelope, APISERVER_ENVELOPE_GUEST_ARTIFACT, None)?;
+        }
     }
     for repository in runtime_repositories {
         let guest_directory = format!("{ARTIFACT_GUEST_ROOT}/runtime-apks/{}", repository.name);
@@ -959,31 +967,15 @@ fi
 /// shared `guest::APISERVER_COMMON`.
 const WSL_APISERVER_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
-# no docker anywhere. Copy it from the verified guest artifact stage.
+# no docker anywhere. APISERVER_SEED_COPY verifies this streamed stage.
 mkdir -p /persist/appliance /usr/local/bin /etc/appliance
 APISERVER_SRC=/opt/appliance/artifacts/appliance-api-server
-if [ -f "$APISERVER_SRC" ]; then
-  cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
-  chmod +x /usr/local/bin/appliance-api-server
-else
-  echo "appliance-api-server: streamed binary missing at $APISERVER_SRC"
-fi
-__CONSOLE_PROVISION__
+CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
+RELEASE_CHECKSUMS=/opt/appliance/artifacts/appliance-api-server.sha256
+RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json
+RELEASE_ENVELOPE=/opt/appliance/artifacts/control-plane-release.sig.json
 printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
 chmod 600 /etc/appliance/bootstrap-token
-"#;
-
-const WSL_CONSOLE_COPY: &str = r#"CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
-if [ -f "$CONSOLE_SRC" ]; then
-  rm -rf /persist/appliance/console.new
-  mkdir -p /persist/appliance/console.new
-  if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
-    rm -rf /persist/appliance/console
-    mv /persist/appliance/console.new /persist/appliance/console
-  else
-    echo "appliance-api-server: console bundle extraction failed (API still serves)"
-  fi
-fi
 "#;
 
 /// The agent-runtime handoff for an agent-only VM on WSL. There is no
@@ -1102,16 +1094,12 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
     // staged. Same substitution rules as the k3s block: injected before
     // the port markers so its nested markers expand too.
     let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, apiserver) {
-        (false, true, false, Some(assets)) => {
-            format!("{WSL_APISERVER_COPY}{}", crate::guest::APISERVER_COMMON)
-                .replace(
-                    "__CONSOLE_PROVISION__",
-                    if assets.console.is_some() {
-                        WSL_CONSOLE_COPY
-                    } else {
-                        ""
-                    },
-                )
+        (false, true, false, Some(_assets)) => {
+            format!(
+                "{WSL_APISERVER_COPY}{}{}",
+                crate::guest::APISERVER_SEED_COPY,
+                crate::guest::APISERVER_COMMON
+            )
                 .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
         }
         _ => String::new(),
@@ -1607,6 +1595,7 @@ mod tests {
         let assets = crate::guest::ApiServerAssets {
             binary: assets_dir.join("appliance-api-server"),
             console: Some(assets_dir.join("appliance-console.tar.gz")),
+            release_evidence: None,
         };
         let script = build_bootstrap(
             &s,
@@ -1839,6 +1828,13 @@ mod tests {
             console: Some(PathBuf::from(
                 r"C:\Users\Avery\.appliance\guest-assets\appliance-console.tar.gz",
             )),
+            release_evidence: Some(crate::guest::ApiServerReleaseEvidence {
+                checksums: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\appliance-api-server.sha256"),
+                payload: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.json"),
+                envelope: PathBuf::from(
+                    r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.sig.json",
+                ),
+            }),
         };
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
         assert!(script.contains(
@@ -1847,6 +1843,9 @@ mod tests {
         assert!(script.contains(
             "CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz"
         ));
+        assert!(script.contains("RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json"));
+        assert!(script.contains("sha256sum \"$APISERVER_SRC\""));
+        assert!(script.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
         assert!(!script.contains(r"C:\Users\Avery"));
         assert!(!script.contains("wslpath"));
         assert!(!script.contains("/mnt/c"));
@@ -1855,7 +1854,8 @@ mod tests {
         assets.console = None;
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
         assert!(!script.contains("__CONSOLE_PROVISION__"));
-        assert!(!script.contains("CONSOLE_SRC="));
+        assert!(script.contains("CONSOLE_SRC="));
+        assert!(script.contains("api-server start refused"));
     }
 
     #[test]

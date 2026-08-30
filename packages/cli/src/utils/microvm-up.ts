@@ -399,7 +399,7 @@ export async function runUp(
   // `showDeployHint` controls the banner's closing `Deploy:` line.
   // `appliance vm up` leaves it on; `appliance init` suppresses it so its
   // own hand-off prints the single, unambiguous next command.
-  opts: { showDeployHint?: boolean; cluster?: boolean } = {}
+  opts: { showDeployHint?: boolean; cluster?: boolean; allowUnsigned?: boolean } = {}
 ): Promise<void> {
   if (!opts.cluster) {
     if (imageOverride) {
@@ -436,7 +436,7 @@ export async function runUp(
   // 1. Stage the api-server guest artifacts BEFORE the boot so the
   //    engine embeds them into the boot media. No docker anywhere.
   try {
-    await ensureApiServerArtifacts();
+    await ensureApiServerArtifacts({ allowUnsigned: opts.allowUnsigned });
   } catch (err) {
     console.error(chalk.red((err as Error).message));
     process.exit(1);

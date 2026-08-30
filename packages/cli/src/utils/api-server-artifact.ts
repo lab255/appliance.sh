@@ -3,9 +3,17 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import archiver from 'archiver';
-import { VERSION } from '@appliance.sh/sdk';
+import {
+  PINNED_RELEASE_TRUST,
+  VERSION,
+  verifyReleaseEnvelope,
+  type ReleaseArtifact,
+  type ReleaseTrustPolicy,
+} from '@appliance.sh/sdk';
+import { ensurePrivateDirectory, restrictWindowsAcl } from './fs-acl.js';
 
 // Staging of the api-server GUEST artifacts: the linux binary the
 // microVM runs as its control plane, plus the web-console bundle it
@@ -43,6 +51,18 @@ function versionStampPath(): string {
   return path.join(guestAssetsDir(), 'appliance-api-server.version');
 }
 
+function releasePayloadPath(): string {
+  return path.join(guestAssetsDir(), 'control-plane-release.json');
+}
+
+function releaseSignaturePath(): string {
+  return path.join(guestAssetsDir(), 'control-plane-release.sig.json');
+}
+
+function releaseChecksumsPath(): string {
+  return path.join(guestAssetsDir(), 'appliance-api-server.sha256');
+}
+
 /** Repo layout probe, resolved relative to this module's emitted file
  *  (dist/utils → the repo's packages dir) — mirrors microvm-up's
  *  repoVmBinaryCandidates. Null under the bun single binary. */
@@ -62,7 +82,7 @@ function repoPackagesDir(): string | null {
  * version-stamped: a matching stamp short-circuits. Set
  * APPLIANCE_REBUILD_API_SERVER=1 to force a restage (repo iteration).
  */
-export async function ensureApiServerArtifacts(): Promise<void> {
+export async function ensureApiServerArtifacts(options: { allowUnsigned?: boolean } = {}): Promise<void> {
   const force = process.env.APPLIANCE_REBUILD_API_SERVER === '1';
   let override = process.env.APPLIANCE_API_SERVER_BINARY;
   if (override && !fs.existsSync(override)) {
@@ -82,19 +102,22 @@ export async function ensureApiServerArtifacts(): Promise<void> {
   // stamp carries the source file's identity instead — a matching
   // VERSION stamp must not keep an older staged binary in place.
   const stamp = override ? overrideStamp(override) : `${VERSION}:${GUEST_ARCH}`;
+  const packagesDir = override ? null : repoPackagesDir();
   if (!force && fs.existsSync(stagedBinaryPath())) {
     try {
-      if (fs.readFileSync(versionStampPath(), 'utf8').trim() === stamp) return;
+      // A published release is re-fetched and re-verified before every boot.
+      // Repo/override dev sources retain the fast identity-stamp path.
+      if (fs.readFileSync(versionStampPath(), 'utf8').trim() === stamp && (override || packagesDir)) return;
     } catch {
       // no stamp — restage
     }
   }
 
-  fs.mkdirSync(guestAssetsDir(), { recursive: true });
+  ensurePrivateDirectory(guestAssetsDir());
 
   if (override) {
     console.log(chalk.cyan(`» staging api-server guest binary from ${override}`));
-    fs.copyFileSync(override, stagedBinaryPath());
+    atomicStageFile(stagedBinaryPath(), fs.readFileSync(override));
     // Console bundle: staged when a tarball ships next to the override
     // binary; the API serves headless without it. No sibling means the
     // override build carries no console — keeping a previously staged
@@ -102,23 +125,23 @@ export async function ensureApiServerArtifacts(): Promise<void> {
     // exact skew this module exists to prevent), so drop it.
     const consoleTar = overrideConsolePath(override);
     if (fs.existsSync(consoleTar)) {
-      fs.copyFileSync(consoleTar, stagedConsolePath());
+      atomicStageFile(stagedConsolePath(), fs.readFileSync(consoleTar));
       console.log(chalk.dim('staged web console bundle'));
     } else {
       fs.rmSync(stagedConsolePath(), { force: true });
       console.log(chalk.dim('no console bundle next to the override binary — the VM serves API only'));
     }
-    fs.writeFileSync(versionStampPath(), stamp);
+    clearReleaseEvidence();
+    atomicStageFile(versionStampPath(), Buffer.from(stamp));
     return;
   }
 
-  const packagesDir = repoPackagesDir();
   if (packagesDir) {
     await stageFromRepo(packagesDir);
   } else {
-    await stageFromRelease();
+    await stageFromRelease({ allowUnsigned: options.allowUnsigned });
   }
-  fs.writeFileSync(versionStampPath(), stamp);
+  atomicStageFile(versionStampPath(), Buffer.from(stamp));
 }
 
 /** The console tarball the desktop's dev staging ships next to the
@@ -163,52 +186,228 @@ async function stageFromRepo(packagesDir: string): Promise<void> {
       );
     }
   }
-  fs.copyFileSync(prebuilt, stagedBinaryPath());
+  atomicStageFile(stagedBinaryPath(), fs.readFileSync(prebuilt));
   console.log(chalk.dim(`staged api-server guest binary (${prebuilt})`));
 
   // Console bundle: best-effort — the API serves headless without it.
   const consoleDist = path.join(packagesDir, 'console', 'dist');
   if (fs.existsSync(path.join(consoleDist, 'index.html'))) {
-    await tarGzDirectory(consoleDist, stagedConsolePath());
+    const temporaryConsole = `${stagedConsolePath()}.${process.pid}.archive.tmp`;
+    await tarGzDirectory(consoleDist, temporaryConsole);
+    const consoleBytes = fs.readFileSync(temporaryConsole);
+    fs.rmSync(temporaryConsole, { force: true });
+    atomicStageFile(stagedConsolePath(), consoleBytes);
     console.log(chalk.dim('staged web console bundle'));
   } else {
     console.log(
       chalk.dim('console bundle not built (pnpm --filter @appliance.sh/console build) — the VM serves API only')
     );
   }
+  clearReleaseEvidence();
 }
 
-async function stageFromRelease(): Promise<void> {
-  const version = VERSION.replace(/^v/, '');
-  const binaryUrl = `${RELEASE_BASE}/v${version}/appliance-api-server-linux-${GUEST_ARCH}`;
-  console.log(chalk.cyan(`» downloading api-server guest binary (${binaryUrl})`));
+export interface StageFromReleaseOptions {
+  version?: string;
+  arch?: 'x64' | 'arm64';
+  fetcher?: typeof fetch;
+  releaseBase?: string;
+  destinationDir?: string;
+  trust?: ReleaseTrustPolicy;
+  now?: Date;
+  highestGeneration?: number;
+  allowUnsigned?: boolean;
+  cliVersion?: string;
+}
+
+/** Download and verify every release byte before the first staging write. */
+export async function stageFromRelease(options: StageFromReleaseOptions = {}): Promise<void> {
+  const version = (options.version ?? VERSION).replace(/^v/, '');
+  const arch = options.arch ?? GUEST_ARCH;
+  const fetcher = options.fetcher ?? fetch;
+  const base = `${options.releaseBase ?? RELEASE_BASE}/v${version}`;
+  const destination = options.destinationDir ?? guestAssetsDir();
+  const releaseName = `control-plane release v${version}`;
+  let payloadResponse: Response;
+  let signatureResponse: Response;
   try {
-    await downloadTo(binaryUrl, stagedBinaryPath());
-  } catch (err) {
+    [payloadResponse, signatureResponse] = await Promise.all([
+      releaseFetch(fetcher, `${base}/control-plane-release.json`),
+      releaseFetch(fetcher, `${base}/control-plane-release.sig.json`),
+    ]);
+  } catch (cause) {
+    throw new Error(`${releaseName} metadata download failed; no guest assets were written: ${errorDetail(cause)}`);
+  }
+
+  if (!payloadResponse.ok || !signatureResponse.ok) {
+    if (!options.allowUnsigned) {
+      throw new Error(
+        `${releaseName} is unsigned (pre-MV0 release); refusing to stage it before writing any guest assets`
+      );
+    }
+    const cliVersion = options.cliVersion ?? VERSION;
+    if (isReleaseBuild(cliVersion)) {
+      throw new Error(`--allow-unsigned is refused by release build ${cliVersion}; ${releaseName} was not staged`);
+    }
+    console.warn(
+      chalk.bgRed.white.bold(
+        ` WARNING: UNSIGNED DEV STAGING ENABLED for ${releaseName}; authenticity and rollback protection are disabled `
+      )
+    );
+    await stageUnsignedRelease(base, version, arch, destination, fetcher);
+    return;
+  }
+
+  let rawPayload: unknown;
+  let rawEnvelope: unknown;
+  try {
+    rawPayload = JSON.parse(await payloadResponse.text());
+    rawEnvelope = JSON.parse(await signatureResponse.text());
+  } catch {
+    throw new Error(`${releaseName} has malformed signed metadata; no guest assets were written`);
+  }
+  let verified;
+  try {
+    verified = await verifyReleaseEnvelope(rawPayload, rawEnvelope, options.trust ?? PINNED_RELEASE_TRUST, {
+      now: options.now,
+      highestGeneration: options.highestGeneration ?? stagedHighestGeneration(destination),
+    });
+  } catch (cause) {
     throw new Error(
-      `could not download the api-server guest binary for v${version} (${(err as Error).message}).\n` +
-        'Check network/GitHub access, or that this CLI version has a published release. ' +
-        'Alternatively point APPLIANCE_API_SERVER_BINARY at a prebuilt linux binary.'
+      `${releaseName} signature verification failed; no guest assets were written: ${errorDetail(cause)}`
     );
   }
+  if (verified.payload.version !== version) {
+    throw new Error(
+      `${releaseName} metadata names version ${verified.payload.version}; refusing cross-version staging before writing`
+    );
+  }
+  const binaryName = `appliance-api-server-linux-${arch}` as const;
+  const binary = releaseArtifact(verified.payload.artifacts, binaryName, arch, releaseName);
+  const consoleArtifact = releaseArtifact(verified.payload.artifacts, 'appliance-console.tar.gz', 'any', releaseName);
+  console.log(chalk.cyan(`» downloading verified api-server guest assets (${releaseName}, ${arch})`));
+  const [binaryBytes, consoleBytes] = await Promise.all([
+    fetchArtifact(fetcher, `${base}/${binary.name}`, binary, releaseName),
+    fetchArtifact(fetcher, `${base}/${consoleArtifact.name}`, consoleArtifact, releaseName),
+  ]);
 
-  // Console bundle: best-effort — the API serves headless without it.
-  try {
-    await downloadTo(`${RELEASE_BASE}/v${version}/appliance-console.tar.gz`, stagedConsolePath());
-    console.log(chalk.dim('staged web console bundle'));
-  } catch {
-    console.log(chalk.dim('no console bundle in this release — the VM serves API only'));
+  // Everything above is in memory and verified. Only now may staging mutate.
+  ensurePrivateDirectory(destination);
+  atomicStageFile(path.join(destination, 'appliance-api-server'), binaryBytes);
+  atomicStageFile(path.join(destination, 'appliance-console.tar.gz'), consoleBytes);
+  const checksums = `${binary.sha256}  appliance-api-server\n${consoleArtifact.sha256}  appliance-console.tar.gz\n`;
+  atomicStageFile(path.join(destination, 'appliance-api-server.sha256'), Buffer.from(checksums));
+  atomicStageFile(
+    path.join(destination, 'control-plane-release.json'),
+    Buffer.from(`${JSON.stringify(verified.payload)}\n`)
+  );
+  atomicStageFile(
+    path.join(destination, 'control-plane-release.sig.json'),
+    Buffer.from(`${JSON.stringify(verified.envelope)}\n`)
+  );
+  console.log(chalk.dim(`staged release signed by keyId ${verified.envelope.keyId}`));
+}
+
+export function isReleaseBuild(version: string = VERSION): boolean {
+  const normalized = version.replace(/^v/, '');
+  return !normalized.startsWith('0.0.0') && !normalized.includes('-dev');
+}
+
+function releaseArtifact(
+  artifacts: ReleaseArtifact[],
+  name: ReleaseArtifact['name'],
+  arch: ReleaseArtifact['arch'],
+  releaseName: string
+): ReleaseArtifact {
+  const artifact = artifacts.find((candidate) => candidate.name === name);
+  if (!artifact || artifact.arch !== arch) {
+    throw new Error(`${releaseName} does not bind ${name} to architecture ${arch}; no guest assets were written`);
+  }
+  return artifact;
+}
+
+async function stageUnsignedRelease(
+  base: string,
+  version: string,
+  arch: 'x64' | 'arm64',
+  destination: string,
+  fetcher: typeof fetch
+): Promise<void> {
+  const releaseName = `unsigned control-plane release v${version}`;
+  const binaryName = `appliance-api-server-linux-${arch}`;
+  const [binaryResponse, consoleResponse] = await Promise.all([
+    releaseFetch(fetcher, `${base}/${binaryName}`),
+    releaseFetch(fetcher, `${base}/appliance-console.tar.gz`),
+  ]);
+  if (!binaryResponse.ok) throw new Error(`${releaseName} binary download failed: HTTP ${binaryResponse.status}`);
+  const binary = Buffer.from(await binaryResponse.arrayBuffer());
+  if (binary.length === 0) throw new Error(`${releaseName} binary is empty`);
+  const consoleBytes = consoleResponse.ok ? Buffer.from(await consoleResponse.arrayBuffer()) : null;
+  ensurePrivateDirectory(destination);
+  atomicStageFile(path.join(destination, 'appliance-api-server'), binary);
+  if (consoleBytes?.length) atomicStageFile(path.join(destination, 'appliance-console.tar.gz'), consoleBytes);
+  else fs.rmSync(path.join(destination, 'appliance-console.tar.gz'), { force: true });
+  for (const file of ['control-plane-release.json', 'control-plane-release.sig.json', 'appliance-api-server.sha256']) {
+    fs.rmSync(path.join(destination, file), { force: true });
   }
 }
 
-async function downloadTo(url: string, dest: string): Promise<void> {
-  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(300_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.length === 0) throw new Error('empty artifact');
-  const tmp = `${dest}.tmp`;
-  fs.writeFileSync(tmp, bytes);
-  fs.renameSync(tmp, dest);
+async function fetchArtifact(
+  fetcher: typeof fetch,
+  url: string,
+  artifact: ReleaseArtifact,
+  releaseName: string
+): Promise<Buffer> {
+  const response = await releaseFetch(fetcher, url);
+  if (!response.ok) throw new Error(`${releaseName} asset ${artifact.name} download failed: HTTP ${response.status}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  if (bytes.length !== artifact.size || digest !== artifact.sha256) {
+    throw new Error(
+      `${releaseName} asset ${artifact.name} failed signed size/SHA-256 verification (expected ${artifact.size}/${artifact.sha256}, got ${bytes.length}/${digest}); no guest assets were written`
+    );
+  }
+  return bytes;
+}
+
+function releaseFetch(fetcher: typeof fetch, url: string): Promise<Response> {
+  return fetcher(url, { redirect: 'follow', signal: AbortSignal.timeout(300_000) });
+}
+
+function errorDetail(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+function stagedHighestGeneration(directory: string): number | undefined {
+  try {
+    const payload = JSON.parse(fs.readFileSync(path.join(directory, 'control-plane-release.json'), 'utf8')) as {
+      generation?: unknown;
+    };
+    return typeof payload.generation === 'number' && Number.isSafeInteger(payload.generation) && payload.generation >= 0
+      ? payload.generation
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function clearReleaseEvidence(): void {
+  for (const file of [releasePayloadPath(), releaseSignaturePath(), releaseChecksumsPath()]) {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+function hardenStagedFile(file: string): void {
+  fs.chmodSync(file, 0o444);
+  restrictWindowsAcl(file);
+}
+
+function atomicStageFile(file: string, bytes: Uint8Array): void {
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, bytes, { mode: 0o600, flag: 'wx' });
+  hardenStagedFile(temporary);
+  fs.rmSync(file, { force: true });
+  fs.renameSync(temporary, file);
+  hardenStagedFile(file);
 }
 
 function tarGzDirectory(dir: string, dest: string): Promise<void> {

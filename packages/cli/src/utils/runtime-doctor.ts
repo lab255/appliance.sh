@@ -439,7 +439,8 @@ const normVersion = (v: string): string => v.replace(/^v/, '');
 export function compareVersionStamp(
   stamp: string | null,
   cliVersion: string,
-  serverVersion: string | null
+  serverVersion: string | null,
+  signingKeyId: string | null = null
 ): RuntimeFinding {
   const id = 'runtime:guest-stamp';
   const title = 'Guest api-server artifacts vs CLI / running server';
@@ -460,13 +461,16 @@ export function compareVersionStamp(
         'guest binary staged from an APPLIANCE_API_SERVER_BINARY override (dev build) — version comparison skipped',
     };
   }
+  const releaseTrust = signingKeyId
+    ? `staged asset signed by keyId ${signingKeyId}`
+    : 'staged asset unsigned (pre-MV0 release)';
   const stampVersion = stamp.split(':')[0] ?? '';
   if (serverVersion && normVersion(serverVersion) !== normVersion(stampVersion)) {
     return {
       id,
       title,
       severity: 'warn',
-      detail: `running api-server is ${serverVersion} but the staged artifacts are ${stampVersion} — the VM booted before the restage`,
+      detail: `running api-server is ${serverVersion} but the staged artifacts are ${stampVersion} — the VM booted before the restage; ${releaseTrust}`,
       remediation: 'Restart the VM to pick up the staged binary: `appliance vm stop && appliance vm up`.',
     };
   }
@@ -475,7 +479,7 @@ export function compareVersionStamp(
       id,
       title,
       severity: 'warn',
-      detail: `staged guest artifacts are ${stampVersion} but this CLI is ${cliVersion}`,
+      detail: `staged guest artifacts are ${stampVersion} but this CLI is ${cliVersion}; ${releaseTrust}`,
       remediation: 'Run `appliance vm up` — it restages the matching artifacts before boot.',
     };
   }
@@ -484,8 +488,8 @@ export function compareVersionStamp(
     title,
     severity: 'ok',
     detail: serverVersion
-      ? `CLI ${cliVersion} = staged ${stampVersion} = running ${serverVersion}`
-      : `CLI ${cliVersion} = staged ${stampVersion} (running server version unknown)`,
+      ? `CLI ${cliVersion} = staged ${stampVersion} = running ${serverVersion}; ${releaseTrust}`
+      : `CLI ${cliVersion} = staged ${stampVersion} (running server version unknown); ${releaseTrust}`,
   };
 }
 
@@ -740,6 +744,21 @@ function readGuestStamp(): string | null {
   }
 }
 
+function readGuestSigningKeyId(): string | null {
+  try {
+    const envelope = JSON.parse(
+      fs.readFileSync(path.join(guestAssetsDir(), 'control-plane-release.sig.json'), 'utf8')
+    ) as { keyId?: unknown; role?: unknown };
+    return envelope.role === 'control-plane-release' &&
+      typeof envelope.keyId === 'string' &&
+      /^ed25519:sha256:[0-9a-f]{64}$/.test(envelope.keyId)
+      ? envelope.keyId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function probeKeychain(profileName: string, profile: Profile): KeychainProbe {
   return probeProfileCredential(profileName, profile);
 }
@@ -934,7 +953,7 @@ export async function runRuntimeDoctor(opts: RuntimeDoctorOptions = {}): Promise
   }
 
   // 4. Guest artifact stamp vs CLI vs running server (check e).
-  findings.push(compareVersionStamp(readGuestStamp(), VERSION, serverVersion));
+  findings.push(compareVersionStamp(readGuestStamp(), VERSION, serverVersion, readGuestSigningKeyId()));
 
   // 5. Duplicate ingress claims (check c) — skip-not-fail without kubectl.
   const ingress = probeIngress(vm);

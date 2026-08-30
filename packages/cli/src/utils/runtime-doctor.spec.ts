@@ -426,8 +426,12 @@ describe('ingress claims', () => {
 
 describe('compareVersionStamp', () => {
   it('passes when CLI, staged stamp, and running server agree (v-prefix insensitive)', () => {
-    expect(compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2').severity).toBe('ok');
-    expect(compareVersionStamp('1.51.2:arm64', 'v1.51.2', null).severity).toBe('ok');
+    const signed = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2', `ed25519:sha256:${'a'.repeat(64)}`);
+    expect(signed.severity).toBe('ok');
+    expect(signed.detail).toContain(`staged asset signed by keyId ed25519:sha256:${'a'.repeat(64)}`);
+    const unsigned = compareVersionStamp('1.51.2:arm64', 'v1.51.2', null);
+    expect(unsigned.severity).toBe('ok');
+    expect(unsigned.detail).toContain('unsigned (pre-MV0 release)');
   });
 
   it('suggests a RESTART when the running server predates the staged stamp', () => {

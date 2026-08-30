@@ -230,6 +230,13 @@ pub fn ensure_k3s_airgap_media() -> Result<PathBuf> {
 pub struct ApiServerAssets {
     pub binary: PathBuf,
     pub console: Option<PathBuf>,
+    pub release_evidence: Option<ApiServerReleaseEvidence>,
+}
+
+pub struct ApiServerReleaseEvidence {
+    pub checksums: PathBuf,
+    pub payload: PathBuf,
+    pub envelope: PathBuf,
 }
 
 /// Locate the staged api-server artifacts, or None when the binary is
@@ -242,7 +249,21 @@ pub fn apiserver_assets() -> Option<ApiServerAssets> {
     }
     let console = dir.join("appliance-console.tar.gz");
     let console = console.is_file().then_some(console);
-    Some(ApiServerAssets { binary, console })
+    let checksums = dir.join("appliance-api-server.sha256");
+    let payload = dir.join("control-plane-release.json");
+    let envelope = dir.join("control-plane-release.sig.json");
+    let release_evidence = (checksums.is_file() && payload.is_file() && envelope.is_file()).then_some(
+        ApiServerReleaseEvidence {
+            checksums,
+            payload,
+            envelope,
+        },
+    );
+    Some(ApiServerAssets {
+        binary,
+        console,
+        release_evidence,
+    })
 }
 
 /// Read (or generate once) the VM's bootstrap token — the shared secret
@@ -972,17 +993,79 @@ BKTOML
 /// WSL2 backend swaps in its own drvfs copy preamble instead.
 const APISERVER_MEDIA_COPY: &str = r#"# --- appliance api-server ---------------------------------------------
 # The control plane runs as a plain guest binary — no image delivery,
-# no docker anywhere. The binary (and console bundle) ride the FAT boot
-# media; copy them off it like k3s above.
+# no docker anywhere. The binary, console, and signed release evidence
+# ride the FAT boot media. APISERVER_SEED_COPY verifies before copying.
 mkdir -p /persist/appliance
 APISERVER_MEDIA=$(dirname "$(find /media -maxdepth 2 -name appliance-api-server 2>/dev/null | head -1)")
-if [ -n "$APISERVER_MEDIA" ]; then
-  cp "$APISERVER_MEDIA/appliance-api-server" /usr/local/bin/appliance-api-server
-  chmod +x /usr/local/bin/appliance-api-server
-  if [ -f "$APISERVER_MEDIA/appliance-console.tar.gz" ]; then
+APISERVER_SRC="$APISERVER_MEDIA/appliance-api-server"
+CONSOLE_SRC="$APISERVER_MEDIA/appliance-console.tar.gz"
+RELEASE_CHECKSUMS="$APISERVER_MEDIA/appliance-api-server.sha256"
+RELEASE_PAYLOAD="$APISERVER_MEDIA/control-plane-release.json"
+RELEASE_ENVELOPE="$APISERVER_MEDIA/control-plane-release.sig.json"
+"#;
+
+/// Backend-neutral MV0 seed gate. The host already verified the Ed25519
+/// envelope; the minimal Alpine guest deliberately does not carry a second
+/// Ed25519 implementation in MV0. It independently binds both exact sizes and
+/// SHA-256 digests to the verified payload copied beside the seed.
+pub(crate) const APISERVER_SEED_COPY: &str = r#"APPLIANCE_WARNINGS_FILE=/var/log/appliance-api-server.warnings
+seed_warning() {
+  MSG="$1"
+  echo "appliance-api-server: SECURITY: $MSG" | tee -a /var/log/appliance-api-server.log >&2
+  echo "$MSG" >> "$APPLIANCE_WARNINGS_FILE"
+}
+if [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PAYLOAD" ] || [ -f "$RELEASE_ENVELOPE" ]; then
+  SEED_OK=1
+  if [ ! -f "$RELEASE_CHECKSUMS" ] || [ ! -f "$RELEASE_PAYLOAD" ] || [ ! -f "$RELEASE_ENVELOPE" ]; then
+    seed_warning "signed control-plane seed evidence is incomplete; api-server start refused"
+    SEED_OK=0
+  fi
+  case "$(uname -m)" in
+    x86_64) RELEASE_ARCH=x64 ;;
+    aarch64|arm64) RELEASE_ARCH=arm64 ;;
+    *) RELEASE_ARCH=unsupported ;;
+  esac
+  RELEASE_NAME="appliance-api-server-linux-$RELEASE_ARCH"
+  EXPECTED_BINARY_SHA=$(jq -r --arg name "$RELEASE_NAME" --arg arch "$RELEASE_ARCH" '.artifacts[] | select(.name == $name and .arch == $arch) | .sha256' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
+  EXPECTED_BINARY_SIZE=$(jq -r --arg name "$RELEASE_NAME" '.artifacts[] | select(.name == $name) | .size' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
+  SIDECAR_BINARY_SHA=$(awk '$2 == "appliance-api-server" { print $1 }' "$RELEASE_CHECKSUMS" 2>/dev/null | head -1)
+  ACTUAL_BINARY_SHA=$(sha256sum "$APISERVER_SRC" 2>/dev/null | awk '{print $1}')
+  ACTUAL_BINARY_SIZE=$(wc -c < "$APISERVER_SRC" 2>/dev/null | tr -d ' ')
+  EXPECTED_CONSOLE_SHA=$(jq -r '.artifacts[] | select(.name == "appliance-console.tar.gz" and .arch == "any") | .sha256' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
+  EXPECTED_CONSOLE_SIZE=$(jq -r '.artifacts[] | select(.name == "appliance-console.tar.gz") | .size' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
+  SIDECAR_CONSOLE_SHA=$(awk '$2 == "appliance-console.tar.gz" { print $1 }' "$RELEASE_CHECKSUMS" 2>/dev/null | head -1)
+  ACTUAL_CONSOLE_SHA=$(sha256sum "$CONSOLE_SRC" 2>/dev/null | awk '{print $1}')
+  ACTUAL_CONSOLE_SIZE=$(wc -c < "$CONSOLE_SRC" 2>/dev/null | tr -d ' ')
+  RELEASE_KEY_ID=$(jq -r 'select(.role == "control-plane-release") | .keyId // empty' "$RELEASE_ENVELOPE" 2>/dev/null)
+  if [ -z "$RELEASE_KEY_ID" ] || [ "$EXPECTED_BINARY_SHA" != "$SIDECAR_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ] || [ "$EXPECTED_CONSOLE_SHA" != "$SIDECAR_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SHA" != "$ACTUAL_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SIZE" != "$ACTUAL_CONSOLE_SIZE" ]; then
+    seed_warning "signed control-plane seed digest/size mismatch; api-server start refused"
+    SEED_OK=0
+  fi
+  if [ "$SEED_OK" = 1 ]; then
+    cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
+    chmod +x /usr/local/bin/appliance-api-server
     rm -rf /persist/appliance/console.new
     mkdir -p /persist/appliance/console.new
-    if tar -xzf "$APISERVER_MEDIA/appliance-console.tar.gz" -C /persist/appliance/console.new 2>/dev/null; then
+    if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
+      rm -rf /persist/appliance/console
+      mv /persist/appliance/console.new /persist/appliance/console
+    else
+      seed_warning "signed console bundle extraction failed; api-server start refused"
+      rm -f /usr/local/bin/appliance-api-server
+    fi
+  else
+    rm -f /usr/local/bin/appliance-api-server
+  fi
+elif [ -f "$APISERVER_SRC" ]; then
+  # Development-only repo/override and explicit --allow-unsigned staging.
+  # Production CLI builds cannot create this state from a release download.
+  seed_warning "unsigned development control-plane seed accepted (pre-MV0 release)"
+  cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
+  chmod +x /usr/local/bin/appliance-api-server
+  if [ -f "$CONSOLE_SRC" ]; then
+    rm -rf /persist/appliance/console.new
+    mkdir -p /persist/appliance/console.new
+    if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
       rm -rf /persist/appliance/console
       mv /persist/appliance/console.new /persist/appliance/console
     else
@@ -2535,7 +2618,7 @@ fn build_apkovl_for_readiness(
                 &if !cluster || !apiserver {
                     String::new()
                 } else {
-                    format!("{APISERVER_MEDIA_COPY}{APISERVER_COMMON}")
+                    format!("{APISERVER_MEDIA_COPY}{APISERVER_SEED_COPY}{APISERVER_COMMON}")
                 },
             )
             // vz boot media: arm the guest-side probe for the
@@ -2744,6 +2827,17 @@ pub fn build_boot_media(
         .and_then(|a| a.console.as_ref())
         .map(fs::read)
         .transpose()?;
+    let release_evidence_data = apiserver
+        .as_ref()
+        .and_then(|assets| assets.release_evidence.as_ref())
+        .map(|evidence| {
+            Ok::<_, std::io::Error>([
+                ("appliance-api-server.sha256", fs::read(&evidence.checksums)?),
+                ("control-plane-release.json", fs::read(&evidence.payload)?),
+                ("control-plane-release.sig.json", fs::read(&evidence.envelope)?),
+            ])
+        })
+        .transpose()?;
 
     // Size the volume to fit contents + FAT overhead, rounded up.
     let content = modloop_data.len()
@@ -2751,6 +2845,9 @@ pub fn build_boot_media(
         + apkovl.len()
         + apiserver_data.as_ref().map_or(0, Vec::len)
         + console_data.as_ref().map_or(0, Vec::len)
+        + release_evidence_data
+            .as_ref()
+            .map_or(0, |files| files.iter().map(|(_, data)| data.len()).sum())
         + runtime_repositories.iter().map(|repository| {
             fs::metadata(&repository.index).map(|metadata| metadata.len() as usize).unwrap_or(0)
                 + repository.packages.iter().map(|package| {
@@ -2819,6 +2916,12 @@ pub fn build_boot_media(
         if let Some(data) = &console_data {
             let mut f = root.create_file("appliance-console.tar.gz")?;
             f.write_all(data)?;
+        }
+        if let Some(files) = &release_evidence_data {
+            for (name, data) in files {
+                let mut f = root.create_file(name)?;
+                f.write_all(data)?;
+            }
         }
     }
     fs.unmount().context("unmount FAT volume")?;
@@ -3559,7 +3662,10 @@ mod tests {
         assert!(!start.contains("__APISERVER_PROVISION__"), "marker must be substituted");
         assert!(!start.contains("__APISERVER_GUEST_PORT__"));
         assert!(!start.contains("__HOST_PORT__"));
-        assert!(start.contains("cp \"$APISERVER_MEDIA/appliance-api-server\" /usr/local/bin/appliance-api-server"));
+        assert!(start.contains("APISERVER_SRC=\"$APISERVER_MEDIA/appliance-api-server\""));
+        assert!(start.contains("sha256sum \"$APISERVER_SRC\""));
+        assert!(start.contains("control-plane-release.sig.json"));
+        assert!(start.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
         // Token auth against the local k3s: bun's fetch can't carry the
         // kubeconfig's client certificates, so the server gets its own
         // ServiceAccount token + the k3s CA via NODE_EXTRA_CA_CERTS.

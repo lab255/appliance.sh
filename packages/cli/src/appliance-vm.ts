@@ -70,6 +70,7 @@ program
   .option('--cpus <n>', 'virtual CPUs for the VM (persisted; takes effect on next boot)', parsePositiveInt)
   .option('--memory <MiB>', 'guest memory in MiB (persisted; takes effect on next boot)', parsePositiveInt)
   .option('--cluster', 'provision k3s, BuildKit, registry, api-server, and the local profile', false)
+  .option('--allow-unsigned', 'DEV ONLY: permit a pre-MV0 unsigned guest release with a loud warning', false)
   .action(
     async (opts: {
       name: string;
@@ -78,6 +79,7 @@ program
       cpus?: number;
       memory?: number;
       cluster: boolean;
+      allowUnsigned: boolean;
     }) => {
       try {
         await runUp(
@@ -88,7 +90,7 @@ program
             cpus: opts.cpus,
             memory: opts.memory,
           },
-          { cluster: opts.cluster }
+          { cluster: opts.cluster, allowUnsigned: opts.allowUnsigned }
         );
       } catch (err) {
         console.error(chalk.red(err instanceof Error ? err.message : String(err)));
