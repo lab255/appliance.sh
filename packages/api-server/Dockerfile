@@ -93,15 +93,20 @@ ENV AWS_LWA_PORT=3000
 # uses x86_64 / arm64 so we map from Docker's amd64 / arm64 form.
 ARG TARGETARCH
 ARG CRANE_VERSION=v0.20.6
+ARG CRANE_SHA256_AMD64=c1d593d01551f2c9a3df5ca0a0be4385a839bd9b86d4a76e18d7b17d16559127
+ARG CRANE_SHA256_ARM64=fc0515857bc38e4ddd2d37a5ab03fb5959449c7b2d4ad759bcc1174ac0cad91b
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
     && rm -rf /var/lib/apt/lists/* \
     && case "${TARGETARCH:-amd64}" in \
-         amd64) CRANE_ARCH=x86_64 ;; \
-         arm64) CRANE_ARCH=arm64 ;; \
+         amd64) CRANE_ARCH=x86_64; CRANE_SHA256="${CRANE_SHA256_AMD64}" ;; \
+         arm64) CRANE_ARCH=arm64; CRANE_SHA256="${CRANE_SHA256_ARM64}" ;; \
          *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
        esac \
-    && curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
-       | tar -xzf - -C /usr/local/bin crane
+    && curl -fsSL -o /tmp/crane.tar.gz \
+       "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" \
+    && echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/crane.tar.gz -C /usr/local/bin crane \
+    && rm /tmp/crane.tar.gz
 
 # Crane writes its auth config to $DOCKER_CONFIG (or $HOME/.docker by default).
 # On Lambda $HOME points at a read-only sandbox dir, so we direct crane at /tmp

@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import type { ObjectStore, ReleaseEnvelope, ReleaseSignatureEnvelope, VersionedObject } from '@appliance.sh/sdk';
 import { StorageService } from './storage.service';
 import { SelfUpdateService, type ReleaseVerifier, type SelfUpdateDispatcher } from './self-update.service';
 import {
   buildImageOnlyUpdate,
   craneCommand,
+  createAwsSelfUpdateDependencies,
+  runCraneCopy,
   SelfUpdateExecutor,
   type AssumedCredentials,
   type SelfUpdateExecutorDependencies,
@@ -61,6 +66,7 @@ const release: ReleaseEnvelope = {
 };
 const oldImage = `111111111111.dkr.ecr.us-east-1.amazonaws.com/appliance@${oldDigest}`;
 const targetImage = `111111111111.dkr.ecr.us-east-1.amazonaws.com/appliance@${digest}`;
+const taggedTargetImage = '111111111111.dkr.ecr.us-east-1.amazonaws.com/appliance:system-1.58.0';
 const credentials: AssumedCredentials = {
   accessKeyId: 'access',
   secretAccessKey: 'secret',
@@ -73,6 +79,8 @@ type AwsMode =
   | 'target-rollback'
   | 'recovery-exhausted'
   | 'recovery-stack-failed'
+  | 'recovery-stuck'
+  | 'rollback-failed'
   | 'stuck';
 
 function fakeAws(now: { value: number }, mode: AwsMode = 'success') {
@@ -103,6 +111,7 @@ function fakeAws(now: { value: number }, mode: AwsMode = 'success') {
       .fn()
       .mockResolvedValue(['ApiServerFunction UPDATE_FAILED arn:aws:iam::111111111111:role/private']),
     getEcrAuthorization: vi.fn().mockResolvedValue('QVdTOnNlY3JldA=='),
+    resolveImageDigest: vi.fn().mockResolvedValue(digest),
     craneCopy: vi.fn().mockResolvedValue(undefined),
     updateStack: vi.fn(async (_credentials, request) => {
       updateRequests.push(request);
@@ -114,16 +123,25 @@ function fakeAws(now: { value: number }, mode: AwsMode = 'success') {
     health: vi.fn(async () => {
       const current = stack.parameters.find((parameter) => parameter.key === 'ImageUri')?.value;
       if (current === targetImage) {
-        return { initialized: true, serverVersion: mode === 'wrong-version' ? '9.9.9' : release.version };
+        return {
+          initialized: true,
+          serverVersion: ['wrong-version', 'recovery-stuck'].includes(mode) ? '9.9.9' : release.version,
+        };
       }
       return { initialized: true, serverVersion: '1.57.0' };
     }),
     sleep: vi.fn(async (ms) => {
       now.value += ms;
-      if (stack.status === 'UPDATE_IN_PROGRESS' && mode !== 'stuck') {
+      if (
+        stack.status === 'UPDATE_IN_PROGRESS' &&
+        mode !== 'stuck' &&
+        !(mode === 'recovery-stuck' && pendingImage === oldImage)
+      ) {
         if (pendingImage === targetImage && mode === 'target-rollback') {
           stack.status = 'UPDATE_ROLLBACK_COMPLETE';
           stack.parameters.find((parameter) => parameter.key === 'ImageUri')!.value = oldImage;
+        } else if (pendingImage === targetImage && mode === 'rollback-failed') {
+          stack.status = 'UPDATE_ROLLBACK_FAILED';
         } else if (pendingImage === oldImage && mode === 'recovery-stack-failed') {
           stack.status = 'UPDATE_FAILED';
           stack.parameters.find((parameter) => parameter.key === 'ImageUri')!.value = targetImage;
@@ -176,14 +194,24 @@ describe('SelfUpdateExecutor', () => {
   it('copies the verified digest and submits the exact previous-template ImageUri-only update', async () => {
     const job = await queuedJob();
     const aws = fakeAws(now);
+    const updateStack = aws.deps.updateStack;
+    aws.deps.updateStack = vi.fn(async (assumed, request) => {
+      expect(await jobs.get(job.id)).toMatchObject({ phase: 'submitting-update', targetImage });
+      await updateStack(assumed, request);
+    });
     await expect(new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id)).resolves.toBe('complete');
 
     expect(aws.deps.assumeRole).toHaveBeenCalledWith(process.env.SELF_UPDATE_ROLE_ARN, `self-update-${job.id}`);
     expect(aws.deps.craneCopy).toHaveBeenCalledWith(
       `${release.image.repository}@${digest}`,
-      targetImage,
+      taggedTargetImage,
       '111111111111.dkr.ecr.us-east-1.amazonaws.com',
       'QVdTOnNlY3JldA=='
+    );
+    expect(aws.deps.resolveImageDigest).toHaveBeenCalledWith(
+      credentials,
+      '111111111111.dkr.ecr.us-east-1.amazonaws.com/appliance',
+      'system-1.58.0'
     );
     expect(aws.updateRequests).toEqual([
       {
@@ -289,6 +317,19 @@ describe('SelfUpdateExecutor', () => {
     expect(retry.job.id).not.toBe(job.id);
   });
 
+  it('leaves a submitted but unobserved re-pin resumable instead of marking it exhausted', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now, 'recovery-stuck');
+    await new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id);
+    expect(aws.updateRequests.map((request) => request.Parameters[1]?.ParameterValue)).toEqual([targetImage, oldImage]);
+    expect(await jobs.get(job.id)).toMatchObject({
+      status: 'running',
+      phase: 'waiting-for-recovery',
+      recoveryState: 'in-progress',
+      recovered: false,
+    });
+  });
+
   it('records redacted CloudFormation events when recovery reaches a failed stable state', async () => {
     const job = await queuedJob();
     const aws = fakeAws(now, 'recovery-stack-failed');
@@ -297,7 +338,7 @@ describe('SelfUpdateExecutor', () => {
     expect(aws.deps.describeStackEvents).toHaveBeenCalled();
     const failed = await jobs.get(job.id);
     expect(failed).toMatchObject({ recoveryState: 'exhausted', recovered: false });
-    expect(failed?.error).toContain('[REDACTED_ROLE_ARN]');
+    expect(failed?.error).toContain('[REDACTED_ARN]');
     expect(failed?.error).not.toContain('111111111111');
   });
 
@@ -324,14 +365,110 @@ describe('SelfUpdateExecutor', () => {
     const aws = fakeAws(now, 'stuck');
     await new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id);
     expect(now.value - Date.parse('2026-08-30T00:00:00.000Z')).toBeLessThanOrEqual(840_000);
-    expect(await jobs.get(job.id)).toMatchObject({ recoveryState: 'exhausted', recovered: false });
+    expect(await jobs.get(job.id)).toMatchObject({
+      status: 'running',
+      recoveryState: 'in-progress',
+      phase: 'submitting-recovery',
+    });
   });
 
   it('builds crane cp as an argv array with shell disabled and auth isolated to the supplied /tmp config', () => {
+    process.env.BOOTSTRAP_TOKEN = 'must-not-reach-crane';
     const command = craneCommand('source@sha256:a', 'target@sha256:a', '/tmp/private-docker-config');
     expect(command.file).toBe('crane');
     expect(command.args).toEqual(['cp', 'source@sha256:a', 'target@sha256:a']);
-    expect(command.options).toMatchObject({ shell: false, env: { DOCKER_CONFIG: '/tmp/private-docker-config' } });
+    expect(command.options).toMatchObject({
+      shell: false,
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, DOCKER_CONFIG: '/tmp/private-docker-config' },
+    });
+    expect(command.options.env).not.toHaveProperty('BOOTSTRAP_TOKEN');
+  });
+
+  it('writes the exact ECR token only to the per-run DOCKER_CONFIG', async () => {
+    let config: unknown;
+    await runCraneCopy(
+      'source@sha256:a',
+      'target:system-1.0.0',
+      '111111111111.dkr.ecr.us-east-1.amazonaws.com',
+      'exact-token',
+      async (command) => {
+        const dockerConfig = command.options.env?.DOCKER_CONFIG;
+        expect(typeof dockerConfig).toBe('string');
+        config = JSON.parse(await readFile(join(String(dockerConfig), 'config.json'), 'utf8'));
+      }
+    );
+    expect(config).toEqual({
+      auths: { '111111111111.dkr.ecr.us-east-1.amazonaws.com': { auth: 'exact-token' } },
+    });
+  });
+
+  it('requests the exact fenced one-hour AssumeRole session', async () => {
+    let command: AssumeRoleCommand | undefined;
+    const send = vi.spyOn(STSClient.prototype, 'send').mockImplementation(async (candidate: unknown) => {
+      command = candidate as AssumeRoleCommand;
+      return {
+        Credentials: { AccessKeyId: 'access', SecretAccessKey: 'secret', SessionToken: 'session' },
+      } as never;
+    });
+    try {
+      await createAwsSelfUpdateDependencies().assumeRole(
+        'arn:aws:iam::111111111111:role/self-update',
+        'self-update-job'
+      );
+    } finally {
+      send.mockRestore();
+    }
+    expect(command?.input).toEqual({
+      RoleArn: 'arn:aws:iam::111111111111:role/self-update',
+      RoleSessionName: 'self-update-job',
+      SourceIdentity: 'self-update-job',
+      DurationSeconds: 3600,
+    });
+  });
+
+  it('persists a redacted recovered failure when mirroring fails before stack mutation', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now);
+    const token = 'bare-secret-token-value';
+    aws.deps.getEcrAuthorization = vi.fn().mockResolvedValue(token);
+    aws.deps.craneCopy = vi.fn().mockRejectedValue(new Error(`crane exposed ${token}`));
+    await new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id);
+    expect(aws.deps.updateStack).not.toHaveBeenCalled();
+    expect(await jobs.get(job.id)).toMatchObject({
+      status: 'failed',
+      recovered: true,
+      recoveryState: 'recovered',
+      error: 'crane exposed [REDACTED_ECR_TOKEN]',
+    });
+  });
+
+  it('rejects a post-mirror digest mismatch before UpdateStack', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now);
+    aws.deps.resolveImageDigest = vi.fn().mockResolvedValue(`sha256:${'c'.repeat(64)}`);
+    await new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id);
+    expect(aws.deps.updateStack).not.toHaveBeenCalled();
+    expect(await jobs.get(job.id)).toMatchObject({ status: 'failed', recovered: true });
+  });
+
+  it('aborts without mutation when a heartbeat reports a stolen lease', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now);
+    vi.spyOn(jobs, 'heartbeat').mockRejectedValueOnce(
+      Object.assign(new Error('stolen by resumed worker'), { code: 'lease-stolen' })
+    );
+    await expect(new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id)).resolves.toBe('complete');
+    expect(aws.deps.craneCopy).not.toHaveBeenCalled();
+    expect(aws.deps.updateStack).not.toHaveBeenCalled();
+  });
+
+  it('does not hammer UpdateStack after a terminal rollback failure', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now, 'rollback-failed');
+    await new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id);
+    expect(aws.updateRequests).toHaveLength(1);
+    expect(aws.deps.describeStackEvents).toHaveBeenCalled();
+    expect(await jobs.get(job.id)).toMatchObject({ status: 'failed', recoveryState: 'exhausted' });
   });
 
   it('refuses to build an update when ImageUri is absent', () => {

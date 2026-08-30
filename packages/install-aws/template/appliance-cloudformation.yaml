@@ -708,7 +708,9 @@ Resources:
                 Resource: !Ref AWS::StackId
               - Sid: UpdateOnlyThisStack
                 Effect: Allow
-                Action: cloudformation:UpdateStack
+                Action:
+                  - cloudformation:ContinueUpdateRollback
+                  - cloudformation:UpdateStack
                 Resource: !Ref AWS::StackId
                 Condition:
                   StringEquals:
@@ -735,7 +737,7 @@ Resources:
         EncryptionType: AES256
       LifecyclePolicy:
         LifecyclePolicyText: |
-          {"rules":[{"rulePriority":1,"description":"Keep the newest 50 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}
+          {"rules":[{"rulePriority":1,"description":"Keep the newest 10 retained system images","selection":{"tagStatus":"tagged","tagPrefixList":["system-"],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the newest 50 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName

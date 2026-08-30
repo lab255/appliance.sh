@@ -333,6 +333,29 @@ describe('appliance CloudFormation template', () => {
     expect(policy.Statement).toContainEqual({ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' });
   });
 
+  it('retains system image tags before applying the shared repository catch-all expiry rule', () => {
+    const lifecycle = JSON.parse(
+      String(
+        document.getIn(['Resources', 'ImageRepository', 'Properties', 'LifecyclePolicy', 'LifecyclePolicyText'])
+      ).trim()
+    ) as { rules: Array<{ rulePriority: number; selection: Record<string, unknown> }> };
+    expect(lifecycle.rules).toEqual([
+      expect.objectContaining({
+        rulePriority: 1,
+        selection: expect.objectContaining({
+          tagStatus: 'tagged',
+          tagPrefixList: ['system-'],
+          countType: 'imageCountMoreThan',
+          countNumber: 10,
+        }),
+      }),
+      expect.objectContaining({
+        rulePriority: 2,
+        selection: expect.objectContaining({ tagStatus: 'any', countNumber: 50 }),
+      }),
+    ]);
+  });
+
   it('has no all-action grants and allowlists every unavoidable wildcard resource', () => {
     const wildcardResourceSids: string[] = [];
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {

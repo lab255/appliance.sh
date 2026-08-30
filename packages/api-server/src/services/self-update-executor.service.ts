@@ -9,7 +9,7 @@ import {
   UpdateStackCommand,
   type Parameter,
 } from '@aws-sdk/client-cloudformation';
-import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
+import { DescribeImagesCommand, ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import { PINNED_RELEASE_TRUST, verifyReleaseEnvelope } from '@appliance.sh/sdk';
 import {
@@ -26,6 +26,8 @@ const HEALTH_WINDOW_MS = 120_000;
 const TARGET_STACK_WORK_MS = 540_000;
 const TARGET_HEALTH_END_MS = 660_000;
 const HARD_WORK_MS = 840_000;
+const RECOVERY_WAIT_FLOOR_MS = 60_000;
+const RECOVERY_HEALTH_FLOOR_MS = 60_000;
 
 export interface AssumedCredentials {
   accessKeyId: string;
@@ -55,6 +57,7 @@ export interface SelfUpdateExecutorDependencies {
   describeStack(credentials: AssumedCredentials, stackId: string): Promise<SelfUpdateStack>;
   describeStackEvents(credentials: AssumedCredentials, stackId: string): Promise<string[]>;
   getEcrAuthorization(credentials: AssumedCredentials): Promise<string>;
+  resolveImageDigest(credentials: AssumedCredentials, repositoryUrl: string, imageTag: string): Promise<string>;
   craneCopy(source: string, target: string, registry: string, authorizationToken: string): Promise<void>;
   updateStack(credentials: AssumedCredentials, request: SelfUpdateStackRequest): Promise<void>;
   health(url: string): Promise<{ initialized: boolean; serverVersion?: string }>;
@@ -97,17 +100,39 @@ export function craneCommand(
     args: ['cp', source, target],
     options: {
       shell: false,
-      env: { ...process.env, DOCKER_CONFIG: dockerConfig },
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        DOCKER_CONFIG: dockerConfig,
+      },
       stdio: ['ignore', 'ignore', 'pipe'],
     },
   };
 }
 
+export type CraneRunner = (command: ReturnType<typeof craneCommand>) => Promise<void>;
+
+const spawnCrane: CraneRunner = async (command) => {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command.file, command.args, command.options);
+    let stderr = '';
+    child.stderr?.on('data', (chunk) => {
+      if (stderr.length < 8_192) stderr += String(chunk);
+    });
+    child.once('error', reject);
+    child.once('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`crane cp exited ${code}: ${stderr.slice(0, 8_192)}`));
+    });
+  });
+};
+
 export async function runCraneCopy(
   source: string,
   target: string,
   registry: string,
-  authorizationToken: string
+  authorizationToken: string,
+  runner: CraneRunner = spawnCrane
 ): Promise<void> {
   const authDir = await mkdtemp(join(tmpdir(), 'appliance-self-update-'));
   try {
@@ -117,18 +142,7 @@ export async function runCraneCopy(
       { mode: 0o600 }
     );
     const command = craneCommand(source, target, authDir);
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(command.file, command.args, command.options);
-      let stderr = '';
-      child.stderr?.on('data', (chunk) => {
-        if (stderr.length < 8_192) stderr += String(chunk);
-      });
-      child.once('error', reject);
-      child.once('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`crane cp exited ${code}: ${stderr.slice(0, 8_192)}`));
-      });
-    });
+    await runner(command);
   } finally {
     await rm(authDir, { recursive: true, force: true });
   }
@@ -142,7 +156,7 @@ export function createAwsSelfUpdateDependencies(): SelfUpdateExecutorDependencie
           RoleArn: roleArn,
           RoleSessionName: sourceIdentity,
           SourceIdentity: sourceIdentity,
-          DurationSeconds: 900,
+          DurationSeconds: 3600,
         })
       );
       const credentials = result.Credentials;
@@ -196,6 +210,26 @@ export function createAwsSelfUpdateDependencies(): SelfUpdateExecutorDependencie
       if (!token) throw new Error('ECR did not return an authorization token');
       return token;
     },
+    async resolveImageDigest(credentials, repositoryUrl, imageTag) {
+      const [registry, ...repositoryParts] = repositoryUrl.split('/');
+      const repositoryName = repositoryParts.join('/');
+      const registryId = registry?.split('.')[0];
+      if (!registryId || !/^\d{12}$/.test(registryId) || !repositoryName) {
+        throw new Error('installation ECR repository URL is malformed');
+      }
+      const result = await new ECRClient({ credentials }).send(
+        new DescribeImagesCommand({
+          registryId,
+          repositoryName,
+          imageIds: [{ imageTag }],
+        })
+      );
+      const resolved = result.imageDetails?.[0]?.imageDigest;
+      if (!resolved || !/^sha256:[0-9a-f]{64}$/.test(resolved)) {
+        throw new Error('ECR did not resolve the mirrored system image digest');
+      }
+      return resolved;
+    },
     craneCopy: runCraneCopy,
     async updateStack(credentials, request) {
       await new CloudFormationClient({ credentials }).send(new UpdateStackCommand(request));
@@ -227,7 +261,7 @@ export class SelfUpdateExecutor {
     this.aws = options.aws ?? createAwsSelfUpdateDependencies();
   }
 
-  async execute(jobId: string): Promise<'complete' | 'continue'> {
+  async execute(jobId: string): Promise<'complete'> {
     const startedAt = this.aws.now().getTime();
     const targetStackDeadline = startedAt + TARGET_STACK_WORK_MS;
     const targetHealthDeadline = startedAt + TARGET_HEALTH_END_MS;
@@ -282,37 +316,69 @@ export class SelfUpdateExecutor {
 
     const stackId = requireInstallValue('APPLIANCE_STACK_ID');
     const sourceIdentity = `self-update-${jobId}`;
-    const credentials = await this.aws.assumeRole(roleArn, sourceIdentity);
-    let stack = await this.aws.describeStack(credentials, stackId);
-    job = await this.captureStack(job, stack, holder);
+    let credentials: AssumedCredentials;
+    let stack: SelfUpdateStack;
+    try {
+      credentials = await this.aws.assumeRole(roleArn, sourceIdentity);
+      stack = await this.aws.describeStack(credentials, stackId);
+      job = await this.captureStack(job, stack, holder);
+    } catch (error) {
+      if (isLeaseStolen(error)) return 'complete';
+      await this.failBeforeMutation(jobId, holder, error);
+      return 'complete';
+    }
     if (isTerminal(job)) return 'complete';
 
     if (job.phase === 'submitting-recovery' || job.phase === 'waiting-for-recovery') {
       return this.recover(job, holder, credentials, stack, 'resuming persisted recovery', hardDeadline);
     }
 
-    const cloudFormationRoleArn = requireOutput(stack, 'SelfUpdateCloudFormationRoleArn');
-    const repository = requireOutput(stack, 'ImageRepositoryUrl');
+    let cloudFormationRoleArn: string;
+    let repository: string;
+    let registry: string;
+    try {
+      cloudFormationRoleArn = requireOutput(stack, 'SelfUpdateCloudFormationRoleArn');
+      repository = requireOutput(stack, 'ImageRepositoryUrl');
+      registry = repository.split('/')[0] ?? '';
+      if (!registry) throw new Error('installation ECR repository is malformed');
+    } catch (error) {
+      await this.failBeforeMutation(jobId, holder, error);
+      return 'complete';
+    }
     const targetImage = `${repository}@${job.targetDigest}`;
-    const registry = repository.split('/')[0];
-    if (!registry) throw new Error('installation ECR repository is malformed');
+    if (job.targetImage && job.targetImage !== targetImage) {
+      await this.failBeforeMutation(jobId, holder, 'persisted target image does not match signed release digest');
+      return 'complete';
+    }
+    const imageTag = systemImageTag(job.targetVersion);
+    const mirrorTarget = `${repository}:${imageTag}`;
+    let authorizationToken: string | undefined;
+    let mutationMayHaveStarted = !['queued', 'verifying', 'describing-stack', 'mirroring'].includes(job.phase);
 
     try {
       if (job.phase !== 'waiting-for-stack' && job.phase !== 'probing-health') {
         if (parameterValue(stack, 'ImageUri') === targetImage) {
           job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
-        } else if (
-          (isUpdateInProgress(stack.status) && job.previousImage) ||
-          (job.phase === 'submitting-update' && parameterValue(stack, 'ImageUri') === targetImage)
-        ) {
+          mutationMayHaveStarted = true;
+        } else if (isUpdateInProgress(stack.status) && job.previousImage) {
+          job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
+          mutationMayHaveStarted = true;
+        } else if (job.phase === 'submitting-update' && job.targetImage === targetImage) {
+          mutationMayHaveStarted = true;
+          await this.aws.updateStack(credentials, buildImageOnlyUpdate(stack, targetImage, cloudFormationRoleArn));
           job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
         } else {
-          job = await this.jobs.heartbeat(jobId, holder, 'mirroring', { targetImage });
-          const token = await this.aws.getEcrAuthorization(credentials);
+          job = await this.jobs.heartbeat(jobId, holder, 'mirroring');
+          authorizationToken = await this.aws.getEcrAuthorization(credentials);
           await this.withHeartbeat(jobId, holder, 'mirroring', () =>
-            this.aws.craneCopy(job.sourceImage, targetImage, registry, token)
+            this.aws.craneCopy(job.sourceImage, mirrorTarget, registry, authorizationToken!)
           );
+          const resolvedDigest = await this.aws.resolveImageDigest(credentials, repository, imageTag);
+          if (resolvedDigest !== job.targetDigest) {
+            throw new Error('mirrored ECR digest does not match the signed release digest');
+          }
           job = await this.jobs.heartbeat(jobId, holder, 'submitting-update', { targetImage });
+          mutationMayHaveStarted = true;
           await this.aws.updateStack(credentials, buildImageOnlyUpdate(stack, targetImage, cloudFormationRoleArn));
           job = await this.jobs.heartbeat(jobId, holder, 'waiting-for-stack', { targetImage });
         }
@@ -344,10 +410,27 @@ export class SelfUpdateExecutor {
       return 'complete';
     } catch (error) {
       if (isLeaseStolen(error)) return 'complete';
-      if (job.phase === 'mirroring') throw error;
+      const safe = safeError(error, authorizationToken ? [authorizationToken] : []);
+      if (!mutationMayHaveStarted) {
+        await this.failBeforeMutation(jobId, holder, safe);
+        return 'complete';
+      }
       stack = await this.aws.describeStack(credentials, stackId);
-      return this.recover(job, holder, credentials, stack, safeError(error), hardDeadline);
+      return this.recover(job, holder, credentials, stack, safe, hardDeadline);
     }
+  }
+
+  private async failBeforeMutation(jobId: string, holder: string, error: unknown): Promise<void> {
+    await this.jobs.finish(
+      jobId,
+      {
+        status: 'failed',
+        recovered: true,
+        recoveryState: 'recovered',
+        error: safeError(error),
+      },
+      holder
+    );
   }
 
   private async captureStack(job: SelfUpdateJob, stack: SelfUpdateStack, holder: string): Promise<SelfUpdateJob> {
@@ -410,15 +493,31 @@ export class SelfUpdateExecutor {
       error: safeError(reason),
     });
     let stack = initialStack;
-    while (isUpdateInProgress(stack.status) && this.aws.now().getTime() < hardDeadline) {
+    const submissionDeadline = hardDeadline - RECOVERY_WAIT_FLOOR_MS - RECOVERY_HEALTH_FLOOR_MS;
+    while (isUpdateInProgress(stack.status) && this.aws.now().getTime() < submissionDeadline) {
       await this.aws.sleep(POLL_MS);
       await this.jobs.heartbeat(job.id, holder, 'submitting-recovery');
       stack = await this.aws.describeStack(credentials, stack.stackId);
     }
+    if (isTerminalUnrecoverableStack(stack.status)) {
+      const events = await this.aws.describeStackEvents(credentials, stack.stackId).catch(() => []);
+      await this.exhaust(job.id, holder, `${reason}; ${events.slice(0, 3).join('; ')}`);
+      return 'complete';
+    }
+    if (isUpdateInProgress(stack.status)) return 'complete';
+
     const roleArn = requireOutput(stack, 'SelfUpdateCloudFormationRoleArn');
     let submitted = false;
     let alreadyPinned = false;
-    while (!submitted && this.aws.now().getTime() < hardDeadline) {
+    let lastSubmissionError: string | undefined;
+    while (!submitted && this.aws.now().getTime() < submissionDeadline) {
+      if (isUpdateInProgress(stack.status)) {
+        await this.aws.sleep(POLL_MS);
+        await this.jobs.heartbeat(job.id, holder, 'submitting-recovery');
+        stack = await this.aws.describeStack(credentials, stack.stackId);
+        continue;
+      }
+      if (isTerminalUnrecoverableStack(stack.status)) break;
       try {
         await this.aws.updateStack(credentials, buildImageOnlyUpdate(stack, job.previousImage, roleArn));
         submitted = true;
@@ -428,18 +527,38 @@ export class SelfUpdateExecutor {
           alreadyPinned = true;
           break;
         }
-        await this.aws.sleep(POLL_MS);
+        lastSubmissionError = safeError(error);
         stack = await this.aws.describeStack(credentials, stack.stackId);
+        if (!isTerminalUnrecoverableStack(stack.status)) await this.aws.sleep(POLL_MS);
       }
     }
     if (!submitted) {
-      await this.exhaust(job.id, holder, reason);
+      if (isTerminalUnrecoverableStack(stack.status)) {
+        const events = await this.aws.describeStackEvents(credentials, stack.stackId).catch(() => []);
+        await this.exhaust(job.id, holder, `${reason}; ${events.slice(0, 3).join('; ')}`);
+      } else if (lastSubmissionError) {
+        await this.exhaust(job.id, holder, `${reason}; recovery submission failed: ${lastSubmissionError}`);
+      }
       return 'complete';
     }
     await this.jobs.heartbeat(job.id, holder, 'waiting-for-recovery');
     stack = await this.waitForRecovery(job.id, holder, credentials, stack.stackId, hardDeadline);
+    if (isUpdateInProgress(stack.status)) return 'complete';
+    if (isTerminalUnrecoverableStack(stack.status)) {
+      const events = await this.aws.describeStackEvents(credentials, stack.stackId).catch(() => []);
+      await this.exhaust(job.id, holder, `${reason}; ${events.slice(0, 3).join('; ')}`);
+      return 'complete';
+    }
     const healthUrl = bootstrapStatusUrl(requireOutput(stack, 'ApiServerFunctionUrl'));
-    const healthy = await this.pollHealth(job.id, holder, 'waiting-for-recovery', healthUrl, undefined, hardDeadline);
+    const recoveryHealthDeadline = Math.min(hardDeadline, this.aws.now().getTime() + RECOVERY_HEALTH_FLOOR_MS);
+    const healthy = await this.pollHealth(
+      job.id,
+      holder,
+      'waiting-for-recovery',
+      healthUrl,
+      undefined,
+      recoveryHealthDeadline
+    );
     if ((stack.status === 'UPDATE_COMPLETE' || alreadyPinned) && healthy) {
       await this.jobs.finish(
         job.id,
@@ -454,6 +573,7 @@ export class SelfUpdateExecutor {
       );
       return 'complete';
     }
+    if (this.aws.now().getTime() >= hardDeadline) return 'complete';
     const events = await this.aws.describeStackEvents(credentials, stack.stackId).catch(() => []);
     await this.exhaust(job.id, holder, `${reason}; ${events.slice(0, 3).join('; ')}`);
     return 'complete';
@@ -561,12 +681,12 @@ function isNoUpdates(error: unknown): boolean {
 }
 
 function trustCode(error: unknown): string {
-  const code = (error as { code?: unknown }).code;
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   return typeof code === 'string' ? code : 'invalid-release';
 }
 
-function safeError(error: unknown): string {
-  return redactSelfUpdateError(error).message.slice(0, 2_000);
+function safeError(error: unknown, exactSecrets: readonly string[] = []): string {
+  return redactSelfUpdateError(error, exactSecrets).message.slice(0, 2_000);
 }
 
 function isTerminal(job: SelfUpdateJob): boolean {
@@ -580,6 +700,14 @@ function requireLeaseHolder(job: SelfUpdateJob): string {
 
 function isLeaseStolen(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'lease-stolen');
+}
+
+function isTerminalUnrecoverableStack(status: string): boolean {
+  return status.endsWith('_FAILED');
+}
+
+function systemImageTag(version: string): string {
+  return `system-${version.replace(/\+/g, '_')}`;
 }
 
 let executor: SelfUpdateExecutor | undefined;

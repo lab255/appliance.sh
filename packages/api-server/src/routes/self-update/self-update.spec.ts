@@ -179,13 +179,16 @@ describe('self-update routes', () => {
   it('redacts the complete CU1 sensitive error set', () => {
     const error = redactSelfUpdateError(
       new Error(
-        'Basic dXNlcjpwYXNz 123456789012.dkr.ecr.us-east-1.amazonaws.com arn:aws:iam::123456789012:role/private self-update-job signature=abc signature-input=def content-digest=ghi envelope:"bytes"'
-      )
+        'Basic dXNlcjpwYXNz 123456789012.dkr.ecr.us-east-1.amazonaws.com arn:aws:iam::123456789012:role/private self-update-job signature=abc signature-input=def content-digest=ghi envelope:"bytes" arn:aws:sts::123456789012:assumed-role/private/session arn:aws:cloudformation:us-east-1:123456789012:stack/private/id bare-token'
+      ),
+      ['bare-token']
     ).message;
     expect(error).not.toMatch(/dXNlcj|123456789012|private|self-update-job|signature=abc|def|ghi|"bytes"/);
     expect(error).toContain('[REDACTED_ECR_TOKEN]');
     expect(error).toContain('[REDACTED_ECR_REGISTRY]');
-    expect(error).toContain('[REDACTED_ROLE_ARN]');
+    expect(error).toContain('[REDACTED_ARN]');
     expect(error).toContain('[REDACTED_ROLE_SESSION]');
+    expect(error).toContain('envelope:"[REDACTED]"');
+    expect(error).not.toContain('bare-token');
   });
 });

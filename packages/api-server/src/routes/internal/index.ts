@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { executeDeployment, workerEventSchema } from '../../services/deployment-executor.service';
 import { getSelfUpdateService, selfUpdateWorkerEventSchema } from '../../services/self-update.service';
 import { getSelfUpdateExecutor } from '../../services/self-update-executor.service';
+import { redactSelfUpdateError } from '../self-update';
 import { logger } from '../../logger';
 
 export const internalRoutes: Router = Router();
@@ -56,9 +57,9 @@ internalRoutes.post('/jobs/self-update', async (req, res) => {
   }
   try {
     const outcome = await getSelfUpdateExecutor().execute(job.id);
-    res.status(outcome === 'continue' ? 202 : 200).json({ ok: true, outcome });
-  } catch {
-    logger.error('self-update worker job failed', new Error('self-update execution failed'), {
+    res.status(200).json({ ok: true, outcome });
+  } catch (error) {
+    logger.error('self-update worker job failed', redactSelfUpdateError(error), {
       requestId: req.requestId,
       jobId: job.id,
       phase: job.phase,

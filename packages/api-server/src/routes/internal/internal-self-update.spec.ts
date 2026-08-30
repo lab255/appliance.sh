@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { logger } from '../../logger';
 import { internalRoutes } from './index';
 import {
   resetSelfUpdateServiceForTests,
@@ -78,5 +79,20 @@ describe('POST /api/internal/jobs/self-update', () => {
     });
     expect(response.status).toBe(403);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('logs the redacted executor error and returns 500', async () => {
+    execute.mockRejectedValueOnce(
+      new Error('arn:aws:sts::123456789012:assumed-role/private/session cannot update account 123456789012')
+    );
+    const logged = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const response = await request(appFor()).post('/api/internal/jobs/self-update').send({ jobId: 'selfupdate_1' });
+    expect(response.status).toBe(500);
+    expect(logged).toHaveBeenCalledWith(
+      'self-update worker job failed',
+      expect.objectContaining({ message: '[REDACTED_ARN] cannot update account [REDACTED_ACCOUNT]' }),
+      expect.objectContaining({ jobId: 'selfupdate_1' })
+    );
+    logged.mockRestore();
   });
 });

@@ -750,7 +750,10 @@ exports[`appliance CloudFormation template > snapshots the exact self-update cal
       "Sid": "ObserveOnlyThisStack",
     },
     {
-      "Action": "cloudformation:UpdateStack",
+      "Action": [
+        "cloudformation:ContinueUpdateRollback",
+        "cloudformation:UpdateStack",
+      ],
       "Condition": {
         "StringEquals": {
           "cloudformation:RoleArn": {
