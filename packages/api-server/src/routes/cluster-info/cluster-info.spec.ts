@@ -11,10 +11,11 @@ import {
   setSelfUpdateSchedulerServiceForTests,
 } from '../../services/self-update-scheduler.service';
 
-function createTestApp(role: 'admin' | 'member' = 'admin') {
+function createTestApp(role: 'admin' | 'member' = 'admin', tenantId = 'default') {
   const app = express();
   app.use((req, _res, next) => {
     req.apiKeyRole = role;
+    req.tenantId = tenantId;
     next();
   });
   app.use('/api/v1/cluster-info', clusterInfoRoutes);
@@ -91,7 +92,43 @@ describe('GET /api/v1/cluster-info', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.selfUpdate.available).toBeUndefined();
+    expect(res.body.selfUpdate.lastCheck).toEqual({
+      at: '',
+      decision: 'not-checked',
+      reason: 'not-checked',
+    });
     expect(markerReads).toBe(0);
+  });
+
+  it('does not expose owner self-update state to a non-owner-tenant admin', async () => {
+    process.env.APPLIANCE_BASE_CONFIG = JSON.stringify(K8S_BASE);
+    process.env.SELF_UPDATE_POLICY = 'notify';
+    let markerReads = 0;
+    let lastCheckReads = 0;
+    setSelfUpdateSchedulerServiceForTests({
+      getAvailable: async () => {
+        markerReads += 1;
+        return { version: '1.58.0' };
+      },
+      getLastCheck: async () => {
+        lastCheckReads += 1;
+        return {
+          at: '2026-08-31T00:00:00.000Z',
+          decision: 'no-trust',
+          reason: 'no-pinned-release-trust',
+        };
+      },
+    } as never);
+
+    const res = await request(createTestApp('admin', 'tenant-b')).get('/api/v1/cluster-info');
+
+    expect(res.status).toBe(200);
+    expect(res.body.selfUpdate).toEqual({
+      policy: 'notify',
+      lastCheck: { at: '', decision: 'not-checked', reason: 'not-checked' },
+    });
+    expect(markerReads).toBe(0);
+    expect(lastCheckReads).toBe(0);
   });
 
   it('suppresses a stale marker whose version is already running', async () => {

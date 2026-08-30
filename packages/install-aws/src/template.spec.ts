@@ -199,7 +199,7 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*'),
   ],
   DenySchedulerMutation: sub(
-    'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${InstallationName}-*'
+    'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update'
   ),
   LambdaEdgeReplication: sub('arn:${AWS::Partition}:lambda:us-east-1:${AWS::AccountId}:function:*:*'),
 } as const;
@@ -282,6 +282,10 @@ describe('appliance CloudFormation template', () => {
     );
     expect(document.getIn(['Resources', 'SelfUpdateSchedule', 'Condition'])).toBe('SelfUpdateScheduled');
     expect(document.getIn(['Resources', 'SelfUpdateSchedulerRole', 'Condition'])).toBe('SelfUpdateScheduled');
+    expect(document.getIn(['Resources', 'SelfUpdateSchedule', 'Properties', 'Name'])).toEqual(
+      sub('${InstallationName}-self-update')
+    );
+    expect(document.getIn(['Resources', 'SelfUpdateSchedule', 'Properties', 'GroupName'])).toBe('default');
     expect(toJson(['Resources', 'SelfUpdateSchedule', 'Properties', 'Target'])).toEqual({
       Arn: { tag: '!GetAtt', value: 'WorkerFunction.Arn' },
       RoleArn: { tag: '!GetAtt', value: 'SelfUpdateSchedulerRole.Arn' },
@@ -324,7 +328,9 @@ describe('appliance CloudFormation template', () => {
     ).toEqual({
       StringEquals: { 'aws:SourceAccount': ref('AWS::AccountId') },
       ArnLike: {
-        'aws:SourceArn': sub('arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*'),
+        'aws:SourceArn': sub(
+          'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update'
+        ),
       },
     });
   });

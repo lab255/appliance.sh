@@ -9,7 +9,13 @@ import {
   type SelfUpdateService,
 } from '../../services/self-update.service';
 import { logger } from '../../logger';
+import { requireAdmin } from '../../middleware/auth';
 import { redactSelfUpdateError } from '../../services/self-update-redaction';
+import {
+  getSelfUpdateSchedulerService,
+  SELF_UPDATE_STATE_CACHE_MS,
+  type SelfUpdateLastCheck,
+} from '../../services/self-update-scheduler.service';
 
 export { redactSelfUpdateError } from '../../services/self-update-redaction';
 
@@ -19,8 +25,10 @@ export interface SelfUpdateCheckResponse {
 }
 
 export type SelfUpdateCheckDispatcher = (caller: SigningCredentials) => Promise<SelfUpdateCheckResponse>;
+export type SelfUpdateLastCheckReader = () => Promise<SelfUpdateLastCheck | null>;
 
 const emptyCheckSchema = z.strictObject({});
+const SELF_UPDATE_CHECK_TIMEOUT_MS = 25_000;
 
 export async function dispatchSelfUpdateCheck(caller: SigningCredentials): Promise<SelfUpdateCheckResponse> {
   const workerUrl = process.env.WORKER_URL;
@@ -29,7 +37,12 @@ export async function dispatchSelfUpdateCheck(caller: SigningCredentials): Promi
   const body = JSON.stringify({ kind: 'self-update-check' });
   const baseHeaders = { 'content-type': 'application/json' };
   const signed = await signRequest(caller, { method: 'POST', url, headers: baseHeaders, body });
-  const response = await fetch(url, { method: 'POST', headers: { ...baseHeaders, ...signed }, body });
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...baseHeaders, ...signed },
+    body,
+    signal: AbortSignal.timeout(SELF_UPDATE_CHECK_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`worker self-update check returned HTTP ${response.status}`);
   const parsed = z.strictObject({ decision: z.string(), reason: z.string() }).safeParse(await response.json());
   if (!parsed.success) throw new Error('worker self-update check returned an invalid response');
@@ -52,11 +65,14 @@ export const requireOwnerTenant: RequestHandler = (req, res, next) => {
 
 export function createSelfUpdateRoutes(
   resolveService: () => SelfUpdateService = getSelfUpdateService,
-  dispatchCheck: SelfUpdateCheckDispatcher = dispatchSelfUpdateCheck
+  dispatchCheck: SelfUpdateCheckDispatcher = dispatchSelfUpdateCheck,
+  readLastCheck: SelfUpdateLastCheckReader = () => getSelfUpdateSchedulerService().getLastCheck(),
+  now: () => number = Date.now
 ): Router {
   const router = Router();
+  let lastCheckDispatchAt: number | undefined;
 
-  router.post('/check', async (req, res) => {
+  router.post('/check', requireAdmin, async (req, res) => {
     if (!emptyCheckSchema.safeParse(req.body).success) {
       res.status(400).json({ error: 'Self-update check accepts no target controls' });
       return;
@@ -71,6 +87,13 @@ export function createSelfUpdateRoutes(
       return;
     }
     try {
+      const requestedAt = now();
+      if (lastCheckDispatchAt !== undefined && requestedAt - lastCheckDispatchAt < SELF_UPDATE_STATE_CACHE_MS) {
+        const stored = await readLastCheck();
+        res.json({ decision: stored?.decision ?? 'not-checked', reason: 'cooldown' });
+        return;
+      }
+      lastCheckDispatchAt = requestedAt;
       res.json(await dispatchCheck({ keyId: caller.id, secret: caller.secret }));
     } catch (error) {
       logger.error('dispatch self-update check failed', redactSelfUpdateError(error), {

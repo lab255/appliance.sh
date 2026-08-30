@@ -291,7 +291,7 @@ export AWS_REGION=us-east-1
    aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query 'Stacks[0].Parameters[?ParameterKey==`SelfUpdatePolicy`].ParameterValue' --output text
    aws cloudformation describe-stack-resource --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --logical-resource-id SelfUpdateSchedule --query 'StackResourceDetail.ResourceStatus' --output text
    appliance cloud update --check-now
-   appliance doctor --json | jq '.runtime.selfUpdate.lastCheck, .runtime.selfUpdate.available'
+   appliance cloud update --status --json | jq '.lastCheck, .available'
    ```
 
    Expect `notify`, `CREATE_COMPLETE`/`UPDATE_COMPLETE`, then `notify (notify-marked)`, then a `lastCheck.reason` of `notify-marked` and an available version. Before AP-226,
@@ -303,25 +303,30 @@ export AWS_REGION=us-east-1
 
    ```sh
    appliance cloud update
-   appliance doctor --json | jq '.runtime.selfUpdate.available // "cleared"'
+   appliance cloud update --status --json | jq '.available // "cleared"'
    ```
 
    Expect the command to print `Updating to vX (from the scheduled notify check)` or `(latest signed release)` before phases, then
    `"cleared"` after success. No marker banner or bootstrap boolean may remain when the marker version equals the running version.
 
-3. Enable auto, trigger twice, and exercise the live-lease skip:
+3. Enable auto and prove manual-check cooldown plus scheduled-job idempotency:
 
    ```sh
    appliance cloud update --policy auto
-   appliance cloud update --check-now & appliance cloud update --check-now & wait
-   appliance doctor --json | jq '.runtime.selfUpdate.lastCheck'
-   aws cloudformation describe-stack-events --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query 'StackEvents[?ResourceStatus==`UPDATE_IN_PROGRESS`].[Timestamp,LogicalResourceId,ResourceType]' --output table
+   SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+   appliance cloud update --check-now
+   appliance cloud update --check-now
+   sleep 60
+   appliance cloud update --check-now
+   appliance cloud update --status --json | jq '.lastCheck'
+   aws cloudformation describe-stack-events --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query "StackEvents[?Timestamp >= \`$SINCE\` && ResourceStatus == \`UPDATE_IN_PROGRESS\`].[Timestamp,LogicalResourceId,ResourceType]" --output table
    ```
 
-   Expect one `auto-created`/`auto-reused` result and either a reused `scheduled:<digest>` job or `lease-conflict` for the concurrent
-   call. Follow a reported live job with `appliance cloud update --follow <jobId>`. The stack events may show only image-bearing Lambda
-   updates for the scheduled operation: no IAM, S3, KMS, permissions-boundary, managed-policy, scheduler-role, or schedule logical
-   resource may enter `UPDATE_IN_PROGRESS`.
+   Expect the immediate repeat to report `cooldown` without another worker dispatch. After 60 seconds, expect `auto-reused`,
+   `lease-conflict` while another update lease is live, or `current` if the first job already completed; the scheduled idempotency key
+   remains `scheduled:<digest>`. Follow any reported live job with `appliance cloud update --follow <jobId>`. Since the captured
+   timestamp, the stack events may show only `ApiServerFunction` and `WorkerFunction` entering `UPDATE_IN_PROGRESS`; no IAM, S3, KMS,
+   permissions-boundary, managed-policy, scheduler-role, or schedule logical resource may appear.
 
 4. Turn the feature off and verify CloudFormation removed its trigger resources:
 
@@ -329,10 +334,11 @@ export AWS_REGION=us-east-1
    appliance cloud update --policy off
    aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --query 'Stacks[0].Parameters[?ParameterKey==`SelfUpdatePolicy`].ParameterValue' --output text
    aws cloudformation describe-stack-resource --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --logical-resource-id SelfUpdateSchedule
-   appliance doctor --json | jq '.runtime.selfUpdate'
+   aws cloudformation describe-stack-resource --region "$AWS_REGION" --stack-name "$APPLIANCE_STACK" --logical-resource-id SelfUpdateSchedulerRole
+   appliance cloud update --status --json | jq '.'
    ```
 
-   Expect `off`, `describe-stack-resource` to report that `SelfUpdateSchedule` does not exist, and doctor to report policy `off`.
+   Expect `off`, both `describe-stack-resource` calls to report `ResourceNotFound`, and status to report policy `off`.
 
 ## 5. microVM mechanism (MV1)
 

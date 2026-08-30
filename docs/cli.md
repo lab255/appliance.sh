@@ -66,6 +66,7 @@ appliance cloud update --json
 appliance cloud update --local [--image <registry/ref>] [--arch amd64|arm64] [--aws-profile <name>]
 appliance cloud update --policy off|notify|auto [--aws-profile <name>]
 appliance cloud update --check-now
+appliance cloud update --status [--json]
 ```
 
 The scheduled policies are:
@@ -76,6 +77,9 @@ The scheduled policies are:
   image-only CloudFormation update and health wait as a manual update.
 
 The cadence is `rate(1 day)` with a 60-minute flexible window. `--check-now` runs the same owner-signed, target-free check immediately.
+Repeated manual checks within 60 seconds return the stored decision with reason `cooldown` without dispatching the worker again.
+`--status` performs a signed, read-only cluster-info request using the active or selected profile and prints the policy, complete last-check
+record, and any available version; add `--json` for the machine-readable server shape.
 Enabling `notify` or `auto` is refused while `SystemRoleMode=admin`; restore scoped roles with
 `appliance cloud baseline-update --system-role-mode scoped`. Policy changes preserve the running `ImageUri` explicitly and send
 `UsePreviousValue` for unrelated stack parameters. Scheduled checks never apply baseline changes. A notify marker is a notice only:

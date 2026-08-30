@@ -276,6 +276,9 @@ export function SelfUpdateAvailableNotice({
       }
     >
       This signed image release was found by the scheduled notify check.
+      {!canUpdate ? (
+        <span className="mt-1 block">Update now is unavailable until the latest signed release lookup succeeds.</span>
+      ) : null}
     </Banner>
   );
 }

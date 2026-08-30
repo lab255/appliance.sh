@@ -111,14 +111,19 @@ async function readAvailableMarker(): Promise<SelfUpdateAvailableMarker | null> 
   }
 }
 
-async function readLastCheck(policy: ClusterInfo['selfUpdate']['policy']): Promise<SelfUpdateLastCheck> {
-  try {
-    const stored = await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getLastCheck());
-    if (stored) return stored;
-  } catch (error) {
-    logger.warn('cluster-info self-update last check unavailable', {
-      error: redactSelfUpdateError(error).message,
-    });
+async function readLastCheck(
+  policy: ClusterInfo['selfUpdate']['policy'],
+  exposeOwnerState: boolean
+): Promise<SelfUpdateLastCheck> {
+  if (exposeOwnerState) {
+    try {
+      const stored = await runWithTenant(DEFAULT_TENANT, () => getSelfUpdateSchedulerService().getLastCheck());
+      if (stored) return stored;
+    } catch (error) {
+      logger.warn('cluster-info self-update last check unavailable', {
+        error: redactSelfUpdateError(error).message,
+      });
+    }
   }
   return {
     at: '',
@@ -135,11 +140,12 @@ clusterInfoRoutes.get('/', async (req, res) => {
     const externalUrl = getExternalConsoleUrl();
     const warnings = readWarnings();
     const policy = selfUpdatePolicy();
-    // Availability is owner-operator state. Member keys still receive the
-    // policy and last-check health, but cannot read the actionable marker.
-    const storedAvailable = policy === 'notify' && req.apiKeyRole === 'admin' ? await readAvailableMarker() : null;
+    // Availability and check health disclose owner-operator posture. Only an
+    // owner-tenant admin may read either; policy itself remains non-sensitive.
+    const exposeOwnerState = req.apiKeyRole === 'admin' && req.tenantId === DEFAULT_TENANT;
+    const storedAvailable = policy === 'notify' && exposeOwnerState ? await readAvailableMarker() : null;
     const available = storedAvailable?.version === VERSION ? null : storedAvailable;
-    const lastCheck = await readLastCheck(policy);
+    const lastCheck = await readLastCheck(policy, exposeOwnerState);
     const body: ClusterInfo = {
       version: VERSION,
       // The RESPONSE copy is sanitized; `baseConfig` itself (the full

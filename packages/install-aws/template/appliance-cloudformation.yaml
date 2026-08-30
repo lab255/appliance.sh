@@ -183,7 +183,7 @@ Resources:
               - scheduler:CreateSchedule*
               - scheduler:DeleteSchedule*
               - scheduler:UpdateSchedule*
-            Resource: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${InstallationName}-*
+            Resource: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update
 
   SystemApiServerRole:
     Type: AWS::IAM::Role
@@ -520,7 +520,7 @@ Resources:
               - scheduler:CreateSchedule*
               - scheduler:DeleteSchedule*
               - scheduler:UpdateSchedule*
-            Resource: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${InstallationName}-*
+            Resource: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update
 
   SystemWorkerEdgeProvisioningPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -763,7 +763,7 @@ Resources:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
               ArnLike:
-                aws:SourceArn: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*
+                aws:SourceArn: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/default/${InstallationName}-self-update
       Policies:
         - PolicyName: appliance-self-update-scheduler
           PolicyDocument:
@@ -866,6 +866,8 @@ Resources:
     Type: AWS::Scheduler::Schedule
     Condition: SelfUpdateScheduled
     Properties:
+      Name: !Sub ${InstallationName}-self-update
+      GroupName: default
       Description: Daily signed Appliance control-plane image update check
       FlexibleTimeWindow:
         Mode: FLEXIBLE

@@ -372,7 +372,7 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
       "Effect": "Deny",
       "Resource": {
         "tag": "!Sub",
-        "value": "arn:\${AWS::Partition}:scheduler:\${AWS::Region}:\${AWS::AccountId}:schedule/*/\${InstallationName}-*",
+        "value": "arn:\${AWS::Partition}:scheduler:\${AWS::Region}:\${AWS::AccountId}:schedule/default/\${InstallationName}-self-update",
       },
       "Sid": "DenySchedulerMutation",
     },

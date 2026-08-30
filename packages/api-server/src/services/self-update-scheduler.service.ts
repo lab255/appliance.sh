@@ -54,7 +54,7 @@ export const SELF_UPDATE_AVAILABILITY = 'self-update-availability';
 export const SELF_UPDATE_LAST_CHECK = 'self-update-last-check';
 const AVAILABILITY_ID = 'cloud';
 const LAST_CHECK_ID = 'cloud';
-const AVAILABILITY_CACHE_MS = 60_000;
+export const SELF_UPDATE_STATE_CACHE_MS = 60_000;
 const GHCR_TOKEN_ENDPOINT = 'https://ghcr.io/token';
 const GHCR_REGISTRY_ENDPOINT = 'https://ghcr.io/v2';
 const RELEASE_BASE = 'https://github.com/lab255/appliance.sh/releases/download';
@@ -134,7 +134,7 @@ export class SelfUpdateSchedulerService {
         return this.availabilityCache.value;
       }
       const value = await this.storage.get<SelfUpdateAvailableMarker>(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID);
-      this.availabilityCache = { expiresAt: timestamp + AVAILABILITY_CACHE_MS, value };
+      this.availabilityCache = { expiresAt: timestamp + SELF_UPDATE_STATE_CACHE_MS, value };
       return value;
     });
   }
@@ -219,7 +219,7 @@ export class SelfUpdateSchedulerService {
       if (policy === 'notify') {
         await this.storage.set(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID, marker);
         this.availabilityCache = {
-          expiresAt: this.now().getTime() + AVAILABILITY_CACHE_MS,
+          expiresAt: this.now().getTime() + SELF_UPDATE_STATE_CACHE_MS,
           value: marker,
         };
         logger.info('self-update-check update available', {
@@ -268,7 +268,7 @@ export class SelfUpdateSchedulerService {
   private async clearAvailable(): Promise<void> {
     await this.storage.delete(SELF_UPDATE_AVAILABILITY, AVAILABILITY_ID);
     this.availabilityCache = {
-      expiresAt: this.now().getTime() + AVAILABILITY_CACHE_MS,
+      expiresAt: this.now().getTime() + SELF_UPDATE_STATE_CACHE_MS,
       value: null,
     };
   }

@@ -68,6 +68,14 @@ describe('CloudFormation update handoff', () => {
     expect(html).toContain('scheduled notify check');
   });
 
+  it('explains why the notify action is unavailable when latest release lookup fails', () => {
+    const html = renderToStaticMarkup(
+      <SelfUpdateAvailableNotice version="1.58.0" busy={false} canUpdate={false} onUpdate={() => undefined} />
+    );
+    expect(html).toContain('Update now is unavailable until the latest signed release lookup succeeds');
+    expect(html).toContain('disabled');
+  });
+
   it('suppresses a stale marker once that version is running', () => {
     expect(shouldShowSelfUpdateAvailable('1.58.0', '1.58.0')).toBe(false);
     expect(shouldShowSelfUpdateAvailable('1.58.0', '1.57.0')).toBe(true);

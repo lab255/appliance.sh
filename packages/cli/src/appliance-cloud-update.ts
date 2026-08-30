@@ -22,6 +22,7 @@ import {
   createPhaseLineFormatter,
   terminalFailureMessage,
 } from './utils/cloud-update-output.js';
+import { inactiveReasonCopy, selfUpdateStatusJson, selfUpdateStatusLines } from './utils/self-update-status.js';
 
 interface Options {
   version?: string;
@@ -33,6 +34,7 @@ interface Options {
   awsProfile?: string;
   policy?: SelfUpdatePolicy;
   checkNow: boolean;
+  status: boolean;
 }
 
 const program = new Command();
@@ -46,7 +48,8 @@ program
   .option('--aws-profile <name>', 'AWS credential profile for --local or --policy')
   .option('--policy <policy>', 'set scheduled image-update policy (checked ~daily): off, notify, or auto')
   .option('--check-now', 'run a signed scheduled image-update check now', false)
-  .option('--json', 'print the terminal job including per-phase durations as JSON', false)
+  .option('--status', 'show scheduled image-update policy and last-check status', false)
+  .option('--json', 'print status or the terminal job including per-phase durations as JSON', false)
   .action(run);
 
 async function run(options: Options): Promise<void> {
@@ -61,7 +64,8 @@ async function run(options: Options): Promise<void> {
       options.image ||
       options.arch ||
       options.json ||
-      options.checkNow)
+      options.checkNow ||
+      options.status)
   ) {
     throw new Error('--policy cannot be combined with update target, follow, local, architecture, or JSON options');
   }
@@ -73,10 +77,26 @@ async function run(options: Options): Promise<void> {
       options.image ||
       options.arch ||
       options.json ||
-      options.awsProfile)
+      options.awsProfile ||
+      options.status)
   ) {
     throw new Error(
       '--check-now cannot be combined with update target, follow, local, architecture, JSON, or AWS options'
+    );
+  }
+  if (
+    options.status &&
+    (options.local ||
+      options.follow ||
+      options.version ||
+      options.image ||
+      options.arch ||
+      options.awsProfile ||
+      options.policy ||
+      options.checkNow)
+  ) {
+    throw new Error(
+      '--status cannot be combined with update target, follow, local, architecture, AWS, policy, or check options'
     );
   }
   if (options.local && options.follow) throw new Error('--follow cannot be combined with --local');
@@ -150,6 +170,19 @@ async function run(options: Options): Promise<void> {
     product: 'cli',
     timeout: 30_000,
   });
+  if (options.status) {
+    const clusterInfo = await client.getClusterInfo();
+    if (!clusterInfo.success) throw clusterInfo.error;
+    if (!clusterInfo.data.selfUpdate) {
+      throw new Error('Scheduled self-update status is unavailable on this server version');
+    }
+    process.stdout.write(
+      options.json
+        ? `${selfUpdateStatusJson(clusterInfo.data.selfUpdate)}\n`
+        : `${selfUpdateStatusLines(clusterInfo.data.selfUpdate).join('\n')}\n`
+    );
+    return;
+  }
   if (options.checkNow) {
     const checked = await client.selfUpdate.check();
     if (!checked.success) throw checked.error;
@@ -219,12 +252,8 @@ async function run(options: Options): Promise<void> {
 }
 
 export function checkDecisionCopy(check: { decision: string; reason: string }): string {
-  if (check.reason === 'no-pinned-release-trust') {
-    return 'scheduled checks are inactive: this build has no pinned release trust';
-  }
-  if (check.reason === 'unscoped-role') {
-    return 'scheduled checks are inactive: enable scoped roles with appliance cloud baseline-update --system-role-mode scoped';
-  }
+  const inactive = inactiveReasonCopy(check.reason);
+  if (inactive) return inactive;
   return `${check.decision} (${check.reason})`;
 }
 

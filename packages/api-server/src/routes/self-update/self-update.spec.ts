@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { requireAdmin } from '../../middleware/auth';
-import { createSelfUpdateRoutes, redactSelfUpdateError, requireOwnerTenant } from './index';
+import { createSelfUpdateRoutes, dispatchSelfUpdateCheck, redactSelfUpdateError, requireOwnerTenant } from './index';
 
 const mockApiKeyService = vi.hoisted(() => ({ getByKeyId: vi.fn() }));
 vi.mock('../../services/api-key.service', () => ({ apiKeyService: mockApiKeyService }));
@@ -36,7 +36,9 @@ function appFor(
   role: 'admin' | 'member',
   tenantId: string,
   keyId = 'admin',
-  dispatchCheck = vi.fn()
+  dispatchCheck = vi.fn(),
+  readLastCheck = vi.fn(async () => null),
+  now: () => number = Date.now
 ) {
   const app = express();
   app.use(express.json());
@@ -50,7 +52,7 @@ function appFor(
     '/api/v1/self-update',
     requireAdmin,
     requireOwnerTenant,
-    createSelfUpdateRoutes(() => service as never, dispatchCheck)
+    createSelfUpdateRoutes(() => service as never, dispatchCheck, readLastCheck, now)
   );
   return app;
 }
@@ -73,6 +75,12 @@ describe('self-update routes', () => {
       getAndResume: vi.fn().mockResolvedValue(job),
       publicJob: vi.fn().mockReturnValue({ jobId: job.id, status: job.status, phase: job.phase }),
     };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    delete process.env.WORKER_URL;
   });
 
   it('returns 503 before persistence when scoped system roles are disabled', async () => {
@@ -148,6 +156,76 @@ describe('self-update routes', () => {
     const injected = await request(app).post('/api/v1/self-update/check').send({ targetDigest: digest });
     expect(injected.status).toBe(400);
     expect(dispatchCheck).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a member check at the outer route with the authorization cause', async () => {
+    const dispatchCheck = vi.fn();
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.apiKeyId = 'member';
+      req.apiKeyRole = 'member';
+      req.tenantId = 'default';
+      next();
+    });
+    app.use(
+      '/api/v1/self-update',
+      createSelfUpdateRoutes(() => service as never, dispatchCheck)
+    );
+
+    const response = await request(app).post('/api/v1/self-update/check').send({});
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'This action needs an admin key' });
+    expect(dispatchCheck).not.toHaveBeenCalled();
+  });
+
+  it('returns stored check state during the 60-second manual-check cooldown', async () => {
+    let now = 1_000;
+    const dispatchCheck = vi.fn(async () => ({ decision: 'current', reason: 'up-to-date' }));
+    const readLastCheck = vi.fn(async () => ({
+      at: '2026-08-31T00:00:00.000Z',
+      decision: 'notify' as const,
+      reason: 'notify-marked',
+      version: '1.58.0',
+    }));
+    const app = appFor(service, 'admin', 'default', 'admin', dispatchCheck, readLastCheck, () => now);
+
+    const first = await request(app).post('/api/v1/self-update/check').send({});
+    const cooledDown = await request(app).post('/api/v1/self-update/check').send({});
+
+    expect(first.body).toEqual({ decision: 'current', reason: 'up-to-date' });
+    expect(cooledDown.body).toEqual({ decision: 'notify', reason: 'cooldown' });
+    expect(dispatchCheck).toHaveBeenCalledOnce();
+    expect(readLastCheck).toHaveBeenCalledOnce();
+
+    now += 60_000;
+    const afterCooldown = await request(app).post('/api/v1/self-update/check').send({});
+    expect(afterCooldown.body).toEqual({ decision: 'current', reason: 'up-to-date' });
+    expect(dispatchCheck).toHaveBeenCalledTimes(2);
+  });
+
+  it('aborts worker check dispatch after 25 seconds', async () => {
+    process.env.WORKER_URL = 'https://worker.example';
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ decision: 'current', reason: 'up-to-date' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    vi.stubGlobal('fetch', fetcher);
+
+    await expect(
+      dispatchSelfUpdateCheck({ keyId: 'ak_test-key', secret: 'sk_test-secret-value-1234567890' })
+    ).resolves.toEqual({ decision: 'current', reason: 'up-to-date' });
+
+    expect(timeout).toHaveBeenCalledWith(25_000);
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://worker.example/api/internal/self-update/check',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   it.each(['POST', 'GET'])('rejects member %s with 403', async (method) => {
