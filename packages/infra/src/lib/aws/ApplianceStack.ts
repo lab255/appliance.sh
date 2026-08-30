@@ -136,7 +136,11 @@ export class ApplianceStack extends pulumi.ComponentResource {
     const defaultOpts = { parent: this, provider: opts.provider };
     const defaultNativeOpts = { parent: this, provider: opts.nativeProvider };
     const boundaryArn = awsConfig.userAppliancePermissionsBoundaryArn;
-    if (!boundaryArn) throw new Error('CFN base config is missing aws.userAppliancePermissionsBoundaryArn');
+    if (!boundaryArn) {
+      throw new Error(
+        'This installation predates scoped user-appliance role boundaries. Run `appliance cloud baseline-update` before deploying or updating an appliance.'
+      );
+    }
     const defaultTags: Record<string, string> = {
       'appliance:managed': 'true',
       'appliance:stack-name': name,

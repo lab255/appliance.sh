@@ -60,6 +60,36 @@ describe('assertAwsEdgeProvisioned', () => {
 });
 
 describe('ApplianceStack', () => {
+  it('directs pre-boundary installs to baseline-update', () => {
+    const config = applianceBaseConfig.parse({
+      name: 'prod',
+      type: ApplianceBaseType.ApplianceAwsPublic,
+      provisioner: 'cloudformation-v1',
+      stateBackendUrl: 's3://prod-state',
+      domainName: 'example.com',
+      aws: {
+        region: 'us-east-1',
+        zoneId: 'Z123',
+        cloudfrontDistributionId: 'DIST123',
+        cloudfrontDistributionDomainName: 'distribution.cloudfront.net',
+        dataBucketName: 'prod-data',
+      },
+    });
+    const regionalProvider = new aws.Provider('legacy-regional-provider', { region: 'us-east-1' });
+    const globalProvider = new aws.Provider('legacy-global-provider', { region: 'us-east-1' });
+    const nativeProvider = new awsNative.Provider('legacy-native-provider', { region: 'us-east-1' });
+    const nativeGlobalProvider = new awsNative.Provider('legacy-native-global-provider', { region: 'us-east-1' });
+
+    expect(
+      () =>
+        new ApplianceStack(
+          'legacy-sample',
+          { config },
+          { provider: regionalProvider, globalProvider, nativeProvider, nativeGlobalProvider }
+        )
+    ).toThrow(/appliance cloud baseline-update/);
+  });
+
   it('uses the scoped role path, boundary output, and policy path for the no-build branch', async () => {
     const config = applianceBaseConfig.parse({
       name: 'prod',
