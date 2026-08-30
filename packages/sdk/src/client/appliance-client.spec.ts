@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApplianceClient } from './appliance-client';
 import { VERSION } from '../version';
+import type { ReleaseEnvelope, ReleaseSignatureEnvelope, SelfUpdatePublicJob } from '../models';
 
 // The `x-appliance-client` tag must be context-sensitive: server-side
 // callers (CLI, engine, tests — no `document` global) always send it,
@@ -81,3 +82,93 @@ describe('x-appliance-client tagging', () => {
     expect(headers['signature']).toBeDefined();
   });
 });
+
+describe('self-update client', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const digest = `sha256:${'a'.repeat(64)}`;
+  const evidence = {
+    payload: {
+      kind: 'control-plane-release',
+      version: '1.58.0',
+      generation: 2,
+      notBefore: '2026-08-01T00:00:00Z',
+      expires: '2026-09-30T00:00:00Z',
+      artifacts: [
+        { name: 'appliance-api-server-linux-x64', arch: 'x64', sha256: '1'.repeat(64), size: 1 },
+        { name: 'appliance-api-server-linux-arm64', arch: 'arm64', sha256: '2'.repeat(64), size: 1 },
+        { name: 'appliance-console.tar.gz', arch: 'any', sha256: '3'.repeat(64), size: 1 },
+      ],
+      image: { repository: 'ghcr.io/lab255/appliance-api-server', manifestDigest: digest },
+    } as ReleaseEnvelope,
+    envelope: {
+      alg: 'ed25519',
+      keyId: `ed25519:sha256:${'4'.repeat(64)}`,
+      role: 'control-plane-release',
+      sig: 'AA',
+    } as ReleaseSignatureEnvelope,
+  };
+
+  it.each([202, 409] as const)('returns a typed %s start response with the idempotency key', async (status) => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponseFor(status, {
+        jobId: 'selfupdate_1',
+        ...(status === 202 ? { status: 'queued' } : {}),
+        statusUrl: '/api/v1/self-update/selfupdate_1',
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createApplianceClient({
+      baseUrl: 'https://api.test',
+      credentials: { keyId: 'k1', secret: 'secret' },
+    });
+
+    const result = await client.selfUpdate.start({ targetDigest: digest, release: evidence, idempotencyKey: 'once' });
+
+    expect(result).toMatchObject({ success: true, data: { httpStatus: status, jobId: 'selfupdate_1' } });
+    expect(sentHeaders(fetchMock)['idempotency-key']).toBe('once');
+    expect(sentHeaders(fetchMock).signature).toBeDefined();
+  });
+
+  it('polls phase changes and resolves on a terminal job', async () => {
+    vi.useFakeTimers();
+    const phases = ['mirroring', 'mirroring', 'probing-health', 'complete'] as const;
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const phase = phases[Math.min(call++, phases.length - 1)]!;
+        return jsonResponseFor(200, job(phase, phase === 'complete' ? 'succeeded' : 'running'));
+      })
+    );
+    const client = createApplianceClient({ baseUrl: 'https://api.test' });
+    const seen: string[] = [];
+    const watching = client.selfUpdate.watch('job/unsafe', { intervalMs: 10, onPhase: (value) => seen.push(value.phase) });
+    await vi.runAllTimersAsync();
+
+    await expect(watching).resolves.toMatchObject({ success: true, data: { status: 'succeeded' } });
+    expect(seen).toEqual(['mirroring', 'probing-health', 'complete']);
+  });
+});
+
+function jsonResponseFor(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+function job(phase: SelfUpdatePublicJob['phase'], status: SelfUpdatePublicJob['status']): SelfUpdatePublicJob {
+  return {
+    jobId: 'selfupdate_1',
+    status,
+    phase,
+    target: { digest: `sha256:${'a'.repeat(64)}`, version: '1.58.0', generation: 2, source: 'ghcr.io/x@y' },
+    timestamps: {
+      createdAt: '2026-08-30T00:00:00Z',
+      updatedAt: '2026-08-30T00:00:01Z',
+      heartbeatAt: '2026-08-30T00:00:01Z',
+      leaseExpiresAt: '2026-08-30T00:01:01Z',
+    },
+  };
+}

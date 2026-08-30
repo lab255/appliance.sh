@@ -14,5 +14,6 @@ export * from './stack';
 export * from './catalogue';
 export * from './catalogue-trust';
 export * from './release-trust';
+export * from './self-update';
 export * from './installed-app';
 export * from './entitlement';

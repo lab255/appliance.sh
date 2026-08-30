@@ -176,6 +176,29 @@ describe('SelfUpdateService durable route state', () => {
     await expect(service.claim(created.job.id)).rejects.toThrow('already claimed');
   });
 
+  it('records additive per-phase durations in the public job', async () => {
+    const created = await service.create(evidence(), {
+      keyId: 'admin-a',
+      tenantId: 'default',
+      secret: 'secret',
+    });
+    nowMs += 1_000;
+    const claimed = await service.claim(created.job.id);
+    nowMs += 2_000;
+    await service.heartbeat(created.job.id, claimed.lease.holder!, 'mirroring');
+    nowMs += 3_000;
+    await service.heartbeat(created.job.id, claimed.lease.holder!, 'waiting-for-stack');
+    nowMs += 4_000;
+    const finished = await service.finish(created.job.id, { status: 'succeeded' }, claimed.lease.holder!);
+
+    expect(service.publicJob(finished).phaseDurationsMs).toEqual({
+      queued: 1_000,
+      verifying: 2_000,
+      mirroring: 3_000,
+      'waiting-for-stack': 4_000,
+    });
+  });
+
   it('fences a zombie worker after an expired lease is resumed and re-claimed', async () => {
     const created = await service.create(evidence(), {
       keyId: 'admin-a',

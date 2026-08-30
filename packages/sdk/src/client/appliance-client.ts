@@ -10,6 +10,12 @@ import { ApplianceBaseConfig } from '../models/appliance-base';
 import { Workloads } from '../models/workloads';
 import { signRequest } from '../signing';
 import { VERSION } from '../version';
+import type {
+  SelfUpdatePublicJob,
+  SelfUpdateStartInput,
+  SelfUpdateStartResponse,
+  SelfUpdateWatchOptions,
+} from '../models/self-update';
 
 /** GET /api/v1/cluster-info response. Mirrors the api-server's
  *  ClusterInfo (routes/cluster-info); every field beyond `version` +
@@ -140,6 +146,79 @@ export class ApplianceClient {
       };
     }
   }
+
+  private async startSelfUpdate(input: SelfUpdateStartInput): Promise<Result<SelfUpdateStartResponse>> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      const url = `${this.baseUrl}/api/v1/self-update`;
+      const body = JSON.stringify({ targetDigest: input.targetDigest, release: input.release });
+      const headers: Record<string, string> = {
+        'content-type': 'application/json',
+        'idempotency-key': input.idempotencyKey,
+        ...this.clientTagHeaders(),
+      };
+      if (this.credentials) {
+        Object.assign(headers, await signRequest(this.credentials, { method: 'POST', url, headers, body }));
+      }
+      const response = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
+      clearTimeout(timeoutId);
+      const data = (await response.json()) as Record<string, unknown>;
+      if (response.status === 202) {
+        return {
+          success: true,
+          data: {
+            httpStatus: 202,
+            jobId: String(data.jobId),
+            status: data.status as SelfUpdatePublicJob['status'],
+            statusUrl: String(data.statusUrl),
+          },
+        };
+      }
+      if (response.status === 409) {
+        return {
+          success: true,
+          data: { httpStatus: 409, jobId: String(data.jobId), statusUrl: String(data.statusUrl) },
+        };
+      }
+      return {
+        success: false,
+        error: new Error(`HTTP ${response.status}: ${JSON.stringify(data)}`),
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+
+  /** Signed control-plane self-update API and terminal-state polling helper. */
+  readonly selfUpdate = {
+    start: (input: SelfUpdateStartInput): Promise<Result<SelfUpdateStartResponse>> => this.startSelfUpdate(input),
+    status: (jobId: string): Promise<Result<SelfUpdatePublicJob>> =>
+      this.request<SelfUpdatePublicJob>('GET', `/api/v1/self-update/${encodeURIComponent(jobId)}`),
+    watch: async (
+      jobId: string,
+      options: SelfUpdateWatchOptions = {}
+    ): Promise<Result<SelfUpdatePublicJob>> => {
+      const intervalMs = options.intervalMs ?? 2_000;
+      if (!Number.isFinite(intervalMs) || intervalMs < 0) {
+        return { success: false, error: new Error('selfUpdate.watch intervalMs must be a non-negative number') };
+      }
+      let previousPhase: SelfUpdatePublicJob['phase'] | undefined;
+      for (;;) {
+        const current = await this.request<SelfUpdatePublicJob>(
+          'GET',
+          `/api/v1/self-update/${encodeURIComponent(jobId)}`
+        );
+        if (!current.success) return current;
+        if (current.data.phase !== previousPhase) {
+          previousPhase = current.data.phase;
+          options.onPhase?.(current.data);
+        }
+        if (current.data.status === 'succeeded' || current.data.status === 'failed') return current;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    },
+  };
 
   /**
    * Like `request<T>`, but resolves the response as a plain text body
