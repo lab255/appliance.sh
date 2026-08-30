@@ -61,6 +61,7 @@ const K3S_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/k3s";
 const APISERVER_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server";
 const CONSOLE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-console.tar.gz";
 const APISERVER_CHECKSUMS_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/appliance-api-server.sha256";
+const APISERVER_PROPERTIES_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.properties";
 const APISERVER_RELEASE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.json";
 const APISERVER_ENVELOPE_GUEST_ARTIFACT: &str = "/opt/appliance/artifacts/control-plane-release.sig.json";
 
@@ -708,6 +709,7 @@ fn stream_boot_artifacts(
         }
         if let Some(evidence) = &assets.release_evidence {
             stream_guest_artifact(distro, &evidence.checksums, APISERVER_CHECKSUMS_GUEST_ARTIFACT, None)?;
+            stream_guest_artifact(distro, &evidence.properties, APISERVER_PROPERTIES_GUEST_ARTIFACT, None)?;
             stream_guest_artifact(distro, &evidence.payload, APISERVER_RELEASE_GUEST_ARTIFACT, None)?;
             stream_guest_artifact(distro, &evidence.envelope, APISERVER_ENVELOPE_GUEST_ARTIFACT, None)?;
         }
@@ -971,7 +973,9 @@ const WSL_APISERVER_COPY: &str = r#"# --- appliance api-server -----------------
 mkdir -p /persist/appliance /usr/local/bin /etc/appliance
 APISERVER_SRC=/opt/appliance/artifacts/appliance-api-server
 CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz
+APISERVER_MEDIA=/opt/appliance/artifacts
 RELEASE_CHECKSUMS=/opt/appliance/artifacts/appliance-api-server.sha256
+RELEASE_PROPERTIES=/opt/appliance/artifacts/control-plane-release.properties
 RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json
 RELEASE_ENVELOPE=/opt/appliance/artifacts/control-plane-release.sig.json
 printf '%s' '__APISERVER_TOKEN__' > /etc/appliance/bootstrap-token
@@ -1094,13 +1098,19 @@ fn build_bootstrap_with_inputs(spec: &VmSpec, inputs: BootstrapInputs<'_>) -> Re
     // staged. Same substitution rules as the k3s block: injected before
     // the port markers so its nested markers expand too.
     let apiserver_block = match (spec.runtime, spec.cluster, spec.agent_only, apiserver) {
-        (false, true, false, Some(_assets)) => {
+        (false, true, false, Some(assets)) => {
+            let pinned_key_id = assets
+                .release_evidence
+                .as_ref()
+                .map(|evidence| evidence.key_id.as_str())
+                .unwrap_or_default();
             format!(
                 "{WSL_APISERVER_COPY}{}{}",
                 crate::guest::APISERVER_SEED_COPY,
                 crate::guest::APISERVER_COMMON
             )
                 .replace("__APISERVER_TOKEN__", &shell_squote(bootstrap_token))
+                .replace("__PINNED_RELEASE_KEY_ID__", pinned_key_id)
         }
         _ => String::new(),
     };
@@ -1830,10 +1840,14 @@ mod tests {
             )),
             release_evidence: Some(crate::guest::ApiServerReleaseEvidence {
                 checksums: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\appliance-api-server.sha256"),
+                properties: PathBuf::from(
+                    r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.properties",
+                ),
                 payload: PathBuf::from(r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.json"),
                 envelope: PathBuf::from(
                     r"C:\Users\Avery\.appliance\guest-assets\control-plane-release.sig.json",
                 ),
+                key_id: format!("ed25519:sha256:{}", "a".repeat(64)),
             }),
         };
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
@@ -1844,8 +1858,16 @@ mod tests {
             "CONSOLE_SRC=/opt/appliance/artifacts/appliance-console.tar.gz"
         ));
         assert!(script.contains("RELEASE_PAYLOAD=/opt/appliance/artifacts/control-plane-release.json"));
+        assert!(script.contains(
+            "RELEASE_PROPERTIES=/opt/appliance/artifacts/control-plane-release.properties"
+        ));
         assert!(script.contains("sha256sum \"$APISERVER_SRC\""));
         assert!(script.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
+        assert!(!script.contains("jq -r"));
+        assert!(script.contains(&format!(
+            "RELEASE_KEY_ID\" != \"ed25519:sha256:{}",
+            "a".repeat(64)
+        )));
         assert!(!script.contains(r"C:\Users\Avery"));
         assert!(!script.contains("wslpath"));
         assert!(!script.contains("/mnt/c"));
@@ -1855,7 +1877,7 @@ mod tests {
         let script = build_bootstrap(&s, None, None, Some(&assets), "tok3n", &[], None).unwrap();
         assert!(!script.contains("__CONSOLE_PROVISION__"));
         assert!(script.contains("CONSOLE_SRC="));
-        assert!(script.contains("api-server start refused"));
+        assert!(script.contains("console skipped (api-server remains headless)"));
     }
 
     #[test]

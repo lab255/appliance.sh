@@ -157,6 +157,10 @@ pub fn run_vm_checks(name: &str) -> Report {
     #[cfg(windows)]
     report.findings.push(wsl_guest_policy_finding(name));
 
+    if let Some(finding) = guest_seed_warning_finding(name) {
+        report.findings.push(finding);
+    }
+
     // --- guest api-server reachability ------------------------------
     let agent_only = spec.as_ref().is_some_and(|s| s.agent_only);
     if agent_only {
@@ -265,6 +269,34 @@ fn skew_finding(skew: i64) -> Finding {
         )
         .remedy("restart the VM (`appliance vm stop && appliance vm up`) — the engine re-syncs the guest clock at boot and every 30s".to_string())
     }
+}
+
+fn guest_seed_warning_finding(name: &str) -> Option<Finding> {
+    let output = run_wrapped(
+        name,
+        "if [ -s /persist/.apiserver-seed-warning ]; then cat /persist/.apiserver-seed-warning; fi",
+    )
+    .ok()?;
+    classify_seed_warning(output.trim())
+}
+
+fn classify_seed_warning(detail: &str) -> Option<Finding> {
+    if detail.is_empty() {
+        return None;
+    }
+    let refused = detail.contains("refused") || detail.contains("digest/size mismatch");
+    Some(
+        Finding::new(
+            "engine:apiserver-seed",
+            "Guest control-plane seed verification",
+            if refused { Severity::Fail } else { Severity::Warn },
+            detail.to_string(),
+        )
+        .remedy(
+            "restage with `appliance vm up`, then restart the VM; inspect /var/log/appliance-api-server.log if the finding remains"
+                .to_string(),
+        ),
+    )
 }
 
 #[cfg(windows)]
@@ -500,6 +532,25 @@ mod tests {
             assert_eq!(f.severity, Severity::Fail, "skew {skew}");
             assert!(f.detail.as_deref().unwrap_or("").contains("401"));
         }
+    }
+
+    #[test]
+    fn refused_seed_marker_is_a_hard_doctor_finding() {
+        let finding = classify_seed_warning(
+            "signed control-plane seed digest/size mismatch; api-server start refused",
+        )
+        .unwrap();
+        assert_eq!(finding.severity, Severity::Fail);
+        assert_eq!(finding.id, "engine:apiserver-seed");
+    }
+
+    #[test]
+    fn unsigned_pre_mv0_seed_marker_warns() {
+        let finding = classify_seed_warning(
+            "unsigned pre-MV0 control-plane seed accepted; self-update disabled",
+        )
+        .unwrap();
+        assert_eq!(finding.severity, Severity::Warn);
     }
 
     #[test]

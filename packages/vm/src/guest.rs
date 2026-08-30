@@ -235,8 +235,10 @@ pub struct ApiServerAssets {
 
 pub struct ApiServerReleaseEvidence {
     pub checksums: PathBuf,
+    pub properties: PathBuf,
     pub payload: PathBuf,
     pub envelope: PathBuf,
+    pub key_id: String,
 }
 
 /// Locate the staged api-server artifacts, or None when the binary is
@@ -250,15 +252,27 @@ pub fn apiserver_assets() -> Option<ApiServerAssets> {
     let console = dir.join("appliance-console.tar.gz");
     let console = console.is_file().then_some(console);
     let checksums = dir.join("appliance-api-server.sha256");
+    let properties = dir.join("control-plane-release.properties");
     let payload = dir.join("control-plane-release.json");
     let envelope = dir.join("control-plane-release.sig.json");
-    let release_evidence = (checksums.is_file() && payload.is_file() && envelope.is_file()).then_some(
-        ApiServerReleaseEvidence {
+    let key_id = fs::read_to_string(&properties).ok().and_then(|contents| {
+        contents.lines().find_map(|line| line.strip_prefix("keyId=")).filter(|value| {
+            value
+                .strip_prefix("ed25519:sha256:")
+                .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        }).map(str::to_string)
+    });
+    let release_evidence =
+        (checksums.is_file() && properties.is_file() && payload.is_file() && envelope.is_file())
+            .then_some(key_id)
+            .flatten()
+            .map(|key_id| ApiServerReleaseEvidence {
             checksums,
+            properties,
             payload,
             envelope,
-        },
-    );
+            key_id,
+        });
     Some(ApiServerAssets {
         binary,
         console,
@@ -1000,6 +1014,7 @@ APISERVER_MEDIA=$(dirname "$(find /media -maxdepth 2 -name appliance-api-server 
 APISERVER_SRC="$APISERVER_MEDIA/appliance-api-server"
 CONSOLE_SRC="$APISERVER_MEDIA/appliance-console.tar.gz"
 RELEASE_CHECKSUMS="$APISERVER_MEDIA/appliance-api-server.sha256"
+RELEASE_PROPERTIES="$APISERVER_MEDIA/control-plane-release.properties"
 RELEASE_PAYLOAD="$APISERVER_MEDIA/control-plane-release.json"
 RELEASE_ENVELOPE="$APISERVER_MEDIA/control-plane-release.sig.json"
 "#;
@@ -1008,15 +1023,23 @@ RELEASE_ENVELOPE="$APISERVER_MEDIA/control-plane-release.sig.json"
 /// envelope; the minimal Alpine guest deliberately does not carry a second
 /// Ed25519 implementation in MV0. It independently binds both exact sizes and
 /// SHA-256 digests to the verified payload copied beside the seed.
-pub(crate) const APISERVER_SEED_COPY: &str = r#"APPLIANCE_WARNINGS_FILE=/var/log/appliance-api-server.warnings
+pub(crate) const APISERVER_SEED_COPY: &str = r#"APPLIANCE_WARNINGS_FILE=${APPLIANCE_WARNINGS_FILE:-/var/log/appliance-api-server.warnings}
+APPLIANCE_SEED_LOG=${APPLIANCE_SEED_LOG:-/var/log/appliance-api-server.log}
+APPLIANCE_SEED_MARKER=${APPLIANCE_SEED_MARKER:-/persist/.apiserver-seed-warning}
+APISERVER_DEST=${APISERVER_DEST:-/usr/local/bin/appliance-api-server}
+CONSOLE_DEST=${CONSOLE_DEST:-/persist/appliance/console}
+rm -f "$APPLIANCE_SEED_MARKER"
 seed_warning() {
   MSG="$1"
-  echo "appliance-api-server: SECURITY: $MSG" | tee -a /var/log/appliance-api-server.log >&2
+  echo "appliance-api-server: SECURITY: $MSG" | tee -a "$APPLIANCE_SEED_LOG" >&2
   echo "$MSG" >> "$APPLIANCE_WARNINGS_FILE"
+  echo "$MSG" >> "$APPLIANCE_SEED_MARKER"
 }
-if [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PAYLOAD" ] || [ -f "$RELEASE_ENVELOPE" ]; then
+if [ -z "${APISERVER_MEDIA:-}" ]; then
+  seed_warning "boot media not found"
+elif [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PROPERTIES" ] || [ -f "$RELEASE_PAYLOAD" ] || [ -f "$RELEASE_ENVELOPE" ]; then
   SEED_OK=1
-  if [ ! -f "$RELEASE_CHECKSUMS" ] || [ ! -f "$RELEASE_PAYLOAD" ] || [ ! -f "$RELEASE_ENVELOPE" ]; then
+  if [ ! -f "$RELEASE_CHECKSUMS" ] || [ ! -f "$RELEASE_PROPERTIES" ] || [ ! -f "$RELEASE_PAYLOAD" ] || [ ! -f "$RELEASE_ENVELOPE" ]; then
     seed_warning "signed control-plane seed evidence is incomplete; api-server start refused"
     SEED_OK=0
   fi
@@ -1025,51 +1048,56 @@ if [ -f "$RELEASE_CHECKSUMS" ] || [ -f "$RELEASE_PAYLOAD" ] || [ -f "$RELEASE_EN
     aarch64|arm64) RELEASE_ARCH=arm64 ;;
     *) RELEASE_ARCH=unsupported ;;
   esac
-  RELEASE_NAME="appliance-api-server-linux-$RELEASE_ARCH"
-  EXPECTED_BINARY_SHA=$(jq -r --arg name "$RELEASE_NAME" --arg arch "$RELEASE_ARCH" '.artifacts[] | select(.name == $name and .arch == $arch) | .sha256' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
-  EXPECTED_BINARY_SIZE=$(jq -r --arg name "$RELEASE_NAME" '.artifacts[] | select(.name == $name) | .size' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
-  SIDECAR_BINARY_SHA=$(awk '$2 == "appliance-api-server" { print $1 }' "$RELEASE_CHECKSUMS" 2>/dev/null | head -1)
+  EXPECTED_BINARY_SHA=$(awk '$2 == "appliance-api-server" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+  EXPECTED_BINARY_SIZE=$(awk '$2 == "appliance-api-server" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
   ACTUAL_BINARY_SHA=$(sha256sum "$APISERVER_SRC" 2>/dev/null | awk '{print $1}')
   ACTUAL_BINARY_SIZE=$(wc -c < "$APISERVER_SRC" 2>/dev/null | tr -d ' ')
-  EXPECTED_CONSOLE_SHA=$(jq -r '.artifacts[] | select(.name == "appliance-console.tar.gz" and .arch == "any") | .sha256' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
-  EXPECTED_CONSOLE_SIZE=$(jq -r '.artifacts[] | select(.name == "appliance-console.tar.gz") | .size' "$RELEASE_PAYLOAD" 2>/dev/null | head -1)
-  SIDECAR_CONSOLE_SHA=$(awk '$2 == "appliance-console.tar.gz" { print $1 }' "$RELEASE_CHECKSUMS" 2>/dev/null | head -1)
-  ACTUAL_CONSOLE_SHA=$(sha256sum "$CONSOLE_SRC" 2>/dev/null | awk '{print $1}')
-  ACTUAL_CONSOLE_SIZE=$(wc -c < "$CONSOLE_SRC" 2>/dev/null | tr -d ' ')
-  RELEASE_KEY_ID=$(jq -r 'select(.role == "control-plane-release") | .keyId // empty' "$RELEASE_ENVELOPE" 2>/dev/null)
-  if [ -z "$RELEASE_KEY_ID" ] || [ "$EXPECTED_BINARY_SHA" != "$SIDECAR_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ] || [ "$EXPECTED_CONSOLE_SHA" != "$SIDECAR_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SHA" != "$ACTUAL_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SIZE" != "$ACTUAL_CONSOLE_SIZE" ]; then
+  RELEASE_KEY_ID=$(awk -F= '$1 == "keyId" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  RELEASE_VERSION=$(awk -F= '$1 == "version" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  SIDECAR_ARCH=$(awk -F= '$1 == "arch" { print $2; exit }' "$RELEASE_PROPERTIES" 2>/dev/null)
+  if [ -z "$RELEASE_KEY_ID" ] || [ "$RELEASE_KEY_ID" != "__PINNED_RELEASE_KEY_ID__" ] || [ -z "$RELEASE_VERSION" ] || [ "$SIDECAR_ARCH" != "$RELEASE_ARCH" ] || [ "$EXPECTED_BINARY_SHA" != "$ACTUAL_BINARY_SHA" ] || [ "$EXPECTED_BINARY_SIZE" != "$ACTUAL_BINARY_SIZE" ]; then
     seed_warning "signed control-plane seed digest/size mismatch; api-server start refused"
     SEED_OK=0
   fi
   if [ "$SEED_OK" = 1 ]; then
-    cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
-    chmod +x /usr/local/bin/appliance-api-server
-    rm -rf /persist/appliance/console.new
-    mkdir -p /persist/appliance/console.new
-    if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
-      rm -rf /persist/appliance/console
-      mv /persist/appliance/console.new /persist/appliance/console
-    else
-      seed_warning "signed console bundle extraction failed; api-server start refused"
-      rm -f /usr/local/bin/appliance-api-server
+    cp "$APISERVER_SRC" "$APISERVER_DEST"
+    chmod +x "$APISERVER_DEST"
+    if [ -f "$CONSOLE_SRC" ]; then
+      EXPECTED_CONSOLE_SHA=$(awk '$2 == "appliance-console.tar.gz" { print $1; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+      EXPECTED_CONSOLE_SIZE=$(awk '$2 == "appliance-console.tar.gz" { print $3; exit }' "$RELEASE_CHECKSUMS" 2>/dev/null)
+      ACTUAL_CONSOLE_SHA=$(sha256sum "$CONSOLE_SRC" 2>/dev/null | awk '{print $1}')
+      ACTUAL_CONSOLE_SIZE=$(wc -c < "$CONSOLE_SRC" 2>/dev/null | tr -d ' ')
+      if [ "$EXPECTED_CONSOLE_SHA" != "$ACTUAL_CONSOLE_SHA" ] || [ "$EXPECTED_CONSOLE_SIZE" != "$ACTUAL_CONSOLE_SIZE" ]; then
+        seed_warning "signed console bundle digest/size mismatch; console skipped (api-server remains headless)"
+      else
+        rm -rf "$CONSOLE_DEST.new"
+        mkdir -p "$CONSOLE_DEST.new"
+        if tar -xzf "$CONSOLE_SRC" -C "$CONSOLE_DEST.new" 2>/dev/null; then
+          rm -rf "$CONSOLE_DEST"
+          mv "$CONSOLE_DEST.new" "$CONSOLE_DEST"
+        else
+          seed_warning "signed console bundle extraction failed; console skipped (api-server remains headless)"
+          rm -rf "$CONSOLE_DEST.new"
+        fi
+      fi
     fi
   else
-    rm -f /usr/local/bin/appliance-api-server
+    rm -f "$APISERVER_DEST"
   fi
 elif [ -f "$APISERVER_SRC" ]; then
-  # Development-only repo/override and explicit --allow-unsigned staging.
-  # Production CLI builds cannot create this state from a release download.
-  seed_warning "unsigned development control-plane seed accepted (pre-MV0 release)"
-  cp "$APISERVER_SRC" /usr/local/bin/appliance-api-server
-  chmod +x /usr/local/bin/appliance-api-server
+  # Pre-AP-226 releases and explicitly acknowledged development overrides.
+  seed_warning "unsigned pre-MV0 control-plane seed accepted; self-update disabled"
+  cp "$APISERVER_SRC" "$APISERVER_DEST"
+  chmod +x "$APISERVER_DEST"
   if [ -f "$CONSOLE_SRC" ]; then
-    rm -rf /persist/appliance/console.new
-    mkdir -p /persist/appliance/console.new
-    if tar -xzf "$CONSOLE_SRC" -C /persist/appliance/console.new 2>/dev/null; then
-      rm -rf /persist/appliance/console
-      mv /persist/appliance/console.new /persist/appliance/console
+    rm -rf "$CONSOLE_DEST.new"
+    mkdir -p "$CONSOLE_DEST.new"
+    if tar -xzf "$CONSOLE_SRC" -C "$CONSOLE_DEST.new" 2>/dev/null; then
+      rm -rf "$CONSOLE_DEST"
+      mv "$CONSOLE_DEST.new" "$CONSOLE_DEST"
     else
       echo "appliance-api-server: console bundle extraction failed (API still serves)"
+      rm -rf "$CONSOLE_DEST.new"
     fi
   fi
 fi
@@ -2490,6 +2518,7 @@ fn build_apkovl(
         host_port,
         bootstrap_token,
         apiserver,
+        "",
     )
 }
 
@@ -2506,6 +2535,7 @@ fn build_apkovl_for_readiness(
     host_port: u16,
     bootstrap_token: &str,
     apiserver: bool,
+    pinned_release_key_id: &str,
 ) -> Result<Vec<u8>> {
     let agent_only = readiness == HostReadiness::Agent;
     let runtime = readiness == HostReadiness::Runtime;
@@ -2627,6 +2657,7 @@ fn build_apkovl_for_readiness(
             // network); the WSL bootstrap substitutes this to empty.
             .replace("__K3S_AIRGAP_PREAMBLE__", "APPLIANCE_AIRGAP_PROBE=1")
             .replace("__APISERVER_GUEST_PORT__", &API_SERVER_GUEST_PORT.to_string())
+            .replace("__PINNED_RELEASE_KEY_ID__", pinned_release_key_id)
             // Writer-version stamp on the guest's base config, logged by
             // the api-server on parse — makes engine/guest schema drift
             // visible in the server log (incident B follow-up).
@@ -2814,6 +2845,11 @@ pub fn build_boot_media(
         host_port,
         &bootstrap_token,
         apiserver.is_some(),
+        apiserver
+            .as_ref()
+            .and_then(|assets| assets.release_evidence.as_ref())
+            .map(|evidence| evidence.key_id.as_str())
+            .unwrap_or_default(),
     )?;
 
     let modloop_data = fs::read(&modloop)?;
@@ -2833,6 +2869,7 @@ pub fn build_boot_media(
         .map(|evidence| {
             Ok::<_, std::io::Error>([
                 ("appliance-api-server.sha256", fs::read(&evidence.checksums)?),
+                ("control-plane-release.properties", fs::read(&evidence.properties)?),
                 ("control-plane-release.json", fs::read(&evidence.payload)?),
                 ("control-plane-release.sig.json", fs::read(&evidence.envelope)?),
             ])
@@ -3657,7 +3694,22 @@ mod tests {
         // k3s VM with the api-server staged: media copy, base config,
         // ingress route, token launch env, respawn loop — all present,
         // no literal markers.
-        let plain = build_apkovl(5052, None, false, false, false, 5053, false, "", 8081, "tok3n", true).unwrap();
+        let pinned_key_id = format!("ed25519:sha256:{}", "a".repeat(64));
+        let plain = build_apkovl_for_readiness(
+            5052,
+            None,
+            false,
+            false,
+            false,
+            5053,
+            HostReadiness::K3s,
+            "",
+            8081,
+            "tok3n",
+            true,
+            &pinned_key_id,
+        )
+        .unwrap();
         let start = apkovl_file(&plain, "etc/local.d/appliance.start").unwrap();
         assert!(!start.contains("__APISERVER_PROVISION__"), "marker must be substituted");
         assert!(!start.contains("__APISERVER_GUEST_PORT__"));
@@ -3665,6 +3717,9 @@ mod tests {
         assert!(start.contains("APISERVER_SRC=\"$APISERVER_MEDIA/appliance-api-server\""));
         assert!(start.contains("sha256sum \"$APISERVER_SRC\""));
         assert!(start.contains("control-plane-release.sig.json"));
+        assert!(start.contains("control-plane-release.properties"));
+        assert!(!start.contains("jq "), "the minimal api-server guest does not install jq");
+        assert!(start.contains(&format!("RELEASE_KEY_ID\" != \"{pinned_key_id}")));
         assert!(start.contains("signed control-plane seed digest/size mismatch; api-server start refused"));
         // Token auth against the local k3s: bun's fetch can't carry the
         // kubeconfig's client certificates, so the server gets its own
@@ -3700,6 +3755,106 @@ mod tests {
         let start = apkovl_file(&agent, "etc/local.d/appliance.start").unwrap();
         assert!(!start.contains("__APISERVER_PROVISION__"), "marker must be substituted");
         assert!(!start.contains("base-config.json"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apiserver_seed_gate_runs_with_restricted_busybox_userland_and_rejects_tampering() {
+        use std::os::unix::fs::symlink;
+        use std::process::Command;
+
+        let root = std::env::temp_dir().join(format!(
+            "appliance-seed-gate-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let busybox = Command::new("/bin/sh")
+            .args(["-c", "command -v busybox"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|path| PathBuf::from(path.trim()));
+        for applet in ["awk", "chmod", "cp", "mkdir", "mv", "rm", "sha256sum", "tar", "tee", "tr", "uname", "wc"] {
+            let source = if let Some(path) = &busybox {
+                path.clone()
+            } else {
+                let output = Command::new("/bin/sh")
+                    .args(["-c", &format!("command -v {applet}")])
+                    .output()
+                    .unwrap();
+                assert!(output.status.success(), "missing test userland applet {applet}");
+                PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
+            };
+            symlink(source, bin.join(applet)).unwrap();
+        }
+
+        let source = root.join("appliance-api-server");
+        fs::write(&source, b"verified-binary").unwrap();
+        let digest = crate::images::content_sha256_hex(b"verified-binary");
+        let key_id = format!("ed25519:sha256:{}", "a".repeat(64));
+        let checksums = root.join("appliance-api-server.sha256");
+        fs::write(
+            &checksums,
+            format!("{digest}  appliance-api-server  {}\n{}  appliance-console.tar.gz  1\n", 15, "b".repeat(64)),
+        )
+        .unwrap();
+        let properties = root.join("control-plane-release.properties");
+        let arch = if std::env::consts::ARCH == "aarch64" { "arm64" } else { "x64" };
+        fs::write(&properties, format!("keyId={key_id}\nversion=1.57.0\narch={arch}\n")).unwrap();
+        let payload = root.join("control-plane-release.json");
+        let envelope = root.join("control-plane-release.sig.json");
+        fs::write(&payload, b"{}\n").unwrap();
+        fs::write(&envelope, b"{}\n").unwrap();
+        let destination = root.join("installed-api-server");
+        let warning = root.join("warnings");
+        let marker = root.join("marker");
+        let log = root.join("seed.log");
+        let script = APISERVER_SEED_COPY.replace("__PINNED_RELEASE_KEY_ID__", &key_id);
+
+        let run = || {
+            let mut command = if let Some(path) = &busybox {
+                let mut command = Command::new(path);
+                command.arg("sh");
+                command
+            } else {
+                Command::new("/bin/sh")
+            };
+            command
+                .arg("-c")
+                .arg(&script)
+                .env("PATH", &bin)
+                .env("APISERVER_MEDIA", &root)
+                .env("APISERVER_SRC", &source)
+                .env("CONSOLE_SRC", root.join("missing-console"))
+                .env("RELEASE_CHECKSUMS", &checksums)
+                .env("RELEASE_PROPERTIES", &properties)
+                .env("RELEASE_PAYLOAD", &payload)
+                .env("RELEASE_ENVELOPE", &envelope)
+                .env("APISERVER_DEST", &destination)
+                .env("CONSOLE_DEST", root.join("console"))
+                .env("APPLIANCE_WARNINGS_FILE", &warning)
+                .env("APPLIANCE_SEED_MARKER", &marker)
+                .env("APPLIANCE_SEED_LOG", &log)
+                .output()
+                .unwrap()
+        };
+
+        let accepted = run();
+        assert!(accepted.status.success(), "seed script failed: {}", String::from_utf8_lossy(&accepted.stderr));
+        assert_eq!(fs::read(&destination).unwrap(), b"verified-binary");
+
+        fs::write(&source, b"tampered-binary").unwrap();
+        let rejected = run();
+        assert!(rejected.status.success());
+        assert!(!destination.exists(), "a tampered seed must remove the installed binary");
+        assert!(fs::read_to_string(&marker).unwrap().contains("start refused"));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -4083,6 +4238,7 @@ mod tests {
             8100,
             "",
             false,
+            "",
         )
         .unwrap();
         let repositories = apkovl_file(&overlay, "etc/apk/repositories").unwrap();
@@ -4433,6 +4589,7 @@ done >> "$CTR_ARGV"
             8081,
             "",
             false,
+            "",
         )
         .unwrap();
         let start = apkovl_file(&core, "etc/local.d/appliance.start").unwrap();
