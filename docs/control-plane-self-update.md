@@ -107,6 +107,12 @@ CU1 adds conditional `SelfUpdateRole` and a stack-scoped CFN service role. Updat
 default chain. CU0 first removes `AdministratorAccess` from both system Lambda roles using a CloudTrail-derived, live-proven deployment
 allow-list; this is a release gate, not a residual caveat.
 
+**CU0 shipped:** `SystemRoleMode=scoped` is now the CloudFormation default.
+The api-server can read/write its data bucket and read only the bootstrap secret.
+The worker adds Pulumi state/KMS, installation ECR, and bounded user-appliance IAM/Lambda/CloudFront/Route 53/ACM/log delivery.
+Account-scoped `Resource: '*'` remains only where AWS exposes no resource-level authorization, and every case is test-allowlisted.
+Run `appliance cloud baseline-update --system-role-mode admin` only for break glass; rerun with `scoped` to restore least privilege.
+
 Its trust policy is:
 
 ```yaml

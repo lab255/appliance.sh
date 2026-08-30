@@ -51,3 +51,10 @@ top-level commands remain unchanged.
 - `appliance deploy` keeps the existing target selection: it uses `--profile`, `APPLIANCE_PROFILE`, or the active cluster (usually a cloud cluster), falling back to the local cluster when none is selected.
 - `appliance install` uses the same deploy engine but defaults to the local VM cluster. It ignores `APPLIANCE_PROFILE` and the active cluster; use `--cluster <name>` to install to another registered cluster (`--profile <name>` remains accepted for compatibility).
 - `appliance runtime install <path|url>` installs a packaged app into the current workspace target (see [docs/runtime.md](runtime.md#run-or-install-a-bundle)); unlike the top-level `install`, it honours `APPLIANCE_PROFILE`.
+
+## Cloud baseline role mode
+
+`appliance cloud baseline-update` applies the CLI's current CloudFormation template while preserving the stack's existing `ImageUri`.
+System Lambda execution roles default to `--system-role-mode scoped`. If a live deployment exposes an unenumerated AWS permission,
+`--system-role-mode admin` is the documented break-glass escape hatch; return to least privilege by rerunning the command with
+`--system-role-mode scoped` after the missing action is identified from CloudTrail.
