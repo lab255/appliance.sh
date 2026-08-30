@@ -447,6 +447,16 @@ describe('compareVersionStamp', () => {
     expect(finding.detail).toContain('signed by an unrecognized key');
   });
 
+  it('tells pre-pin CLIs to upgrade when a release carried signed metadata', () => {
+    const keyId = `ed25519:sha256:${'b'.repeat(64)}`;
+    const finding = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2', keyId, {
+      keys: {},
+      generationFloor: 1,
+    });
+    expect(finding.severity).toBe('warn');
+    expect(finding.detail).toContain('signed release, CLI has no pinned trust — upgrade the CLI');
+  });
+
   it('suggests a RESTART when the running server predates the staged stamp', () => {
     const f = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.50.0');
     expect(f.severity).toBe('warn');

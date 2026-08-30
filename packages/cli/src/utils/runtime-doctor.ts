@@ -466,11 +466,13 @@ export function compareVersionStamp(
   const recognizedKey = signingKeyId !== null && Object.prototype.hasOwnProperty.call(releaseTrust.keys, signingKeyId);
   const trustDetail = recognizedKey
     ? `staged asset signed by keyId ${signingKeyId}`
-    : signingKeyId
-      ? `staged asset signed by an unrecognized key ${signingKeyId}`
-      : pinnedKeys.length === 0
-        ? 'staged asset unsigned pre-MV0 release; self-update disabled'
-        : 'staged asset is unsigned even though production release trust is pinned';
+    : signingKeyId && pinnedKeys.length === 0
+      ? `signed release, CLI has no pinned trust — upgrade the CLI (keyId ${signingKeyId})`
+      : signingKeyId
+        ? `staged asset signed by an unrecognized key ${signingKeyId}`
+        : pinnedKeys.length === 0
+          ? 'staged asset unsigned pre-MV0 release; self-update disabled'
+          : 'staged asset is unsigned even though production release trust is pinned';
   const trustSeverity: Severity | null = recognizedKey
     ? null
     : signingKeyId || pinnedKeys.length === 0
@@ -767,7 +769,14 @@ function readGuestSigningKeyId(): string | null {
       ? envelope.keyId
       : null;
   } catch {
-    return null;
+    try {
+      const keyId = fs
+        .readFileSync(path.join(guestAssetsDir(), 'control-plane-release.untrusted-key-id'), 'utf8')
+        .trim();
+      return /^ed25519:sha256:[0-9a-f]{64}$/.test(keyId) ? keyId : null;
+    } catch {
+      return null;
+    }
   }
 }
 

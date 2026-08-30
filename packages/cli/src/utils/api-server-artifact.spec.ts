@@ -260,6 +260,32 @@ describe('stageFromRelease signed metadata gate', () => {
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
   });
 
+  it('treats signed metadata as pre-MV0 when this CLI has no pinned trust', async () => {
+    const release = payload();
+    const envelope = await signReleaseEnvelope(release, releaseDevFixturePrivateKey);
+    await stageFromRelease({
+      version: '1.57.0',
+      arch: 'x64',
+      destinationDir: destination,
+      fetcher: fakeFetcher({
+        'control-plane-release.json': JSON.stringify(release),
+        'control-plane-release.sig.json': JSON.stringify(envelope),
+        'appliance-api-server-linux-x64': binary,
+        'appliance-console.tar.gz': consoleBundle,
+      }),
+      trust: { keys: {}, generationFloor: 1 },
+      now: new Date('2026-08-30T00:00:00Z'),
+    });
+
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('CLI has no pinned trust'));
+    expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
+    expect(fs.readFileSync(path.join(destination, 'control-plane-release.untrusted-key-id'), 'utf8').trim()).toBe(
+      envelope.keyId
+    );
+    expect(fs.existsSync(path.join(destination, 'control-plane-release.json'))).toBe(false);
+    expect(fs.existsSync(path.join(destination, 'control-plane-release.sig.json'))).toBe(false);
+  });
+
   it('--allow-unsigned warns loudly in a dev build', async () => {
     await stageFromRelease({
       version: '1.56.0',
@@ -341,6 +367,47 @@ describe('stageFromRelease signed metadata gate', () => {
     ).resolves.toBeUndefined();
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('offline-verified'));
     expect(fs.readFileSync(path.join(destination, 'release-generation.high-water'), 'utf8').trim()).toBe('225');
+  });
+
+  it('re-verifies a matching stamped release before using metadata only to check for newer assets', async () => {
+    const release = payload();
+    const envelope = await signReleaseEnvelope(release, releaseDevFixturePrivateKey);
+    await stageFromRelease({
+      version: '1.57.0',
+      arch: 'x64',
+      destinationDir: destination,
+      fetcher: fakeFetcher({
+        'control-plane-release.json': JSON.stringify(release),
+        'control-plane-release.sig.json': JSON.stringify(envelope),
+        'appliance-api-server-linux-x64': binary,
+        'appliance-console.tar.gz': consoleBundle,
+      }),
+      trust: devTrust,
+      now: new Date('2026-08-30T00:00:00Z'),
+    });
+    fs.writeFileSync(path.join(destination, 'appliance-api-server.version'), '1.57.0:x64');
+    const requested: string[] = [];
+    const metadataOnly = (async (input: string | URL | Request) => {
+      const name = new URL(typeof input === 'string' || input instanceof URL ? input : input.url).pathname
+        .split('/')
+        .at(-1)!;
+      requested.push(name);
+      if (name === 'control-plane-release.json') return new Response(JSON.stringify(release));
+      if (name === 'control-plane-release.sig.json') return new Response(JSON.stringify(envelope));
+      throw new Error(`asset should not be downloaded: ${name}`);
+    }) as typeof fetch;
+
+    await expect(
+      stageFromRelease({
+        version: '1.57.0',
+        arch: 'x64',
+        destinationDir: destination,
+        fetcher: metadataOnly,
+        trust: devTrust,
+        now: new Date('2026-08-30T00:00:00Z'),
+      })
+    ).resolves.toBeUndefined();
+    expect(requested.sort()).toEqual(['control-plane-release.json', 'control-plane-release.sig.json']);
   });
 
   it('never clears or lowers the durable generation high-water when staging a legacy unsigned release', async () => {
