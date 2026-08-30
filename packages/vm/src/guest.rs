@@ -298,8 +298,8 @@ fn release_evidence_well_formed(evidence: &ApiServerReleaseEvidence) -> bool {
             _ => return false,
         }
     }
-    if key_id.map_or(true, |value| value.is_empty() || validate_pinned_release_key_id(value).is_err())
-        || version.map_or(true, str::is_empty)
+    if key_id.is_none_or(|value| value.is_empty() || validate_pinned_release_key_id(value).is_err())
+        || version.is_none_or(str::is_empty)
         || !matches!(arch, Some("x64" | "arm64"))
     {
         return false;
