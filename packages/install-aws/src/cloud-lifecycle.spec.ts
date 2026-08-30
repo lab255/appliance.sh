@@ -131,7 +131,12 @@ describe('CloudFormation lifecycle', () => {
       { targetDigest: `sha256:${'a'.repeat(64)}`, release: {} as never, idempotencyKey: 'once' },
       client as never
     );
-    expect(result).toMatchObject({ outcome: 'conflict', start: { jobId: 'existing' } });
+    expect(result).toMatchObject({
+      outcome: 'conflict',
+      jobId: 'existing',
+      statusUrl: '/api/v1/self-update/existing',
+      start: { jobId: 'existing' },
+    });
     expect(client.selfUpdate.watch).not.toHaveBeenCalled();
   });
 

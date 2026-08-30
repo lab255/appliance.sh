@@ -66,9 +66,12 @@ appliance cloud update --json
 appliance cloud update --local [--image <registry/ref>] [--arch amd64|arm64] [--aws-profile <name>]
 ```
 
-`409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. `--json` emits one
-wrapper object with the stable top-level shape `{outcome, job, previousServerVersion, currentServerVersion}`. The terminal `job`
-contains `phaseDurationsMs` and an explicit `totalMs`. For example, the timing-gate breakdown is:
+`409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. Successful and failed
+terminal `--json` output has the stable top-level shape
+`{outcome:"terminal", job, previousServerVersion, currentServerVersion}`. The terminal `job` contains `phaseDurationsMs`, explicit
+`totalMs`, and `resumeCount`. A live-job conflict instead exits `3` and emits
+`{outcome:"conflict", jobId, statusUrl, start, previousServerVersion}`; `jobId` and `statusUrl` are top-level so automation can follow it.
+For example, the timing-gate breakdown is:
 
 ```sh
 appliance cloud update --json > update.json

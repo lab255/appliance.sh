@@ -217,6 +217,28 @@ describe('self-update client', () => {
     expect(call).toBe(4);
   });
 
+  it('tolerates at least 120 seconds of consecutive status failures by default', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-30T00:00:00Z'));
+    const unavailableUntil = Date.now() + 120_000;
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1;
+        return Date.now() < unavailableUntil
+          ? new Response('bad gateway', { status: 502 })
+          : jsonResponseFor(200, job('complete', 'succeeded'));
+      })
+    );
+    const client = createApplianceClient({ baseUrl: 'https://api.test' });
+    const watching = client.selfUpdate.watch('selfupdate_swap', { intervalMs: 2_000, deadlineMs: 180_000 });
+    await vi.advanceTimersByTimeAsync(121_000);
+
+    await expect(watching).resolves.toMatchObject({ success: true, data: { status: 'succeeded' } });
+    expect(call).toBeGreaterThan(5);
+  });
+
   it('bounds non-terminal polling with a deadline and preserves the follow command', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-30T00:00:00Z'));

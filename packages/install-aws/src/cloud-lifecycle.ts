@@ -58,6 +58,8 @@ export interface CloudRouteUpdateOptions {
 export type CloudRouteUpdateResult =
   | {
       outcome: 'conflict';
+      jobId: string;
+      statusUrl: string;
       start: Extract<SelfUpdateStartResponse, { httpStatus: 409 }>;
       previousServerVersion?: string;
     }
@@ -174,7 +176,13 @@ export async function runCloudRouteUpdate(
     });
     if (!started.success) throw started.error;
     if (started.data.httpStatus === 409) {
-      return { outcome: 'conflict', start: started.data, previousServerVersion };
+      return {
+        outcome: 'conflict',
+        jobId: started.data.jobId,
+        statusUrl: started.data.statusUrl,
+        start: started.data,
+        previousServerVersion,
+      };
     }
     jobId = started.data.jobId;
   }

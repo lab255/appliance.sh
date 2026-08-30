@@ -58,6 +58,7 @@ export interface SelfUpdateJob {
   /** Additive CU2 fields; absent on schema-v0/N-1 records. */
   phaseStartedAt?: string;
   phaseDurationsMs?: SelfUpdatePhaseDurations;
+  resumeCount?: number;
   previousImage?: string;
   targetImage?: string;
   stackId?: string;
@@ -199,6 +200,7 @@ export class SelfUpdateService {
       startedAt: now.toISOString(),
       phaseStartedAt: now.toISOString(),
       phaseDurationsMs: {},
+      resumeCount: 0,
     };
     if (!(await this.storage.setIfAbsent(SELF_UPDATE_JOBS, job.id, job))) {
       throw new Error('self-update job id collision');
@@ -256,7 +258,12 @@ export class SelfUpdateService {
         lease: { ...lease, jobId, idempotencyHash: job.idempotencyHash },
       };
       if (!(await this.storage.setIfVersion(SELF_UPDATE_CONTROL, CONTROL_ID, next, control.version))) continue;
-      await this.updateJob(jobId, (current) => ({ ...current, lease, updatedAt: this.now().toISOString() }));
+      await this.updateJob(jobId, (current) => ({
+        ...current,
+        lease,
+        resumeCount: (current.resumeCount ?? 0) + 1,
+        updatedAt: this.now().toISOString(),
+      }));
       await this.dispatchForResume(job, caller);
       job = await this.get(jobId);
       return job;
@@ -360,6 +367,7 @@ export class SelfUpdateService {
       },
       ...(job.phaseDurationsMs ? { phaseDurationsMs: job.phaseDurationsMs } : {}),
       ...(totalMs !== undefined ? { totalMs } : {}),
+      ...(job.resumeCount !== undefined ? { resumeCount: job.resumeCount } : {}),
       ...(job.error ? { error: job.error } : {}),
       ...(job.recovered !== undefined ? { recovered: job.recovered } : {}),
       ...(job.recoveryState ? { recoveryState: job.recoveryState } : {}),

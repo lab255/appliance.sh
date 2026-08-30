@@ -56,6 +56,7 @@ describe('cloud update UX copy', () => {
       status: 'succeeded',
       phase: 'complete',
       totalMs: 123_000,
+      resumeCount: 0,
       phaseDurationsMs: { mirroring: 28_000, 'waiting-for-stack': 70_000, 'probing-health': 15_000 },
     });
     const parsed = JSON.parse(
@@ -67,13 +68,15 @@ describe('cloud update UX copy', () => {
       })
     ) as Record<string, unknown>;
     expect(Object.keys(parsed)).toEqual(['outcome', 'job', 'previousServerVersion', 'currentServerVersion']);
-    expect(parsed.job).toMatchObject({ totalMs: 123_000 });
+    expect(parsed.job).toMatchObject({ totalMs: 123_000, resumeCount: 0 });
   });
 
   it('uses exit 3 for conflicts and exit 1 only for terminal failures', () => {
     expect(
       cloudUpdateExitCode({
         outcome: 'conflict',
+        jobId: 'existing',
+        statusUrl: '/api/v1/self-update/existing',
         start: { httpStatus: 409, jobId: 'existing', statusUrl: '/api/v1/self-update/existing' },
       })
     ).toBe(3);
@@ -81,6 +84,19 @@ describe('cloud update UX copy', () => {
     expect(
       cloudUpdateExitCode({ outcome: 'terminal', job: job({ status: 'succeeded', phase: 'complete' }) })
     ).toBeUndefined();
+  });
+
+  it('pins the conflict JSON acceptance artifact top-level shape', () => {
+    const parsed = JSON.parse(
+      cloudUpdateJson({
+        outcome: 'conflict',
+        jobId: 'existing',
+        statusUrl: '/api/v1/self-update/existing',
+        start: { httpStatus: 409, jobId: 'existing', statusUrl: '/api/v1/self-update/existing' },
+        previousServerVersion: '1.57.0',
+      })
+    ) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toEqual(['outcome', 'jobId', 'statusUrl', 'start', 'previousServerVersion']);
   });
 });
 

@@ -151,7 +151,7 @@ describe('SelfUpdateService durable route state', () => {
     await service.heartbeat(first.job.id, claimed.lease.holder!, 'waiting-for-stack', { stackId: 'stack-id' });
     nowMs += 61_000;
     const resumed = await service.getAndResume(first.job.id, { keyId: 'admin-a', secret: 'secret' });
-    expect(resumed).toMatchObject({ phase: 'waiting-for-stack', stackId: 'stack-id' });
+    expect(resumed).toMatchObject({ phase: 'waiting-for-stack', stackId: 'stack-id', resumeCount: 1 });
     expect(dispatcher.dispatch).toHaveBeenCalledTimes(2);
   });
 
@@ -221,6 +221,7 @@ describe('SelfUpdateService durable route state', () => {
 
     expect(service.publicJob(finished)).toMatchObject({
       totalMs: 67_000,
+      resumeCount: 1,
       phaseDurationsMs: { 'waiting-for-stack': 64_000 },
     });
   });

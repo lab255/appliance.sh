@@ -268,9 +268,17 @@ export class ApplianceClient {
           error: new Error('selfUpdate.watch maxConsecutiveErrors must be a positive integer'),
         };
       }
+      const consecutiveErrorWindowMs = options.consecutiveErrorWindowMs ?? 120_000;
+      if (!Number.isFinite(consecutiveErrorWindowMs) || consecutiveErrorWindowMs < 0) {
+        return {
+          success: false,
+          error: new Error('selfUpdate.watch consecutiveErrorWindowMs must be a non-negative number'),
+        };
+      }
       const deadlineAt = Date.now() + deadlineMs;
       let previousPhase: SelfUpdatePublicJob['phase'] | undefined;
       let consecutiveErrors = 0;
+      let firstConsecutiveErrorAt: number | undefined;
       for (;;) {
         const remainingMs = deadlineAt - Date.now();
         if (options.signal?.aborted) return { success: false, error: watchResumeError(jobId, 'Polling was cancelled') };
@@ -286,12 +294,14 @@ export class ApplianceClient {
             return { success: false, error: watchResumeError(jobId, 'Polling was cancelled') };
           }
           consecutiveErrors += 1;
-          if (consecutiveErrors >= maxConsecutiveErrors) {
+          firstConsecutiveErrorAt ??= Date.now();
+          const consecutiveErrorMs = Date.now() - firstConsecutiveErrorAt;
+          if (consecutiveErrors >= maxConsecutiveErrors && consecutiveErrorMs >= consecutiveErrorWindowMs) {
             return {
               success: false,
               error: watchResumeError(
                 jobId,
-                `Status remained unavailable after ${consecutiveErrors} consecutive attempts: ${current.error.message}`
+                `Status remained unavailable for ${consecutiveErrorMs}ms across ${consecutiveErrors} consecutive attempts: ${current.error.message}`
               ),
             };
           }
@@ -302,6 +312,7 @@ export class ApplianceClient {
           continue;
         }
         consecutiveErrors = 0;
+        firstConsecutiveErrorAt = undefined;
         if (current.data.phase !== previousPhase) {
           previousPhase = current.data.phase;
           options.onPhase?.(current.data);

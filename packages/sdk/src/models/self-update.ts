@@ -82,6 +82,8 @@ export interface SelfUpdatePublicJob {
   phaseDurationsMs?: SelfUpdatePhaseDurations;
   /** Terminal wall-clock duration from job start through completion. */
   totalMs?: number;
+  /** Number of expired-lease takeovers. Resumed jobs are not valid live timing samples. */
+  resumeCount?: number;
   error?: string;
   recovered?: boolean;
   recoveryState?: 'unknown' | 'in-progress' | 'recovered' | 'exhausted';
@@ -95,5 +97,7 @@ export interface SelfUpdateWatchOptions {
   signal?: AbortSignal;
   /** Consecutive transient poll failures tolerated before returning an error. Defaults to 5. */
   maxConsecutiveErrors?: number;
+  /** Minimum continuous status-outage window tolerated. Defaults to 120 seconds. */
+  consecutiveErrorWindowMs?: number;
   onPhase?: (job: SelfUpdatePublicJob) => void;
 }

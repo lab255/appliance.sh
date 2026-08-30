@@ -103,11 +103,12 @@ The SDK exposes the self-update contract as `client.selfUpdate`:
 
 - `start({targetDigest, release, idempotencyKey})` signs `POST /api/v1/self-update` and returns a typed `202` accepted or `409`
   live-lease response.
-- `status(jobId)` signs `GET /api/v1/self-update/:jobId` and returns the shared `SelfUpdatePublicJob`, including redacted failure and
-  additive `phaseDurationsMs` timing evidence and terminal `totalMs`.
-- `watch(jobId, {intervalMs, onPhase, deadlineMs, signal, maxConsecutiveErrors})` polls status, calls `onPhase` once per phase
-  transition, tolerates five consecutive transient failures by default with capped exponential backoff, and resolves on `succeeded`
-  or `failed`. The deadline and abort signal bound polling; a give-up error retains the job id and its `--follow` recovery command.
+- `status(jobId)` signs `GET /api/v1/self-update/:jobId` and returns the shared `SelfUpdatePublicJob`, including redacted failure,
+  additive `phaseDurationsMs` timing evidence, terminal `totalMs`, and the durable `resumeCount`.
+- `watch(jobId, {intervalMs, onPhase, deadlineMs, signal, maxConsecutiveErrors, consecutiveErrorWindowMs})` polls status, calls
+  `onPhase` once per phase transition, and resolves on `succeeded` or `failed`. Capped exponential backoff tolerates both at least five
+  consecutive failures and at least 120 seconds of continuous status unavailability by default, covering the expected endpoint swap.
+  The deadline and abort signal bound polling; a give-up error retains the job id and its `--follow` recovery command.
 
 CLI and Desktop CloudFormation-v1 updates use this same client. Desktop retains the argv-based Tauri sidecar only for the legacy
 two-release deprecation path; baseline updates and other host/AWS operations remain host-local.
