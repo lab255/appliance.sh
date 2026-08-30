@@ -5,6 +5,14 @@ export const APPLIANCE_CLOUDFORMATION_TEMPLATE = templateBody;
 
 export const CLOUDFORMATION_TEMPLATE_BODY_LIMIT = 51_200;
 
+/** The template names IAM roles and managed policies, so IAM is insufficient. */
+export const APPLIANCE_CLOUDFORMATION_CAPABILITIES = ['CAPABILITY_NAMED_IAM'] as const;
+
+/** Operator baseline updates may intentionally change protected resources. */
+export const APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE = JSON.stringify({
+  Statement: [{ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' }],
+});
+
 /**
  * Post-CU1 stack policy. The signed self-update path can change Lambda code
  * through ImageUri, but can never modify or replace stack-owned IAM, S3, or

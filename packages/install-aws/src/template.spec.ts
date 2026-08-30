@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import YAML from 'yaml';
 import {
   APPLIANCE_CLOUDFORMATION_TEMPLATE,
+  APPLIANCE_CLOUDFORMATION_CAPABILITIES,
   APPLIANCE_STACK_POLICY,
   CLOUDFORMATION_TEMPLATE_BODY_LIMIT,
 } from './template.js';
@@ -202,6 +203,18 @@ describe('appliance CloudFormation template', () => {
     expect(document.errors).toEqual([]);
     expect(document.warnings.every((warning) => warning.message.startsWith('Unresolved tag: !'))).toBe(true);
     expect(document.getIn(['Resources', 'StateBucket', 'Type'])).toBe('AWS::S3::Bucket');
+  });
+
+  it('requires named-IAM acknowledgement whenever the template names an IAM resource', () => {
+    const resources = toJson(['Resources']) as Record<string, { Type: string; Properties?: Record<string, unknown> }>;
+    const namedIamResources = Object.entries(resources).filter(([, resource]) => {
+      if (!resource.Type.startsWith('AWS::IAM::')) return false;
+      return ['RoleName', 'ManagedPolicyName', 'PolicyName', 'GroupName', 'UserName'].some(
+        (property) => resource.Properties?.[property] !== undefined
+      );
+    });
+    expect(namedIamResources.length).toBeGreaterThan(0);
+    expect(APPLIANCE_CLOUDFORMATION_CAPABILITIES).toEqual(['CAPABILITY_NAMED_IAM']);
   });
   it('stays below the direct TemplateBody limit', () => {
     const templateBytes = Buffer.byteLength(APPLIANCE_CLOUDFORMATION_TEMPLATE, 'utf8');

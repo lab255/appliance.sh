@@ -196,7 +196,7 @@ describe('SelfUpdateExecutor', () => {
           { ParameterKey: 'SystemRoleMode', UsePreviousValue: true },
         ],
         RoleARN: aws.stack.outputs.SelfUpdateCloudFormationRoleArn,
-        Capabilities: ['CAPABILITY_IAM'],
+        Capabilities: ['CAPABILITY_NAMED_IAM'],
       },
     ]);
     expect(await jobs.get(job.id)).toMatchObject({

@@ -47,7 +47,7 @@ export interface SelfUpdateStackRequest {
   UsePreviousTemplate: true;
   Parameters: Parameter[];
   RoleARN: string;
-  Capabilities: ['CAPABILITY_IAM'];
+  Capabilities: ['CAPABILITY_NAMED_IAM'];
 }
 
 export interface SelfUpdateExecutorDependencies {
@@ -79,7 +79,7 @@ export function buildImageOnlyUpdate(
         : { ParameterKey: parameter.key, UsePreviousValue: true }
     ),
     RoleARN: cloudFormationRoleArn,
-    Capabilities: ['CAPABILITY_IAM'],
+    Capabilities: ['CAPABILITY_NAMED_IAM'],
   };
 }
 

@@ -3,6 +3,7 @@ import {
   CloudFormationClient,
   CreateStackCommand,
   DescribeStacksCommand,
+  SetStackPolicyCommand,
   UpdateStackCommand,
   waitUntilStackCreateComplete,
   waitUntilStackUpdateComplete,
@@ -17,7 +18,11 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { ApplianceBaseType, VERSION } from '@appliance.sh/sdk';
 import { mirrorImageToEcr, type MirrorImageOptions, type MirrorImageResult } from './ecr-mirror.js';
-import { APPLIANCE_CLOUDFORMATION_TEMPLATE, APPLIANCE_STACK_POLICY } from './template.js';
+import {
+  APPLIANCE_CLOUDFORMATION_TEMPLATE,
+  APPLIANCE_STACK_POLICY,
+  APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE,
+} from './template.js';
 import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
 export const BASE_CONFIG_KEY = 'system/base-config.json';
@@ -398,7 +403,7 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
             TemplateBody: APPLIANCE_CLOUDFORMATION_TEMPLATE,
             StackPolicyBody: APPLIANCE_STACK_POLICY,
             Parameters: parameters,
-            Capabilities: [Capability.CAPABILITY_IAM],
+            Capabilities: [Capability.CAPABILITY_NAMED_IAM],
           })
         );
         const waited = await waitUntilStackCreateComplete(
@@ -407,26 +412,33 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
         );
         if (waited.state !== 'SUCCESS') throw new Error(`CloudFormation create did not converge: ${waited.reason}`);
       } else {
+        let updateSubmitted = false;
         try {
           await cloudFormation.send(
             new UpdateStackCommand({
               StackName: input.stackName,
               TemplateBody: APPLIANCE_CLOUDFORMATION_TEMPLATE,
               StackPolicyBody: APPLIANCE_STACK_POLICY,
+              StackPolicyDuringUpdateBody: APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE,
               Parameters: parameters,
-              Capabilities: [Capability.CAPABILITY_IAM],
+              Capabilities: [Capability.CAPABILITY_NAMED_IAM],
             })
           );
+          updateSubmitted = true;
         } catch (error) {
           if (!isNoCloudFormationUpdates(error)) throw error;
-          return getStack(input.stackName);
         }
-        const waited = await waitUntilStackUpdateComplete(
-          { client: cloudFormation, maxWaitTime: 1800 },
-          { StackName: input.stackName }
-        );
-        if (waited.state !== 'SUCCESS') throw new Error(`CloudFormation update did not converge: ${waited.reason}`);
+        if (updateSubmitted) {
+          const waited = await waitUntilStackUpdateComplete(
+            { client: cloudFormation, maxWaitTime: 1800 },
+            { StackName: input.stackName }
+          );
+          if (waited.state !== 'SUCCESS') throw new Error(`CloudFormation update did not converge: ${waited.reason}`);
+        }
       }
+      await cloudFormation.send(
+        new SetStackPolicyCommand({ StackName: input.stackName, StackPolicyBody: APPLIANCE_STACK_POLICY })
+      );
       return getStack(input.stackName);
     },
     async getRegistryCredentials() {
