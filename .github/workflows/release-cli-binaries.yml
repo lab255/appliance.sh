@@ -11,7 +11,7 @@ on:
         required: false
         default: ''
       publish:
-        description: Upload signed assets to the GitHub release. Disable for an unsigned build-only dry run.
+        description: Upload assets to the GitHub release; signing is added only when AP-226's protected secret exists. Disable for a build-only dry run.
         type: boolean
         required: false
         default: true
@@ -19,6 +19,21 @@ on:
         description: Optional sha256:... GHCR multi-arch manifest digest override; otherwise the workflow waits for the sibling image workflow.
         required: false
         default: ''
+      require_signature:
+        description: Fail publishing when APPLIANCE_RELEASE_SIGNING_KEY is absent. AP-226 flips this default to true after provisioning.
+        type: boolean
+        required: false
+        default: false
+      image_digest_poll_attempts:
+        description: Number of GHCR manifest-resolution attempts before signing fails.
+        type: number
+        required: false
+        default: 40
+      image_digest_poll_seconds:
+        description: Seconds between GHCR manifest-resolution attempts.
+        type: number
+        required: false
+        default: 15
 
 permissions:
   contents: write # to upload assets to the release
@@ -130,6 +145,15 @@ jobs:
       - name: Package web console bundle
         run: tar -czf packages/api-server/dist/guest/appliance-console.tar.gz -C packages/console/dist .
 
+      - name: Compute guest SHA256SUMS
+        working-directory: packages/api-server/dist/guest
+        run: >-
+          sha256sum
+          appliance-api-server-linux-x64
+          appliance-api-server-linux-arm64
+          appliance-console.tar.gz
+          > SHA256SUMS
+
       - name: Resolve release tag
         id: tag
         env:
@@ -145,75 +169,36 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Releasing CLI binaries for ${TAG}"
 
+      - name: Guard published builds to their tag ref
+        if: ${{ inputs.publish }}
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
+            echo "::error::publish=true requires workflow ref refs/tags/$TAG (got $GITHUB_REF)"
+            exit 1
+          fi
+
       - name: Warn for unsigned build-only dry run
         if: ${{ ! inputs.publish }}
         run: echo "::warning::publish=false — skipping release signing and every GitHub Release upload"
 
-      - name: Set up Docker Buildx for manifest resolution
-        if: ${{ inputs.publish }}
-        uses: docker/setup-buildx-action@v3
+      - name: Self-check release signing code for dry runs
+        if: ${{ ! inputs.publish }}
+        run: node packages/sdk/scripts/create-control-plane-release.mjs --check
 
-      - name: Resolve api-server multi-arch manifest digest
-        if: ${{ inputs.publish }}
-        id: image
-        env:
-          INPUT_DIGEST: ${{ inputs.image_manifest_digest }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          IMAGE="ghcr.io/${OWNER_LOWER}/api-server"
-          VERSION="${TAG#v}"
-          DIGEST="${INPUT_DIGEST:-}"
-          if [ -z "$DIGEST" ]; then
-            for attempt in $(seq 1 40); do
-              DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" 2>/dev/null | awk '$1 == "Digest:" { print $2; exit }')
-              [ -n "$DIGEST" ] && break
-              echo "Waiting for sibling api-server image ${IMAGE}:${VERSION} (${attempt}/40)"
-              sleep 15
-            done
-          fi
-          if ! echo "$DIGEST" | grep -qE '^sha256:[0-9a-f]{64}$'; then
-            echo "::error::Could not resolve a valid multi-arch manifest digest for ${IMAGE}:${VERSION}"
-            exit 1
-          fi
-          echo "repository=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-
-      - name: Guard signing key + set validity window
-        if: ${{ inputs.publish }}
-        env:
-          # AP-226 provisions this as standard base64 for one raw 32-byte
-          # Ed25519 seed. The script never prints the secret.
-          APPLIANCE_RELEASE_SIGNING_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_KEY }}
-          RELEASE_ASSET_DIR: ${{ github.workspace }}/packages/api-server/dist/guest
-          RELEASE_OUTPUT_DIR: ${{ github.workspace }}/packages/api-server/dist/guest
-          RELEASE_VERSION: ${{ steps.tag.outputs.tag }}
-          RELEASE_GENERATION: ${{ github.run_id }}
-          RELEASE_IMAGE_REPOSITORY: ${{ steps.image.outputs.repository }}
-          RELEASE_IMAGE_MANIFEST_DIGEST: ${{ steps.image.outputs.digest }}
-        run: |
-          set -euo pipefail
-          if [ -z "${APPLIANCE_RELEASE_SIGNING_KEY:-}" ]; then
-            echo "::error::APPLIANCE_RELEASE_SIGNING_KEY is required when publish=true"
-            exit 1
-          fi
-          echo "RELEASE_NOT_BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-          echo "RELEASE_EXPIRES=$(date -u -d '+365 days' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-
-      - name: Sign control-plane release metadata
-        if: ${{ inputs.publish }}
-        env:
-          APPLIANCE_RELEASE_SIGNING_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_KEY }}
-          RELEASE_ASSET_DIR: ${{ github.workspace }}/packages/api-server/dist/guest
-          RELEASE_OUTPUT_DIR: ${{ github.workspace }}/packages/api-server/dist/guest
-          RELEASE_VERSION: ${{ steps.tag.outputs.tag }}
-          RELEASE_GENERATION: ${{ github.run_id }}
-          RELEASE_NOT_BEFORE: ${{ env.RELEASE_NOT_BEFORE }}
-          RELEASE_EXPIRES: ${{ env.RELEASE_EXPIRES }}
-          RELEASE_IMAGE_REPOSITORY: ${{ steps.image.outputs.repository }}
-          RELEASE_IMAGE_MANIFEST_DIGEST: ${{ steps.image.outputs.digest }}
-        run: node packages/sdk/scripts/create-control-plane-release.mjs
+      - name: Preserve guest assets for protected signing job
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-plane-release-assets
+          path: |
+            packages/api-server/dist/guest/appliance-api-server-linux-x64
+            packages/api-server/dist/guest/appliance-api-server-linux-arm64
+            packages/api-server/dist/guest/appliance-console.tar.gz
+            packages/api-server/dist/guest/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
 
       # `gh release upload` requires an existing release. nx-release
       # creates the GitHub Release before this workflow runs; the
@@ -271,9 +256,157 @@ jobs:
             appliance-api-server-linux-x64 \
             appliance-api-server-linux-arm64 \
             appliance-console.tar.gz \
-            SHA256SUMS \
-            control-plane-release.json \
-            control-plane-release.sig.json
+            SHA256SUMS
+
+  sign-control-plane-release:
+    name: Sign control-plane release metadata
+    needs: build
+    if: ${{ inputs.publish && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    environment: release-signing
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build signing SDK
+        run: pnpm exec nx build @appliance.sh/sdk
+
+      - name: Download verified build outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: control-plane-release-assets
+          path: packages/api-server/dist/guest
+
+      - name: Decide whether signing is provisioned
+        id: signing-key
+        env:
+          APPLIANCE_RELEASE_SIGNING_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_KEY }}
+          REQUIRE_SIGNATURE: ${{ inputs.require_signature }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APPLIANCE_RELEASE_SIGNING_KEY:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::UNSIGNED release — AP-226 not provisioned"
+          echo "## ⚠️ UNSIGNED release — AP-226 not provisioned" >> "$GITHUB_STEP_SUMMARY"
+          echo "Binaries and SHA256SUMS were uploaded; no control-plane payload or envelope was published." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$REQUIRE_SIGNATURE" = "true" ]; then
+            echo "::error::require_signature=true but APPLIANCE_RELEASE_SIGNING_KEY is absent"
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx for manifest validation
+        if: ${{ steps.signing-key.outputs.available == 'true' }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve and validate api-server manifest digest
+        if: ${{ steps.signing-key.outputs.available == 'true' }}
+        id: image
+        env:
+          INPUT_DIGEST: ${{ inputs.image_manifest_digest }}
+          POLL_ATTEMPTS: ${{ inputs.image_digest_poll_attempts }}
+          POLL_SECONDS: ${{ inputs.image_digest_poll_seconds }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          OWNER_LOWER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LOWER}/api-server"
+          VERSION="${TAG#v}"
+          ACTUAL=""
+          for attempt in $(seq 1 "$POLL_ATTEMPTS"); do
+            ACTUAL=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" 2>/dev/null | awk '$1 == "Digest:" { print $2; exit }')
+            [ -n "$ACTUAL" ] && break
+            echo "Waiting for sibling api-server image ${IMAGE}:${VERSION} (${attempt}/${POLL_ATTEMPTS})"
+            sleep "$POLL_SECONDS"
+          done
+          if ! echo "$ACTUAL" | grep -qE '^sha256:[0-9a-f]{64}$'; then
+            echo "::error::Could not resolve a valid multi-arch manifest digest for ${IMAGE}:${VERSION}"
+            exit 1
+          fi
+          if [ -n "${INPUT_DIGEST:-}" ] && [ "$INPUT_DIGEST" != "$ACTUAL" ]; then
+            echo "::error::image_manifest_digest override $INPUT_DIGEST does not match GHCR $ACTUAL"
+            exit 1
+          fi
+          echo "repository=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "digest=${ACTUAL}" >> "$GITHUB_OUTPUT"
+
+      - name: Derive monotonic semver generation
+        if: ${{ steps.signing-key.outputs.available == 'true' }}
+        id: generation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([+-].*)?$'; then
+            echo "::error::release tag is not semver: $TAG"
+            exit 1
+          fi
+          IFS=. read -r MAJOR MINOR PATCH_REST <<< "$VERSION"
+          PATCH="${PATCH_REST%%[-+]*}"
+          if [ "$MINOR" -ge 1000 ] || [ "$PATCH" -ge 1000 ]; then
+            echo "::error::minor and patch must be below 1000 for release generation"
+            exit 1
+          fi
+          GENERATION=$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))
+          PREVIOUS=""
+          while IFS= read -r CANDIDATE; do
+            [ "$CANDIDATE" = "$TAG" ] && continue
+            if gh release download "$CANDIDATE" --pattern control-plane-release.json --output "$RUNNER_TEMP/previous-release.json" 2>/dev/null; then
+              PREVIOUS=$(node -e "const p=require(process.argv[1]); if(!Number.isSafeInteger(p.generation)) process.exit(1); process.stdout.write(String(p.generation))" "$RUNNER_TEMP/previous-release.json")
+              break
+            fi
+          done < <(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name')
+          echo "generation=$GENERATION" >> "$GITHUB_OUTPUT"
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+
+      - name: Sign control-plane release metadata
+        if: ${{ steps.signing-key.outputs.available == 'true' }}
+        env:
+          APPLIANCE_RELEASE_SIGNING_KEY: ${{ secrets.APPLIANCE_RELEASE_SIGNING_KEY }}
+          RELEASE_ASSET_DIR: ${{ github.workspace }}/packages/api-server/dist/guest
+          RELEASE_OUTPUT_DIR: ${{ github.workspace }}/packages/api-server/dist/guest
+          RELEASE_VERSION: ${{ needs.build.outputs.tag }}
+          RELEASE_GENERATION: ${{ steps.generation.outputs.generation }}
+          RELEASE_PREVIOUS_GENERATION: ${{ steps.generation.outputs.previous }}
+          RELEASE_IMAGE_REPOSITORY: ${{ steps.image.outputs.repository }}
+          RELEASE_IMAGE_MANIFEST_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          RELEASE_NOT_BEFORE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+          RELEASE_EXPIRES=$(date -u -d '+365 days' +%Y-%m-%dT%H:%M:%SZ) \
+          node packages/sdk/scripts/create-control-plane-release.mjs
+
+      - name: Upload signed payload and envelope
+        if: ${{ steps.signing-key.outputs.available == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.build.outputs.tag }}
+        working-directory: packages/api-server/dist/guest
+        run: >-
+          gh release upload "$TAG" --clobber
+          control-plane-release.json
+          control-plane-release.sig.json
 
   build-credential-helper:
     name: Build + publish credential helper (${{ matrix.triple }})

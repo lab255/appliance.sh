@@ -2,31 +2,47 @@
 
 ## Control-plane release signing (AP-225 / AP-226)
 
-`release-cli-binaries.yml` publishes the two guest api-server binaries, console
-bundle, `SHA256SUMS`, `control-plane-release.json`, and
-`control-plane-release.sig.json`. The RFC-8785/Ed25519 envelope covers the
+`release-cli-binaries.yml` always publishes the two guest api-server binaries,
+console bundle, and `SHA256SUMS`. Its separate `release-signing` environment job
+adds `control-plane-release.json` and `control-plane-release.sig.json` only when
+the signing secret is provisioned. The RFC-8785/Ed25519 envelope covers the
 artifact names, architectures, byte counts and SHA-256 values plus the sibling
 GHCR api-server multi-arch manifest digest. The workflow waits for that image
-tag; a manual rerun may instead provide the `image_manifest_digest` input.
+tag using the configurable `image_digest_poll_attempts` and
+`image_digest_poll_seconds` budget. An `image_manifest_digest` override is still
+checked against `imagetools inspect`; wiring an explicit `needs:` relationship
+to the sibling image workflow remains a follow-up because GitHub workflows run
+independently.
 
-Production publishing (`publish=true`, the default) fails unless the Actions
-secret `APPLIANCE_RELEASE_SIGNING_KEY` exists. Its value is standard base64 for
-exactly one raw 32-byte Ed25519 seed. `publish=false` is the build-only unsigned
-dry run and uploads nothing. Never paste, log, or commit the decoded seed.
+Before AP-226, `publish=true` without `APPLIANCE_RELEASE_SIGNING_KEY` uploads the
+unsigned binaries and `SHA256SUMS`, writes **UNSIGNED release — AP-226 not
+provisioned** to the job summary, and publishes no payload/envelope. Setting
+`require_signature=true` makes a missing secret fatal; AP-226 changes its default
+to true only after provisioning. `publish=false` uploads nothing but executes a
+throwaway-key sign-and-verify self-check. The secret value is standard base64
+for exactly one raw 32-byte Ed25519 seed. Never paste, log, or commit it.
+
+Signed generations are derived from semver as `major*1,000,000 + minor*1,000 +
+patch`. The signing script rejects a generation that does not match the version
+or fails to exceed the newest previously published signed payload, preventing an
+old tag rerun from minting a signed downgrade with a newer workflow-run number.
 
 AP-226 owner steps, in order:
 
 1. Generate the offline production Ed25519 identity and record its custody,
-   backup, rotation, revocation, and signed-blacklist procedure.
-2. Replace `RELEASE_DEV_FIXTURE_PUBLIC_KEY`,
-   `RELEASE_DEV_FIXTURE_KEY_ID`, and the `PINNED_RELEASE_TRUST` mapping in
+   backup, rotation, and revocation procedure. Signed blacklist distribution is
+   still an AP-226/CU2 follow-up; until then revocation requires a CLI upgrade.
+2. Replace the intentionally empty `PINNED_RELEASE_TRUST.keys` mapping in
    `packages/sdk/src/models/release-trust.ts` with that production public key
-   and its `ed25519:sha256:<hex>` pin.
-3. Store the matching 32-byte seed as standard base64 in the Actions secret
-   named exactly `APPLIANCE_RELEASE_SIGNING_KEY`; restrict secret management
-   to release owners.
+   and its `ed25519:sha256:<hex>` pin, then consciously delete the empty-pin test.
+3. Create the GitHub Actions environment named exactly `release-signing`, add
+   tag/deployment protection and release-owner reviewers, and store the matching
+   standard-base64 32-byte seed there as the environment secret named exactly
+   `APPLIANCE_RELEASE_SIGNING_KEY`.
 4. Run a non-publishing workflow dry run, then publish a canary and confirm the
    CLI reports `staged asset signed by keyId …` and both VZ/WSL seed checks pass.
+5. As the final AP-226 step, change the workflow input `require_signature`
+   default to `true`; thereafter a missing secret stops the release.
 
 ## Regenerating the Windows credential-helper digest
 
