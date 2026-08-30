@@ -12,7 +12,7 @@ import {
 } from '@aws-sdk/client-cloudformation';
 import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { ApplianceBaseType, VERSION } from '@appliance.sh/sdk';
@@ -20,7 +20,7 @@ import { mirrorImageToEcr, type MirrorImageOptions, type MirrorImageResult } fro
 import { APPLIANCE_CLOUDFORMATION_TEMPLATE } from './template.js';
 import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
 
-const BASE_CONFIG_KEY = 'system/base-config.json';
+export const BASE_CONFIG_KEY = 'system/base-config.json';
 const DEFAULT_HEALTH_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_HEALTH_POLL_MS = 5_000;
 
@@ -68,6 +68,8 @@ export interface CloudInstallDependencies {
   mirror(options: MirrorImageOptions): Promise<MirrorImageResult>;
   /** Create epoch 1 only when no base-config object exists. Returns false when already initialized. */
   writeBaseConfigIfAbsent(bucket: string, key: string, value: unknown): Promise<boolean>;
+  /** Preserve the current epoch while refreshing the CFN-owned boundary output. */
+  updateBaseConfigBoundary(bucket: string, key: string, boundaryArn: string): Promise<void>;
   getSecret(secretArn: string): Promise<string>;
   getBootstrapStatus(apiUrl: string): Promise<{ initialized: boolean }>;
   mintApiKey(apiUrl: string, token: string, name: string): Promise<{ id: string; secret: string }>;
@@ -95,6 +97,7 @@ export function resolveCloudOutputs(snapshot: StackSnapshot): ApplianceCloudOutp
     apiServerRoleArn: output(snapshot, 'SystemApiServerRoleArn'),
     workerRoleArn: output(snapshot, 'SystemWorkerRoleArn'),
     bootstrapTokenSecretArn: output(snapshot, 'BootstrapTokenSecretArn'),
+    userAppliancePermissionsBoundaryArn: output(snapshot, 'UserAppliancePermissionsBoundaryArn'),
   };
   if (snapshot.outputs.ApiServerFunctionUrl) {
     resolved.apiServer = {
@@ -131,6 +134,7 @@ export function substrateBaseConfig(
       kmsKeyArn: outputs.kmsKeyArn,
       kmsAliasName: outputs.kmsAliasName,
       ecrRepositoryUrl: outputs.imageRepositoryUrl,
+      userAppliancePermissionsBoundaryArn: outputs.userAppliancePermissionsBoundaryArn,
       systemRoleArns: { apiServer: outputs.apiServerRoleArn, worker: outputs.workerRoleArn },
       systemFunctions: { apiServer: outputs.apiServer, worker: outputs.worker },
     },
@@ -439,6 +443,25 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
         if (candidate.name === 'PreconditionFailed' || candidate.$metadata?.httpStatusCode === 412) return false;
         throw error;
       }
+    },
+    async updateBaseConfigBoundary(bucket, key, boundaryArn) {
+      const current = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      if (!current.Body) throw new Error(`Base config s3://${bucket}/${key} has no body`);
+      const parsed = JSON.parse(await current.Body.transformToString()) as Record<string, unknown>;
+      const aws = parsed.aws;
+      if (!aws || typeof aws !== 'object' || Array.isArray(aws)) {
+        throw new Error(`Base config s3://${bucket}/${key} has no AWS configuration`);
+      }
+      parsed.aws = { ...aws, userAppliancePermissionsBoundaryArn: boundaryArn };
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: JSON.stringify(parsed),
+          ContentType: 'application/json',
+          IfMatch: current.ETag,
+        })
+      );
     },
     async getSecret(secretArn) {
       const response = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn }));

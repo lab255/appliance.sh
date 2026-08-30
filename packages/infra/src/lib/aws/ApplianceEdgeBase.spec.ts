@@ -81,6 +81,8 @@ describe('ApplianceEdgeBase', () => {
         kmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/key-1',
         kmsAliasName: 'alias/appliance/prod-state',
         ecrRepositoryUrl: '123456789012.dkr.ecr.us-east-1.amazonaws.com/prod',
+        userAppliancePermissionsBoundaryArn:
+          'arn:aws:iam::123456789012:policy/appliance-system/prod-user-appliance-boundary',
         systemRoleArns: {
           apiServer: 'arn:aws:iam::123456789012:role/prod-api',
           worker: 'arn:aws:iam::123456789012:role/prod-worker',
@@ -128,7 +130,7 @@ describe('ApplianceEdgeBase', () => {
       expect(roles[0]?.name).toContain('edge-router-role');
       expect(roles[0]?.inputs).toMatchObject({
         path: '/appliance/prod-edge/',
-        permissionsBoundary: 'arn:aws:iam::123456789012:policy/appliance/prod-user-appliance-boundary',
+        permissionsBoundary: 'arn:aws:iam::123456789012:policy/appliance-system/prod-user-appliance-boundary',
         tags: { 'appliance:managed': 'true' },
       });
 

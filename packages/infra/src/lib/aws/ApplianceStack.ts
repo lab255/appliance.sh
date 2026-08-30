@@ -135,11 +135,8 @@ export class ApplianceStack extends pulumi.ComponentResource {
 
     const defaultOpts = { parent: this, provider: opts.provider };
     const defaultNativeOpts = { parent: this, provider: opts.nativeProvider };
-    const boundaryArn = pulumi.interpolate`arn:${
-      aws.getPartitionOutput({}, defaultOpts).partition
-    }:iam::${aws.getCallerIdentityOutput({}, defaultOpts).accountId}:policy/appliance/${
-      args.config.name
-    }-user-appliance-boundary`;
+    const boundaryArn = awsConfig.userAppliancePermissionsBoundaryArn;
+    if (!boundaryArn) throw new Error('CFN base config is missing aws.userAppliancePermissionsBoundaryArn');
     const defaultTags: Record<string, string> = {
       'appliance:managed': 'true',
       'appliance:stack-name': name,

@@ -33,6 +33,8 @@ const stack = {
     SystemApiServerRoleArn: 'arn:api-role',
     SystemWorkerRoleArn: 'arn:worker-role',
     BootstrapTokenSecretArn: 'arn:secret',
+    UserAppliancePermissionsBoundaryArn:
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary',
     ApiServerFunctionName: 'api',
     ApiServerFunctionArn: 'arn:api',
     ApiServerFunctionUrl: profile.apiUrl,
@@ -55,6 +57,7 @@ function dependencies(): CloudLifecycleDependencies {
       reusedBlobs: 0,
     })),
     writeBaseConfigIfAbsent: vi.fn(),
+    updateBaseConfigBoundary: vi.fn(),
     getSecret: vi.fn(),
     getBootstrapStatus: vi.fn(async () => ({ initialized: true })),
     mintApiKey: vi.fn(),

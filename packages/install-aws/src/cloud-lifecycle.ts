@@ -3,6 +3,7 @@ import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { createApplianceClient, DeploymentStatus } from '@appliance.sh/sdk';
 import {
   createAwsCloudInstallDependencies,
+  BASE_CONFIG_KEY,
   defaultSourceImage,
   resolveCloudOutputs,
   type CloudInstallDependencies,
@@ -69,6 +70,15 @@ async function healthPoll(
   throw new Error(`api-server health check failed: ${last}`);
 }
 
+async function syncPermissionsBoundary(deps: CloudInstallDependencies, stack: StackSnapshot): Promise<void> {
+  const outputs = resolveCloudOutputs(stack);
+  await deps.updateBaseConfigBoundary(
+    outputs.dataBucketName,
+    BASE_CONFIG_KEY,
+    outputs.userAppliancePermissionsBoundaryArn
+  );
+}
+
 export async function runCloudSystemUpdate(
   options: CloudUpdateOptions,
   deps: CloudInstallDependencies
@@ -102,6 +112,7 @@ export async function runCloudSystemUpdate(
     architecture,
     systemRoleMode: stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped',
   });
+  await syncPermissionsBoundary(deps, updated);
   try {
     await healthPoll(deps, options.profile.apiUrl, options.healthTimeoutMs, options.healthPollMs);
   } catch (error) {
@@ -131,6 +142,7 @@ export async function runCloudBaselineUpdate(
     architecture: stack.parameters.ImageArchitecture === 'arm64' ? 'arm64' : 'x86_64',
     systemRoleMode: options.systemRoleMode ?? (stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped'),
   });
+  await syncPermissionsBoundary(deps, updated);
   try {
     await healthPoll(deps, options.profile.apiUrl, options.healthTimeoutMs, options.healthPollMs);
   } catch (error) {

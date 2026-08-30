@@ -19,6 +19,7 @@ export interface ApplianceCloudOutputs {
   apiServerRoleArn: string;
   workerRoleArn: string;
   bootstrapTokenSecretArn: string;
+  userAppliancePermissionsBoundaryArn: string;
   apiServer?: SystemFunctionOutput;
   worker?: SystemFunctionOutput;
 }

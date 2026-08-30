@@ -18,6 +18,7 @@ const substrateOutputs = {
   SystemApiServerRoleArn: 'arn:aws:iam::111:role/api',
   SystemWorkerRoleArn: 'arn:aws:iam::111:role/worker',
   BootstrapTokenSecretArn: 'arn:aws:secretsmanager:us-east-1:111:secret:bootstrap',
+  UserAppliancePermissionsBoundaryArn: 'arn:aws:iam::111:policy/appliance-system/test-user-appliance-boundary',
 };
 const functionOutputs = {
   WorkerFunctionName: 'worker',
@@ -97,6 +98,11 @@ function harness(
       if (baseConfigObject) return false;
       baseConfigObject = value as Record<string, unknown>;
       return true;
+    },
+    async updateBaseConfigBoundary(_bucket, _key, boundaryArn) {
+      const config = baseConfigObject as { aws?: Record<string, unknown> } | undefined;
+      if (!config?.aws) throw new Error('missing base config');
+      config.aws.userAppliancePermissionsBoundaryArn = boundaryArn;
     },
     async getSecret() {
       mark('secret');
