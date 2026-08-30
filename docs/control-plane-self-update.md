@@ -113,6 +113,7 @@ The api-server can read/write only its data bucket; CloudFormation, not the Lamb
 The worker adds Pulumi state/KMS, installation ECR, and permissions-boundary-contained user-appliance provisioning.
 That boundary lives under `/appliance-system/`, outside the worker's mutable `/appliance/` policy namespace.
 It denies its own policy mutation, non-appliance role assumption, all non-read operations on the control-plane stack, and mutations of both qualified and unqualified system functions.
+Pre-CU0 appliance roles adopt only this boundary on their first redeploy; deletion, replacement, and trust-policy mutation are not granted.
 Account-scoped `Resource: '*'` remains only where AWS exposes no resource-level authorization, and every case is test-allowlisted.
 Run `appliance cloud baseline-update --system-role-mode admin --yes` only for break glass; rerun with `scoped` to restore least privilege.
 
