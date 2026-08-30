@@ -63,6 +63,10 @@ const LAMBDA_ADAPTER_LAYER: Record<string, string> = {
 // cloud resolver — so generic packaging carries no AWS coupling.
 const LWA_IMAGE = 'public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1';
 
+export function cloudBuildImageTag(tag: string): string {
+  return `build-${tag}`;
+}
+
 const FRAMEWORK_RUNTIMES: Record<string, string> = {
   node: 'nodejs22.x',
   python: 'python3.13',
@@ -221,6 +225,7 @@ export class BuildService {
     const aws = config.aws;
     const ecrRepositoryUrl = aws.ecrRepositoryUrl;
     if (!ecrRepositoryUrl) throw new Error('ECR repository not configured');
+    const buildTag = cloudBuildImageTag(tag);
 
     const registryHost = ecrRepositoryUrl.split('/')[0];
     const { username, password } = await this.getEcrAuth(aws.region);
@@ -254,7 +259,7 @@ export class BuildService {
       ensureDockerfile(tmpDir, manifest);
       const baseRef = await buildImageWithBuildKit({
         contextDir: tmpDir,
-        ref: `${ecrRepositoryUrl}:${tag}-base`,
+        ref: `${ecrRepositoryUrl}:${buildTag}-base`,
         addr: buildkitAddr,
         platform: manifest.platform,
         env,
@@ -277,7 +282,7 @@ export class BuildService {
         );
         const imageUri = await buildImageWithBuildKit({
           contextDir: wrapDir,
-          ref: `${ecrRepositoryUrl}:${tag}`,
+          ref: `${ecrRepositoryUrl}:${buildTag}`,
           addr: buildkitAddr,
           platform: manifest.platform,
           env,
@@ -318,7 +323,7 @@ export class BuildService {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    const remoteTag = `${ecrRepositoryUrl}:${tag}`;
+    const remoteTag = `${ecrRepositoryUrl}:${cloudBuildImageTag(tag)}`;
     execFileSync('crane', ['push', imageTarPath, remoteTag], { stdio: 'pipe' });
 
     // Get digest for immutable image reference

@@ -102,7 +102,7 @@ only after that image is built and delivered; CU1 pins it and CU2 acceptance ver
 Before `crane cp`, the worker uses the new production release trust (not `PINNED_CATALOGUE_TRUST`) to verify the RFC-8785 envelope,
 keyId SHA-256 pin, generation floor/high-water mark, validity, blacklist, artifact kind/arch, and exact GHCR manifest digest. Verification
 needs no transparency/network service. Only that digest is copied to installation ECR under `system-<version>`; the repository
-lifecycle keeps the newest ten `system-` tags ahead of the shared catch-all rule. `ecr:DescribeImages` resolves the mirrored tag back
+lifecycle expires only `build-` workload tags, so updater `system-` and installer `sha256-` tags are never lifecycle candidates. Tags are immutable. `ecr:DescribeImages` resolves the mirrored tag back
 to a digest, which must equal the signed digest and is persisted before `UpdateStack`. Signature, expiry, rollback-generation,
 blacklist, or digest mismatch fails before ECR/CFN mutation.
 
@@ -343,8 +343,8 @@ Test crane array argv/no shell, verified source-to-target digest binding, nonbla
 `UsePreviousTemplate`, only `ImageUri` new, every other parameter previous, service `RoleArn`, and exactly
 `[CAPABILITY_NAMED_IAM]`, with no stack-policy override. Parse YAML, enforce 51,200 bytes, fail if a named IAM resource lacks
 NAMED_IAM acknowledgement, snapshot caller/service-role allow-lists and stack-policy protected logical IDs, and submit an
-arbitrary-template negative test. Test operator-only `StackPolicyDuringUpdateBody`, unconditional policy installation, retained
-system-tag lifecycle ordering, ECR digest resolution, exact AssumeRole shape, token-to-DOCKER_CONFIG wiring, pre-mutation failure,
+arbitrary-template negative test. Test operator-only `StackPolicyDuringUpdateBody`, unconditional policy installation, lifecycle
+exclusion of system tags, ECR digest resolution, exact AssumeRole shape, token-to-DOCKER_CONFIG wiring, pre-mutation failure,
 terminal stack failures, submitted-but-unobserved recovery, exhaustion clearing its lease, resumption, and deadline reserve.
 
 CU0/CU1 live verification uses a disposable install and CloudTrail to remove admin, minimize both normal execution and CFN service-role

@@ -333,7 +333,7 @@ describe('appliance CloudFormation template', () => {
     expect(policy.Statement).toContainEqual({ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' });
   });
 
-  it('retains system image tags before applying the shared repository catch-all expiry rule', () => {
+  it('expires only workload build tags so system image tags never match the lifecycle rule', () => {
     const lifecycle = JSON.parse(
       String(
         document.getIn(['Resources', 'ImageRepository', 'Properties', 'LifecyclePolicy', 'LifecyclePolicyText'])
@@ -342,18 +342,36 @@ describe('appliance CloudFormation template', () => {
     expect(lifecycle.rules).toEqual([
       expect.objectContaining({
         rulePriority: 1,
-        selection: expect.objectContaining({
+        selection: {
           tagStatus: 'tagged',
-          tagPrefixList: ['system-'],
+          tagPrefixList: ['build-'],
           countType: 'imageCountMoreThan',
-          countNumber: 10,
-        }),
-      }),
-      expect.objectContaining({
-        rulePriority: 2,
-        selection: expect.objectContaining({ tagStatus: 'any', countNumber: 50 }),
+          countNumber: 50,
+        },
       }),
     ]);
+    expect(lifecycle.rules).not.toContainEqual(
+      expect.objectContaining({ selection: expect.objectContaining({ tagPrefixList: ['system-'] }) })
+    );
+    expect(lifecycle.rules).not.toContainEqual(
+      expect.objectContaining({ selection: expect.objectContaining({ tagStatus: 'any' }) })
+    );
+    expect(document.getIn(['Resources', 'ImageRepository', 'Properties', 'ImageTagMutability'])).toBe('IMMUTABLE');
+    const lifecyclePrefixes = lifecycle.rules.flatMap((rule) => {
+      const prefixes = rule.selection.tagPrefixList;
+      return Array.isArray(prefixes) ? prefixes : [];
+    });
+    expect(lifecyclePrefixes).not.toContain('system-');
+    expect(lifecyclePrefixes).not.toContain('sha256-');
+  });
+
+  it('gates self-update in both Lambda processes on scoped system roles', () => {
+    const expected = ['UseScopedSystemRoles', { tag: '!GetAtt', value: 'SelfUpdateRole.Arn' }, ''];
+    for (const logicalId of ['ApiServerFunction', 'WorkerFunction']) {
+      expect(
+        toJson(['Resources', logicalId, 'Properties', 'Environment', 'Variables', 'SELF_UPDATE_ROLE_ARN'])
+      ).toEqual(expected);
+    }
   });
 
   it('has no all-action grants and allowlists every unavoidable wildcard resource', () => {

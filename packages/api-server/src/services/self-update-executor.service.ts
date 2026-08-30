@@ -262,6 +262,15 @@ export class SelfUpdateExecutor {
   }
 
   async execute(jobId: string): Promise<'complete'> {
+    try {
+      return await this.executeWithLease(jobId);
+    } catch (error) {
+      if (isLeaseStolen(error)) return 'complete';
+      throw error;
+    }
+  }
+
+  private async executeWithLease(jobId: string): Promise<'complete'> {
     const startedAt = this.aws.now().getTime();
     const targetStackDeadline = startedAt + TARGET_STACK_WORK_MS;
     const targetHealthDeadline = startedAt + TARGET_HEALTH_END_MS;
@@ -330,7 +339,14 @@ export class SelfUpdateExecutor {
     if (isTerminal(job)) return 'complete';
 
     if (job.phase === 'submitting-recovery' || job.phase === 'waiting-for-recovery') {
-      return this.recover(job, holder, credentials, stack, 'resuming persisted recovery', hardDeadline);
+      return await this.recover(
+        job,
+        holder,
+        credentials,
+        stack,
+        job.error ?? 'resuming persisted recovery',
+        hardDeadline
+      );
     }
 
     let cloudFormationRoleArn: string;
@@ -386,7 +402,14 @@ export class SelfUpdateExecutor {
 
       stack = await this.waitForTarget(jobId, holder, credentials, stackId, targetStackDeadline);
       if (stack.status !== 'UPDATE_COMPLETE') {
-        return this.recover(job, holder, credentials, stack, `CloudFormation reached ${stack.status}`, hardDeadline);
+        return await this.recover(
+          job,
+          holder,
+          credentials,
+          stack,
+          `CloudFormation reached ${stack.status}`,
+          hardDeadline
+        );
       }
       await this.jobs.heartbeat(jobId, holder, 'probing-health');
       const healthUrl = bootstrapStatusUrl(requireOutput(stack, 'ApiServerFunctionUrl'));
@@ -399,7 +422,7 @@ export class SelfUpdateExecutor {
         Math.min(targetHealthDeadline, this.aws.now().getTime() + HEALTH_WINDOW_MS)
       );
       if (!healthy)
-        return this.recover(job, holder, credentials, stack, 'target health/version probe failed', hardDeadline);
+        return await this.recover(job, holder, credentials, stack, 'target health/version probe failed', hardDeadline);
       await this.jobs.finish(jobId, { status: 'succeeded', recovered: false, healthUrl }, holder);
       logger.info('self-update completed', {
         jobId,
@@ -416,7 +439,7 @@ export class SelfUpdateExecutor {
         return 'complete';
       }
       stack = await this.aws.describeStack(credentials, stackId);
-      return this.recover(job, holder, credentials, stack, safe, hardDeadline);
+      return await this.recover(job, holder, credentials, stack, safe, hardDeadline);
     }
   }
 

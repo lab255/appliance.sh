@@ -731,13 +731,14 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:
         EncryptionType: AES256
       LifecyclePolicy:
         LifecyclePolicyText: |
-          {"rules":[{"rulePriority":1,"description":"Keep the newest 10 retained system images","selection":{"tagStatus":"tagged","tagPrefixList":["system-"],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the newest 50 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}
+          {"rules":[{"rulePriority":1,"description":"Keep the newest 50 workload build images","selection":{"tagStatus":"tagged","tagPrefixList":["build-"],"countType":"imageCountMoreThan","countNumber":50},"action":{"type":"expire"}}]}
       Tags:
         - Key: appliance.sh/installation
           Value: !Ref InstallationName
@@ -832,6 +833,7 @@ Resources:
           APPLIANCE_MODE: server
           APPLIANCE_DATA_BUCKET: !Ref DataBucket
           APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
+          SELF_UPDATE_ROLE_ARN: !If [UseScopedSystemRoles, !GetAtt SelfUpdateRole.Arn, '']
           PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
           PULUMI_CONFIG_PASSPHRASE: ''
           APPLIANCE_TRUST_PROXY: 'true'

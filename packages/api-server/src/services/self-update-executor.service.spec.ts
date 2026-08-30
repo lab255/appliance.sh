@@ -330,6 +330,24 @@ describe('SelfUpdateExecutor', () => {
     });
   });
 
+  it('preserves the original failure when persisted recovery resumes', async () => {
+    const job = await queuedJob();
+    await new SelfUpdateExecutor({ jobs, verifier, aws: fakeAws(now, 'recovery-stuck').deps }).execute(job.id);
+    expect(await jobs.get(job.id)).toMatchObject({
+      phase: 'waiting-for-recovery',
+      error: 'target health/version probe failed',
+    });
+
+    now.value += 61_000;
+    await jobs.getAndResume(job.id, { keyId: 'admin', secret: 'secret' });
+    await new SelfUpdateExecutor({ jobs, verifier, aws: fakeAws(now).deps }).execute(job.id);
+    expect(await jobs.get(job.id)).toMatchObject({
+      status: 'failed',
+      recovered: true,
+      error: 'target health/version probe failed',
+    });
+  });
+
   it('records redacted CloudFormation events when recovery reaches a failed stable state', async () => {
     const job = await queuedJob();
     const aws = fakeAws(now, 'recovery-stack-failed');
@@ -460,6 +478,51 @@ describe('SelfUpdateExecutor', () => {
     await expect(new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id)).resolves.toBe('complete');
     expect(aws.deps.craneCopy).not.toHaveBeenCalled();
     expect(aws.deps.updateStack).not.toHaveBeenCalled();
+  });
+
+  it('absorbs a stolen lease from the persisted-recovery early-return path', async () => {
+    const job = await queuedJob();
+    const claimed = await jobs.claim(job.id);
+    await jobs.heartbeat(job.id, claimed.lease.holder!, 'submitting-recovery', {
+      previousImage: oldImage,
+      error: 'original target failure',
+    });
+    now.value += 61_000;
+    await jobs.getAndResume(job.id, { keyId: 'admin', secret: 'secret' });
+
+    const originalHeartbeat = jobs.heartbeat.bind(jobs);
+    let recoveryHeartbeats = 0;
+    const heartbeat = vi.spyOn(jobs, 'heartbeat').mockImplementation(async (...args) => {
+      if (args[2] === 'submitting-recovery' && ++recoveryHeartbeats === 2) {
+        throw Object.assign(new Error('stolen during resumed recovery'), { code: 'lease-stolen' });
+      }
+      return originalHeartbeat(...args);
+    });
+    try {
+      await expect(new SelfUpdateExecutor({ jobs, verifier, aws: fakeAws(now).deps }).execute(job.id)).resolves.toBe(
+        'complete'
+      );
+    } finally {
+      heartbeat.mockRestore();
+    }
+  });
+
+  it('absorbs a stolen lease while the outer failure path enters recovery', async () => {
+    const job = await queuedJob();
+    const aws = fakeAws(now);
+    aws.deps.updateStack = vi.fn().mockRejectedValue(new Error('target submission became uncertain'));
+    const originalHeartbeat = jobs.heartbeat.bind(jobs);
+    const heartbeat = vi.spyOn(jobs, 'heartbeat').mockImplementation(async (...args) => {
+      if (args[2] === 'submitting-recovery') {
+        throw Object.assign(new Error('stolen before recovery submission'), { code: 'lease-stolen' });
+      }
+      return originalHeartbeat(...args);
+    });
+    try {
+      await expect(new SelfUpdateExecutor({ jobs, verifier, aws: aws.deps }).execute(job.id)).resolves.toBe('complete');
+    } finally {
+      heartbeat.mockRestore();
+    }
   });
 
   it('does not hammer UpdateStack after a terminal rollback failure', async () => {
