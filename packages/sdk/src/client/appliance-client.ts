@@ -62,12 +62,11 @@ function watchResumeError(jobId: string, detail: string): Error {
 function waitForPoll(ms: number, signal?: AbortSignal): Promise<boolean> {
   if (signal?.aborted) return Promise.resolve(false);
   return new Promise((resolve) => {
-    let timeoutId: ReturnType<typeof setTimeout>;
     const abort = () => {
       clearTimeout(timeoutId);
       resolve(false);
     };
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       signal?.removeEventListener('abort', abort);
       resolve(true);
     }, ms);

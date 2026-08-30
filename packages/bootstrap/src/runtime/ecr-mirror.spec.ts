@@ -41,19 +41,27 @@ describe('legacy ECR mirror immutable tags', () => {
       harness.images.set(image.slice(image.lastIndexOf(':') + 1), harness.platformDigest);
     });
     harness.tagImage.mockReset();
-    harness.send.mockReset().mockImplementation(async (command: { constructor: { name: string }; input: any }) => {
-      if (command.constructor.name === 'GetAuthorizationTokenCommand') {
-        return {
-          authorizationData: [
-            { authorizationToken: Buffer.from('AWS:password').toString('base64'), proxyEndpoint: 'https://ecr.test' },
-          ],
-        };
-      }
-      const imageTag = command.input.imageIds[0].imageTag as string;
-      const imageDigest = harness.images.get(imageTag);
-      if (!imageDigest) throw Object.assign(new Error('not found'), { name: 'ImageNotFoundException' });
-      return { imageDetails: [{ imageDigest }] };
-    });
+    harness.send
+      .mockReset()
+      .mockImplementation(
+        async (command: { constructor: { name: string }; input: { imageIds?: Array<{ imageTag?: string }> } }) => {
+          if (command.constructor.name === 'GetAuthorizationTokenCommand') {
+            return {
+              authorizationData: [
+                {
+                  authorizationToken: Buffer.from('AWS:password').toString('base64'),
+                  proxyEndpoint: 'https://ecr.test',
+                },
+              ],
+            };
+          }
+          const imageTag = command.input.imageIds?.[0]?.imageTag;
+          if (!imageTag) throw new Error('DescribeImages test command omitted imageTag');
+          const imageDigest = harness.images.get(imageTag);
+          if (!imageDigest) throw Object.assign(new Error('not found'), { name: 'ImageNotFoundException' });
+          return { imageDetails: [{ imageDigest }] };
+        }
+      );
   });
 
   it('skips when the target manifest matches source provenance', async () => {
