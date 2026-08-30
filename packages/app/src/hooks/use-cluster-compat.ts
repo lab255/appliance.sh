@@ -70,7 +70,7 @@ export function useClusterCompat(): ClusterCompat {
   const client = useApplianceClient();
   const { cluster } = useSelectedCluster();
   const isMicroVm = Boolean(cluster && isMicroVmClusterId(cluster.id));
-  const vmName = cluster ? microVmNameFromClusterId(cluster.id) ?? undefined : undefined;
+  const vmName = cluster ? (microVmNameFromClusterId(cluster.id) ?? undefined) : undefined;
 
   const vmStatusQuery = useQuery({
     queryKey: ['microvm', vmName, 'status'],

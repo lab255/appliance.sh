@@ -4,15 +4,8 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { getPublicKeyAsync } from '@noble/ed25519';
-import {
-  signReleaseEnvelope,
-  type ReleaseEnvelope,
-  type ReleaseTrustPolicy,
-} from '@appliance.sh/sdk';
-import {
-  updateMicroVm,
-  type MicroVmUpdateTransport,
-} from './microvm-update.js';
+import { signReleaseEnvelope, type ReleaseEnvelope, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
+import { updateMicroVm, type MicroVmUpdateTransport } from './microvm-update.js';
 
 describe('microVM in-place control-plane update', () => {
   const privateKey = new Uint8Array(32).fill(51);
@@ -90,37 +83,66 @@ describe('microVM in-place control-plane update', () => {
 
   it('verifies signed bytes before transport and advances the running version', async () => {
     const channel = transport();
-    await expect(updateMicroVm({
-      name: 'appliance', version: '1.58.0', arch: 'x64', destinationDir: destination,
-      trust, now: new Date('2026-08-30T00:00:00Z'), fetcher: await fetcher(), transport: channel,
-    })).resolves.toMatchObject({ oldVersion: '1.57.0', newVersion: '1.58.0' });
+    await expect(
+      updateMicroVm({
+        name: 'appliance',
+        version: '1.58.0',
+        arch: 'x64',
+        destinationDir: destination,
+        trust,
+        now: new Date('2026-08-30T00:00:00Z'),
+        fetcher: await fetcher(),
+        transport: channel,
+      })
+    ).resolves.toMatchObject({ oldVersion: '1.57.0', newVersion: '1.58.0' });
     expect(channel.swaps).toEqual([digest(binary)]);
   });
 
   it('refuses while the production trust pin is empty', async () => {
     const channel = transport();
-    await expect(updateMicroVm({
-      name: 'appliance', destinationDir: destination,
-      trust: { keys: {}, generationFloor: 1 }, fetcher: vi.fn() as unknown as typeof fetch, transport: channel,
-    })).rejects.toThrow('self-update disabled until the production key is pinned (AP-226)');
+    await expect(
+      updateMicroVm({
+        name: 'appliance',
+        destinationDir: destination,
+        trust: { keys: {}, generationFloor: 1 },
+        fetcher: vi.fn() as unknown as typeof fetch,
+        transport: channel,
+      })
+    ).rejects.toThrow('self-update disabled until the production key is pinned (AP-226)');
     expect(channel.swaps).toEqual([]);
   });
 
   it('refuses an unsupported/wrong host architecture before transport', async () => {
     const channel = transport();
-    await expect(updateMicroVm({
-      name: 'appliance', version: '1.58.0', arch: 'mips' as 'x64', destinationDir: destination,
-      trust, now: new Date('2026-08-30T00:00:00Z'), fetcher: await fetcher(), transport: channel,
-    })).rejects.toThrow(/linux-mips|architecture/u);
+    await expect(
+      updateMicroVm({
+        name: 'appliance',
+        version: '1.58.0',
+        arch: 'mips' as 'x64',
+        destinationDir: destination,
+        trust,
+        now: new Date('2026-08-30T00:00:00Z'),
+        fetcher: await fetcher(),
+        transport: channel,
+      })
+    ).rejects.toThrow(/linux-mips|architecture/u);
     expect(channel.swaps).toEqual([]);
   });
 
   it('tells old launchers to restage and reboot instead of opening the artifact channel', async () => {
     const channel = transport(false);
-    await expect(updateMicroVm({
-      name: 'legacy', version: '1.58.0', arch: 'x64', destinationDir: destination,
-      trust, now: new Date('2026-08-30T00:00:00Z'), fetcher: await fetcher(), transport: channel,
-    })).rejects.toThrow('appliance vm up --name legacy --cluster');
+    await expect(
+      updateMicroVm({
+        name: 'legacy',
+        version: '1.58.0',
+        arch: 'x64',
+        destinationDir: destination,
+        trust,
+        now: new Date('2026-08-30T00:00:00Z'),
+        fetcher: await fetcher(),
+        transport: channel,
+      })
+    ).rejects.toThrow('appliance vm up --name legacy --cluster');
     expect(channel.swaps).toEqual([]);
   });
 });

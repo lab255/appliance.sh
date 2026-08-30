@@ -23,37 +23,38 @@ export function ClusterCompatBanner() {
   const [updateError, setUpdateError] = React.useState<string | null>(null);
   if (compat.loading) return null;
 
-  const updateAction = compat.controlPlaneUpdateCapable && compat.vmName && host.vm ? (
-    <button
-      type="button"
-      disabled={updating}
-      className="underline disabled:opacity-60"
-      onClick={() => {
-        setUpdating(true);
-        setUpdateError(null);
-        void host.vm!
-          .instance(compat.vmName)
-          .update(compat.clientVersion)
-          .then(async () => {
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ['cluster-info'] }),
-              queryClient.invalidateQueries({ queryKey: ['microvm', compat.vmName, 'status'] }),
-            ]);
-          })
-          .catch((error: unknown) => setUpdateError(error instanceof Error ? error.message : String(error)))
-          .finally(() => setUpdating(false));
-      }}
-    >
-      {updating ? 'Updating…' : 'Update now'}
-    </button>
-  ) : (
-    <>
-      restart it from the{' '}
-      <Link to="/machine" className="underline">
-        Machine page
-      </Link>
-    </>
-  );
+  const updateAction =
+    compat.controlPlaneUpdateCapable && compat.vmName && host.vm ? (
+      <button
+        type="button"
+        disabled={updating}
+        className="underline disabled:opacity-60"
+        onClick={() => {
+          setUpdating(true);
+          setUpdateError(null);
+          void host
+            .vm!.instance(compat.vmName)
+            .update(compat.clientVersion)
+            .then(async () => {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['cluster-info'] }),
+                queryClient.invalidateQueries({ queryKey: ['microvm', compat.vmName, 'status'] }),
+              ]);
+            })
+            .catch((error: unknown) => setUpdateError(error instanceof Error ? error.message : String(error)))
+            .finally(() => setUpdating(false));
+        }}
+      >
+        {updating ? 'Updating…' : 'Update now'}
+      </button>
+    ) : (
+      <>
+        restart it from the{' '}
+        <Link to="/machine" className="underline">
+          Machine page
+        </Link>
+      </>
+    );
 
   let message: React.ReactNode = null;
   if (compat.clientBelowMinimum) {
@@ -64,11 +65,7 @@ export function ClusterCompatBanner() {
       </>
     );
   } else if (compat.controlPlanePredatesReporting) {
-    message = (
-      <>
-        The Dev Machine&apos;s control plane predates capability reporting — {updateAction} to update it.
-      </>
-    );
+    message = <>The Dev Machine&apos;s control plane predates capability reporting — {updateAction} to update it.</>;
   } else if (compat.versionDrift && compat.isMicroVm) {
     message = (
       <>
