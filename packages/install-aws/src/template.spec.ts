@@ -189,7 +189,7 @@ describe('appliance CloudFormation template', () => {
       Array.isArray(applianceFunctionActions) ? applianceFunctionActions : [applianceFunctionActions]
     ).filter(
       (action): action is string =>
-        Boolean(action) && !action.startsWith('lambda:Get') && !action.startsWith('lambda:List')
+        typeof action === 'string' && !action.startsWith('lambda:Get') && !action.startsWith('lambda:List')
     );
     expect(deniedSystemFunctionActions).toEqual(allowedMutations);
   });
