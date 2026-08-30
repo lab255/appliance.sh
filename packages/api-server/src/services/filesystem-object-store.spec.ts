@@ -26,6 +26,12 @@ describe('FilesystemObjectStore', () => {
     expect(await store.get('projects/p1.json')).toBe('{"id":"p1"}');
   });
 
+  it('creates atomically only when absent', async () => {
+    expect(await store.setIfAbsent('jobs/lease.json', 'first')).toBe(true);
+    expect(await store.setIfAbsent('jobs/lease.json', 'second')).toBe(false);
+    expect(await store.get('jobs/lease.json')).toBe('first');
+  });
+
   it('list returns the keys under a prefix verbatim', async () => {
     await store.set('projects/a.json', '1');
     await store.set('projects/b.json', '2');

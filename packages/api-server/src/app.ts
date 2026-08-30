@@ -14,7 +14,8 @@ import { inviteRoutes } from './routes/invites';
 import { clusterInfoRoutes } from './routes/cluster-info';
 import { workloadsRoutes, environmentWorkloadsRoutes, podLogsRoutes } from './routes/workloads';
 import { internalRoutes } from './routes/internal';
-import { signatureAuth } from './middleware/auth';
+import { selfUpdateRoutes, requireOwnerTenant } from './routes/self-update';
+import { signatureAuth, requireAdmin } from './middleware/auth';
 import { corsMiddleware } from './middleware/cors';
 import { mountConsole } from './console-static';
 import { requestLogger, logger } from './logger';
@@ -91,6 +92,7 @@ export function createApp(mode: ApplianceMode = getMode()): Express {
     app.use('/api/v1/workloads', signatureAuth, workloadsRoutes);
     app.use('/api/v1/environments', signatureAuth, environmentWorkloadsRoutes);
     app.use('/api/v1/pods', signatureAuth, podLogsRoutes);
+    app.use('/api/v1/self-update', signatureAuth, requireAdmin, requireOwnerTenant, selfUpdateRoutes);
   } else {
     // Worker internal routes reuse the data-plane signatureAuth: the
     // server re-signs each dispatch with the ORIGINAL caller's API key,

@@ -49,6 +49,25 @@ export class S3ObjectStore implements ObjectStore {
     await this.client.send(command);
   }
 
+  async setIfAbsent(key: string, value: string): Promise<boolean> {
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+          Body: value,
+          ContentType: 'application/json',
+          IfNoneMatch: '*',
+        })
+      );
+      return true;
+    } catch (error) {
+      const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (candidate.name === 'PreconditionFailed' || candidate.$metadata?.httpStatusCode === 412) return false;
+      throw error;
+    }
+  }
+
   async setIfVersion(key: string, value: string, version: string): Promise<boolean> {
     try {
       await this.client.send(

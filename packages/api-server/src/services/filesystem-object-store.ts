@@ -38,6 +38,16 @@ export class FilesystemObjectStore implements ObjectStore {
     await this.withWriteLock(fullPath, () => this.writeAtomic(fullPath, value));
   }
 
+  async setIfAbsent(key: string, value: string): Promise<boolean> {
+    const fullPath = this.resolveKey(key);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    return this.withWriteLock(fullPath, async () => {
+      if ((await this.get(key)) !== null) return false;
+      await this.writeAtomic(fullPath, value);
+      return true;
+    });
+  }
+
   async setIfVersion(key: string, value: string, version: string): Promise<boolean> {
     const fullPath = this.resolveKey(key);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });

@@ -780,6 +780,7 @@ Resources:
           APPLIANCE_MODE: worker
           APPLIANCE_DATA_BUCKET: !Ref DataBucket
           APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
+          APPLIANCE_STACK_ID: !Ref AWS::StackId
           PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
           PULUMI_CONFIG_PASSPHRASE: ''
           APPLIANCE_TRUST_PROXY: 'true'

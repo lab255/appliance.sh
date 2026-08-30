@@ -149,9 +149,6 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
 // trust-proxy behavior) plus a list of header names so we can spot
 // missing/unexpected fields.
 function buildAuthDiag(req: Request, reconstructedUrl: string): Record<string, unknown> {
-  const sigInputHeader = req.headers['signature-input'];
-  const sigInputRaw = Array.isArray(sigInputHeader) ? sigInputHeader[0] : sigInputHeader;
-
   return {
     method: req.method,
     originalUrl: req.originalUrl,
@@ -162,10 +159,9 @@ function buildAuthDiag(req: Request, reconstructedUrl: string): Record<string, u
     xForwardedHost: req.get('x-forwarded-host'),
     xForwardedProto: req.get('x-forwarded-proto'),
     xForwardedFor: req.get('x-forwarded-for'),
-    // The signature-input header carries the fields + params the
-    // client signed over. Logging it lets us see the client's view
-    // of @authority / @path / created / expires. No secret material.
-    signatureInput: typeof sigInputRaw === 'string' ? sigInputRaw : null,
+    // CU1 redaction: never log values from signature/key headers. Presence
+    // is enough to diagnose reconstruction without retaining signed bytes.
+    signatureInputPresent: typeof req.headers['signature-input'] === 'string',
     signaturePresent: typeof req.headers['signature'] === 'string',
     contentDigestPresent: typeof req.headers['content-digest'] === 'string',
     headerNames: Object.keys(req.headers).sort(),
