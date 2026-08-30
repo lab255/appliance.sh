@@ -31,6 +31,7 @@ export class CatalogueTrustError extends Error {
       | 'invalid-schema'
       | 'wrong-role'
       | 'unknown-key'
+      | 'blacklisted-key'
       | 'key-id-mismatch'
       | 'bad-signature'
       | 'generation-below-floor'
@@ -186,22 +187,26 @@ function parseJson(bytes: Uint8Array): unknown {
   }
 }
 
-function checkGeneration(generation: number, policy: CatalogueTrustPolicy): void {
+/** Shared monotonic-generation gate for every signed Appliance metadata role. */
+export function checkTrustGeneration(generation: number, policy: CatalogueTrustPolicy, subject = 'catalogue'): void {
   const floor = Math.max(policy.generationFloor, policy.highestGeneration ?? 0);
   if (generation < floor) {
     throw new CatalogueTrustError(
       'generation-below-floor',
-      `catalogue generation ${generation} is below floor ${floor}`
+      `${subject} generation ${generation} is below floor ${floor}`
     );
   }
 }
 
-function checkValidity(
+/** Shared not-before/expiry gate. Defaults preserve catalogue diagnostics exactly. */
+export function checkTrustValidity(
   issuedAtValue: string,
   expiresAtValue: string,
   maxSpan: number,
   now: Date,
-  allowExpired: boolean
+  allowExpired: boolean,
+  subject = 'catalogue',
+  notBeforeSubject = 'catalogue index'
 ): boolean {
   const issuedAt = Date.parse(issuedAtValue);
   const expiresAt = Date.parse(expiresAtValue);
@@ -212,11 +217,22 @@ function checkValidity(
     expiresAt <= issuedAt ||
     expiresAt - issuedAt > maxSpan
   ) {
-    throw new CatalogueTrustError('invalid-validity', 'catalogue validity window exceeds its RFC cap');
+    throw new CatalogueTrustError('invalid-validity', `${subject} validity window exceeds its RFC cap`);
   }
-  if (issuedAt > current) throw new CatalogueTrustError('invalid-validity', 'catalogue index is not valid yet');
-  if (current > expiresAt && !allowExpired) throw new CatalogueTrustError('expired', 'catalogue index has expired');
+  if (issuedAt > current) throw new CatalogueTrustError('invalid-validity', `${notBeforeSubject} is not valid yet`);
+  if (current > expiresAt && !allowExpired) throw new CatalogueTrustError('expired', `${notBeforeSubject} has expired`);
   return current > expiresAt;
+}
+
+/** A caller may only supply this list after verifying its signed blacklist. */
+export function checkTrustedKeyBlacklist(
+  keyId: string,
+  blacklistedKeyIds: readonly string[] | ReadonlySet<string> | undefined,
+  subject = 'catalogue signer'
+): void {
+  if (blacklistedKeyIds && Array.from(blacklistedKeyIds).includes(keyId)) {
+    throw new CatalogueTrustError('blacklisted-key', `${subject} ${keyId} is blacklisted`);
+  }
 }
 
 export interface VerifiedCatalogue<T> {
@@ -248,9 +264,15 @@ async function verifyPair<T extends { generation: number; issuedAt: string; expi
   if (!publicKey) throw new CatalogueTrustError('unknown-key', 'catalogue signer is not pinned');
   const envelope = await verifySignatureEnvelope(rawPayload, envelopeValue, options.expectedRole, publicKey);
   const payload = options.parse(rawPayload);
-  checkGeneration(payload.generation, options.policy);
+  checkTrustGeneration(payload.generation, options.policy);
   const now = options.now ?? new Date();
-  const stale = checkValidity(payload.issuedAt, payload.expiresAt, options.maxSpan, now, options.allowExpired ?? false);
+  const stale = checkTrustValidity(
+    payload.issuedAt,
+    payload.expiresAt,
+    options.maxSpan,
+    now,
+    options.allowExpired ?? false
+  );
   return { payload, envelope, stale, verifiedAt: now.toISOString() };
 }
 

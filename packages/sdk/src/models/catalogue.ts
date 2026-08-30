@@ -70,7 +70,16 @@ export const catalogueBlacklistSchema = z.strictObject({
 export const signatureEnvelopeSchema = z.strictObject({
   alg: z.literal('ed25519'),
   keyId,
-  role: z.enum(['bundle', 'index', 'blacklist', 'delegation', 'revocation', 'entitlement', 'sync']),
+  role: z.enum([
+    'bundle',
+    'index',
+    'blacklist',
+    'delegation',
+    'revocation',
+    'entitlement',
+    'sync',
+    'control-plane-release',
+  ]),
   sig: base64url,
 });
 
