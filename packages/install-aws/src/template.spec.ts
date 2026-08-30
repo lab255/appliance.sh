@@ -198,6 +198,9 @@ const EXPECTED_IAM_LAMBDA_RESOURCES = {
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker'),
     sub('arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*'),
   ],
+  DenySchedulerMutation: sub(
+    'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${InstallationName}-*'
+  ),
   LambdaEdgeReplication: sub('arn:${AWS::Partition}:lambda:us-east-1:${AWS::AccountId}:function:*:*'),
 } as const;
 
@@ -283,6 +286,7 @@ describe('appliance CloudFormation template', () => {
       Arn: { tag: '!GetAtt', value: 'WorkerFunction.Arn' },
       RoleArn: { tag: '!GetAtt', value: 'SelfUpdateSchedulerRole.Arn' },
       Input: '{"kind":"self-update-check"}',
+      RetryPolicy: { MaximumRetryAttempts: 0 },
     });
     expect(toJson(['Resources', 'SelfUpdateSchedule', 'Properties', 'FlexibleTimeWindow'])).toEqual({
       Mode: 'FLEXIBLE',
@@ -307,6 +311,24 @@ describe('appliance CloudFormation template', () => {
         'Principal',
       ])
     ).toEqual({ Service: 'scheduler.amazonaws.com' });
+    expect(
+      toJson([
+        'Resources',
+        'SelfUpdateSchedulerRole',
+        'Properties',
+        'AssumeRolePolicyDocument',
+        'Statement',
+        0,
+        'Condition',
+      ])
+    ).toEqual({
+      StringEquals: { 'aws:SourceAccount': ref('AWS::AccountId') },
+      ArnLike: {
+        'aws:SourceArn': sub(
+          'arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*'
+        ),
+      },
+    });
   });
 
   it('pins the self-update trust and limits the worker to assuming only that role', () => {
@@ -461,7 +483,15 @@ describe('appliance CloudFormation template', () => {
         const actions = actionsOf(statement);
         expect(actions).not.toContain('*');
         expect(actions.filter((action) => action.includes('*'))).toEqual(
-          actions.filter((action) => ['lambda:DisableReplication*', 'lambda:EnableReplication*'].includes(action))
+          actions.filter((action) =>
+            [
+              'lambda:DisableReplication*',
+              'lambda:EnableReplication*',
+              'scheduler:CreateSchedule*',
+              'scheduler:DeleteSchedule*',
+              'scheduler:UpdateSchedule*',
+            ].includes(action)
+          )
         );
         const resources = Array.isArray(statement.Resource) ? statement.Resource : [statement.Resource];
         if (resources.includes('*')) wildcardResourceSids.push(statement.Sid);
@@ -470,10 +500,12 @@ describe('appliance CloudFormation template', () => {
     expect(wildcardResourceSids.sort()).toEqual(Object.keys(WILDCARD_RESOURCE_JUSTIFICATIONS).sort());
   });
 
-  it('contains IAM and Lambda resources to an explicit, reviewable set', () => {
+  it('contains IAM, Lambda, and scheduler resources to an explicit, reviewable set', () => {
     const statements = scopedPolicy('SystemWorkerRole').Statement.filter((statement) => {
       const actions = actionsOf(statement);
-      return actions.some((action) => action.startsWith('iam:') || action.startsWith('lambda:'));
+      return actions.some(
+        (action) => action.startsWith('iam:') || action.startsWith('lambda:') || action.startsWith('scheduler:')
+      );
     });
     expect(Object.fromEntries(statements.map((statement) => [statement.Sid, statement.Resource]))).toEqual(
       EXPECTED_IAM_LAMBDA_RESOURCES
@@ -543,6 +575,12 @@ describe('appliance CloudFormation template', () => {
       Effect: 'Deny',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySystemFunctionMutation,
     });
+    expect(statements.find((statement) => statement.Sid === 'DenySchedulerMutation')).toEqual({
+      Sid: 'DenySchedulerMutation',
+      Effect: 'Deny',
+      Action: ['scheduler:CreateSchedule*', 'scheduler:DeleteSchedule*', 'scheduler:UpdateSchedule*'],
+      Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySchedulerMutation,
+    });
     const applianceFunctionMutations = new Set(
       actionsOf(statements.find((statement) => statement.Sid === 'ApplianceFunctions')!).filter(
         (action) => !action.startsWith('lambda:Get') && !action.startsWith('lambda:List')
@@ -603,6 +641,12 @@ describe('appliance CloudFormation template', () => {
     expect(statements.find((statement) => statement.Sid === 'DenySystemFunctionMutation')).toMatchObject({
       Effect: 'Deny',
       Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySystemFunctionMutation,
+    });
+    expect(statements.find((statement) => statement.Sid === 'DenySchedulerMutation')).toEqual({
+      Sid: 'DenySchedulerMutation',
+      Effect: 'Deny',
+      Action: ['scheduler:CreateSchedule*', 'scheduler:DeleteSchedule*', 'scheduler:UpdateSchedule*'],
+      Resource: EXPECTED_IAM_LAMBDA_RESOURCES.DenySchedulerMutation,
     });
   });
 

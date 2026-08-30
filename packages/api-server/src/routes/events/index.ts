@@ -9,6 +9,13 @@ import { logger } from '../../logger';
 export const eventRoutes: Router = Router();
 
 eventRoutes.post('/', async (req, res) => {
+  // Lambda Web Adapter adds this header for Function URL requests but not
+  // for direct Lambda invokes forwarded through its pass-through path. Keep
+  // the public worker URL from becoming an unauthenticated check trigger.
+  if (req.headers['x-amzn-request-context']) {
+    res.status(404).end();
+    return;
+  }
   const parsed = selfUpdateCheckEventSchema.safeParse(req.body);
   if (!parsed.success) {
     logger.warn('worker event rejected: invalid fixed payload', { issueCount: parsed.error.issues.length });
@@ -16,5 +23,6 @@ eventRoutes.post('/', async (req, res) => {
     return;
   }
   const outcome = await getSelfUpdateSchedulerService().check();
-  res.status(200).json({ ok: true, outcome });
+  logger.info('worker self-update check completed', { outcome });
+  res.status(200).json({ ok: true });
 });

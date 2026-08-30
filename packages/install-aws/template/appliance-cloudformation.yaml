@@ -177,6 +177,13 @@ Resources:
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*
+          - Sid: DenySchedulerMutation
+            Effect: Deny
+            Action:
+              - scheduler:CreateSchedule*
+              - scheduler:DeleteSchedule*
+              - scheduler:UpdateSchedule*
+            Resource: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${InstallationName}-*
 
   SystemApiServerRole:
     Type: AWS::IAM::Role
@@ -507,6 +514,13 @@ Resources:
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-api-server:*
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker
               - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${InstallationName}-worker:*
+          - Sid: DenySchedulerMutation
+            Effect: Deny
+            Action:
+              - scheduler:CreateSchedule*
+              - scheduler:DeleteSchedule*
+              - scheduler:UpdateSchedule*
+            Resource: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${InstallationName}-*
 
   SystemWorkerEdgeProvisioningPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -745,6 +759,11 @@ Resources:
             Principal:
               Service: scheduler.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/*
       Policies:
         - PolicyName: appliance-self-update-scheduler
           PolicyDocument:
@@ -857,6 +876,8 @@ Resources:
         Arn: !GetAtt WorkerFunction.Arn
         RoleArn: !GetAtt SelfUpdateSchedulerRole.Arn
         Input: '{"kind":"self-update-check"}'
+        RetryPolicy:
+          MaximumRetryAttempts: 0
 
   ApiServerLogGroup:
     Type: AWS::Logs::LogGroup

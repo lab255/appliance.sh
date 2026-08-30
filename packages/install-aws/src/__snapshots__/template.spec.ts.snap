@@ -363,6 +363,19 @@ exports[`appliance CloudFormation template > snapshots every scoped execution-ro
       ],
       "Sid": "DenySystemFunctionMutation",
     },
+    {
+      "Action": [
+        "scheduler:CreateSchedule*",
+        "scheduler:DeleteSchedule*",
+        "scheduler:UpdateSchedule*",
+      ],
+      "Effect": "Deny",
+      "Resource": {
+        "tag": "!Sub",
+        "value": "arn:\${AWS::Partition}:scheduler:\${AWS::Region}:\${AWS::AccountId}:schedule/*/\${InstallationName}-*",
+      },
+      "Sid": "DenySchedulerMutation",
+    },
   ],
   "Version": "2012-10-17",
 }
