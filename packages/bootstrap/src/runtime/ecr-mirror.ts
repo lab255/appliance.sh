@@ -34,6 +34,8 @@ interface MirrorOptions {
  */
 export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   const { sourceImage, ecrRepositoryUrl, tag, region, awsProfile, emit } = opts;
+  const digestSource = sourceDigest(sourceImage);
+  const targetTag = digestSource ? digestSource.replace(':', '-') : tag;
 
   // Pin to the host's native platform so we end up with a
   // single-platform local image. Containerd image-store users would
@@ -42,6 +44,7 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   // rejects that as `media type ... not supported` since it only
   // accepts single image manifests, not OCI indexes.
   pullImage(sourceImage, emit, hostDockerPlatform());
+  const locallyResolvedDigest = digestSource ?? digestFromUri(imageRepoDigest(sourceImage));
 
   emit?.({ type: 'log', level: 'info', message: `requesting ECR auth in ${region}` });
   // Constructing credentials explicitly when a profile is set keeps
@@ -68,7 +71,32 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
 
   login(registryHost, username, password);
 
-  const remoteTag = `${ecrRepositoryUrl}:${tag}`;
+  const repositoryName = parseEcrRepositoryName(ecrRepositoryUrl);
+  if (!repositoryName) throw new Error(`Malformed ECR repository URL: ${ecrRepositoryUrl}`);
+  let existingDigest: string | undefined;
+  try {
+    const existing = await ecr.send(new DescribeImagesCommand({ repositoryName, imageIds: [{ imageTag: targetTag }] }));
+    existingDigest = existing.imageDetails?.[0]?.imageDigest;
+  } catch (error) {
+    if ((error as { name?: string }).name !== 'ImageNotFoundException') throw error;
+  }
+  if (existingDigest) {
+    if (locallyResolvedDigest === existingDigest) {
+      const digestUri = `${ecrRepositoryUrl}@${existingDigest}`;
+      emit?.({ type: 'log', level: 'info', message: `ECR tag ${targetTag} already matches; using ${digestUri}` });
+      return digestUri;
+    }
+    if (!digestSource) {
+      throw new Error(
+        `tag ${targetTag} already exists with a different digest; use --image <ref>@sha256:… or a new tag`
+      );
+    }
+    throw new Error(
+      `digest-derived tag ${targetTag} already exists with a different digest; refusing immutable ECR write`
+    );
+  }
+
+  const remoteTag = `${ecrRepositoryUrl}:${targetTag}`;
   tagImage(sourceImage, remoteTag);
   // Push a single-platform manifest. With containerd image store
   // enabled, the local image may be wrapped in an OCI index even
@@ -81,7 +109,8 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   // Lambda holding whatever digest the *first* deploy resolved —
   // subsequent pushes that overwrite the tag don't trigger Pulumi
   // to update the function's image (the URI string didn't change),
-  // and the Lambda keeps running the stale digest.
+  // and the Lambda can keep running the stale digest. CU2 repositories are
+  // immutable, so we preflight the target tag above and never overwrite it.
   //
   // Source of truth is ECR itself, not local docker: with containerd
   // image store + multi-arch local images, `docker inspect`'s
@@ -89,10 +118,9 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
   // exist in ECR after a single-platform push. Asking ECR via
   // DescribeImages always returns the digest of the manifest we
   // actually uploaded.
-  const repositoryName = parseEcrRepositoryName(ecrRepositoryUrl);
   if (repositoryName) {
     try {
-      const r = await ecr.send(new DescribeImagesCommand({ repositoryName, imageIds: [{ imageTag: tag }] }));
+      const r = await ecr.send(new DescribeImagesCommand({ repositoryName, imageIds: [{ imageTag: targetTag }] }));
       const digest = r.imageDetails?.[0]?.imageDigest;
       if (digest) {
         const digestUri = `${ecrRepositoryUrl}@${digest}`;
@@ -127,6 +155,16 @@ export async function mirrorImageToEcr(opts: MirrorOptions): Promise<string> {
     message: `could not resolve digest for ${remoteTag}; falling back to tag-only URI`,
   });
   return remoteTag;
+}
+
+export function sourceDigest(image: string): string | undefined {
+  const match = image.match(/@(sha256:[0-9a-f]{64})$/);
+  return match?.[1];
+}
+
+function digestFromUri(uri: string | null): string | undefined {
+  const match = uri?.match(/@(sha256:[0-9a-f]{64})$/);
+  return match?.[1];
 }
 
 /**

@@ -48,6 +48,8 @@ export interface MirrorImageOptions {
   sourceCredentials?: RegistryCredentials;
   fetch?: typeof globalThis.fetch;
   onProgress?: (message: string) => void;
+  /** AWS adapter uses ECR DescribeImages before writing an immutable tag. */
+  describeTargetTag?: (tag: string) => Promise<string | undefined>;
 }
 
 export interface MirrorImageResult {
@@ -294,6 +296,23 @@ export async function mirrorImageToEcr(options: MirrorImageOptions): Promise<Mir
     sourceImage.registry === target.registry ? options.targetCredentials : options.sourceCredentials
   );
   const resolved = await resolvePlatformManifest(source, sourceImage, options.architecture);
+  const tag = sourceImage.reference.startsWith('sha256:') ? resolved.digest.replace(':', '-') : sourceImage.reference;
+  const existingDigest = await options.describeTargetTag?.(tag);
+  if (existingDigest) {
+    if (existingDigest === resolved.digest) {
+      options.onProgress?.(`target tag ${tag} already binds ${resolved.digest}; skipping mirror`);
+      return {
+        imageUri: `${options.targetRepositoryUrl}@${resolved.digest}`,
+        digest: resolved.digest,
+        uploadedBlobs: 0,
+        reusedBlobs: 0,
+      };
+    }
+    if (!sourceImage.reference.startsWith('sha256:')) {
+      throw new Error(`tag ${tag} already exists with a different digest; use --image <ref>@sha256:… or a new tag`);
+    }
+    throw new Error(`digest-derived tag ${tag} already exists with a different digest; refusing immutable ECR write`);
+  }
   const descriptors = [resolved.manifest.config, ...resolved.manifest.layers];
   const targetAuthorization = basicAuth(options.targetCredentials)!;
   let uploadedBlobs = 0;
@@ -305,7 +324,6 @@ export async function mirrorImageToEcr(options: MirrorImageOptions): Promise<Mir
     else reusedBlobs += 1;
   }
 
-  const tag = sourceImage.reference.startsWith('sha256:') ? resolved.digest.replace(':', '-') : sourceImage.reference;
   const manifestUrl = registryUrl(
     target.registry,
     `/v2/${target.repository}/manifests/${encodeURIComponent(tag).replace(/%3A/gi, ':')}`

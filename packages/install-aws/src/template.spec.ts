@@ -333,22 +333,35 @@ describe('appliance CloudFormation template', () => {
     expect(policy.Statement).toContainEqual({ Effect: 'Allow', Principal: '*', Action: 'Update:*', Resource: '*' });
   });
 
-  it('expires only workload build tags so system image tags never match the lifecycle rule', () => {
+  it('expires workload build tags and old untagged manifests without matching system tags', () => {
     const lifecycle = JSON.parse(
       String(
         document.getIn(['Resources', 'ImageRepository', 'Properties', 'LifecyclePolicy', 'LifecyclePolicyText'])
       ).trim()
     ) as { rules: Array<{ rulePriority: number; selection: Record<string, unknown> }> };
     expect(lifecycle.rules).toEqual([
-      expect.objectContaining({
+      {
         rulePriority: 1,
+        description: 'Keep the newest 50 workload build images',
         selection: {
           tagStatus: 'tagged',
           tagPrefixList: ['build-'],
           countType: 'imageCountMoreThan',
           countNumber: 50,
         },
-      }),
+        action: { type: 'expire' },
+      },
+      {
+        rulePriority: 2,
+        description: 'Expire orphaned untagged manifests after 7 days',
+        selection: {
+          tagStatus: 'untagged',
+          countType: 'sinceImagePushed',
+          countUnit: 'days',
+          countNumber: 7,
+        },
+        action: { type: 'expire' },
+      },
     ]);
     expect(lifecycle.rules).not.toContainEqual(
       expect.objectContaining({ selection: expect.objectContaining({ tagPrefixList: ['system-'] }) })
