@@ -9,7 +9,6 @@ import {
   SelfUpdateConflictError,
   SelfUpdateService,
   type SelfUpdateDispatcher,
-  type SelfUpdateJob,
 } from './self-update.service';
 import type { ControlPlaneRelease, ReleaseVerifier } from './release-trust.adapter';
 
@@ -222,5 +221,17 @@ describe('SelfUpdateService durable route state', () => {
         .update(JSON.stringify(['a/b', 'default', '../same']))
         .digest('hex')
     );
+  });
+
+  it('reads an N-1 job record with additive unknown fields', async () => {
+    const created = await service.create(evidence(), { keyId: 'admin-a', tenantId: 'default', secret: 'secret' });
+    await storage.set(SELF_UPDATE_JOBS, created.job.id, {
+      ...created.job,
+      schemaVersion: 0,
+      legacyWorkerNote: 'ignored by N reader',
+    });
+    const loaded = await service.get(created.job.id);
+    expect(loaded).toMatchObject({ schemaVersion: 0, id: created.job.id, phase: 'queued' });
+    expect(service.publicJob(loaded!)).toMatchObject({ jobId: created.job.id, status: 'queued' });
   });
 });

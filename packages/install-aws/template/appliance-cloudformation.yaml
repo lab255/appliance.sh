@@ -781,6 +781,7 @@ Resources:
           APPLIANCE_DATA_BUCKET: !Ref DataBucket
           APPLIANCE_BASE_CONFIG_KEY: system/base-config.json
           APPLIANCE_STACK_ID: !Ref AWS::StackId
+          SELF_UPDATE_ROLE_ARN: !If [UseScopedSystemRoles, !GetAtt SelfUpdateRole.Arn, '']
           PULUMI_BACKEND_URL: !Sub s3://${StateBucket}
           PULUMI_CONFIG_PASSPHRASE: ''
           APPLIANCE_TRUST_PROXY: 'true'

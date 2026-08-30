@@ -39,7 +39,8 @@ export interface SelfUpdateLease {
 }
 
 export interface SelfUpdateJob {
-  schemaVersion: 1;
+  /** Version 0 used the same core fields; readers intentionally accept N-1. */
+  schemaVersion: 0 | 1;
   id: string;
   ownerTenantId: string;
   callerKeyId: string;
