@@ -52,9 +52,7 @@ top-level commands remain unchanged.
 - `appliance install` uses the same deploy engine but defaults to the local VM cluster. It ignores `APPLIANCE_PROFILE` and the active cluster; use `--cluster <name>` to install to another registered cluster (`--profile <name>` remains accepted for compatibility).
 - `appliance runtime install <path|url>` installs a packaged app into the current workspace target (see [docs/runtime.md](runtime.md#run-or-install-a-bundle)); unlike the top-level `install`, it honours `APPLIANCE_PROFILE`.
 
-## Cloud baseline role mode
-
-### `cloud update`
+## cloud update
 
 For a `cloudformation-v1` profile, `appliance cloud update` resolves the requested release (`--version <semver>`, or the latest semver
 GHCR tag), downloads `control-plane-release.json` plus `control-plane-release.sig.json`, verifies that pair offline with the pinned
@@ -68,14 +66,28 @@ appliance cloud update --json
 appliance cloud update --local [--image <registry/ref>] [--arch amd64|arm64] [--aws-profile <name>]
 ```
 
-`409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. `--json` emits the
-terminal job, including `phaseDurationsMs`, for timing evidence. A failed target with `recovered:true` reports that the previous image
-was re-pinned and passed health. `recoveryState:"exhausted"` points to `--local`.
+`409` means another lease is live; the command prints its status URL and the matching `--follow <jobId>` command. `--json` emits one
+wrapper object with the stable top-level shape `{outcome, job, previousServerVersion, currentServerVersion}`. The terminal `job`
+contains `phaseDurationsMs` and an explicit `totalMs`. For example, the timing-gate breakdown is:
+
+```sh
+appliance cloud update --json > update.json
+jq '{mirrorMs: .job.phaseDurationsMs.mirroring, cloudFormationMs: ((.job.phaseDurationsMs["submitting-update"] // 0) + (.job.phaseDurationsMs["waiting-for-stack"] // 0)), healthMs: .job.phaseDurationsMs["probing-health"], totalMs: .job.totalMs}' update.json
+```
+
+A failed target with `recovered:true` reports that the previous image was re-pinned and passed health.
+`recoveryState:"exhausted"` says that the installation may still be running the failed image and points to `--local`.
 
 `--local` is the explicit break-glass path: it preserves the former operator-machine ECR mirror plus CloudFormation update, so its
 `--image`, `--arch`, and `--aws-profile` flags are intentionally unavailable on the normal in-server route. Legacy profiles without an
-install-generation marker retain their deprecated updater behavior for the two-release compatibility window. Until AP-226 provisions
-`PINNED_RELEASE_TRUST`, signed self-update fails closed with: `self-update disabled until the production key is pinned (AP-226)`.
+install-generation marker retain their deprecated updater behavior for the two-release compatibility window. `--local --json` is
+rejected because the local path has no server job record. Until production release trust is provisioned, signed self-update fails
+closed and directs the operator to the `--local` break-glass path.
+
+Exit code `0` means the selected job succeeded, `1` means a terminal update or user-facing command failure, and `3` means a live-job
+conflict (including the JSON form). Follow the printed job id to attach.
+
+## Cloud baseline role mode
 
 `appliance cloud baseline-update` applies the CLI's current CloudFormation template while preserving the stack's existing `ImageUri`.
 New stacks default to scoped roles; omitting `--system-role-mode` on an existing stack preserves its current mode. A routine

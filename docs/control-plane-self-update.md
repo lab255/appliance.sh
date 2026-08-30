@@ -7,7 +7,8 @@ image/binary only. Cloud baseline changes remain operator-side in `runCloudBasel
 
 The SDK now provides typed `selfUpdate.start/status/watch` methods over the CU1 route and shares the public job contract with the
 server. The CLI resolves a named/latest release, downloads and verifies its signed evidence offline, starts the job, streams phase
-changes, reports before/after `serverVersion`, and emits per-phase durations under `--json`. `409` is attachable with `--follow`; failed
+changes, reports before/after `serverVersion`, and emits per-phase durations plus terminal `totalMs` under `--json`. Polling tolerates
+transient service replacement errors and remains bounded by a deadline/abort signal. `409` is attachable with `--follow`; failed
 healthy recovery reports the prior-image re-pin, while exhausted recovery points to `--local`.
 
 Desktop CloudFormation-v1 profiles call this SDK route through the selected cluster client and render queued, mirror, CloudFormation,
@@ -368,20 +369,23 @@ reject concurrency, kill a worker and resume, force CFN failure, force healthy-w
 
 CU2's owner timing gate is live-only and feeds AP-223; unit fakes are not evidence. After AP-226 pins the production key, run three
 consecutive signed updates on a disposable CloudFormation-v1 installation with `appliance cloud update --json` (use three monotonically
-new signed releases, or another owner-approved sequence that creates three real jobs). Preserve each terminal JSON record and its
-`phaseDurationsMs`. For every run record:
+new signed releases, or another owner-approved sequence that creates three real jobs). Use only fresh, uninterrupted jobs as timing
+samples. Preserve each terminal JSON record, its `phaseDurationsMs`, and its explicit `totalMs`. For every run record:
 
 1. mirror = `mirroring`;
 2. CloudFormation = `submitting-update + waiting-for-stack`;
 3. health = `probing-health`;
-4. target total = mirror + CloudFormation + health.
+4. target total = `totalMs` = `completedAt − startedAt`, covering every pre-complete phase, including queued, verifying, and
+   describing-stack.
 
+Mirror, CloudFormation, and health are diagnostic breakdowns, not a substitute for the target total. A resumed job charges lease-gap
+wall time to whichever phase was in flight; retain that record as recovery evidence but do not use a resumed job as a timing sample.
 Compute p95 and p99 for each component and target total; with three observations, report the nearest-rank value (the maximum) and retain
 all raw values. Acceptance requires the observed p99 target total to fit the 660-second target deadline, leaving 180 seconds to the
 840-second hard-work limit for recovery and a final 60-second reserve inside Lambda's 900-second worker budget. Also force one unhealthy
 target and preserve the recovery-phase durations to prove the previous-image re-pin uses that reserve. Record region, architecture,
-source/target versions, job ids, wall-clock timestamps, and the `--json` files in the PR/live-proof artifact set; do not claim this gate
-from a fake or dry run.
+source/target versions, job ids, wall-clock timestamps, and the `--json` files in the PR/live-proof artifact set. Durations use server
+wall-clock timestamps, so note any NTP/clock step and discard an affected timing sample. Do not claim this gate from a fake or dry run.
 
 For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 warning before the pin and refusal after it, fail-closed create/restage before writing, protected staging and signed
 boot-media seed, raw VZ and same-handle WSL transfer, wrong size/hash, root-only volume/VHD, symlink/held-fd race, PSA/hostPath denial,
