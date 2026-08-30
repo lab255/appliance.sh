@@ -43,6 +43,26 @@ export interface SelfUpdateStartConflict {
 
 export type SelfUpdateStartResponse = SelfUpdateStartAccepted | SelfUpdateStartConflict;
 
+export type SelfUpdateStartErrorCode =
+  | 'trust-not-provisioned'
+  | 'forbidden'
+  | 'scoped-roles-required'
+  | 'invalid-request'
+  | 'invalid-response'
+  | 'http-error';
+
+/** Typed, non-throwing `selfUpdate.start` failure carried by `Result.error`. */
+export class SelfUpdateStartError extends Error {
+  constructor(
+    readonly code: SelfUpdateStartErrorCode,
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = 'SelfUpdateStartError';
+  }
+}
+
 export interface SelfUpdatePublicJob {
   jobId: string;
   status: SelfUpdateStatus;
@@ -60,6 +80,8 @@ export interface SelfUpdatePublicJob {
   };
   /** Additive CU2 timing evidence; older persisted jobs may omit it. */
   phaseDurationsMs?: SelfUpdatePhaseDurations;
+  /** Terminal wall-clock duration from job start through completion. */
+  totalMs?: number;
   error?: string;
   recovered?: boolean;
   recoveryState?: 'unknown' | 'in-progress' | 'recovered' | 'exhausted';
@@ -67,5 +89,11 @@ export interface SelfUpdatePublicJob {
 
 export interface SelfUpdateWatchOptions {
   intervalMs?: number;
+  /** Overall polling budget. Defaults to 20 minutes. */
+  deadlineMs?: number;
+  /** Cancels an active status request and the polling loop. */
+  signal?: AbortSignal;
+  /** Consecutive transient poll failures tolerated before returning an error. Defaults to 5. */
+  maxConsecutiveErrors?: number;
   onPhase?: (job: SelfUpdatePublicJob) => void;
 }

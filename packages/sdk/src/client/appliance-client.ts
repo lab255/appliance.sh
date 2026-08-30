@@ -10,12 +10,70 @@ import { ApplianceBaseConfig } from '../models/appliance-base';
 import { Workloads } from '../models/workloads';
 import { signRequest } from '../signing';
 import { VERSION } from '../version';
-import type {
-  SelfUpdatePublicJob,
-  SelfUpdateStartInput,
-  SelfUpdateStartResponse,
-  SelfUpdateWatchOptions,
+import {
+  SelfUpdateStartError,
+  type SelfUpdatePublicJob,
+  type SelfUpdateStartInput,
+  type SelfUpdateStartResponse,
+  type SelfUpdateWatchOptions,
 } from '../models/self-update';
+
+interface RequestOptions<T> {
+  timeout?: number;
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+  acceptedStatuses?: readonly number[];
+  parse?: (status: number, text: string) => T;
+  error?: (status: number, text: string) => Error;
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
+  try {
+    const value = JSON.parse(text) as unknown;
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function selfUpdateStartError(status: number, text: string): SelfUpdateStartError {
+  const body = parseJsonObject(text);
+  const serverMessage = typeof body?.error === 'string' ? body.error : text.trim();
+  const code =
+    status === 400 && body?.code === 'unknown-key'
+      ? 'trust-not-provisioned'
+      : status === 400
+        ? 'invalid-request'
+        : status === 403
+          ? 'forbidden'
+          : status === 503
+            ? 'scoped-roles-required'
+            : 'http-error';
+  const suffix = serverMessage ? `: ${serverMessage}` : '';
+  return new SelfUpdateStartError(code, status, `Self-update start failed with HTTP ${status}${suffix}`);
+}
+
+function watchResumeError(jobId: string, detail: string): Error {
+  return new Error(`${detail}. Resume this job with appliance cloud update --follow ${jobId}`);
+}
+
+function waitForPoll(ms: number, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const abort = () => {
+      clearTimeout(timeoutId);
+      resolve(false);
+    };
+    timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve(true);
+    }, ms);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 /** GET /api/v1/cluster-info response. Mirrors the api-server's
  *  ClusterInfo (routes/cluster-info); every field beyond `version` +
@@ -80,17 +138,27 @@ export class ApplianceClient {
     return this.clientTag ? { 'x-appliance-client': this.clientTag } : {};
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, timeout?: number): Promise<Result<T>> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    options: RequestOptions<T> = {}
+  ): Promise<Result<T>> {
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort(options.signal?.reason);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout ?? this.timeout);
+      if (options.signal?.aborted) forwardAbort();
+      else options.signal?.addEventListener('abort', forwardAbort, { once: true });
+      timeoutId = setTimeout(() => controller.abort(), options.timeout ?? this.timeout);
 
       const url = `${this.baseUrl}${path}`;
-      const bodyStr = body ? JSON.stringify(body) : undefined;
+      const bodyStr = body === undefined ? undefined : JSON.stringify(body);
 
       const headers: Record<string, string> = {
         'content-type': 'application/json',
         ...this.clientTagHeaders(),
+        ...options.headers,
       };
 
       if (this.credentials && bodyStr) {
@@ -117,13 +185,11 @@ export class ApplianceClient {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorBody = await response.text();
+      const text = await response.text();
+      if (!response.ok && !options.acceptedStatuses?.includes(response.status)) {
         return {
           success: false,
-          error: new Error(`HTTP ${response.status}: ${errorBody}`),
+          error: options.error?.(response.status, text) ?? new Error(`HTTP ${response.status}: ${text}`),
         };
       }
 
@@ -133,61 +199,53 @@ export class ApplianceClient {
       // EOF" error that surfaces to the user as a delete failure.
       // Resolve to `undefined as T` instead so `Result<void>` callers
       // see `{ success: true }`.
-      if (response.status === 204 || response.headers.get('content-length') === '0') {
+      if (response.status === 204 || response.headers.get('content-length') === '0' || text === '') {
         return { success: true, data: undefined as T };
       }
 
-      const data = await response.json();
+      const data = options.parse ? options.parse(response.status, text) : (JSON.parse(text) as T);
       return { success: true, data: data as T };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error : new Error(String(error)),
       };
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      options.signal?.removeEventListener('abort', forwardAbort);
     }
   }
 
   private async startSelfUpdate(input: SelfUpdateStartInput): Promise<Result<SelfUpdateStartResponse>> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-      const url = `${this.baseUrl}/api/v1/self-update`;
-      const body = JSON.stringify({ targetDigest: input.targetDigest, release: input.release });
-      const headers: Record<string, string> = {
-        'content-type': 'application/json',
-        'idempotency-key': input.idempotencyKey,
-        ...this.clientTagHeaders(),
-      };
-      if (this.credentials) {
-        Object.assign(headers, await signRequest(this.credentials, { method: 'POST', url, headers, body }));
+    return this.request<SelfUpdateStartResponse>(
+      'POST',
+      '/api/v1/self-update',
+      { targetDigest: input.targetDigest, release: input.release },
+      {
+        headers: { 'idempotency-key': input.idempotencyKey },
+        acceptedStatuses: [202, 409],
+        parse: (status, text) => {
+          const data = parseJsonObject(text);
+          if (!data) {
+            throw new SelfUpdateStartError(
+              'invalid-response',
+              status,
+              `Self-update returned HTTP ${status} with an invalid JSON response`
+            );
+          }
+          if (status === 202) {
+            return {
+              httpStatus: 202,
+              jobId: String(data.jobId),
+              status: data.status as SelfUpdatePublicJob['status'],
+              statusUrl: String(data.statusUrl),
+            };
+          }
+          return { httpStatus: 409, jobId: String(data.jobId), statusUrl: String(data.statusUrl) };
+        },
+        error: selfUpdateStartError,
       }
-      const response = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
-      clearTimeout(timeoutId);
-      const data = (await response.json()) as Record<string, unknown>;
-      if (response.status === 202) {
-        return {
-          success: true,
-          data: {
-            httpStatus: 202,
-            jobId: String(data.jobId),
-            status: data.status as SelfUpdatePublicJob['status'],
-            statusUrl: String(data.statusUrl),
-          },
-        };
-      }
-      if (response.status === 409) {
-        return {
-          success: true,
-          data: { httpStatus: 409, jobId: String(data.jobId), statusUrl: String(data.statusUrl) },
-        };
-      }
-      return {
-        success: false,
-        error: new Error(`HTTP ${response.status}: ${JSON.stringify(data)}`),
-      };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error : new Error(String(error)) };
-    }
+    );
   }
 
   /** Signed control-plane self-update API and terminal-state polling helper. */
@@ -200,19 +258,60 @@ export class ApplianceClient {
       if (!Number.isFinite(intervalMs) || intervalMs < 0) {
         return { success: false, error: new Error('selfUpdate.watch intervalMs must be a non-negative number') };
       }
+      const deadlineMs = options.deadlineMs ?? 20 * 60_000;
+      if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) {
+        return { success: false, error: new Error('selfUpdate.watch deadlineMs must be a positive number') };
+      }
+      const maxConsecutiveErrors = options.maxConsecutiveErrors ?? 5;
+      if (!Number.isInteger(maxConsecutiveErrors) || maxConsecutiveErrors <= 0) {
+        return {
+          success: false,
+          error: new Error('selfUpdate.watch maxConsecutiveErrors must be a positive integer'),
+        };
+      }
+      const deadlineAt = Date.now() + deadlineMs;
       let previousPhase: SelfUpdatePublicJob['phase'] | undefined;
+      let consecutiveErrors = 0;
       for (;;) {
+        const remainingMs = deadlineAt - Date.now();
+        if (options.signal?.aborted) return { success: false, error: watchResumeError(jobId, 'Polling was cancelled') };
+        if (remainingMs <= 0) return { success: false, error: watchResumeError(jobId, 'Polling deadline expired') };
         const current = await this.request<SelfUpdatePublicJob>(
           'GET',
-          `/api/v1/self-update/${encodeURIComponent(jobId)}`
+          `/api/v1/self-update/${encodeURIComponent(jobId)}`,
+          undefined,
+          { timeout: Math.min(this.timeout, remainingMs), signal: options.signal }
         );
-        if (!current.success) return current;
+        if (!current.success) {
+          if (options.signal?.aborted) {
+            return { success: false, error: watchResumeError(jobId, 'Polling was cancelled') };
+          }
+          consecutiveErrors += 1;
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            return {
+              success: false,
+              error: watchResumeError(
+                jobId,
+                `Status remained unavailable after ${consecutiveErrors} consecutive attempts: ${current.error.message}`
+              ),
+            };
+          }
+          const backoffMs = Math.min(Math.max(intervalMs, 1_000) * 2 ** (consecutiveErrors - 1), 30_000);
+          if (!(await waitForPoll(Math.min(backoffMs, Math.max(0, deadlineAt - Date.now())), options.signal))) {
+            return { success: false, error: watchResumeError(jobId, 'Polling was cancelled') };
+          }
+          continue;
+        }
+        consecutiveErrors = 0;
         if (current.data.phase !== previousPhase) {
           previousPhase = current.data.phase;
           options.onPhase?.(current.data);
         }
         if (current.data.status === 'succeeded' || current.data.status === 'failed') return current;
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        const delayMs = Math.min(intervalMs, Math.max(0, deadlineAt - Date.now()));
+        if (!(await waitForPoll(delayMs, options.signal))) {
+          return { success: false, error: watchResumeError(jobId, 'Polling was cancelled') };
+        }
       }
     },
   };
@@ -577,7 +676,7 @@ export class ApplianceClient {
         ...(options?.replicas !== undefined ? { replicas: options.replicas } : {}),
         ...(options?.refresh !== undefined ? { refresh: options.refresh } : {}),
       },
-      600000
+      { timeout: 600000 }
     );
   }
 
@@ -589,7 +688,7 @@ export class ApplianceClient {
         environmentId,
         action: 'destroy',
       },
-      600000
+      { timeout: 600000 }
     );
   }
 
@@ -607,7 +706,7 @@ export class ApplianceClient {
         environmentId,
         action: 'refresh',
       },
-      600000
+      { timeout: 600000 }
     );
   }
 

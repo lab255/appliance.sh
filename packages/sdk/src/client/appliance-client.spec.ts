@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApplianceClient } from './appliance-client';
 import { VERSION } from '../version';
-import type { ReleaseEnvelope, ReleaseSignatureEnvelope, SelfUpdatePublicJob } from '../models';
+import {
+  SelfUpdateStartError,
+  type ReleaseEnvelope,
+  type ReleaseSignatureEnvelope,
+  type SelfUpdatePublicJob,
+} from '../models';
 
 // The `x-appliance-client` tag must be context-sensitive: server-side
 // callers (CLI, engine, tests — no `document` global) always send it,
@@ -133,6 +138,37 @@ describe('self-update client', () => {
     expect(sentHeaders(fetchMock).signature).toBeDefined();
   });
 
+  it.each([
+    [400, { error: 'trust absent', code: 'unknown-key' }, 'trust-not-provisioned'],
+    [403, { error: 'owner tenant required' }, 'forbidden'],
+    [503, { error: 'scoped roles required' }, 'scoped-roles-required'],
+  ] as const)('returns a typed, non-throwing HTTP %s start failure', async (status, body, code) => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponseFor(status, body)));
+    const client = createApplianceClient({ baseUrl: 'https://api.test' });
+
+    const result = await client.selfUpdate.start({ targetDigest: digest, release: evidence, idempotencyKey: 'once' });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected start failure');
+    expect(result.error).toBeInstanceOf(SelfUpdateStartError);
+    expect(result.error).toMatchObject({ status, code });
+  });
+
+  it('preserves the HTTP status when an upstream returns HTML instead of JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>bad gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } }))
+    );
+    const client = createApplianceClient({ baseUrl: 'https://api.test' });
+
+    const result = await client.selfUpdate.start({ targetDigest: digest, release: evidence, idempotencyKey: 'once' });
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected start failure');
+    expect(result.error).toMatchObject({ status: 502, code: 'http-error' });
+    expect(result.error.message).toContain('bad gateway');
+  });
+
   it('polls phase changes and resolves on a terminal job', async () => {
     vi.useFakeTimers();
     const phases = ['mirroring', 'mirroring', 'probing-health', 'complete'] as const;
@@ -154,6 +190,42 @@ describe('self-update client', () => {
 
     await expect(watching).resolves.toMatchObject({ success: true, data: { status: 'succeeded' } });
     expect(seen).toEqual(['mirroring', 'probing-health', 'complete']);
+  });
+
+  it('tolerates three transient 502 polls before the terminal record', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1;
+        return call <= 3
+          ? new Response('bad gateway', { status: 502 })
+          : jsonResponseFor(200, job('complete', 'succeeded'));
+      })
+    );
+    const client = createApplianceClient({ baseUrl: 'https://api.test' });
+    const watching = client.selfUpdate.watch('selfupdate_1', { intervalMs: 10, deadlineMs: 10_000 });
+    await vi.runAllTimersAsync();
+
+    await expect(watching).resolves.toMatchObject({ success: true, data: { status: 'succeeded' } });
+    expect(call).toBe(4);
+  });
+
+  it('bounds non-terminal polling with a deadline and preserves the follow command', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-30T00:00:00Z'));
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponseFor(200, job('waiting-for-stack', 'running'))));
+    const client = createApplianceClient({ baseUrl: 'https://api.test' });
+    const watching = client.selfUpdate.watch('selfupdate_deadline', { intervalMs: 10, deadlineMs: 25 });
+    await vi.advanceTimersByTimeAsync(30);
+
+    await expect(watching).resolves.toMatchObject({
+      success: false,
+      error: expect.objectContaining({
+        message: expect.stringContaining('appliance cloud update --follow selfupdate_deadline'),
+      }),
+    });
   });
 });
 
