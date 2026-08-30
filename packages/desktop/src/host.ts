@@ -410,7 +410,7 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
         async update(version?: string, onEvent?: (event: { message: string }) => void) {
           const channel = new Channel<{ type: string; message?: string }>();
           channel.onmessage = (event) => {
-            if (event?.message) onEvent?.({ message: event.message });
+            if (event?.message?.trim().startsWith('»')) onEvent?.({ message: event.message });
           };
           return invoke<string>('microvm_update', { name: vm, version: version ?? null, onEvent: channel });
         },

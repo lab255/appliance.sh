@@ -4947,7 +4947,7 @@ async fn microvm_update(
                 CommandEvent::Stdout(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);
                     stdout.push_str(&text);
-                    for message in text.lines().filter(|line| !line.trim().is_empty()) {
+                    for message in text.lines().filter_map(microvm_update_phase) {
                         let _ =
                             on_event.send(serde_json::json!({ "type": "log", "message": message }));
                     }
@@ -4955,10 +4955,6 @@ async fn microvm_update(
                 CommandEvent::Stderr(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);
                     stderr.push_str(&text);
-                    for message in text.lines().filter(|line| !line.trim().is_empty()) {
-                        let _ =
-                            on_event.send(serde_json::json!({ "type": "log", "message": message }));
-                    }
                 }
                 CommandEvent::Error(message) => return Err(message),
                 CommandEvent::Terminated(payload) => exit_code = payload.code,
@@ -4979,6 +4975,11 @@ async fn microvm_update(
     } else {
         Err(stderr.trim().to_string())
     }
+}
+
+fn microvm_update_phase(line: &str) -> Option<&str> {
+    let line = line.trim();
+    line.starts_with('»').then_some(line)
 }
 
 /// Shared bring-up for core, dev, and lazy cluster promotion. `dev` selects
@@ -7562,6 +7563,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn microvm_update_events_expose_phases_only() {
+        assert_eq!(
+            microvm_update_phase("  » shipping artifacts  "),
+            Some("» shipping artifacts")
+        );
+        assert_eq!(microvm_update_phase("WARNING: dev trust override"), None);
+        assert_eq!(microvm_update_phase("control plane updated: v1 → v2"), None);
+    }
 
     fn wsl_output_fixture_bytes(name: &str) -> &'static [u8] {
         match name {

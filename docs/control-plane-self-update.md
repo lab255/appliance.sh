@@ -225,6 +225,8 @@ AP-226 fills `PINNED_RELEASE_TRUST` with the offline release key.
 For owner testing only, a non-release build may load the same trust-policy JSON shape from
 `APPLIANCE_RELEASE_TRUST_FILE=<path>`. Release builds ignore that variable with a loud warning and retain the empty/production pin set;
 the escape hatch never permits unsigned in-place replacement.
+A build is non-release when the CLI `VERSION` starts with `0.0.0` or contains `-dev`. The file shape is
+`{"keys":{"<keyId>":"<pubkey>"},"generationFloor":N,"blacklistedKeyIds":[]}`, with `blacklistedKeyIds` optional.
 
 **MV0 shipped (AP-225):** release assets now include `SHA256SUMS`, `control-plane-release.json`, and
 `control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
@@ -270,7 +272,8 @@ same-open-handle hash/stream contract but changes api-server/console from `expec
 VZ gains a root-only persistent control-plane volume mounted at `/var/lib/appliance-control-plane`, separate from `/persist`
 (the agent HOME/data disk) and never exposed by hostPath. It is appended after the contractual vda data, vdb boot-media, and optional
 vdc agent devices, resolved by the `appliance-control-plane` filesystem label, and sized from three copies of the signed artifact sizes
-plus headroom with a 1 GiB minimum. Formatting is allowed only for a device on which `blkid` reports neither type nor label. The mount
+plus headroom with a 1 GiB minimum. When host staging grows the sparse disk, the provisioner runs online `resize2fs` after mounting so
+the guest filesystem gains the capacity. Formatting is allowed only for a device on which `blkid` reports neither type nor label. The mount
 tries `nodev,nosuid,nosymfollow`, logs and falls back to `nodev,nosuid` only when the guest mount implementation rejects `nosymfollow`.
 WSL uses an ACL'd directory on its distro VHD, never drvfs.
 
@@ -278,14 +281,17 @@ Releases live in content-addressed `releases/<version>-<binary-sha12>/` director
 `{binary, console.tar.gz, console/}`. `current`, `previous`, and `pending` are one-line relative pointer files, restricted to
 `releases/[0-9A-Za-z._+-]+` and flipped with a same-directory `mv -f` rename supported by BusyBox. Existing matching content is reused;
 the updater never removes a directory referenced by any pointer. The promoted signed generation is persisted beside the pointers and
-the guest refuses any lower generation. This promotes `APPLIANCE_CONSOLE_DIR` and binary together without destroying rollback state.
+the guest refuses any lower generation, and permits equality only when the content-addressed target is already `current`. Properties,
+payload version/generation, and the payload binary SHA must also agree with the checksum sidecar before staging. This promotes
+`APPLIANCE_CONSOLE_DIR` and binary together without destroying rollback state.
 
 Extend `APISERVER_COMMON` into a supervisor: open the candidate without following symlinks, verify its signed SHA-256 through that held
 fd immediately before executing `/proc/self/fd/<fd>`, launch with the candidate console, and poll guest-loopback `/bootstrap/status`
 for two minutes requiring the target version. Success promotes the directory; exit/bad health restores `previous` and respawns. Keep
-the old release until a later successful update. Workload namespaces enforce PSA `restricted`; a default-deny
+the old release until a later successful update. Recovery consumes `previous` as a one-shot pointer and falls back to the legacy seed
+when both persistent targets are unusable. Workload namespaces enforce PSA `restricted`; a default-deny
 ValidatingAdmissionPolicy blocks hostPath outside explicitly labelled control-plane namespaces, and a second cluster-wide rule rejects
-every hostPath at or below `/var/lib/appliance-control-plane`, including in privileged namespaces. Older Kubernetes versions that do not
+every hostPath at, below, or containing `/var/lib/appliance-control-plane` (including `/var/lib` and `/`), even in privileged namespaces. Older Kubernetes versions that do not
 apply ValidatingAdmissionPolicy retain PSA but are reported as a doctor warning rather than being claimed as equivalently protected.
 
 Boot-media/WSL copy is seed-only and never overwrites `current`; quarantine, selector-less routing, and SA wiring remain independent.

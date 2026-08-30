@@ -19,6 +19,7 @@ export interface MicroVmSwapRequest {
   stageDir: string;
   binary: ReleaseArtifact;
   console: ReleaseArtifact;
+  onSwapStart?: () => void;
 }
 
 export interface MicroVmUpdateTransport {
@@ -116,6 +117,7 @@ export function defaultMicroVmUpdateTransport(fetcher: typeof fetch = fetch): Mi
         '--console-size',
         String(request.console.size),
       ];
+      request.onSwapStart?.();
       const result = spawnSync(vmBinary(), args, { encoding: 'utf8', timeout: PROCESS_TIMEOUT_MS });
       return { ok: result.status === 0, detail: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim() };
     },
@@ -181,8 +183,13 @@ export async function updateMicroVm(options: MicroVmUpdateOptions): Promise<Micr
     verifyFile(path.join(stage, 'appliance-console.tar.gz'), console);
 
     options.onPhase?.('shipping artifacts');
-    options.onPhase?.('swapping + health check');
-    const swap = await transport.swap({ name: options.name, stageDir: stage, binary, console });
+    const swap = await transport.swap({
+      name: options.name,
+      stageDir: stage,
+      binary,
+      console,
+      onSwapStart: () => options.onPhase?.('swapping + health check'),
+    });
     if (!swap.ok) {
       throw new Error(
         `update rolled back — the previous control plane (v${oldVersion}) is still running and serving: ${swap.detail}`

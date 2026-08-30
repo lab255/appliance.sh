@@ -196,7 +196,8 @@ rolls back and respawns the prior release without rebooting.
 
 VZ keeps releases on a separate sparse disk mounted root-only at
 `/var/lib/appliance-control-plane`; it is label-resolved, sized from the signed
-artifacts with a 1 GiB minimum, and is not the agent/workload `/persist` disk.
+artifacts with a 1 GiB minimum, expanded online with `resize2fs` when its sparse
+host disk grows, and is not the agent/workload `/persist` disk.
 WSL keeps the same root-only layout inside the managed distro VHD, never on
 drvfs. Content-addressed `releases/<version>-<sha12>/` directories are selected
 by atomically renamed one-line `current`, `previous`, and `pending` pointer
@@ -210,6 +211,10 @@ In-place update is fail-closed until the production release key is pinned. An
 owner testing a non-release build may set
 `APPLIANCE_RELEASE_TRUST_FILE=/path/to/test-release-trust.json`; release builds
 ignore the variable and direct the operator to restart the Dev Machine instead.
+A build is non-release when its CLI `VERSION` starts with `0.0.0` or contains
+`-dev`. The trust JSON shape is
+`{"keys":{"<keyId>":"<pubkey>"},"generationFloor":N,"blacklistedKeyIds":[]}`;
+`blacklistedKeyIds` is optional.
 
 Because `.localhost` names resolve to 127.0.0.1 everywhere, hostname
 routing needs zero new machinery — only the port forward.

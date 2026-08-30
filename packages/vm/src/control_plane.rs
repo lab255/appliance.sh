@@ -2,7 +2,9 @@ use anyhow::{bail, Context, Result};
 use ring::digest::{Context as DigestContext, SHA256};
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom};
+#[cfg(unix)]
+use std::io::Write;
 use std::path::Path;
 
 fn digest_open_file(file: &mut File) -> Result<String> {

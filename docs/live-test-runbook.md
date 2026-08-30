@@ -792,6 +792,11 @@ pointing to the trust JSON for the test signing key. A release build ignores
 that variable and must remain fail-closed; unsigned bytes are never an
 acceptable substitute.
 
+Here, “development build” means the CLI `VERSION` starts with `0.0.0` or
+contains `-dev`. The trust file is a JSON object shaped as
+`{"keys":{"<keyId>":"<pubkey>"},"generationFloor":N,"blacklistedKeyIds":[]}`;
+`blacklistedKeyIds` is optional.
+
 Use three post-MV0 releases signed by that trusted key: current N, a candidate
 N+1 whose api-server exits immediately, and a healthy N+1. Record
 `date`, VM PID, `/bootstrap/status`, and `appliance doctor --vm appliance`
@@ -821,5 +826,6 @@ AP-223. Until AP-226 pins production trust, a release build passes this section
 only when the command prints the actionable “in-place update is disabled until
 the production release key is pinned” restart path and the banner offers the
 Machine-page restart while saying in-place updates are not enabled in this
-build. Capture those fail-closed states; run steps 1–4 only with the dev trust
-file described above.
+build. Capture those fail-closed states; the enabled inline `Update now` state
+cannot be captured until AP-226 lands or the app runs with the development
+trust described above. Run steps 1–4 only with that development trust file.

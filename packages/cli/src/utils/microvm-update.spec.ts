@@ -84,6 +84,7 @@ describe('microVM in-place control-plane update', () => {
       },
       async swap(request) {
         this.swaps.push(request.binary.sha256);
+        request.onSwapStart?.();
         return options.swap ?? { ok: true, detail: 'success 1.58.0' };
       },
     };

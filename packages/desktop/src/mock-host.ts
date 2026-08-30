@@ -51,6 +51,7 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 //   grant-prompt         install grant dialog with an optional mount
 //   entitlements-suggest-revoke Settings suggested-revocation list
 //   banner-mv1-disabled MV1 version drift with release trust disabled
+//   banner-legacy-reboot version drift on a pre-MV1 launcher
 //
 // Transitions are simulated (start ≈2s, stop ≈1s, builds stream log
 // lines) so spinners, disabled states, and progress UI are exercised
@@ -82,7 +83,8 @@ type Scenario =
   | 'install-from-file'
   | 'grant-prompt'
   | 'entitlements-suggest-revoke'
-  | 'banner-mv1-disabled';
+  | 'banner-mv1-disabled'
+  | 'banner-legacy-reboot';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -126,7 +128,7 @@ export function mockHostEnabled(): boolean {
         configureWorkspaceScenario(scenario === 'user-mode-no-vm' ? 'user-mode-no-vm' : 'user-mode');
       }
       if (scenario === 'developer-mode') sessionStorage.setItem(APP_MODE_KEY, 'developer');
-      if (scenario === 'banner-mv1-disabled') {
+      if (scenario === 'banner-mv1-disabled' || scenario === 'banner-legacy-reboot') {
         sessionStorage.setItem(APP_MODE_KEY, 'developer');
         configureWorkspaceScenario('user-mode');
         installBannerClusterInfoFixture();
@@ -166,7 +168,8 @@ function scenario(): Scenario {
     s === 'install-from-file' ||
     s === 'grant-prompt' ||
     s === 'entitlements-suggest-revoke' ||
-    s === 'banner-mv1-disabled'
+    s === 'banner-mv1-disabled' ||
+    s === 'banner-legacy-reboot'
     ? s
     : 'ready';
 }
@@ -1132,7 +1135,7 @@ export function createMockHost(): ConsoleHost {
               running: vm.running,
               clusterProvisioned: vm.clusterProvisioned,
               kubeconfigReady: vm.running && vm.clusterProvisioned,
-              controlPlaneUpdateCapable: vm.running,
+              controlPlaneUpdateCapable: vm.running && scenario() !== 'banner-legacy-reboot',
               selfUpdateEnabled: scenario() !== 'banner-mv1-disabled',
               phase: vm.running ? ('ready' as const) : undefined,
               dev: vm.dev,

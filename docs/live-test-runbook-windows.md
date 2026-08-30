@@ -797,6 +797,11 @@ Steps 1–4 have the same trust precondition: production pin, or a development
 build plus `APPLIANCE_RELEASE_TRUST_FILE` containing the test-key trust JSON.
 Release builds ignore that escape hatch and must show the documented
 fail-closed restart path instead.
+Here, “development build” means the CLI `VERSION` starts with `0.0.0` or
+contains `-dev`. The trust file shape is
+`{"keys":{"<keyId>":"<pubkey>"},"generationFloor":N,"blacklistedKeyIds":[]}`;
+`blacklistedKeyIds` is optional. The enabled inline `Update now` evidence is
+not capturable until AP-226 lands or the app uses this development trust.
 Use `appliance-vm.exe stop appliance` followed by `appliance-vm.exe start
 appliance` for the stale-media restart. Record that the WSL distro PID remains
 unchanged for each in-place attempt, rollback restores N, the healthy retry

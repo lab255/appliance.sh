@@ -23,9 +23,20 @@ export function ClusterCompatBanner() {
   const [updatePhase, setUpdatePhase] = React.useState<string | null>(null);
   const [updateError, setUpdateError] = React.useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!updateSuccess) return;
+    const timeout = window.setTimeout(() => setUpdateSuccess(null), 10_000);
+    return () => window.clearTimeout(timeout);
+  }, [updateSuccess]);
   if (updateSuccess) {
     return (
-      <Banner tone="success" role="status" icon={CheckCircle2} className="mb-4">
+      <Banner
+        tone="success"
+        role="status"
+        icon={CheckCircle2}
+        className="mb-4"
+        onDismiss={() => setUpdateSuccess(null)}
+      >
         {updateSuccess}
       </Banner>
     );
@@ -52,15 +63,18 @@ export function ClusterCompatBanner() {
           setUpdateError(null);
           void host
             .vm!.instance(compat.vmName)
-            .update(compat.clientVersion, ({ message }) => setUpdatePhase(message.replace(/^»\s*/u, '')))
+            .update(compat.clientVersion, ({ message }) => {
+              const phase = message.trim();
+              if (phase.startsWith('»')) setUpdatePhase(phase.replace(/^»\s*/u, ''));
+            })
             .then(async () => {
-              setUpdateSuccess(
-                `Control plane updated: v${compat.serverVersion ?? 'unknown'} → v${compat.clientVersion}`
-              );
               await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['cluster-info'] }),
                 queryClient.invalidateQueries({ queryKey: ['microvm', compat.vmName, 'status'] }),
               ]);
+              setUpdateSuccess(
+                `Control plane updated: v${compat.serverVersion ?? 'unknown'} → v${compat.clientVersion}`
+              );
             })
             .catch((error: unknown) => setUpdateError(error instanceof Error ? error.message : String(error)))
             .finally(() => {
