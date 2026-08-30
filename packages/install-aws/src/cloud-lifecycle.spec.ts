@@ -218,24 +218,35 @@ describe('CloudFormation lifecycle', () => {
       imageUri: 'repo@sha256:old',
       architecture: 'x86_64',
       systemRoleMode: 'admin',
+      preserveParameters: true,
     });
     expect(deps.getBootstrapStatus).toHaveBeenCalledWith(profile.apiUrl);
   });
 
-  it('baseline update preserves the stack role mode when the flag is omitted', async () => {
+  it('baseline update preserves the stack role mode with UsePreviousValue when the flag is omitted', async () => {
     const deps = dependencies();
     vi.mocked(deps.getStack).mockResolvedValue({
       ...stack,
       parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
     });
     await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
-    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ preserveParameters: true }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.not.objectContaining({ systemRoleMode: expect.anything() }));
   });
 
-  it('baseline update defaults legacy stacks without the parameter to scoped', async () => {
+  it('lets the baseline parameter builder default legacy stacks without SystemRoleMode to scoped', async () => {
     const deps = dependencies();
     await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
-    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'scoped' }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ preserveParameters: true }));
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.not.objectContaining({ systemRoleMode: expect.anything() }));
+  });
+
+  it('passes a scheduled self-update policy through the operator baseline path', async () => {
+    const deps = dependencies();
+    await runCloudBaselineUpdate({ profile, installationName: 'prod', selfUpdatePolicy: 'notify' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(
+      expect.objectContaining({ selfUpdatePolicy: 'notify', preserveParameters: true, imageUri: 'repo@sha256:old' })
+    );
   });
 
   it('baseline update reports the admin recovery command when post-update health fails', async () => {

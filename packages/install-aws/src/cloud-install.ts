@@ -23,7 +23,13 @@ import {
   APPLIANCE_STACK_POLICY,
   APPLIANCE_STACK_POLICY_DURING_OPERATOR_UPDATE,
 } from './template.js';
-import type { ApplianceCloudOutputs, CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
+import type {
+  ApplianceCloudOutputs,
+  CloudInstallProfileMetadata,
+  ImageArchitecture,
+  SelfUpdatePolicy,
+  SystemRoleMode,
+} from './types.js';
 
 export const BASE_CONFIG_KEY = 'system/base-config.json';
 const DEFAULT_HEALTH_TIMEOUT_MS = 15 * 60_000;
@@ -68,6 +74,9 @@ export interface CloudInstallDependencies {
     imageUri: string;
     architecture: ImageArchitecture;
     systemRoleMode?: SystemRoleMode;
+    selfUpdatePolicy?: SelfUpdatePolicy;
+    /** Operator baseline changes preserve every unrelated current parameter. */
+    preserveParameters?: boolean;
   }): Promise<StackSnapshot>;
   getRegistryCredentials(): Promise<{ username: string; password: string }>;
   mirror(options: MirrorImageOptions): Promise<MirrorImageResult>;
@@ -389,13 +398,20 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
     },
     getStack,
     async deployStack(input) {
-      const parameters = [
-        { ParameterKey: 'InstallationName', ParameterValue: input.installationName },
-        { ParameterKey: 'ImageUri', ParameterValue: input.imageUri },
-        { ParameterKey: 'ImageArchitecture', ParameterValue: input.architecture },
-        { ParameterKey: 'SystemRoleMode', ParameterValue: input.systemRoleMode ?? 'scoped' },
-      ];
       const current = await getStack(input.stackName);
+      const parameters =
+        current.exists && input.preserveParameters
+          ? operatorBaselineParameters(current, input)
+          : [
+              { ParameterKey: 'InstallationName', ParameterValue: input.installationName },
+              { ParameterKey: 'ImageUri', ParameterValue: input.imageUri },
+              { ParameterKey: 'ImageArchitecture', ParameterValue: input.architecture },
+              { ParameterKey: 'SystemRoleMode', ParameterValue: input.systemRoleMode ?? 'scoped' },
+              {
+                ParameterKey: 'SelfUpdatePolicy',
+                ParameterValue: input.selfUpdatePolicy ?? current.parameters.SelfUpdatePolicy ?? 'off',
+              },
+            ];
       if (!current.exists) {
         await cloudFormation.send(
           new CreateStackCommand({
@@ -535,4 +551,33 @@ export function createAwsCloudInstallDependencies(options: AwsCloudInstallAdapte
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log: options.log ?? (() => undefined),
   };
+}
+
+function operatorBaselineParameters(
+  current: StackSnapshot,
+  input: {
+    installationName: string;
+    imageUri: string;
+    architecture: ImageArchitecture;
+    systemRoleMode?: SystemRoleMode;
+    selfUpdatePolicy?: SelfUpdatePolicy;
+  }
+): Parameter[] {
+  const previousOr = (key: string, fallback: string): Parameter =>
+    current.parameters[key]
+      ? { ParameterKey: key, UsePreviousValue: true }
+      : { ParameterKey: key, ParameterValue: fallback };
+  return [
+    previousOr('InstallationName', input.installationName),
+    // ImageUri is deliberately explicit so an operator policy change can
+    // never blank or retag the running control-plane image.
+    { ParameterKey: 'ImageUri', ParameterValue: input.imageUri },
+    previousOr('ImageArchitecture', input.architecture),
+    input.systemRoleMode
+      ? { ParameterKey: 'SystemRoleMode', ParameterValue: input.systemRoleMode }
+      : previousOr('SystemRoleMode', 'scoped'),
+    input.selfUpdatePolicy
+      ? { ParameterKey: 'SelfUpdatePolicy', ParameterValue: input.selfUpdatePolicy }
+      : previousOr('SelfUpdatePolicy', 'off'),
+  ];
 }

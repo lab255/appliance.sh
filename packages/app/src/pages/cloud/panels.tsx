@@ -254,6 +254,30 @@ export function CloudFormationLifecycleHandoff({ cluster, desktop }: { cluster: 
   );
 }
 
+export function SelfUpdateAvailableNotice({
+  version,
+  busy,
+  onUpdate,
+}: {
+  version: string;
+  busy: boolean;
+  onUpdate: () => void;
+}) {
+  return (
+    <Banner
+      tone="info"
+      title={`Update available (v${version})`}
+      action={
+        <Button size="sm" onClick={onUpdate} disabled={busy}>
+          {busy ? 'Updating…' : 'Update now'}
+        </Button>
+      }
+    >
+      This signed image release was found by the scheduled notify check.
+    </Banner>
+  );
+}
+
 export function defaultSelfUpdateTarget(
   latestVersion: string | null,
   runningVersion: string | null,
@@ -461,6 +485,8 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
     retry: false,
   });
   const runningVersion = clusterInfoQuery.data?.serverVersion ?? clusterInfoQuery.data?.version ?? null;
+  const scheduledAvailable =
+    clusterInfoQuery.data?.selfUpdate?.policy === 'notify' ? clusterInfoQuery.data.selfUpdate.available : undefined;
 
   // Latest semver tag on ghcr.io/appliance-sh/api-server. Best-effort:
   // if the lookup fails (no network, package private, etc.) the user
@@ -524,8 +550,8 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
   }, [baseConfigJson]);
   const overrideValid = !clusterInfoUnavailable || parsedOverride !== null;
 
-  const onRun = async () => {
-    if (!targetValid) return;
+  const onRun = async (requestedVersion = targetVersion) => {
+    if (!/^\d+\.\d+\.\d+$/.test(requestedVersion)) return;
     if (!cloudFormation && !overrideValid) return;
     if (!cloudFormation && !host.bootstrap?.updateApiServer) return;
     if (!client || !apiKey) {
@@ -539,7 +565,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
     setRollbackMessage(null);
     try {
       if (cloudFormation) {
-        const update = await runDesktopCloudSelfUpdate(client, targetVersion, {
+        const update = await runDesktopCloudSelfUpdate(client, requestedVersion, {
           idempotencyKey: `desktop-cloud-update-${crypto.randomUUID()}`,
           intervalMs: 2_000,
           onPhase: (job) => setLogs((prev) => [...prev, selfUpdatePhaseMessage(job)]),
@@ -561,7 +587,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
         {
           apiServerUrl: cluster.apiServerUrl,
           apiKey,
-          targetVersion,
+          targetVersion: requestedVersion,
           awsProfile: awsProfile || undefined,
           baseConfigOverride: clusterInfoUnavailable ? (parsedOverride ?? undefined) : undefined,
         },
@@ -629,6 +655,17 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
           </div>
         </div>
       </div>
+
+      {cloudFormation && scheduledAvailable ? (
+        <SelfUpdateAvailableNotice
+          version={scheduledAvailable.version}
+          busy={status === 'running'}
+          onUpdate={() => {
+            setTargetVersion(scheduledAvailable.version);
+            void onRun(scheduledAvailable.version);
+          }}
+        />
+      ) : null}
 
       {!cloudFormation && clusterInfoUnavailable ? (
         <label className="block space-y-1 text-xs">
@@ -707,7 +744,7 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
       <div className="flex items-center gap-2">
         <Button
           size="sm"
-          onClick={onRun}
+          onClick={() => void onRun()}
           disabled={
             status === 'running' ||
             !targetValid ||

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { HostProvider } from '@/providers/host-provider';
 import type { Cluster, ConsoleHost } from '@/lib/host';
-import { CloudFormationLifecycleHandoff, defaultSelfUpdateTarget } from './panels';
+import { CloudFormationLifecycleHandoff, defaultSelfUpdateTarget, SelfUpdateAvailableNotice } from './panels';
 
 const cluster: Cluster = {
   id: 'cloud-1',
@@ -51,5 +51,14 @@ describe('CloudFormation update handoff', () => {
     expect(html).not.toContain('appliance cloud update</');
     expect(html).not.toContain('AWS profile');
     expect(html).toContain('Target version');
+  });
+
+  it('renders notify-mode update copy with an explicit route-backed action', () => {
+    const html = renderToStaticMarkup(
+      <SelfUpdateAvailableNotice version="1.58.0" busy={false} onUpdate={() => undefined} />
+    );
+    expect(html).toContain('Update available (v1.58.0)');
+    expect(html).toContain('Update now');
+    expect(html).toContain('scheduled notify check');
   });
 });

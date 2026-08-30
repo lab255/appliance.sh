@@ -16,7 +16,7 @@ import {
   type CloudInstallDependencies,
   type StackSnapshot,
 } from './cloud-install.js';
-import type { CloudInstallProfileMetadata, ImageArchitecture, SystemRoleMode } from './types.js';
+import type { CloudInstallProfileMetadata, ImageArchitecture, SelfUpdatePolicy, SystemRoleMode } from './types.js';
 
 export interface CloudLifecycleProfile extends CloudInstallProfileMetadata {
   apiUrl: string;
@@ -38,6 +38,7 @@ export interface CloudBaselineUpdateOptions {
   profile: CloudLifecycleProfile;
   installationName?: string;
   systemRoleMode?: SystemRoleMode;
+  selfUpdatePolicy?: SelfUpdatePolicy;
   healthTimeoutMs?: number;
   healthPollMs?: number;
 }
@@ -145,6 +146,10 @@ export async function runCloudSystemUpdate(
     imageUri: mirrored.imageUri,
     architecture,
     systemRoleMode: stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped',
+    selfUpdatePolicy:
+      stack.parameters.SelfUpdatePolicy === 'notify' || stack.parameters.SelfUpdatePolicy === 'auto'
+        ? stack.parameters.SelfUpdatePolicy
+        : 'off',
   });
   await syncPermissionsBoundary(deps, updated);
   try {
@@ -217,7 +222,9 @@ export async function runCloudBaselineUpdate(
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: stack.parameters.ImageUri,
     architecture: stack.parameters.ImageArchitecture === 'arm64' ? 'arm64' : 'x86_64',
-    systemRoleMode: options.systemRoleMode ?? (stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped'),
+    ...(options.systemRoleMode ? { systemRoleMode: options.systemRoleMode } : {}),
+    ...(options.selfUpdatePolicy ? { selfUpdatePolicy: options.selfUpdatePolicy } : {}),
+    preserveParameters: true,
   });
   await syncPermissionsBoundary(deps, updated);
   try {

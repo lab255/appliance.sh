@@ -115,6 +115,8 @@ describe('appliance umbrella routing', () => {
     expect(result.stdout).toContain('--follow <jobId>');
     expect(result.stdout).toContain('--json');
     expect(result.stdout).toContain('--local');
+    expect(result.stdout).toContain('--policy <policy>');
+    expect(result.stdout).toContain('off, notify, or auto');
     expect(result.stdout).toContain('break glass');
   });
 
@@ -123,6 +125,16 @@ describe('appliance umbrella routing', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('--local has no job record; omit --json');
     expect(result.stderr).not.toContain('at run');
+  });
+
+  it('validates the scheduled cloud update policy before profile or AWS access', () => {
+    const invalid = appliance('cloud', 'update', '--policy', 'always');
+    expect(invalid.status).toBe(1);
+    expect(invalid.stderr).toContain('--policy must be off, notify, or auto');
+
+    const mixed = appliance('cloud', 'update', '--policy', 'notify', '--json');
+    expect(mixed.status).toBe(1);
+    expect(mixed.stderr).toContain('--policy cannot be combined');
   });
 
   it('requires explicit confirmation before restoring AdministratorAccess', () => {
