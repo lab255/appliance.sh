@@ -463,8 +463,7 @@ export function compareVersionStamp(
     };
   }
   const pinnedKeys = Object.keys(releaseTrust.keys);
-  const recognizedKey =
-    signingKeyId !== null && Object.prototype.hasOwnProperty.call(releaseTrust.keys, signingKeyId);
+  const recognizedKey = signingKeyId !== null && Object.prototype.hasOwnProperty.call(releaseTrust.keys, signingKeyId);
   const trustDetail = recognizedKey
     ? `staged asset signed by keyId ${signingKeyId}`
     : signingKeyId
