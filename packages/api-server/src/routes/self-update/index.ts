@@ -60,7 +60,13 @@ export function createSelfUpdateRoutes(resolveService: () => SelfUpdateService =
       const code = trustErrorCode(error);
       if (code) {
         logger.warn('self-update release rejected', { requestId: req.requestId, keyId: req.apiKeyId, code });
-        res.status(400).json({ error: 'Release evidence rejected', code });
+        res.status(400).json({
+          error:
+            code === 'unknown-key'
+              ? 'Release signing trust is not provisioned; AP-226 must pin the production key'
+              : 'Release evidence rejected',
+          code,
+        });
         return;
       }
       logger.error('create self-update job failed', redactSelfUpdateError(error), {

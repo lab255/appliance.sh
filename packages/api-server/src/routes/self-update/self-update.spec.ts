@@ -124,6 +124,18 @@ describe('self-update routes', () => {
     expect(service.create).not.toHaveBeenCalled();
   });
 
+  it('returns AP-226 guidance when production release trust has no pinned key', async () => {
+    service.create.mockRejectedValueOnce(Object.assign(new Error('not provisioned'), { code: 'unknown-key' }));
+    const response = await request(appFor(service, 'admin', 'default'))
+      .post('/api/v1/self-update')
+      .send({ targetDigest: digest, release: { payload: {}, envelope: {} } });
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Release signing trust is not provisioned; AP-226 must pin the production key',
+      code: 'unknown-key',
+    });
+  });
+
   it('redacts the complete CU1 sensitive error set', () => {
     const error = redactSelfUpdateError(
       new Error(

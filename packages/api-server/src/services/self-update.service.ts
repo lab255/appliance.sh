@@ -1,7 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { signRequest, z, type SigningCredentials } from '@appliance.sh/sdk';
+import {
+  PINNED_RELEASE_TRUST,
+  signRequest,
+  verifyReleaseEnvelope,
+  z,
+  type ReleaseEnvelope,
+  type SigningCredentials,
+} from '@appliance.sh/sdk';
 import { getStorageService, type StorageService } from './storage.service';
-import { verifyProductionRelease, type ControlPlaneRelease, type ReleaseVerifier } from './release-trust.adapter';
 import { logger } from '../logger';
 
 export const SELF_UPDATE_JOBS = 'self-update-jobs';
@@ -51,7 +57,7 @@ export interface SelfUpdateJob {
   targetVersion: string;
   generation: number;
   sourceImage: string;
-  release: { payload: ControlPlaneRelease; envelope: unknown; verifiedAt: string };
+  release: { payload: ReleaseEnvelope; envelope: unknown; verifiedAt: string };
   lease: SelfUpdateLease;
   createdAt: string;
   updatedAt: string;
@@ -143,6 +149,8 @@ export interface SelfUpdateServiceDependencies {
   now?: () => Date;
 }
 
+export type ReleaseVerifier = typeof verifyReleaseEnvelope;
+
 export class SelfUpdateService {
   private readonly storage: StorageService;
   private readonly verifier: ReleaseVerifier;
@@ -151,7 +159,7 @@ export class SelfUpdateService {
 
   constructor(deps: SelfUpdateServiceDependencies = {}) {
     this.storage = deps.storage ?? getStorageService();
-    this.verifier = deps.verifier ?? verifyProductionRelease;
+    this.verifier = deps.verifier ?? verifyReleaseEnvelope;
     this.dispatcher = deps.dispatcher ?? new HttpSelfUpdateDispatcher();
     this.now = deps.now ?? (() => new Date());
   }
@@ -162,7 +170,7 @@ export class SelfUpdateService {
     idempotencyKey?: string
   ): Promise<{ job: SelfUpdateJob; reused: boolean }> {
     const initialState = await this.getControlState();
-    const verified = await this.verifier(input.release.payload, input.release.envelope, {
+    const verified = await this.verifier(input.release.payload, input.release.envelope, PINNED_RELEASE_TRUST, {
       now: this.now(),
       highestGeneration: initialState.value.highestGeneration,
     });
@@ -208,7 +216,7 @@ export class SelfUpdateService {
       const current = await this.getControlState();
       if (current.value.highestGeneration > verified.payload.generation) {
         await this.storage.delete(SELF_UPDATE_JOBS, job.id);
-        await this.verifier(input.release.payload, input.release.envelope, {
+        await this.verifier(input.release.payload, input.release.envelope, PINNED_RELEASE_TRUST, {
           now: this.now(),
           highestGeneration: current.value.highestGeneration,
         });

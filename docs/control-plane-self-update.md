@@ -8,9 +8,9 @@ image/binary only. Cloud baseline changes remain operator-side in `runCloudBasel
 The cloud server now exposes owner-admin signed POST/GET self-update routes, persists idempotent CAS-leased jobs in the ObjectStore,
 re-signs job-id-only worker dispatch, independently verifies production release evidence, mirrors the bound digest with pinned crane,
 and performs previous-template `ImageUri`-only CloudFormation update/recovery. Scoped self-update and CloudFormation service roles plus
-the protected-resource stack policy bound the mutation surface. The AP-225 adapter fails closed until MV0's production trust exports
-are present; CU2 only re-points the CLI/desktop/SDK to these routes and supplies signed release evidence. CU1 does not change existing
-client triggers.
+the protected-resource stack policy bound the mutation surface. Both route and worker call MV0's `verifyReleaseEnvelope` directly with
+`PINNED_RELEASE_TRUST`; its intentionally empty key set fails closed with AP-226 guidance. CU2 only re-points the CLI/desktop/SDK to
+these routes and supplies signed release evidence. CU1 does not change existing client triggers.
 
 Owner live proof, on a disposable installation:
 

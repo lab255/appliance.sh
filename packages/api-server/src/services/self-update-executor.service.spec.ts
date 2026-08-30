@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ObjectStore, VersionedObject } from '@appliance.sh/sdk';
+import type { ObjectStore, ReleaseEnvelope, ReleaseSignatureEnvelope, VersionedObject } from '@appliance.sh/sdk';
 import { StorageService } from './storage.service';
-import { SelfUpdateService, type SelfUpdateDispatcher } from './self-update.service';
+import { SelfUpdateService, type ReleaseVerifier, type SelfUpdateDispatcher } from './self-update.service';
 import {
   buildImageOnlyUpdate,
   craneCommand,
@@ -11,7 +11,6 @@ import {
   type SelfUpdateStack,
   type SelfUpdateStackRequest,
 } from './self-update-executor.service';
-import type { ControlPlaneRelease, ReleaseVerifier } from './release-trust.adapter';
 
 class MemoryStore implements ObjectStore {
   private readonly values = new Map<string, { value: string; version: number }>();
@@ -47,7 +46,7 @@ class MemoryStore implements ObjectStore {
 
 const digest = `sha256:${'a'.repeat(64)}`;
 const oldDigest = `sha256:${'b'.repeat(64)}`;
-const release: ControlPlaneRelease = {
+const release: ReleaseEnvelope = {
   kind: 'control-plane-release',
   version: '1.58.0',
   generation: 5,
@@ -150,8 +149,8 @@ describe('SelfUpdateExecutor', () => {
     now = { value: Date.parse('2026-08-30T00:00:00.000Z') };
     dispatcher = { dispatch: vi.fn().mockResolvedValue(undefined) };
     verifier = vi.fn(async (payload, envelope) => ({
-      payload: payload as ControlPlaneRelease,
-      envelope,
+      payload: payload as ReleaseEnvelope,
+      envelope: envelope as ReleaseSignatureEnvelope,
       verifiedAt: new Date(now.value).toISOString(),
     }));
     jobs = new SelfUpdateService({

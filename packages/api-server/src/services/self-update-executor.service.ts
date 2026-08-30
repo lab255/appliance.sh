@@ -11,8 +11,13 @@ import {
 } from '@aws-sdk/client-cloudformation';
 import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
-import { getSelfUpdateService, type SelfUpdateJob, type SelfUpdateService } from './self-update.service';
-import { verifyProductionRelease, type ReleaseVerifier } from './release-trust.adapter';
+import { PINNED_RELEASE_TRUST, verifyReleaseEnvelope } from '@appliance.sh/sdk';
+import {
+  getSelfUpdateService,
+  type ReleaseVerifier,
+  type SelfUpdateJob,
+  type SelfUpdateService,
+} from './self-update.service';
 import { redactSelfUpdateError } from '../routes/self-update';
 import { logger } from '../logger';
 
@@ -218,7 +223,7 @@ export class SelfUpdateExecutor {
 
   constructor(options: SelfUpdateExecutorOptions = {}) {
     this.jobs = options.jobs ?? getSelfUpdateService();
-    this.verifier = options.verifier ?? verifyProductionRelease;
+    this.verifier = options.verifier ?? verifyReleaseEnvelope;
     this.aws = options.aws ?? createAwsSelfUpdateDependencies();
   }
 
@@ -231,7 +236,7 @@ export class SelfUpdateExecutor {
     if (isTerminal(job)) return 'complete';
 
     try {
-      const verified = await this.verifier(job.release.payload, job.release.envelope, {
+      const verified = await this.verifier(job.release.payload, job.release.envelope, PINNED_RELEASE_TRUST, {
         now: this.aws.now(),
         highestGeneration: job.generation,
       });

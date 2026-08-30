@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ObjectStore, VersionedObject } from '@appliance.sh/sdk';
+import type { ObjectStore, ReleaseEnvelope, ReleaseSignatureEnvelope, VersionedObject } from '@appliance.sh/sdk';
 import { StorageService } from './storage.service';
 import {
   SELF_UPDATE_CONTROL,
@@ -9,8 +9,8 @@ import {
   SelfUpdateConflictError,
   SelfUpdateService,
   type SelfUpdateDispatcher,
+  type ReleaseVerifier,
 } from './self-update.service';
-import type { ControlPlaneRelease, ReleaseVerifier } from './release-trust.adapter';
 
 class MemoryStore implements ObjectStore {
   readonly values = new Map<string, { value: string; version: number }>();
@@ -46,7 +46,7 @@ class MemoryStore implements ObjectStore {
 }
 
 const digest = `sha256:${'a'.repeat(64)}`;
-const payload: ControlPlaneRelease = {
+const payload: ReleaseEnvelope = {
   kind: 'control-plane-release',
   version: '1.58.0',
   generation: 4,
@@ -60,7 +60,7 @@ const payload: ControlPlaneRelease = {
   image: { repository: 'ghcr.io/lab255/appliance-api-server', manifestDigest: digest },
 };
 
-function evidence(overrides: Partial<ControlPlaneRelease> = {}) {
+function evidence(overrides: Partial<ReleaseEnvelope> = {}) {
   return { targetDigest: digest, release: { payload: { ...payload, ...overrides }, envelope: { fixture: true } } };
 }
 
@@ -77,14 +77,18 @@ describe('SelfUpdateService durable route state', () => {
     storage = new StorageService(store);
     nowMs = Date.parse('2026-08-30T00:00:00.000Z');
     dispatcher = { dispatch: vi.fn().mockResolvedValue(undefined) };
-    verifier = vi.fn(async (untrusted, envelope, options) => {
-      const release = untrusted as ControlPlaneRelease;
+    verifier = vi.fn(async (untrusted, envelope, _trust, options) => {
+      const release = untrusted as ReleaseEnvelope;
       const failure = (envelope as { failure?: string }).failure;
       if (failure) throw Object.assign(new Error(failure), { code: failure });
       if (release.generation < (options?.highestGeneration ?? 0)) {
         throw Object.assign(new Error('generation rollback'), { code: 'generation-below-floor' });
       }
-      return { payload: release, envelope, verifiedAt: new Date(nowMs).toISOString() };
+      return {
+        payload: release,
+        envelope: envelope as ReleaseSignatureEnvelope,
+        verifiedAt: new Date(nowMs).toISOString(),
+      };
     });
     service = new SelfUpdateService({ storage, dispatcher, verifier, now: () => new Date(nowMs) });
   });
@@ -184,6 +188,29 @@ describe('SelfUpdateService durable route state', () => {
       expect(dispatcher.dispatch).not.toHaveBeenCalled();
     }
   );
+
+  it('fails closed against the empty production pin set with AP-226 guidance', async () => {
+    const productionService = new SelfUpdateService({ storage, dispatcher, now: () => new Date(nowMs) });
+    await expect(
+      productionService.create(
+        {
+          targetDigest: digest,
+          release: {
+            payload,
+            envelope: {
+              alg: 'ed25519',
+              keyId: `ed25519:sha256:${'4'.repeat(64)}`,
+              role: 'control-plane-release',
+              sig: 'AA',
+            },
+          },
+        },
+        { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
+        'production-pins-empty'
+      )
+    ).rejects.toMatchObject({ code: 'unknown-key', message: expect.stringContaining('AP-226') });
+    expect([...store.values.keys()].filter((key) => key.startsWith(`${SELF_UPDATE_JOBS}/`))).toEqual([]);
+  });
 
   it('rejects signed digest mismatch before creating a job', async () => {
     await expect(
