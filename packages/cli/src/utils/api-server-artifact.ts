@@ -105,6 +105,14 @@ export async function ensureApiServerArtifacts(options: { allowUnsigned?: boolea
     );
     override = undefined;
   }
+  if (override && isReleaseBuild()) {
+    if (!options.allowUnsigned) {
+      throw new Error(
+        'APPLIANCE_API_SERVER_BINARY is a development-only override in release builds; pass --allow-unsigned to acknowledge the risk explicitly'
+      );
+    }
+    warnUnsigned('APPLIANCE_API_SERVER_BINARY override');
+  }
   // Release/repo staging is keyed by the SDK version, but an override
   // binary changes without a version bump (desktop dev builds), so its
   // stamp carries the source file's identity instead — a matching
@@ -124,12 +132,6 @@ export async function ensureApiServerArtifacts(options: { allowUnsigned?: boolea
   ensurePrivateDirectory(guestAssetsDir());
 
   if (override) {
-    if (isReleaseBuild() && !options.allowUnsigned) {
-      throw new Error(
-        'APPLIANCE_API_SERVER_BINARY is a development-only override in release builds; pass --allow-unsigned to acknowledge the risk explicitly'
-      );
-    }
-    if (isReleaseBuild()) warnUnsigned('APPLIANCE_API_SERVER_BINARY override');
     console.log(chalk.cyan(`» staging api-server guest binary from ${override}`));
     atomicStageFile(stagedBinaryPath(), fs.readFileSync(override));
     // Console bundle: staged when a tarball ships next to the override

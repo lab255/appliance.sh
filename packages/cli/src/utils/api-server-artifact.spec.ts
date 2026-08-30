@@ -135,6 +135,16 @@ describe('ensureApiServerArtifacts with APPLIANCE_API_SERVER_BINARY', () => {
     process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('bin');
     await expect(ensureApiServerArtifacts()).rejects.toThrow('development-only override');
   });
+
+  it('never lets a matching override stamp bypass release-build acknowledgement', async () => {
+    process.env.APPLIANCE_API_SERVER_BINARY = overrideBinary('bin');
+    await ensureApiServerArtifacts({ allowUnsigned: true });
+
+    vi.mocked(console.warn).mockClear();
+    await expect(ensureApiServerArtifacts()).rejects.toThrow('development-only override');
+    await expect(ensureApiServerArtifacts({ allowUnsigned: true })).resolves.toBeUndefined();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('APPLIANCE_API_SERVER_BINARY override'));
+  });
 });
 
 describe('stageFromRelease signed metadata gate', () => {
