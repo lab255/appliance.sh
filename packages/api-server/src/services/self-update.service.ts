@@ -13,6 +13,8 @@ import {
 } from '@appliance.sh/sdk';
 import { getStorageService, type StorageService } from './storage.service';
 import { logger } from '../logger';
+import { DEFAULT_TENANT } from './tenant-context';
+import { redactSelfUpdateError } from './self-update-redaction';
 
 export const SELF_UPDATE_JOBS = 'self-update-jobs';
 export const SELF_UPDATE_CONTROL = 'self-update-control';
@@ -21,6 +23,20 @@ const CONTROL_ID = 'cloud';
 const LEASE_MS = 60_000;
 const DISPATCH_TIMEOUT_MS = 5_000;
 const MAX_CAS_ATTEMPTS = 12;
+
+/**
+ * Reserved in-process principal for EventBridge checks. It is deliberately
+ * not stored in api-keys and its placeholder secret is never used to sign an
+ * HTTP request: HttpSelfUpdateDispatcher keeps this caller on the worker and
+ * hands the persisted job id to the same executor used by the signed route.
+ */
+export const SYSTEM_SCHEDULED_SELF_UPDATE_CALLER = Object.freeze({
+  keyId: 'system-self-update-scheduler',
+  tenantId: DEFAULT_TENANT,
+  role: 'admin' as const,
+  kind: 'system' as const,
+  secret: 'local-dispatch-only',
+});
 
 export const selfUpdateRequestSchema = z.strictObject({
   targetDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
@@ -102,6 +118,11 @@ export interface SelfUpdateDispatcher {
 
 export class HttpSelfUpdateDispatcher implements SelfUpdateDispatcher {
   async dispatch(jobId: string, caller: SigningCredentials): Promise<void> {
+    if (caller.keyId === SYSTEM_SCHEDULED_SELF_UPDATE_CALLER.keyId) {
+      const { getSelfUpdateExecutor } = await import('./self-update-executor.service.js');
+      await getSelfUpdateExecutor().execute(jobId);
+      return;
+    }
     const workerUrl = process.env.WORKER_URL;
     if (!workerUrl) throw new Error('WORKER_URL is required for cloud self-update');
     const url = `${workerUrl.replace(/\/$/, '')}/api/internal/jobs/self-update`;
@@ -422,7 +443,10 @@ export class SelfUpdateService {
     try {
       await this.dispatcher.dispatch(job.id, caller);
     } catch (error) {
-      logger.error('self-update worker dispatch failed', error, { jobId: job.id, phase: job.phase });
+      logger.error('self-update worker dispatch failed', redactSelfUpdateError(error), {
+        jobId: job.id,
+        phase: job.phase,
+      });
       await this.finish(job.id, {
         status: 'failed',
         recovered: false,
@@ -436,7 +460,7 @@ export class SelfUpdateService {
     try {
       await this.dispatcher.dispatch(job.id, caller);
     } catch (error) {
-      logger.error('self-update worker resume dispatch failed; job remains resumable', error, {
+      logger.error('self-update worker resume dispatch failed; job remains resumable', redactSelfUpdateError(error), {
         jobId: job.id,
         phase: job.phase,
       });

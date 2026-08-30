@@ -6,6 +6,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { VERSION } from '@appliance.sh/sdk';
 import { clusterInfoRoutes } from './index';
+import {
+  resetSelfUpdateSchedulerServiceForTests,
+  setSelfUpdateSchedulerServiceForTests,
+} from '../../services/self-update-scheduler.service';
 
 function createTestApp() {
   const app = express();
@@ -24,10 +28,32 @@ describe('GET /api/v1/cluster-info', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    setSelfUpdateSchedulerServiceForTests({ getAvailable: async () => null } as never);
   });
 
   afterEach(() => {
     process.env = originalEnv;
+    resetSelfUpdateSchedulerServiceForTests();
+  });
+
+  it('surfaces policy and only the non-sensitive notify marker fields', async () => {
+    process.env.APPLIANCE_BASE_CONFIG = JSON.stringify(K8S_BASE);
+    process.env.SELF_UPDATE_POLICY = 'notify';
+    setSelfUpdateSchedulerServiceForTests({
+      getAvailable: async () => ({
+        version: '1.58.0',
+        digest: `sha256:${'a'.repeat(64)}`,
+        generation: 8,
+        seenAt: '2026-08-31T00:00:00.000Z',
+      }),
+    } as never);
+
+    const res = await request(createTestApp()).get('/api/v1/cluster-info');
+
+    expect(res.status).toBe(200);
+    expect(res.body.selfUpdate).toEqual({ policy: 'notify', available: { version: '1.58.0', generation: 8 } });
+    expect(res.text).not.toContain('sha256:');
+    expect(res.text).not.toContain('seenAt');
   });
 
   it('reports serverVersion and uploadBuilds=true on a kubernetes base with a builder', async () => {

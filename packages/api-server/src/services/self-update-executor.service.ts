@@ -18,7 +18,7 @@ import {
   type SelfUpdateJob,
   type SelfUpdateService,
 } from './self-update.service';
-import { redactSelfUpdateError } from '../routes/self-update';
+import { redactSelfUpdateError } from './self-update-redaction';
 import { logger } from '../logger';
 
 const POLL_MS = 5_000;

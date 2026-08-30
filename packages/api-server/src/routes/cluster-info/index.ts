@@ -5,6 +5,12 @@ import { getConsoleMode, getExternalConsoleUrl, type ConsoleMode } from '../../c
 import { supportsUploadBuilds } from '../../services/build-upload.service';
 import { logger } from '../../logger';
 import { requireBaseConfigSnapshot } from '../../services/base-config.service';
+import {
+  getSelfUpdateSchedulerService,
+  selfUpdatePolicy,
+  type SelfUpdateAvailableMarker,
+} from '../../services/self-update-scheduler.service';
+import { redactSelfUpdateError } from '../../services/self-update-redaction';
 
 export interface ClusterInfo {
   /**
@@ -62,6 +68,11 @@ export interface ClusterInfo {
    * warnings.
    */
   warnings?: string[];
+  /** Scheduled cloud image update policy and signed notify marker. */
+  selfUpdate: {
+    policy: 'off' | 'notify' | 'auto';
+    available?: { version: string; generation: number };
+  };
 }
 
 /**
@@ -86,6 +97,17 @@ function readWarnings(): string[] | undefined {
   }
 }
 
+async function readAvailableMarker(): Promise<SelfUpdateAvailableMarker | null> {
+  try {
+    return await getSelfUpdateSchedulerService().getAvailable();
+  } catch (error) {
+    logger.warn('cluster-info self-update marker unavailable', {
+      error: redactSelfUpdateError(error).message,
+    });
+    return null;
+  }
+}
+
 export const clusterInfoRoutes: Router = Router();
 
 clusterInfoRoutes.get('/', async (req, res) => {
@@ -93,6 +115,8 @@ clusterInfoRoutes.get('/', async (req, res) => {
     const baseConfig = requireBaseConfigSnapshot();
     const externalUrl = getExternalConsoleUrl();
     const warnings = readWarnings();
+    const policy = selfUpdatePolicy();
+    const available = policy === 'notify' ? await readAvailableMarker() : null;
     const body: ClusterInfo = {
       version: VERSION,
       // The RESPONSE copy is sanitized; `baseConfig` itself (the full
@@ -104,6 +128,10 @@ clusterInfoRoutes.get('/', async (req, res) => {
       minClientVersion: MIN_CLIENT_VERSION,
       capabilities: { uploadBuilds: supportsUploadBuilds(baseConfig) },
       ...(warnings ? { warnings } : {}),
+      selfUpdate: {
+        policy,
+        ...(available ? { available: { version: available.version, generation: available.generation } } : {}),
+      },
     };
     res.json(body);
   } catch (error) {

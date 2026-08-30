@@ -20,6 +20,10 @@ vi.mock('../../services/invite.service', () => ({
 }));
 
 import { bootstrapRoutes } from './index';
+import {
+  resetSelfUpdateSchedulerServiceForTests,
+  setSelfUpdateSchedulerServiceForTests,
+} from '../../services/self-update-scheduler.service';
 
 function createTestApp() {
   const app = express();
@@ -35,10 +39,12 @@ describe('Bootstrap routes', () => {
     vi.resetAllMocks();
     mockApiKeyService.exists.mockResolvedValue(false);
     process.env = { ...originalEnv, BOOTSTRAP_TOKEN: 'test-token-123' };
+    setSelfUpdateSchedulerServiceForTests({ getAvailable: async () => null } as never);
   });
 
   afterEach(() => {
     process.env = originalEnv;
+    resetSelfUpdateSchedulerServiceForTests();
   });
 
   describe('POST /bootstrap/create-key', () => {
@@ -206,6 +212,26 @@ describe('Bootstrap routes', () => {
       // signed request, this route does not.
       expect(typeof res.body.serverVersion).toBe('string');
       expect(res.body.serverVersion.length).toBeGreaterThan(0);
+    });
+
+    it('exposes only an availability boolean on the unauthenticated probe', async () => {
+      process.env.SELF_UPDATE_POLICY = 'notify';
+      setSelfUpdateSchedulerServiceForTests({
+        getAvailable: async () => ({
+          version: '9.9.9',
+          digest: `sha256:${'a'.repeat(64)}`,
+          generation: 99,
+          seenAt: '2026-08-31T00:00:00.000Z',
+        }),
+      } as never);
+
+      const res = await request(createTestApp()).get('/bootstrap/status');
+
+      expect(res.status).toBe(200);
+      expect(res.body.selfUpdateAvailable).toBe(true);
+      expect(res.text).not.toContain('9.9.9');
+      expect(res.text).not.toContain('sha256:');
+      expect(res.text).not.toContain('generation');
     });
   });
 });

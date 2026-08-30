@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { executeDeployment, workerEventSchema } from '../../services/deployment-executor.service';
 import { getSelfUpdateService, selfUpdateWorkerEventSchema } from '../../services/self-update.service';
 import { getSelfUpdateExecutor } from '../../services/self-update-executor.service';
-import { redactSelfUpdateError } from '../self-update';
+import { redactSelfUpdateError } from '../../services/self-update-redaction';
 import { logger } from '../../logger';
 
 export const internalRoutes: Router = Router();
