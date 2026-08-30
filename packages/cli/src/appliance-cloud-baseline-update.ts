@@ -14,11 +14,18 @@ import { readProfiles, resolveProfile } from './utils/profile-store.js';
 const program = new Command();
 program
   .description('apply the current CloudFormation baseline while preserving the running ImageUri')
-  .option('--system-role-mode <mode>', 'system Lambda role mode: scoped or admin', 'scoped')
+  .option('--system-role-mode <mode>', 'system Lambda role mode: scoped or admin')
+  .option('-y, --yes', 'confirm the AdministratorAccess break-glass mode', false)
   .option('--aws-profile <name>', 'AWS credential profile')
-  .action(async (options: { systemRoleMode: string; awsProfile?: string }) => {
-    if (options.systemRoleMode !== 'scoped' && options.systemRoleMode !== 'admin') {
+  .action(async (options: { systemRoleMode?: string; yes: boolean; awsProfile?: string }) => {
+    if (options.systemRoleMode && options.systemRoleMode !== 'scoped' && options.systemRoleMode !== 'admin') {
       throw new Error('--system-role-mode must be scoped or admin');
+    }
+    if (options.systemRoleMode === 'admin') {
+      console.error(chalk.red.bold('WARNING: AdministratorAccess break-glass mode requested.'));
+      console.error(chalk.yellow('Both system Lambda execution roles will regain account-wide administrator access.'));
+      console.error(chalk.yellow('Restore with: appliance cloud baseline-update --system-role-mode scoped'));
+      if (!options.yes) throw new Error('Refusing AdministratorAccess without --yes confirmation');
     }
     const resolved = resolveProfile(readProfiles(), { override: getActiveProfileOverride() });
     if (!resolved) throw new Error('No active Appliance profile');
@@ -39,18 +46,20 @@ program
       writeProfile: () => undefined,
       log: (message) => console.log(chalk.dim(message)),
     });
-    await runCloudBaselineUpdate(
+    const updated = await runCloudBaselineUpdate(
       {
         profile: { ...profile, keyId: secret.keyId, secret: secret.secret } as never,
         installationName: resolved.name,
-        systemRoleMode: options.systemRoleMode as SystemRoleMode,
+        systemRoleMode: options.systemRoleMode as SystemRoleMode | undefined,
       },
       deps
     );
+    const resultingMode = updated.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped';
     console.log(
-      chalk.green(
-        `Baseline update complete. System Lambda roles are in ${options.systemRoleMode} mode; ImageUri was preserved.`
-      )
+      chalk.green(`Baseline update complete. System Lambda roles are in ${resultingMode} mode; ImageUri was preserved.`)
     );
+    if (resultingMode === 'admin') {
+      console.error(chalk.yellow('Restore with: appliance cloud baseline-update --system-role-mode scoped'));
+    }
   });
 program.parse(process.argv);

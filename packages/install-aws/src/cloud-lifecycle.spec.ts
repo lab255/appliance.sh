@@ -105,12 +105,32 @@ describe('CloudFormation lifecycle', () => {
       architecture: 'x86_64',
       systemRoleMode: 'admin',
     });
+    expect(deps.getBootstrapStatus).toHaveBeenCalledWith(profile.apiUrl);
   });
 
-  it('baseline update defaults the role mode to scoped', async () => {
+  it('baseline update preserves the stack role mode when the flag is omitted', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue({
+      ...stack,
+      parameters: { ...stack.parameters, SystemRoleMode: 'admin' },
+    });
+    await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
+    expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
+  });
+
+  it('baseline update defaults legacy stacks without the parameter to scoped', async () => {
     const deps = dependencies();
     await runCloudBaselineUpdate({ profile, installationName: 'prod' }, deps);
     expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'scoped' }));
+  });
+
+  it('baseline update reports the admin recovery command when post-update health fails', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getBootstrapStatus).mockRejectedValue(new Error('AccessDenied'));
+    await expect(
+      runCloudBaselineUpdate({ profile, installationName: 'prod', healthTimeoutMs: 1, healthPollMs: 0 }, deps)
+    ).rejects.toThrow('baseline-update --system-role-mode admin --yes');
+    expect(deps.deployStack).toHaveBeenCalledOnce();
   });
 
   it('destroys edge before CFN and reports retained resources', async () => {

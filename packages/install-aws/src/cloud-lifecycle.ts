@@ -30,6 +30,8 @@ export interface CloudBaselineUpdateOptions {
   profile: CloudLifecycleProfile;
   installationName?: string;
   systemRoleMode?: SystemRoleMode;
+  healthTimeoutMs?: number;
+  healthPollMs?: number;
 }
 
 export interface CloudTeardownResult {
@@ -121,14 +123,22 @@ export async function runCloudBaselineUpdate(
   const stack = await deps.getStack(options.profile.cloudFormationStackName);
   if (!stack.exists) throw new Error(`CloudFormation stack ${options.profile.cloudFormationStackName} does not exist`);
   if (!stack.parameters.ImageUri) throw new Error('CloudFormation stack has no ImageUri to preserve');
-  return deps.deployStack({
+  const updated = await deps.deployStack({
     stackName: options.profile.cloudFormationStackName,
     installationName:
       stack.parameters.InstallationName ?? options.installationName ?? profileInstallName(options.profile),
     imageUri: stack.parameters.ImageUri,
     architecture: stack.parameters.ImageArchitecture === 'arm64' ? 'arm64' : 'x86_64',
-    systemRoleMode: options.systemRoleMode ?? 'scoped',
+    systemRoleMode: options.systemRoleMode ?? (stack.parameters.SystemRoleMode === 'admin' ? 'admin' : 'scoped'),
   });
+  try {
+    await healthPoll(deps, options.profile.apiUrl, options.healthTimeoutMs, options.healthPollMs);
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}. If scoped IAM caused the outage, rerun with \`appliance cloud baseline-update --system-role-mode admin --yes\`.`
+    );
+  }
+  return updated;
 }
 
 function profileInstallName(profile: CloudLifecycleProfile): string {
