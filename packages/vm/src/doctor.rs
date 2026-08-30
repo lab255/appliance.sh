@@ -284,7 +284,7 @@ fn classify_seed_warning(detail: &str) -> Option<Finding> {
     if detail.is_empty() {
         return None;
     }
-    let refused = detail.contains("refused") || detail.contains("digest/size mismatch");
+    let refused = detail.contains("refused");
     Some(
         Finding::new(
             "engine:apiserver-seed",
@@ -548,6 +548,15 @@ mod tests {
     fn unsigned_pre_mv0_seed_marker_warns() {
         let finding = classify_seed_warning(
             "unsigned pre-MV0 control-plane seed accepted; self-update disabled",
+        )
+        .unwrap();
+        assert_eq!(finding.severity, Severity::Warn);
+    }
+
+    #[test]
+    fn console_only_seed_marker_warns_while_api_remains_available() {
+        let finding = classify_seed_warning(
+            "signed console bundle digest/size mismatch; console skipped (api-server remains headless)",
         )
         .unwrap();
         assert_eq!(finding.severity, Severity::Warn);
