@@ -246,6 +246,7 @@ Resources:
                     - iam:GetRole
                     - iam:GetRolePolicy
                     - iam:ListAttachedRolePolicies
+                    - iam:ListInstanceProfilesForRole
                     - iam:ListRolePolicies
                     - iam:PassRole
                     - iam:PutRolePolicy
@@ -264,6 +265,7 @@ Resources:
                     - iam:DeletePolicyVersion
                     - iam:GetPolicy
                     - iam:GetPolicyVersion
+                    - iam:ListPolicyTags
                     - iam:ListPolicyVersions
                     - iam:SetDefaultPolicyVersion
                     - iam:TagPolicy
@@ -380,32 +382,38 @@ Resources:
                     - logs:CreateLogGroup
                     - logs:DeleteLogGroup
                     - logs:DeleteRetentionPolicy
-                    - logs:DescribeLogGroups
                     - logs:ListTagsForResource
                     - logs:PutRetentionPolicy
                     - logs:TagResource
                     - logs:UntagResource
                   Resource: !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/appliance/*
-                # Delivery creation and lookup are account-scoped; destination/source mutation is scoped below.
-                - Sid: LogDeliveryAccountOperations
+                # Logs describe APIs enumerate regional account state and do not support resource ARNs.
+                - Sid: LogsAccountDiscovery
                   Effect: Allow
                   Action:
-                    - logs:CreateDelivery
-                    - logs:DeleteDelivery
-                    - logs:GetDelivery
-                    - logs:ListLogDeliveries
-                    - logs:UpdateDelivery
+                    - logs:DescribeDeliveries
+                    - logs:DescribeDeliveryDestinations
+                    - logs:DescribeDeliverySources
+                    - logs:DescribeLogGroups
                   Resource: '*'
                 - Sid: ApplianceLogDeliveryResources
                   Effect: Allow
                   Action:
+                    - logs:CreateDelivery
+                    - logs:DeleteDelivery
                     - logs:DeleteDeliveryDestination
                     - logs:DeleteDeliverySource
+                    - logs:GetDelivery
                     - logs:GetDeliveryDestination
                     - logs:GetDeliverySource
+                    - logs:ListTagsForResource
                     - logs:PutDeliveryDestination
                     - logs:PutDeliverySource
+                    - logs:TagResource
+                    - logs:UntagResource
+                    - logs:UpdateDeliveryConfiguration
                   Resource:
+                    - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery:*
                     - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-destination:*
                     - !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:delivery-source:*
           - !Ref AWS::NoValue

@@ -10,8 +10,12 @@ type PolicyStatement = {
 
 const document = YAML.parseDocument(APPLIANCE_CLOUDFORMATION_TEMPLATE);
 
+function toJson(path: (string | number)[]): unknown {
+  return (document.getIn(path) as { toJSON(): unknown }).toJSON();
+}
+
 function scopedPolicy(role: 'SystemApiServerRole' | 'SystemWorkerRole') {
-  const policies = document.getIn(['Resources', role, 'Properties', 'Policies'])?.toJSON() as [
+  const policies = toJson(['Resources', role, 'Properties', 'Policies']) as [
     string,
     { PolicyDocument: { Version: string; Statement: PolicyStatement[] } },
     string,
@@ -32,8 +36,8 @@ const WILDCARD_RESOURCE_JUSTIFICATIONS = {
   Route53CreateHostedZone: 'hosted-zone creation is account-scoped',
   // ACM cannot scope RequestCertificate to the ARN returned by that request.
   AcmRequestCertificate: 'certificate creation is account-scoped',
-  // CloudWatch Logs delivery CRUD/list APIs do not support resource-level permissions.
-  LogDeliveryAccountOperations: 'log delivery orchestration is account-scoped',
+  // CloudWatch Logs describe APIs enumerate account state and do not support resource-level permissions.
+  LogsAccountDiscovery: 'CloudWatch Logs discovery is account-scoped',
 } as const;
 
 describe('appliance CloudFormation template', () => {
@@ -52,9 +56,9 @@ describe('appliance CloudFormation template', () => {
 
   it('defaults to scoped roles and makes AdministratorAccess break-glass only', () => {
     expect(document.getIn(['Parameters', 'SystemRoleMode', 'Default'])).toBe('scoped');
-    expect(document.getIn(['Parameters', 'SystemRoleMode', 'AllowedValues'])?.toJSON()).toEqual(['scoped', 'admin']);
+    expect(toJson(['Parameters', 'SystemRoleMode', 'AllowedValues'])).toEqual(['scoped', 'admin']);
     for (const role of ['SystemApiServerRole', 'SystemWorkerRole'] as const) {
-      const arns = document.getIn(['Resources', role, 'Properties', 'ManagedPolicyArns'])?.toJSON();
+      const arns = toJson(['Resources', role, 'Properties', 'ManagedPolicyArns']);
       expect(arns).toEqual([
         'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
         ['UseAdminSystemRoles', 'arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess', 'AWS::NoValue'],
