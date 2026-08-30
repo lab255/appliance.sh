@@ -72,6 +72,9 @@ async function healthPoll(
 
 async function syncPermissionsBoundary(deps: CloudInstallDependencies, stack: StackSnapshot): Promise<void> {
   const outputs = resolveCloudOutputs(stack);
+  if (!outputs.userAppliancePermissionsBoundaryArn) {
+    throw new Error('Updated CloudFormation stack is missing required output UserAppliancePermissionsBoundaryArn');
+  }
   await deps.updateBaseConfigBoundary(
     outputs.dataBucketName,
     BASE_CONFIG_KEY,

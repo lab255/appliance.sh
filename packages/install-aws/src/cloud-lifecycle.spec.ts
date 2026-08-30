@@ -44,6 +44,11 @@ const stack = {
   },
 };
 
+function preCu0Stack() {
+  const { UserAppliancePermissionsBoundaryArn: _boundaryOutput, ...outputs } = stack.outputs;
+  return { ...stack, outputs };
+}
+
 function dependencies(): CloudLifecycleDependencies {
   return {
     getAccountId: vi.fn(async () => profile.awsAccountId),
@@ -111,6 +116,20 @@ describe('CloudFormation lifecycle', () => {
     expect(deps.deployStack).toHaveBeenCalledWith(expect.objectContaining({ systemRoleMode: 'admin' }));
   });
 
+  it('updates a pre-CU0 stack before requiring the new boundary output', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue(preCu0Stack());
+
+    await runCloudSystemUpdate({ profile, installationName: 'prod' }, deps);
+
+    expect(deps.deployStack).toHaveBeenCalledOnce();
+    expect(deps.updateBaseConfigBoundary).toHaveBeenCalledWith(
+      'data',
+      'system/base-config.json',
+      'arn:aws:iam::111111111111:policy/appliance-system/prod-user-appliance-boundary'
+    );
+  });
+
   it('baseline update preserves ImageUri and passes the selected role mode', async () => {
     const deps = dependencies();
     await runCloudBaselineUpdate({ profile, installationName: 'prod', systemRoleMode: 'admin' }, deps);
@@ -162,6 +181,14 @@ describe('CloudFormation lifecycle', () => {
       { kind: 'KMS key', value: 'arn:kms' },
       { kind: 'ECR repository', value: stack.outputs.ImageRepositoryUrl },
     ]);
+  });
+
+  it('tears down a pre-CU0 stack without requiring the boundary output', async () => {
+    const deps = dependencies();
+    vi.mocked(deps.getStack).mockResolvedValue(preCu0Stack());
+
+    await expect(runCloudTeardown(profile, deps)).resolves.toMatchObject({ retained: expect.any(Array) });
+    expect(deps.deleteStack).toHaveBeenCalledOnce();
   });
 
   it('never starts CFN deletion until resumable edge destruction has converged', async () => {

@@ -97,7 +97,7 @@ export function resolveCloudOutputs(snapshot: StackSnapshot): ApplianceCloudOutp
     apiServerRoleArn: output(snapshot, 'SystemApiServerRoleArn'),
     workerRoleArn: output(snapshot, 'SystemWorkerRoleArn'),
     bootstrapTokenSecretArn: output(snapshot, 'BootstrapTokenSecretArn'),
-    userAppliancePermissionsBoundaryArn: output(snapshot, 'UserAppliancePermissionsBoundaryArn'),
+    userAppliancePermissionsBoundaryArn: snapshot.outputs.UserAppliancePermissionsBoundaryArn,
   };
   if (snapshot.outputs.ApiServerFunctionUrl) {
     resolved.apiServer = {
@@ -121,6 +121,8 @@ export function substrateBaseConfig(
 ): Record<string, unknown> {
   if (!outputs.apiServer || !outputs.worker)
     throw new Error('System function outputs are unavailable before image deployment');
+  if (!outputs.userAppliancePermissionsBoundaryArn)
+    throw new Error('User appliance permissions boundary output is unavailable before the CU0 template update');
   return {
     name: installationName,
     type: ApplianceBaseType.ApplianceAwsPublic,
@@ -223,11 +225,18 @@ export async function runCloudInstall(
   const complete = await deps.deployStack({ ...options, imageUri: mirrored.imageUri });
   const outputs = resolveCloudOutputs(complete);
   const apiUrl = normalizeApiUrl(outputs.apiServer!.url);
-  await deps.writeBaseConfigIfAbsent(
+  const initializedBaseConfig = await deps.writeBaseConfigIfAbsent(
     outputs.dataBucketName,
     BASE_CONFIG_KEY,
     substrateBaseConfig(options.installationName, options.region, outputs)
   );
+  if (!initializedBaseConfig) {
+    await deps.updateBaseConfigBoundary(
+      outputs.dataBucketName,
+      BASE_CONFIG_KEY,
+      outputs.userAppliancePermissionsBoundaryArn!
+    );
+  }
 
   let status: { initialized: boolean };
   try {

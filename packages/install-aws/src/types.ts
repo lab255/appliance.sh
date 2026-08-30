@@ -19,7 +19,8 @@ export interface ApplianceCloudOutputs {
   apiServerRoleArn: string;
   workerRoleArn: string;
   bootstrapTokenSecretArn: string;
-  userAppliancePermissionsBoundaryArn: string;
+  /** Added by the CU0 template; absent from pre-1.58 stack snapshots. */
+  userAppliancePermissionsBoundaryArn?: string;
   apiServer?: SystemFunctionOutput;
   worker?: SystemFunctionOutput;
 }
