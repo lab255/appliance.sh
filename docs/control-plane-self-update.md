@@ -238,17 +238,33 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
 
 ## 5. microVM mechanism (MV1)
 
+**MV0 shipped (AP-225):** release assets now include `SHA256SUMS`, `control-plane-release.json`, and
+`control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
+The protected `release-signing` environment signs only when `APPLIANCE_RELEASE_SIGNING_KEY` exists; pre-AP-226 publishing remains unsigned.
+Create/restage verifies the envelope, generation, validity, version, architecture, size, and SHA-256 before its first write.
+VZ and WSL use verified hash/size and keyId sidecars without `jq`, and compare the sidecar keyId to the trust pin rendered explicitly
+by the CLI rather than deriving trust from media; AP-226 replaces the intentionally empty production pin set.
+
 MV0 first adds a `control-plane-release` envelope role and changes the workflow to publish `SHA256SUMS` plus its Ed25519/RFC-8785
 production release envelope covering both
 `appliance-api-server-linux-*`, `appliance-console.tar.gz`, and the GHCR manifest digest. It uses a new offline Appliance production
 key whose SHA-256 `keyId` is pinned separately from the RFC-0001 fixture. Reuse the catalogue verifier's canonical envelopes,
-generation floor/high-water protection, expiry, and signed blacklist. Key custody/rotation/revocation procedure is a separate owner
-card. Only releases produced after MV0 are eligible for either cloud or microVM self-update.
+generation floor/high-water protection, expiry, and blacklist gate. The release path does not yet fetch a signed blacklist: revocation
+currently requires a CLI upgrade; signed blacklist distribution is an AP-226/CU2 follow-up. Key custody/rotation is a separate owner card.
+Only releases produced after MV0 are eligible for either cloud or microVM self-update.
 
-MV0 also makes `stageFromRelease` verify that envelope before writing and fail closed; `--allow-unsigned` is development-only and emits a
-loud warning. It moves `guestAssetsDir()` to the same ACL'd, non-user-writable staging area used by updates, and the guest accepts a seed
-copy from boot media only when it matches the same signed digest. Until all three controls land in MV0, restage+reboot is not a sanctioned
-update path; afterward it is a fallback only for signed post-MV0 releases.
+MV0 makes `stageFromRelease` verify an available envelope before writing. While the production pin set is empty, legacy unsigned release
+seeds remain bootable with a loud warning and self-update disabled; once AP-226 pins a key, release builds fail closed on missing evidence.
+`--allow-unsigned` remains development-only. The guest accepts a signed seed copy from boot media only when it matches the verified
+sidecars. Restage+reboot becomes a sanctioned update fallback only for signed post-MV0 releases.
+
+The unprivileged macOS/Linux CLI cannot create a genuinely root-owned host cache without an elevation contract. MV0 therefore keeps the
+compatible `~/.appliance/vm/images/guest-assets` path, makes the directory `0700`, stages verified files atomically as `0444`, and treats
+the guest-side digest/size check as the effective seed gate. Windows additionally applies the existing protected owner/SYSTEM/
+Administrators DACL. The MV0 guest does not perform Ed25519 itself: the host verifies the signature and derives boot-media sidecars, then
+both VZ and WSL independently compare the selected binary's hash/size/architecture and keyId against the CLI-rendered production pin.
+This protects the seed copy after host
+staging; it is not a second signature-verification boundary.
 
 `appliance vm update [--name NAME] [--version VERSION]` downloads binary, console, `SHA256SUMS`, payload, and envelope to an ACL'd,
 non-user-writable host staging directory. It verifies the envelope offline, production key id, generation, validity, blacklist,
@@ -280,20 +296,21 @@ pass identical supervisor tests.
 
 ## 6. Failure matrix
 
-| Method / failure                                            | Detection                                | Automatic action                   | Next update path                  |
-| ----------------------------------------------------------- | ---------------------------------------- | ---------------------------------- | --------------------------------- |
-| Cloud unknown/expired/blacklisted signer or digest mismatch | production envelope verifier             | no crane/CFN mutation              | corrected signed request          |
-| Direct worker target injection                              | jobId-only schema + persisted derivation | reject before lease/mutation       | admin server route                |
-| Worker kill/stale lease                                     | `expiresAt`/heartbeat CAS                | mark abandoned; resume/new job     | signed route never permanent-409s |
-| Cloud mirror/auth/budget                                    | crane/deadline                           | no stack mutation; phase resumable | current route                     |
-| Cloud CFN resource failure                                  | stack events/status                      | CFN built-in rollback              | restored/current route            |
-| Cloud wrong/unhealthy server                                | versioned bootstrap probe                | re-pin `previousImage`             | restored signed route             |
-| Cloud re-pin exhausted                                      | persisted terminal recovery state        | clear lease + alert                | new request or `--local`          |
-| Pre-MV0 release                                             | trust probe                              | refuse every update path           | install a post-MV0 release        |
-| Old launcher after MV0                                      | capability probe                         | no in-place transfer               | signed restage+reboot             |
-| microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap        | old release, retry command        |
-| microVM candidate crash/probe timeout                       | supervisor                               | restore `previous`, respawn        | `appliance vm update`             |
-| microVM reboot with stale media                             | persistent current exists                | ignore media seed                  | persistent supervisor             |
+| Method / failure                                            | Detection                                | Automatic action                                                                             | Next update path                  |
+| ----------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------- |
+| Cloud unknown/expired/blacklisted signer or digest mismatch | production envelope verifier             | no crane/CFN mutation                                                                        | corrected signed request          |
+| Direct worker target injection                              | jobId-only schema + persisted derivation | reject before lease/mutation                                                                 | admin server route                |
+| Worker kill/stale lease                                     | `expiresAt`/heartbeat CAS                | mark abandoned; resume/new job                                                               | signed route never permanent-409s |
+| Cloud mirror/auth/budget                                    | crane/deadline                           | no stack mutation; phase resumable                                                           | current route                     |
+| Cloud CFN resource failure                                  | stack events/status                      | CFN built-in rollback                                                                        | restored/current route            |
+| Cloud wrong/unhealthy server                                | versioned bootstrap probe                | re-pin `previousImage`                                                                       | restored signed route             |
+| Cloud re-pin exhausted                                      | persisted terminal recovery state        | clear lease + alert                                                                          | new request or `--local`          |
+| Pre-MV0 release                                             | empty production pin / missing envelope  | allow initial seed with loud warning and disable self-update; refuse after AP-226 pins trust | install a signed post-MV0 release |
+| Old launcher after MV0                                      | capability probe                         | no in-place transfer                                                                         | signed restage+reboot             |
+| microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap                                                                  | old release, retry command        |
+| microVM corrupt/missing console with valid binary           | guest console hash/extract check         | warn and run headless; never delete the api-server binary                                    | restage the same signed release   |
+| microVM candidate crash/probe timeout                       | supervisor                               | restore `previous`, respawn                                                                  | `appliance vm update`             |
+| microVM reboot with stale media                             | persistent current exists                | ignore media seed                                                                            | persistent supervisor             |
 
 ## 7. Test and owner live-verification plan (input to AP-223)
 
@@ -310,7 +327,7 @@ CU0/CU1 live verification uses a disposable install and CloudTrail to remove adm
 actions, confirm only the scoped CFN PassRole and no GetFunction, and prove baseline/IAM/S3/KMS mutation denied. Measure p95/p99 before CU2;
 then update N→N+1, reject concurrency, kill a worker and resume, force CFN failure, force healthy-wrong-version re-pin, and retry good.
 
-For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 refusal, fail-closed create/restage before writing, protected staging and signed
+For MV0/MV1 test signed `SHA256SUMS`/cloud digest, pre-MV0 warning before the pin and refusal after it, fail-closed create/restage before writing, protected staging and signed
 boot-media seed, raw VZ and same-handle WSL transfer, wrong size/hash, root-only volume/VHD, symlink/held-fd race, PSA/hostPath denial,
 atomic binary+console promotion, crash/hang/
 wrong-version rollback, stale media, old-launcher fallback, quarantine coexistence, doctor/banner, and VZ/WSL parity. Owner updates without
@@ -333,8 +350,10 @@ AP-223 consumes the live steps after CU0/CU1 and MV0/MV1 test environments exist
 ## 9. Decisions taken
 
 - Trust root is a new offline Appliance production Ed25519 key, never the shipped RFC-0001 fixture; custody/rotation/revocation is an
-  owner card, while verifiers pin its SHA-256 key id and enforce generation, expiry, and blacklist offline.
+  owner card, while verifiers pin its SHA-256 key id and enforce generation and expiry offline. Until signed blacklist distribution lands,
+  revocation requires shipping a CLI with the compromised key removed.
 - One signed production release envelope gates two transports: the GHCR manifest digest before cloud crane copy and guest binary plus
   console hashes before VM transfer.
 - CU0 de-admins both system Lambda execution roles before CU1/CU2; CU1 adds the scoped self-update/CFN roles and stack policy.
-- MV0 must publish signed metadata first. Cloud CU2 and MV1 accept only post-MV0 releases; checksum-only update is never allowed.
+- MV0 may preserve unsigned initial boot before AP-226, but Cloud CU2 and MV1 accept only signed post-MV0 releases; checksum-only
+  self-update is never allowed.

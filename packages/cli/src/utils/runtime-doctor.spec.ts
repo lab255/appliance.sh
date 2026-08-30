@@ -426,8 +426,35 @@ describe('ingress claims', () => {
 
 describe('compareVersionStamp', () => {
   it('passes when CLI, staged stamp, and running server agree (v-prefix insensitive)', () => {
-    expect(compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2').severity).toBe('ok');
-    expect(compareVersionStamp('1.51.2:arm64', 'v1.51.2', null).severity).toBe('ok');
+    const keyId = `ed25519:sha256:${'a'.repeat(64)}`;
+    const signed = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2', keyId, {
+      keys: { [keyId]: 'ed25519:test' },
+      generationFloor: 1,
+    });
+    expect(signed.severity).toBe('ok');
+    expect(signed.detail).toContain(`staged asset signed by keyId ${keyId}`);
+    const unsigned = compareVersionStamp('1.51.2:arm64', 'v1.51.2', null);
+    expect(unsigned.severity).toBe('warn');
+    expect(unsigned.detail).toContain('unsigned pre-MV0 release; self-update disabled');
+  });
+
+  it('warns when staged evidence names an unrecognized signing key', () => {
+    const finding = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2', `ed25519:sha256:${'b'.repeat(64)}`, {
+      keys: { [`ed25519:sha256:${'a'.repeat(64)}`]: 'ed25519:test' },
+      generationFloor: 1,
+    });
+    expect(finding.severity).toBe('warn');
+    expect(finding.detail).toContain('signed by an unrecognized key');
+  });
+
+  it('tells pre-pin CLIs to upgrade when a release carried signed metadata', () => {
+    const keyId = `ed25519:sha256:${'b'.repeat(64)}`;
+    const finding = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.51.2', keyId, {
+      keys: {},
+      generationFloor: 1,
+    });
+    expect(finding.severity).toBe('warn');
+    expect(finding.detail).toContain('signed release, CLI has no pinned trust — upgrade the CLI');
   });
 
   it('suggests a RESTART when the running server predates the staged stamp', () => {
