@@ -18,11 +18,7 @@ const manifestDigest = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 const rfc3339 = z.iso.datetime({ offset: true });
 
 const releaseArtifactSchema = z.strictObject({
-  name: z.enum([
-    'appliance-api-server-linux-x64',
-    'appliance-api-server-linux-arm64',
-    'appliance-console.tar.gz',
-  ]),
+  name: z.enum(['appliance-api-server-linux-x64', 'appliance-api-server-linux-arm64', 'appliance-console.tar.gz']),
   arch: z.enum(['x64', 'arm64', 'any']),
   sha256,
   size: z.number().int().positive(),
@@ -37,9 +33,7 @@ export const releaseEnvelopeSchema = z
     expires: rfc3339,
     artifacts: z.array(releaseArtifactSchema).length(3),
     image: z.strictObject({
-      repository: z
-        .string()
-        .regex(/^ghcr\.io\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/),
+      repository: z.string().regex(/^ghcr\.io\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/),
       manifestDigest,
     }),
   })
@@ -52,15 +46,24 @@ export const releaseEnvelopeSchema = z
     const seen = new Set<string>();
     for (const [index, artifact] of release.artifacts.entries()) {
       if (seen.has(artifact.name)) {
-        context.addIssue({ code: 'custom', message: `duplicate release artifact ${artifact.name}`, path: ['artifacts', index] });
+        context.addIssue({
+          code: 'custom',
+          message: `duplicate release artifact ${artifact.name}`,
+          path: ['artifacts', index],
+        });
       }
       seen.add(artifact.name);
       if (artifact.arch !== expected.get(artifact.name)) {
-        context.addIssue({ code: 'custom', message: `wrong architecture for ${artifact.name}`, path: ['artifacts', index, 'arch'] });
+        context.addIssue({
+          code: 'custom',
+          message: `wrong architecture for ${artifact.name}`,
+          path: ['artifacts', index, 'arch'],
+        });
       }
     }
     for (const name of expected.keys()) {
-      if (!seen.has(name)) context.addIssue({ code: 'custom', message: `missing release artifact ${name}`, path: ['artifacts'] });
+      if (!seen.has(name))
+        context.addIssue({ code: 'custom', message: `missing release artifact ${name}`, path: ['artifacts'] });
     }
   });
 
@@ -99,7 +102,8 @@ export async function verifyReleaseEnvelope(
   options: { now?: Date; highestGeneration?: number } = {}
 ): Promise<VerifiedReleaseEnvelope> {
   const envelopeResult = signatureEnvelopeSchema.safeParse(untrustedEnvelope);
-  if (!envelopeResult.success) throw new CatalogueTrustError('invalid-schema', 'release signature envelope is malformed');
+  if (!envelopeResult.success)
+    throw new CatalogueTrustError('invalid-schema', 'release signature envelope is malformed');
   const publicKey = trust.keys[envelopeResult.data.keyId];
   if (!publicKey) throw new CatalogueTrustError('unknown-key', 'release signer is not pinned');
   checkTrustedKeyBlacklist(envelopeResult.data.keyId, trust.blacklistedKeyIds, 'release signer');
@@ -110,13 +114,18 @@ export async function verifyReleaseEnvelope(
     publicKey
   )) as ReleaseSignatureEnvelope;
   const payloadResult = releaseEnvelopeSchema.safeParse(untrustedPayload);
-  if (!payloadResult.success) throw new CatalogueTrustError('invalid-schema', 'control-plane release schema is invalid');
+  if (!payloadResult.success)
+    throw new CatalogueTrustError('invalid-schema', 'control-plane release schema is invalid');
   const payload = payloadResult.data;
-  checkTrustGeneration(payload.generation, {
-    keys: trust.keys,
-    generationFloor: trust.generationFloor,
-    highestGeneration: options.highestGeneration,
-  }, 'release');
+  checkTrustGeneration(
+    payload.generation,
+    {
+      keys: trust.keys,
+      generationFloor: trust.generationFloor,
+      highestGeneration: options.highestGeneration,
+    },
+    'release'
+  );
   const now = options.now ?? new Date();
   checkTrustValidity(payload.notBefore, payload.expires, Number.MAX_SAFE_INTEGER, now, false, 'release', 'release');
   return { payload, envelope, verifiedAt: now.toISOString() };

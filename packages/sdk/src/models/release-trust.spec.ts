@@ -46,7 +46,9 @@ describe('control-plane release trust', () => {
   it('accepts a valid release envelope', async () => {
     const payload = release();
     const envelope = await signReleaseEnvelope(payload, privateKey);
-    await expect(verifyReleaseEnvelope(payload, envelope, trust, { now, highestGeneration: 11 })).resolves.toMatchObject({
+    await expect(
+      verifyReleaseEnvelope(payload, envelope, trust, { now, highestGeneration: 11 })
+    ).resolves.toMatchObject({
       payload: { version: '1.57.0', generation: 12 },
       envelope: { keyId: envelope.keyId, role: 'control-plane-release' },
     });
@@ -62,8 +64,14 @@ describe('control-plane release trust', () => {
   it('rejects a tampered artifact sha256', async () => {
     const signed = release();
     const envelope = await signReleaseEnvelope(signed, privateKey);
-    const tampered = release({ artifacts: signed.artifacts.map((artifact, index) => index ? artifact : { ...artifact, sha256: 'f'.repeat(64) }) });
-    await expect(verifyReleaseEnvelope(tampered, envelope, trust, { now })).rejects.toMatchObject({ code: 'bad-signature' });
+    const tampered = release({
+      artifacts: signed.artifacts.map((artifact, index) =>
+        index ? artifact : { ...artifact, sha256: 'f'.repeat(64) }
+      ),
+    });
+    await expect(verifyReleaseEnvelope(tampered, envelope, trust, { now })).rejects.toMatchObject({
+      code: 'bad-signature',
+    });
   });
 
   it('rejects a wrong artifact architecture in the payload schema', () => {
@@ -75,13 +83,18 @@ describe('control-plane release trust', () => {
   it('rejects a generation below the high-water mark', async () => {
     const payload = release({ generation: 11 });
     await expect(
-      verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), trust, { now, highestGeneration: 12 })
+      verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), trust, {
+        now,
+        highestGeneration: 12,
+      })
     ).rejects.toMatchObject({ code: 'generation-below-floor' });
   });
 
   it('rejects an expired release', async () => {
     const payload = release({ expires: '2026-08-29T12:00:00Z' });
-    await expect(verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), trust, { now })).rejects.toMatchObject({
+    await expect(
+      verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), trust, { now })
+    ).rejects.toMatchObject({
       code: 'expired',
     });
   });
