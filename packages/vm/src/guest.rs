@@ -1010,7 +1010,9 @@ const APISERVER_MEDIA_COPY: &str = r#"# --- appliance api-server ---------------
 # no docker anywhere. The binary, console, and signed release evidence
 # ride the FAT boot media. APISERVER_SEED_COPY verifies before copying.
 mkdir -p /persist/appliance
-APISERVER_MEDIA=$(dirname "$(find /media -maxdepth 2 -name appliance-api-server 2>/dev/null | head -1)")
+APISERVER_MEDIA_PATH=$(find /media -maxdepth 2 -name appliance-api-server 2>/dev/null | head -1)
+APISERVER_MEDIA=
+[ -z "$APISERVER_MEDIA_PATH" ] || APISERVER_MEDIA=$(dirname "$APISERVER_MEDIA_PATH")
 APISERVER_SRC="$APISERVER_MEDIA/appliance-api-server"
 CONSOLE_SRC="$APISERVER_MEDIA/appliance-console.tar.gz"
 RELEASE_CHECKSUMS="$APISERVER_MEDIA/appliance-api-server.sha256"

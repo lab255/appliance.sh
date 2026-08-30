@@ -343,6 +343,19 @@ describe('stageFromRelease signed metadata gate', () => {
     expect(fs.readFileSync(path.join(destination, 'release-generation.high-water'), 'utf8').trim()).toBe('225');
   });
 
+  it('never clears or lowers the durable generation high-water when staging a legacy unsigned release', async () => {
+    fs.writeFileSync(path.join(destination, 'release-generation.high-water'), '225\n');
+    fs.writeFileSync(path.join(destination, 'control-plane-release.json'), '{}\n');
+    await stageFromRelease({
+      version: '1.56.0',
+      arch: 'x64',
+      destinationDir: destination,
+      fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
+    });
+    expect(fs.readFileSync(path.join(destination, 'release-generation.high-water'), 'utf8')).toBe('225\n');
+    expect(fs.existsSync(path.join(destination, 'control-plane-release.json'))).toBe(false);
+  });
+
   it('rejects an offline staged binary after byte tampering when trust is pinned', async () => {
     const release = payload();
     const envelope = await signReleaseEnvelope(release, releaseDevFixturePrivateKey);

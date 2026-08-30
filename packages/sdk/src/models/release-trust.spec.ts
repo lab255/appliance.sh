@@ -49,6 +49,13 @@ describe('control-plane release trust', () => {
     expect(Object.keys(PINNED_RELEASE_TRUST.keys)).toHaveLength(0);
   });
 
+  it('names AP-226 when the empty production pin rejects a signature', async () => {
+    const payload = release();
+    await expect(
+      verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), PINNED_RELEASE_TRUST, { now })
+    ).rejects.toMatchObject({ code: 'unknown-key', message: expect.stringContaining('AP-226') });
+  });
+
   it('accepts a valid release envelope', async () => {
     const payload = release();
     const envelope = await signReleaseEnvelope(payload, privateKey);
