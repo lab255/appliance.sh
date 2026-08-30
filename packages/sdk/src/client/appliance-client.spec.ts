@@ -143,7 +143,10 @@ describe('self-update client', () => {
     [403, { error: 'owner tenant required' }, 'forbidden'],
     [503, { error: 'scoped roles required' }, 'scoped-roles-required'],
   ] as const)('returns a typed, non-throwing HTTP %s start failure', async (status, body, code) => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponseFor(status, body)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponseFor(status, body))
+    );
     const client = createApplianceClient({ baseUrl: 'https://api.test' });
 
     const result = await client.selfUpdate.start({ targetDigest: digest, release: evidence, idempotencyKey: 'once' });
@@ -157,7 +160,9 @@ describe('self-update client', () => {
   it('preserves the HTTP status when an upstream returns HTML instead of JSON', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response('<html>bad gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } }))
+      vi.fn(
+        async () => new Response('<html>bad gateway</html>', { status: 502, headers: { 'content-type': 'text/html' } })
+      )
     );
     const client = createApplianceClient({ baseUrl: 'https://api.test' });
 
@@ -215,7 +220,10 @@ describe('self-update client', () => {
   it('bounds non-terminal polling with a deadline and preserves the follow command', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-30T00:00:00Z'));
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponseFor(200, job('waiting-for-stack', 'running'))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponseFor(200, job('waiting-for-stack', 'running')))
+    );
     const client = createApplianceClient({ baseUrl: 'https://api.test' });
     const watching = client.selfUpdate.watch('selfupdate_deadline', { intervalMs: 10, deadlineMs: 25 });
     await vi.advanceTimersByTimeAsync(30);
