@@ -198,6 +198,12 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
 
 ## 5. microVM mechanism (MV1)
 
+**MV0 shipped (AP-225):** release assets now include `SHA256SUMS`, `control-plane-release.json`, and
+`control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
+Publishing requires the `APPLIANCE_RELEASE_SIGNING_KEY` Actions secret; `publish=false` is the explicit unsigned dry-run.
+Create/restage verifies the envelope, generation, validity, version, architecture, size, and SHA-256 before its first write.
+VZ and WSL re-check signed payload sizes/digests in the guest; AP-226 must replace the pinned public dev fixture and provision custody.
+
 MV0 first adds a `control-plane-release` envelope role and changes the workflow to publish `SHA256SUMS` plus its Ed25519/RFC-8785
 production release envelope covering both
 `appliance-api-server-linux-*`, `appliance-console.tar.gz`, and the GHCR manifest digest. It uses a new offline Appliance production
@@ -209,6 +215,12 @@ MV0 also makes `stageFromRelease` verify that envelope before writing and fail c
 loud warning. It moves `guestAssetsDir()` to the same ACL'd, non-user-writable staging area used by updates, and the guest accepts a seed
 copy from boot media only when it matches the same signed digest. Until all three controls land in MV0, restage+reboot is not a sanctioned
 update path; afterward it is a fallback only for signed post-MV0 releases.
+
+The unprivileged macOS/Linux CLI cannot create a genuinely root-owned host cache without an elevation contract. MV0 therefore keeps the
+compatible `~/.appliance/vm/images/guest-assets` path, makes the directory `0700`, stages verified files atomically as `0444`, and treats
+the guest-side digest/size check as the effective seed gate. Windows additionally applies the existing protected owner/SYSTEM/
+Administrators DACL. The MV0 guest does not perform Ed25519 itself: the host verifies the signature, then both VZ and WSL independently
+bind the booted bytes to the verified payload copied beside them.
 
 `appliance vm update [--name NAME] [--version VERSION]` downloads binary, console, `SHA256SUMS`, payload, and envelope to an ACL'd,
 non-user-writable host staging directory. It verifies the envelope offline, production key id, generation, validity, blacklist,

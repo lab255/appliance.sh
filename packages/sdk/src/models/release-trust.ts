@@ -75,8 +75,8 @@ export interface ReleaseTrustPolicy {
   blacklistedKeyIds?: readonly string[] | ReadonlySet<string>;
 }
 
-// Public-only development fixture. AP-226 replaces this keyId and public key
-// with the offline production release identity before production publishing.
+// Public-only development fixture and production pin placeholder: replaced by
+// AP-226 with the offline production release keyId and public key.
 export const RELEASE_DEV_FIXTURE_PUBLIC_KEY = 'ed25519:GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE';
 export const RELEASE_DEV_FIXTURE_KEY_ID =
   'ed25519:sha256:b600306cfa76723fdec395e53a9b3d9fdb78b1e2d7a23c32fcbcd2dc6d0c4092';

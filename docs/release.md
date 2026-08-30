@@ -1,5 +1,33 @@
 # Release operations
 
+## Control-plane release signing (AP-225 / AP-226)
+
+`release-cli-binaries.yml` publishes the two guest api-server binaries, console
+bundle, `SHA256SUMS`, `control-plane-release.json`, and
+`control-plane-release.sig.json`. The RFC-8785/Ed25519 envelope covers the
+artifact names, architectures, byte counts and SHA-256 values plus the sibling
+GHCR api-server multi-arch manifest digest. The workflow waits for that image
+tag; a manual rerun may instead provide the `image_manifest_digest` input.
+
+Production publishing (`publish=true`, the default) fails unless the Actions
+secret `APPLIANCE_RELEASE_SIGNING_KEY` exists. Its value is standard base64 for
+exactly one raw 32-byte Ed25519 seed. `publish=false` is the build-only unsigned
+dry run and uploads nothing. Never paste, log, or commit the decoded seed.
+
+AP-226 owner steps, in order:
+
+1. Generate the offline production Ed25519 identity and record its custody,
+   backup, rotation, revocation, and signed-blacklist procedure.
+2. Replace `RELEASE_DEV_FIXTURE_PUBLIC_KEY`,
+   `RELEASE_DEV_FIXTURE_KEY_ID`, and the `PINNED_RELEASE_TRUST` mapping in
+   `packages/sdk/src/models/release-trust.ts` with that production public key
+   and its `ed25519:sha256:<hex>` pin.
+3. Store the matching 32-byte seed as standard base64 in the release
+   environment secret named exactly `APPLIANCE_RELEASE_SIGNING_KEY`; restrict
+   environment access to release owners and required reviewers.
+4. Run a non-publishing workflow dry run, then publish a canary and confirm the
+   CLI reports `staged asset signed by keyId …` and both VZ/WSL seed checks pass.
+
 ## Regenerating the Windows credential-helper digest
 
 The npm package pins the normalized Windows credential helper's SHA-256. The
