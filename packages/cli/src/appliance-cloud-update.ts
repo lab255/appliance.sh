@@ -40,8 +40,10 @@ program
 
 async function run(options: Options): Promise<void> {
   if (options.local && options.follow) throw new Error('--follow cannot be combined with --local');
-  if (options.local && options.version) throw new Error('--version selects signed route evidence; use --image with --local');
-  if (!options.local && options.image) throw new Error('--image is a --local break-glass option; use --version for self-update');
+  if (options.local && options.version)
+    throw new Error('--version selects signed route evidence; use --image with --local');
+  if (!options.local && options.image)
+    throw new Error('--image is a --local break-glass option; use --version for self-update');
   if (!options.local && options.arch) throw new Error('--arch is a --local break-glass option');
   if (!options.local && options.awsProfile) throw new Error('--aws-profile is a --local break-glass option');
   if (options.follow && options.version) throw new Error('--follow cannot be combined with --version');

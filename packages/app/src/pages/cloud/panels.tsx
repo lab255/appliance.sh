@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Rocket, Trash2 } from 'lucide-react';
-import { applianceBaseConfig, type ApplianceBaseConfig } from '@appliance.sh/sdk';
+import { applianceBaseConfig, fetchReleaseEvidence, type ApplianceBaseConfig } from '@appliance.sh/sdk';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { CommandSnippet } from '@/components/ui/command-snippet';
@@ -16,6 +16,7 @@ import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useApplianceClient } from '@/hooks/use-appliance-client';
 import type { BootstrapEvent, Cluster, ConsoleHost } from '@/lib/host';
+import { selfUpdatePhaseMessage, selfUpdateTerminalError } from '@/lib/self-update-ui';
 
 // Cloud installation detail — the lifecycle ops for one bootstrapped AWS
 // installation: update baseline, update api-server/worker, detach/reattach
@@ -180,7 +181,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   }
 
   if (provisioner === 'cloudformation-v1') {
-    return <CloudFormationLifecycleHandoff />;
+    return <CloudFormationLifecycleHandoff cluster={cluster} />;
   }
 
   if (!canBootstrap) {
@@ -222,15 +223,10 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function CloudFormationLifecycleHandoff() {
+function CloudFormationLifecycleHandoff({ cluster }: { cluster: Cluster }) {
   return (
     <div className="space-y-3">
-      <SectionCard
-        title="Update cloud installation"
-        description="This installation is managed by CloudFormation. Run updates with the Appliance CLI."
-      >
-        <CommandSnippet command="appliance cloud update" />
-      </SectionCard>
+      <UpdateApiServerPanel cluster={cluster} cloudFormation />
       <SectionCard
         tone="danger"
         title="Destroy cloud installation"
@@ -414,7 +410,7 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
+function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cluster; cloudFormation?: boolean }) {
   const host = useHost();
   const client = useApplianceClient();
   const { config } = useSelectedCluster();
@@ -438,7 +434,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
     },
     retry: false,
   });
-  const runningVersion = clusterInfoQuery.data?.version ?? null;
+  const runningVersion = clusterInfoQuery.data?.serverVersion ?? clusterInfoQuery.data?.version ?? null;
 
   // Latest semver tag on ghcr.io/appliance-sh/api-server. Best-effort:
   // if the lookup fails (no network, package private, etc.) the user
@@ -504,9 +500,9 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
 
   const onRun = async () => {
     if (!targetValid) return;
-    if (!overrideValid) return;
-    if (!host.bootstrap?.updateApiServer) return;
-    if (!apiKey) {
+    if (!cloudFormation && !overrideValid) return;
+    if (!cloudFormation && !host.bootstrap?.updateApiServer) return;
+    if (!client || !apiKey) {
       setStatus('failed');
       setError('No API key loaded for this cluster — switch to it first.');
       return;
@@ -515,7 +511,32 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
     setLogs([]);
     setError(null);
     try {
-      await host.bootstrap.updateApiServer(
+      if (cloudFormation) {
+        const evidence = await fetchReleaseEvidence({ version: targetVersion });
+        const started = await client.selfUpdate.start({
+          targetDigest: evidence.targetDigest,
+          release: evidence.release,
+          idempotencyKey: `desktop-cloud-update-${crypto.randomUUID()}`,
+        });
+        if (!started.success) throw started.error;
+        const jobId = started.data.jobId;
+        if (started.data.httpStatus === 409) {
+          setLogs((prev) => [
+            ...prev,
+            `An update is already running at ${started.data.statusUrl}; attaching to ${jobId}.`,
+          ]);
+        }
+        const watched = await client.selfUpdate.watch(jobId, {
+          intervalMs: 2_000,
+          onPhase: (job) => setLogs((prev) => [...prev, selfUpdatePhaseMessage(job)]),
+        });
+        if (!watched.success) throw watched.error;
+        if (watched.data.status === 'failed') throw new Error(selfUpdateTerminalError(watched.data));
+        await clusterInfoQuery.refetch();
+        setStatus('succeeded');
+        return;
+      }
+      await host.bootstrap!.updateApiServer(
         {
           apiServerUrl: cluster.apiServerUrl,
           apiKey,
@@ -544,7 +565,9 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
               Technical details
             </summary>
             <p className="mt-1">
-              Copies the selected registry image into ECR, then updates the worker and service Lambdas in order.
+              {cloudFormation
+                ? 'The running service verifies signed release evidence, mirrors the bound digest, updates CloudFormation, probes health, and automatically re-pins the previous image on failure.'
+                : 'Copies the selected registry image into ECR, then updates the worker and service Lambdas in order.'}
             </p>
           </details>
         </div>
@@ -584,7 +607,7 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
         </div>
       </div>
 
-      {clusterInfoUnavailable ? (
+      {!cloudFormation && clusterInfoUnavailable ? (
         <label className="block space-y-1 text-xs">
           <span className="text-[var(--color-muted-foreground)]">
             APPLIANCE_BASE_CONFIG (paste JSON — fallback when /cluster-info isn&apos;t available)
@@ -614,18 +637,20 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
         </label>
       ) : null}
 
-      <label className="block space-y-1 text-xs">
-        <span className="text-[var(--color-muted-foreground)]">Target version</span>
-        <Input
-          type="text"
-          value={targetVersion}
-          onChange={(e) => setTargetVersion(e.target.value)}
-          placeholder="1.37.0"
-          disabled={status === 'running'}
-          spellCheck={false}
-          mono
-        />
-      </label>
+      {!cloudFormation ? (
+        <label className="block space-y-1 text-xs">
+          <span className="text-[var(--color-muted-foreground)]">Target version</span>
+          <Input
+            type="text"
+            value={targetVersion}
+            onChange={(e) => setTargetVersion(e.target.value)}
+            placeholder="1.37.0"
+            disabled={status === 'running'}
+            spellCheck={false}
+            mono
+          />
+        </label>
+      ) : null}
 
       <label className="block space-y-1 text-xs">
         <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
@@ -657,7 +682,11 @@ function UpdateApiServerPanel({ cluster }: { cluster: Cluster }) {
       </label>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onRun} disabled={status === 'running' || !targetValid || !overrideValid}>
+        <Button
+          size="sm"
+          onClick={onRun}
+          disabled={status === 'running' || !targetValid || (!cloudFormation && !overrideValid)}
+        >
           {status === 'running' ? 'Updating…' : `Update to ${targetVersion || '…'}`}
         </Button>
       </div>

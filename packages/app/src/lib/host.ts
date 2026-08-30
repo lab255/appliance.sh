@@ -209,8 +209,8 @@ export interface BootstrapHost {
     onEvent: (event: BootstrapEvent) => void
   ): Promise<void>;
   /**
-   * Self-update the cluster's api-server + api-worker to a new image
-   * version. The sidecar mirrors the new image to the cluster ECR
+   * Legacy-only api-server + api-worker update retained for the two-release
+   * deprecation window. The sidecar mirrors the new image to the cluster ECR
    * (needs docker — Lambda can't pull/push images) and then drives
    * deploys via the cluster's existing deployment API. Worker is
    * updated first; the api-server's deploy goes through the (now
