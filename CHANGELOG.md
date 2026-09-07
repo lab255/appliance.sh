@@ -1,3 +1,61 @@
+## 1.58.0 (2026-09-07)
+
+### Features
+
+- **api:** in-server signed cloud self-update — scoped roles, job routes, resumable executor with auto re-pin (AP-219) ([#119](https://github.com/lab255/appliance.sh/pull/119))
+- **aws:** scope the system Lambda execution roles — de-admin the control plane (AP-224) ([#117](https://github.com/lab255/appliance.sh/pull/117))
+- **aws,api:** opt-in scheduled self-update — off|notify|auto policy, EventBridge Scheduler → worker check (AP-221) ([#122](https://github.com/lab255/appliance.sh/pull/122))
+- **cli,desktop:** route cloud updates through the in-server self-update job — phases, --json timings, --local break-glass (AP-220) ([#121](https://github.com/lab255/appliance.sh/pull/121))
+- **credentials:** neutral credential store + appliance-credhelper + verified packaging (AP-207) ([#104](https://github.com/lab255/appliance.sh/pull/104))
+- **credentials:** thin callers, verified scrub migration and doctor states for windows (AP-208) ([#107](https://github.com/lab255/appliance.sh/pull/107))
+- **desktop:** label the local machine by platform — This Mac / This PC (AP-187) ([#92](https://github.com/lab255/appliance.sh/pull/92))
+- **release:** Ed25519 signed control-plane release envelope + verified guest staging (AP-225) ([#118](https://github.com/lab255/appliance.sh/pull/118))
+- **vm:** app runtime on the wsl backend — guest profile + drvfs payload adapter (AP-203) ([#101](https://github.com/lab255/appliance.sh/pull/101))
+- **vm:** wsl runtime forward broker + open/restart reconciliation (AP-204) ([#105](https://github.com/lab255/appliance.sh/pull/105))
+- **vm:** wsl-mode strict/cooperative, truthful enforcement output, windows certification runbook (AP-205) ([#109](https://github.com/lab255/appliance.sh/pull/109))
+- **vm:** authenticated per-app egress policy selector + revocation for wsl runtime (AP-206) ([#111](https://github.com/lab255/appliance.sh/pull/111))
+- **vm:** signed in-place microVM control-plane update with health check + rollback (AP-222) ([#120](https://github.com/lab255/appliance.sh/pull/120))
+
+### Bug Fixes
+
+- **app:** surface real install/list errors instead of a generic banner (AP-184) ([#89](https://github.com/lab255/appliance.sh/pull/89))
+- **cli:** use ntfs-safe immutable bundle filenames (AP-185) ([#90](https://github.com/lab255/appliance.sh/pull/90))
+- **cli:** harden runtime bundle handling for windows filesystems (AP-186) ([#93](https://github.com/lab255/appliance.sh/pull/93))
+- **desktop:** complete the windows desktop journey — PATH, setup-token launch, url opener (AP-197) ([#103](https://github.com/lab255/appliance.sh/pull/103))
+- **desktop:** credentials panel emits argv helpers (AP-210) ([#112](https://github.com/lab255/appliance.sh/pull/112))
+- **security:** restrict secret files to the current windows user and refuse foreign-writable credential rules (AP-195) ([#99](https://github.com/lab255/appliance.sh/pull/99))
+- **vm:** resolve wsl net_link to nat, label the egress boundary, fail fast on runtime (AP-193) ([#95](https://github.com/lab255/appliance.sh/pull/95))
+- **vm:** run the credential helper as argv instead of sh -c (AP-194) ([#96](https://github.com/lab255/appliance.sh/pull/96))
+- **vm:** harden the wsl lifecycle — clock sync, destroy order, preflight, sizing flags (AP-196) ([#102](https://github.com/lab255/appliance.sh/pull/102))
+- **vm:** stop exposing the whole windows drive to the wsl guest (no automount, streamed artifacts, targeted drvfs) ([#106](https://github.com/lab255/appliance.sh/pull/106))
+- **vm:** canonicalize the state dir tolerantly so wsl bootstrap tests run on fresh runners ([#108](https://github.com/lab255/appliance.sh/pull/108))
+
+### Refactoring
+
+- **wsl:** unify wsl.exe output decoders and failure classifiers behind shared fixtures (AP-198) ([#113](https://github.com/lab255/appliance.sh/pull/113))
+
+### Documentation
+
+- **control-plane:** re-baselined self-update design — cloud first, then microVM (AP-218) ([#116](https://github.com/lab255/appliance.sh/pull/116))
+- **credentials:** windows credential posture + release helper digest guard (AP-209) ([#110](https://github.com/lab255/appliance.sh/pull/110))
+- **rfc:** app runtime on the wsl backend (AP-190) ([#97](https://github.com/lab255/appliance.sh/pull/97))
+- **rfc:** windows credential posture (AP-191) ([#98](https://github.com/lab255/appliance.sh/pull/98))
+- **windows:** consolidate the certification runbook and scope the platform claims (AP-200) ([#115](https://github.com/lab255/appliance.sh/pull/115))
+
+### Chores
+
+- **windows:** parity follow-ups — spec integrity, destroy quiesce, share validators, capture warning, fixture isolation ([#114](https://github.com/lab255/appliance.sh/pull/114))
+
+### CI
+
+- add windows desktop + cli job to the pr workflow (AP-188) ([#91](https://github.com/lab255/appliance.sh/pull/91))
+- run cargo test and clippy for packages/vm on windows (AP-192) ([#94](https://github.com/lab255/appliance.sh/pull/94))
+- **desktop:** smoke-test the windows installer (AP-199) ([#100](https://github.com/lab255/appliance.sh/pull/100))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.57.0 (2026-08-28)
 
 ### Features
