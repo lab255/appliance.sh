@@ -10,6 +10,9 @@ permissions:
   contents: read # for checkout
 
 jobs:
+  credential-helper:
+    uses: ./.github/workflows/credential-helper.yml
+
   verify:
     name: Pull Request
     runs-on: ubuntu-latest

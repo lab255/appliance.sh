@@ -35,12 +35,30 @@ exercises sibling-only discovery and missing-helper behavior;
 [`binary-integrity.spec.mjs`](../packages/cli/scripts/binary-integrity.spec.mjs)
 exercises digest rejection and release layouts.
 
-The standalone CLI release cross-builds the Windows helper; the desktop
-release builds its copy natively. They remain separate builds until AP-202
-signs both. Each workflow therefore hashes its own staged output and requires
-byte identity with the same CLI-baked digest before publishing.
-[`binary-integrity.spec.mjs`](../packages/cli/scripts/binary-integrity.spec.mjs)
-locks both release guards to those layouts.
+The CLI and desktop release workflows consume the canonical Windows artifact
+from [`credential-helper.yml`](../.github/workflows/credential-helper.yml).
+Before exposing that artifact, independent Linux and Windows builds must both
+match the npm pin and each other byte-for-byte. `pr.yml` runs the same gate on
+every PR, including changes to helper source and its credential-store dependency.
+Desktop packaging verifies the artifact again before copying it; the installed
+bundle and staged CLI release also retain their digest guards.
+
+To intentionally update the helper, install Rust 1.96.0 and run:
+
+```sh
+pnpm --filter @appliance.sh/cli credhelper:digest
+pnpm --filter @appliance.sh/cli credhelper:digest -- --check
+```
+
+Commit the regenerated `credential-helper-checksums.json` with the source change.
+The recipe uses Rust 1.96.0's bundled rust-lld on every host, the SHA-verified
+2026-08-07 MSVC sysroot, `Cargo.lock`, remapped source paths, a fixed PDB name,
+and PE metadata normalization. It does not use host-installed MSVC or LLVM.
+`APPLIANCE_CREDHELPER_TARGET_DIR` can select a fresh output directory to test
+clean-build reproducibility; `APPLIANCE_CREDHELPER_CACHE_DIR` selects the sysroot
+cache. CI's `APPLIANCE_CREDHELPER_BINARY` is a packaging input, always checked
+against the committed pin, and is never a runtime helper lookup override.
+Releases remain owner-gated; checksum regeneration does not dispatch a release.
 
 The helper accepts typed cluster, agent, and entitlement operations. Writes
 arrive on stdin, reads leave on stdout, and diagnostics use stderr. Windows

@@ -29,6 +29,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  credential-helper:
+    uses: ./.github/workflows/credential-helper.yml
+
   # ----------------------------------------------------------------------
   # Per-arch macOS bundle build. The matrix mirrors the CLI's per-arch
   # compile targets (packages/cli/package.json -> compile:darwin-*):
@@ -310,6 +313,9 @@ jobs:
   # macOS job runs — they are platform-aware.
   # ----------------------------------------------------------------------
   build-windows:
+    needs: credential-helper
+    env:
+      APPLIANCE_CREDHELPER_BINARY: ${{ github.workspace }}/credential-helper/appliance-credhelper.exe
     name: Build windows-x86_64 bundle
     runs-on: windows-latest
     # Publishing runs opt in to the `publish` environment for the Tauri
@@ -352,6 +358,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Download canonical Windows credential helper
+        uses: actions/download-artifact@v4
+        with:
+          name: credential-helper-canonical
+          path: credential-helper
+
+      - name: Verify canonical Windows credential helper
+        run: node packages/cli/scripts/verify-credential-helper-digest.mjs x86_64-pc-windows-msvc credential-helper/appliance-credhelper.exe
 
       - name: Build desktop prerequisites
         run: pnpm exec nx run-many -t build -p '@appliance.sh/cli' '@appliance.sh/app'
