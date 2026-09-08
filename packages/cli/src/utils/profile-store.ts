@@ -99,8 +99,8 @@ function ensureDir(): void {
  *
  * Implemented as an O_EXCL lockfile (the portable primitive Node exposes
  * without a native flock binding): create-exclusive wins the lock; on
- * contention the shared helper retries, steals a stale lock (crashed holder),
- * and eventually proceeds unlocked rather than block the user.
+ * contention the shared helper retries and fails closed. Native account writes
+ * use this same lock in addition to their OS file lock.
  *
  * SCOPE: this serializes CLI profile RMWs and the nested Windows credential
  * migration. The helper is module-reentrant so lock order stays
@@ -177,6 +177,10 @@ function atomicWriteJson(p: string, value: unknown, mode: number): void {
  * same set after a downgrade.
  */
 export function writeProfiles(file: ProfilesFile): void {
+  return withProfilesLock(() => writeProfilesLocked(file));
+}
+
+function writeProfilesLocked(file: ProfilesFile): void {
   ensureDir();
   atomicWriteJson(DEFAULT_PROFILE_PATHS.profilesFile, file, 0o600);
 
@@ -187,15 +191,15 @@ export function writeProfiles(file: ProfilesFile): void {
       keyId: active.keyId,
       secret: active.secret,
     };
-    atomicWriteJson(DEFAULT_PROFILE_PATHS.legacyCredentialsFile, legacy, 0o600);
+    const existing = readJson<Record<string, unknown>>(DEFAULT_PROFILE_PATHS.legacyCredentialsFile) ?? {};
+    atomicWriteJson(DEFAULT_PROFILE_PATHS.legacyCredentialsFile, { ...existing, ...legacy }, 0o600);
   } else if (fs.existsSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile)) {
-    // No active profile any more — clear the legacy file so a downgraded
-    // CLI doesn't keep using stale creds. Best-effort.
-    try {
-      fs.unlinkSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile);
-    } catch {
-      // ignore
-    }
+    const existing = readJson<Record<string, unknown>>(DEFAULT_PROFILE_PATHS.legacyCredentialsFile) ?? {};
+    delete existing.apiUrl;
+    delete existing.keyId;
+    delete existing.secret;
+    if (Object.keys(existing).length) atomicWriteJson(DEFAULT_PROFILE_PATHS.legacyCredentialsFile, existing, 0o600);
+    else fs.unlinkSync(DEFAULT_PROFILE_PATHS.legacyCredentialsFile);
   }
 }
 

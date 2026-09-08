@@ -2,8 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ensurePrivateDirectory } from './fs-acl.js';
 
-const LOCK_STALE_MS = 10_000;
-const LOCK_TIMEOUT_MS = 2_000;
+const LOCK_TIMEOUT_MS = 20_000;
 const heldLocks = new Set<string>();
 
 function sleepSync(ms: number): void {
@@ -24,16 +23,9 @@ export function withProfilesLock<T>(lockPath: string, fn: () => T): T {
       fd = fs.openSync(resolvedLock, 'wx', 0o600);
       break;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return fn();
-      try {
-        if (Date.now() - fs.statSync(resolvedLock).mtimeMs > LOCK_STALE_MS) {
-          fs.unlinkSync(resolvedLock);
-          continue;
-        }
-      } catch {
-        continue;
-      }
-      if (Date.now() > deadline) return fn();
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      // Never steal a live native refresh lock or continue unlocked.
+      if (Date.now() > deadline) throw new Error('Profile credentials are busy; retry.');
       sleepSync(50);
     }
   }
