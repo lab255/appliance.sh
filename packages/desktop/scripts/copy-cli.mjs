@@ -77,6 +77,24 @@ function sourceBinary(triple) {
 }
 
 function buildCredentialHelper(triple) {
+  if (triple === 'x86_64-pc-windows-msvc') {
+    const digestScripts = path.join(repoRoot, 'packages/cli/scripts');
+    const canonical = process.env.APPLIANCE_CREDHELPER_BINARY;
+    if (!canonical) {
+      execFileSync(process.execPath, [path.join(digestScripts, 'credential-helper-digest.mjs'), '--check'], {
+        cwd: repoRoot,
+        stdio: 'inherit',
+        windowsHide: true,
+      });
+    }
+    const source = canonical ?? path.join(credhelperRoot, 'target', triple, 'release/appliance-credhelper.exe');
+    execFileSync(process.execPath, [path.join(digestScripts, 'verify-credential-helper-digest.mjs'), triple, source], {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      windowsHide: true,
+    });
+    return source;
+  }
   execFileSync(
     'cargo',
     ['build', '--locked', '--release', '--manifest-path', path.join(credhelperRoot, 'Cargo.toml'), '--target', triple],

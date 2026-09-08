@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -77,17 +78,76 @@ describe('credential helper npm and release layouts', () => {
       expect(workflow).toContain(`triple: ${triple}`);
     }
     expect(workflow).toContain('appliance-credhelper-x86_64-pc-windows-msvc.exe');
-    expect(workflow).toContain('pnpm --filter @appliance.sh/cli credhelper:digest -- --check');
+    expect(workflow).toContain('uses: ./.github/workflows/credential-helper.yml');
+    expect(workflow).toContain('needs: credential-helper');
+    expect(workflow).toContain('name: credential-helper-canonical');
     expect(workflow).toContain('"$OUT/$ASSET.sha256"');
     expect(workflow).toContain('verify-credential-helper-digest.mjs');
   });
 
-  it('guards the separately built desktop helper with the CLI baked digest', () => {
+  it('guards the canonical desktop helper with the CLI baked digest', () => {
     const workflow = fs.readFileSync(
       path.resolve(import.meta.dirname, '../../../.github/workflows/release-desktop.yml'),
       'utf-8'
     );
+    expect(workflow).toContain('uses: ./.github/workflows/credential-helper.yml');
+    expect(workflow).toContain('needs: credential-helper');
+    expect(workflow).toContain('name: credential-helper-canonical');
     expect(workflow).toContain('packages/cli/scripts/verify-credential-helper-digest.mjs');
     expect(workflow).toContain('packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe');
+  });
+});
+
+describe('canonical Windows helper packaging', () => {
+  function packageHelper(bytes) {
+    const helper = candidate(bytes);
+    const root = path.dirname(helper);
+    for (const relative of ['packages/desktop/scripts', 'packages/cli/scripts', 'packages/cli/dist']) {
+      fs.mkdirSync(path.join(root, relative), { recursive: true });
+    }
+    const repository = path.resolve(import.meta.dirname, '../../..');
+    for (const relative of [
+      'packages/desktop/scripts/copy-cli.mjs',
+      'packages/cli/scripts/verify-credential-helper-digest.mjs',
+    ]) {
+      fs.copyFileSync(path.join(repository, relative), path.join(root, relative));
+    }
+    fs.writeFileSync(
+      path.join(root, 'packages/cli/scripts/credential-helper-checksums.json'),
+      JSON.stringify({
+        digests: { 'x86_64-pc-windows-msvc': createHash('sha256').update('canonical helper').digest('hex') },
+      })
+    );
+    fs.writeFileSync(path.join(root, 'packages/cli/dist/appliance.exe'), 'compiled CLI');
+    const result = spawnSync(process.execPath, [path.join(root, 'packages/desktop/scripts/copy-cli.mjs')], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: '',
+        APPLIANCE_TARGET_TRIPLE: 'x86_64-pc-windows-msvc',
+        APPLIANCE_CREDHELPER_BINARY: helper,
+      },
+    });
+    return {
+      result,
+      destination: path.join(
+        root,
+        'packages/desktop/src-tauri/binaries/appliance-credhelper-x86_64-pc-windows-msvc.exe'
+      ),
+    };
+  }
+
+  it('copies the verified artifact unchanged without requiring a native builder', () => {
+    const { result, destination } = packageHelper('canonical helper');
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(fs.readFileSync(destination, 'utf8')).toBe('canonical helper');
+  });
+
+  it('refuses a substituted artifact before staging desktop sidecars', () => {
+    const { result, destination } = packageHelper('substituted helper');
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('do not match byte-for-byte');
+    expect(fs.existsSync(destination)).toBe(false);
   });
 });
