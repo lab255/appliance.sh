@@ -7412,6 +7412,22 @@ fn prepend_to_path(dirs: &[String]) {
     unsafe { std::env::set_var("PATH", next) };
 }
 
+/// Optional identity only; raw tokens remain inside the shared native module.
+#[tauri::command]
+async fn able_account(action: String, switch_account: bool) -> Result<appliance_credhelper::able::Status, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use appliance_credhelper::able::{Account, Port};
+        let account = Account::host().map_err(str::to_owned)?;
+        match action.as_str() {
+            "sign-in" => account.sign_in(Port::Desktop, switch_account),
+            "status" => account.status(),
+            "refresh" => account.refresh(),
+            "sign-out" => account.sign_out(),
+            _ => Err("Unknown account action"),
+        }.map_err(str::to_owned)
+    }).await.map_err(|_| "Account operation failed".to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Order matters: user paths are added first, then managed bins are
@@ -7480,6 +7496,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            able_account,
             host_platform,
             get_config,
             get_app_mode,

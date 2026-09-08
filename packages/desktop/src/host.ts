@@ -69,6 +69,12 @@ interface NativeCatalogueCache {
 // through a Node sidecar the Rust side spawns — progress events
 // stream back over a Tauri Channel.
 export const tauriHost: Omit<ConsoleHost, 'platform'> = {
+  account: {
+    status: () => invoke('able_account', { action: 'status', switchAccount: false }),
+    signIn: (switchAccount = false) => invoke('able_account', { action: 'sign-in', switchAccount }),
+    signOut: () => invoke('able_account', { action: 'sign-out', switchAccount: false }),
+    refresh: () => invoke('able_account', { action: 'refresh', switchAccount: false }),
+  },
   desktop: true,
   async getConfig(): Promise<HostConfig> {
     return invoke<HostConfig>('get_config');

@@ -41,6 +41,10 @@ interface SubcommandDef {
 }
 
 const SUBCOMMANDS: Record<string, SubcommandDef> = {
+  account: {
+    description: 'optional able account identity (sign-in, status, sign-out)',
+    load: () => import('./appliance-account.js'),
+  },
   agent: {
     description: 'run a coding agent (Claude Code, Copilot, Codex) inside the sandbox microVM',
     load: () => import('./appliance-agent.js'),

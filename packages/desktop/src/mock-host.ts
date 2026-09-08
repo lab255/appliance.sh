@@ -657,7 +657,26 @@ export function createMockHost(): ConsoleHost {
           },
         ]
       : [];
+  let accountSignedIn = false;
+  const accountStatus = () => ({
+    signedIn: accountSignedIn,
+    email: accountSignedIn ? 'avery@example.com' : null,
+    subject: accountSignedIn ? 'mock-able-user' : null,
+    revocationFailed: false,
+  });
   return {
+    account: {
+      status: async () => accountStatus(),
+      signIn: async () => {
+        accountSignedIn = true;
+        return accountStatus();
+      },
+      signOut: async () => {
+        accountSignedIn = false;
+        return accountStatus();
+      },
+      refresh: async () => accountStatus(),
+    },
     platform: mockPlatform(),
     desktop: true,
     async getConfig(): Promise<HostConfig> {
