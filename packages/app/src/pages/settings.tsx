@@ -8,6 +8,7 @@ import { SectionCard } from '@/components/ui/section-card';
 import { StatusPill } from '@/components/ui/status-pill';
 import { useHost } from '@/providers/host-provider';
 import { dismissOnboarding, resetOnboarding } from '@/lib/local-runtime';
+import { AccountSection } from '@/pages/settings-account';
 import { TeamSection } from '@/pages/settings-team';
 import type { AvailableUpdate, UpdateProgress } from '@/lib/host';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,8 @@ export function SettingsPage() {
       <PageHeader title="Settings" description="Mode, updates, team access, and preferences for this desktop app." />
 
       {host.appMode ? <ModeSection /> : null}
+
+      {host.account ? <AccountSection /> : null}
 
       <TeamSection />
 

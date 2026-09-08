@@ -25,6 +25,8 @@ mod file;
 #[cfg(feature = "keyring")]
 mod keyring_store;
 
+#[cfg(all(feature = "file", windows))]
+pub use file::secure_owned_account_path;
 #[cfg(feature = "file")]
 pub use file::{restrict_to_current_user, AclFileStore};
 #[cfg(feature = "keyring")]
@@ -43,8 +45,8 @@ const HASH_SUFFIX_HEX_LEN: usize = 12;
 pub fn encode_identifier(value: &str) -> String {
     let mut tokens = Vec::new();
     for (index, byte) in value.as_bytes().iter().copied().enumerate() {
-        let allowed = byte.is_ascii_alphanumeric()
-            || (index > 0 && matches!(byte, b'.' | b'_' | b'-'));
+        let allowed =
+            byte.is_ascii_alphanumeric() || (index > 0 && matches!(byte, b'.' | b'_' | b'-'));
         if allowed {
             tokens.push(char::from(byte).to_string());
         } else {

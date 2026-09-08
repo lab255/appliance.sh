@@ -399,6 +399,13 @@ export interface ConsoleHost {
    * When present, Settings exposes a "Check for updates" panel.
    */
   updater?: UpdaterHost;
+  /** Optional host identity. This never authorizes local apps or grants. */
+  account?: {
+    status(): Promise<AbleAccountStatus>;
+    signIn(switchAccount?: boolean): Promise<AbleAccountStatus>;
+    signOut(): Promise<AbleAccountStatus>;
+    refresh(): Promise<AbleAccountStatus>;
+  };
   /**
    * Host-side agent credential login (Phase 5, L3 / docs/agent-login.md
    * §4). Lets a DESKTOP-only user authenticate the agent — API key OR
@@ -1117,3 +1124,10 @@ export type {
   StatePromotionInput,
   StatePromotionOptions,
 };
+
+export interface AbleAccountStatus {
+  signedIn: boolean;
+  email: string | null;
+  subject: string | null;
+  revocationFailed: boolean;
+}

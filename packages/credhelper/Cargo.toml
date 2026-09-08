@@ -8,15 +8,25 @@ edition = "2021"
 rust-version = "1.77"
 
 [dependencies]
-appliance-credential-store = { path = "../credential-store", default-features = false, features = ["keyring"] }
+appliance-credential-store = { path = "../credential-store", default-features = false, features = ["keyring", "file"] }
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 dirs = "5"
+fs2 = "0.4.3"
 getrandom = "0.3"
+libc = "0.2"
+# Use platform TLS (Schannel on Windows). The canonical MSVC cross-build must
+# not pull ring/aws-lc C archives or depend on host-installed lib.exe/LLVM tools.
+openidconnect = { version = "=4.0.1", default-features = false, features = ["reqwest-blocking", "native-tls"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
+webbrowser = "1"
 zeroize = "1"
 
 [dev-dependencies]
+ed25519-dalek = "2"
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 
 [[bin]]

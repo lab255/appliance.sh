@@ -562,3 +562,50 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+/// Refuse foreign-owned or redirected paths before tightening a native account ACL.
+#[cfg(windows)]
+pub fn secure_owned_account_path(path: &Path) -> Result<(), StoreError> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::MetadataExt;
+    use windows_sys::Win32::Security::Authorization::GetNamedSecurityInfoW;
+    use windows_sys::Win32::Security::EqualSid;
+    let metadata = fs::symlink_metadata(path).map_err(map_io_error)?;
+    if metadata.file_attributes() & 0x400 != 0 {
+        return Err(StoreError::Internal(
+            "account path is a reparse point".into(),
+        ));
+    }
+    let current = current_user_sid()?;
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut owner = std::ptr::null_mut();
+    let mut descriptor = std::ptr::null_mut();
+    let result = unsafe {
+        GetNamedSecurityInfoW(
+            wide.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if result != ERROR_SUCCESS {
+        return Err(map_io_error(std::io::Error::from_raw_os_error(
+            result as i32,
+        )));
+    }
+    let _descriptor = LocalSecurityDescriptor(descriptor);
+    if owner.is_null() || unsafe { EqualSid(owner, current.sid) } == 0 {
+        return Err(StoreError::Internal(
+            "account path is not owned by the current user".into(),
+        ));
+    }
+    restrict_to_current_user(path)
+}

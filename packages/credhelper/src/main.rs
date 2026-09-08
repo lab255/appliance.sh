@@ -19,6 +19,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum TopLevelCommand {
+    Account {
+        #[command(subcommand)]
+        command: AccountCommand,
+    },
     Cluster {
         #[command(subcommand)]
         command: ClusterCommand,
@@ -35,6 +39,40 @@ enum TopLevelCommand {
         #[command(subcommand)]
         command: EntitlementAnchorCommand,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum AccountCommand {
+    SignIn {
+        #[arg(long)]
+        switch_account: bool,
+    },
+    Status,
+    Refresh,
+    SignOut,
+}
+
+fn account_command(command: AccountCommand) -> ExitCode {
+    use appliance_credhelper::able::{Account, Port};
+    let result = Account::host().and_then(|account| match command {
+        AccountCommand::SignIn { switch_account } => account.sign_in(Port::Cli, switch_account),
+        AccountCommand::Status => account.status(),
+        AccountCommand::Refresh => account.refresh(),
+        AccountCommand::SignOut => account.sign_out(),
+    });
+    match result {
+        Ok(status) => {
+            println!(
+                "{}",
+                serde_json::to_string(&status).expect("status is serializable")
+            );
+            ExitCode::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("{message}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -100,6 +138,10 @@ fn main() -> ExitCode {
         }
     };
 
+    if let TopLevelCommand::Account { command } = cli.command {
+        return account_command(command);
+    }
+
     let request = match request_from_cli(cli) {
         Ok(request) => request,
         Err(error) => {
@@ -125,6 +167,7 @@ fn main() -> ExitCode {
 
 fn request_from_cli(cli: Cli) -> Result<Request, CommandError> {
     match cli.command {
+        TopLevelCommand::Account { .. } => unreachable!("account dispatched above"),
         TopLevelCommand::Cluster { command } => {
             let (operation, profile) = match command {
                 ClusterCommand::Get(identifier) => (Operation::Get, identifier.profile),

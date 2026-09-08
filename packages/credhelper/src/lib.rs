@@ -1,3 +1,5 @@
+pub mod able;
+
 use appliance_credential_store::{CredentialStore, Presence, StoreError, StoreKey};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;

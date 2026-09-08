@@ -1039,7 +1039,7 @@ function migrateWindowsCredentialFilesWithLocksHeld(
         version: 1,
         activeProfile: 'default',
         profiles: {
-          default: { ...legacy, managed: 'cli' },
+          default: { apiUrl: legacy.apiUrl, keyId: legacy.keyId, secret: legacy.secret, managed: 'cli' },
         },
       };
     }
