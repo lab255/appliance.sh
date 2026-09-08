@@ -159,6 +159,8 @@ run(
 const binary = path.join(targetDirectory, target, 'release/appliance-credhelper.exe');
 run(process.execPath, [path.join(scriptDirectory, 'normalize-credential-helper-pe.mjs'), binary]);
 const digest = sha256(binary);
+// Keep evidence even when the baked-pin guard below fails.
+fs.writeFileSync(`${binary}.sha256`, `${digest}  appliance-credhelper.exe\n`);
 const manifest = JSON.parse(fs.readFileSync(digestManifest, 'utf8'));
 
 if (checkOnly) {
