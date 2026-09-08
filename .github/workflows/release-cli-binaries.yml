@@ -212,6 +212,7 @@ jobs:
             gh release create "${TAG}" --title "${TAG}" --generate-notes
           fi
 
+      # release-cli-binaries.yml owns publishing shared credential-helper assets.
       - name: Upload binaries
         if: ${{ inputs.publish }}
         env:

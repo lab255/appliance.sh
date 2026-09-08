@@ -589,9 +589,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download all arch artifacts
+      # release-cli-binaries.yml owns publishing shared credential-helper assets.
+      - name: Download desktop arch artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: desktop-*
           path: dist-artifacts
 
       - name: Resolve release tag
