@@ -66,6 +66,13 @@ struct Credential {
     expires_at: u64,
     refresh_expires_at: u64,
 }
+impl Drop for Credential {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.access_token.zeroize();
+        self.refresh_token.zeroize();
+    }
+}
 impl Credential {
     fn status(&self) -> Status {
         Status {
@@ -280,6 +287,9 @@ impl Account {
             .add_scope(Scope::new("offline_access".into()))
             .set_pkce_challenge(challenge)
             .url();
+        if Instant::now() >= deadline {
+            return Err("Sign-in timed out; retry");
+        }
         open(url.as_str())?;
         let code = 'receive: loop {
             if Instant::now() >= deadline {
@@ -356,14 +366,41 @@ impl Account {
         if claims.subject().as_str().is_empty() || claims.email_verified() != Some(true) {
             return Err("A verified able email is required");
         }
-        let email = claims
-            .email()
-            .ok_or("A verified able email is required")?
+        let userinfo_request = openidconnect::http::Request::builder()
+            .uri(format!("{ISSUER}/oauth2/userinfo"))
+            .header(
+                "authorization",
+                format!("Bearer {}", response.access_token().secret()),
+            )
+            .body(Vec::new())
+            .map_err(|_| "Invalid userinfo request")?;
+        let userinfo_response = http
+            .call(userinfo_request)
+            .map_err(|_| "Cannot verify able profile")?;
+        if !userinfo_response.status().is_success() {
+            return Err("Cannot verify able profile");
+        }
+        let userinfo: Value =
+            serde_json::from_slice(userinfo_response.body()).map_err(|_| "Invalid able profile")?;
+        if userinfo["sub"].as_str() != Some(claims.subject().as_str())
+            || userinfo["email_verified"] != true
+        {
+            return Err("able profile did not match verified identity");
+        }
+        let email = userinfo["email"]
             .as_str()
+            .ok_or("A verified able email is required")?
             .trim()
             .to_lowercase();
         if email.is_empty() {
             return Err("A verified able email is required");
+        }
+        if response.scopes().is_some_and(|scopes| {
+            SCOPES
+                .split(' ')
+                .any(|required| !scopes.iter().any(|scope| scope.as_str() == required))
+        }) {
+            return Err("able did not grant the required identity scopes");
         }
         if let Some(expected) = claims.access_token_hash() {
             let actual = openidconnect::AccessTokenHash::from_token(
@@ -554,11 +591,9 @@ fn secure(path: &Path, directory: bool) -> Result<()> {
             return Err("Account storage must be owned by you with directory 0700 and files 0600");
         }
     }
-    #[cfg(not(unix))]
-    {
-        return Err("Secure native account storage is not yet available on this platform");
-    }
-    #[cfg(unix)]
+    #[cfg(windows)]
+    appliance_credential_store::secure_owned_account_path(path)
+        .map_err(|_| "Unsafe account storage ownership or permissions")?;
     Ok(())
 }
 #[cfg_attr(test, allow(dead_code))]
@@ -571,10 +606,10 @@ impl SyncHttpClient for AbleHttp {
     ) -> std::result::Result<openidconnect::HttpResponse, Self::Error> {
         #[cfg(test)]
         {
-            return tests::request(request);
+            tests::request(request)
         }
         #[cfg(not(test))]
-        self.0.call(request).map_err(|e| std::io::Error::other(e))
+        self.0.call(request).map_err(std::io::Error::other)
     }
 }
 fn http() -> Result<AbleHttp> {

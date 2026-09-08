@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 // The transport is replaced at compile time in tests. No test can call live able.
 // This server implements the registered public client's wire contract and signs real JWTs.
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Server {
     nonce: String,
     challenge: String,
@@ -62,7 +62,7 @@ pub(super) fn request(
         let path = request.uri().path().to_owned();
         server.calls.push(path.clone());
         assert!(!path.contains("introspect"));
-        assert!(request.headers().get("authorization").is_none());
+        if !path.ends_with("/userinfo") { assert!(request.headers().get("authorization").is_none()); }
         let body = String::from_utf8(request.body().clone()).unwrap();
         assert!(!body.contains("client_secret"));
         let params = reqwest::Url::parse(&format!("http://localhost/?{body}")).unwrap().query_pairs().into_owned().collect::<std::collections::HashMap<_,_>>();
@@ -96,6 +96,10 @@ pub(super) fn request(
                 if server.tamper == "missing-refresh" { response.as_object_mut().unwrap().remove("refresh_token"); }
                 if server.tamper == "missing-id" { response.as_object_mut().unwrap().remove("id_token"); }
                 reply(200, response)
+            }
+            "/api/auth/oauth2/userinfo" => {
+                assert_eq!(request.headers()["authorization"], "Bearer mock-access");
+                reply(200, json!({"sub": if server.tamper == "userinfo" { "wrong" } else if server.tamper == "subject" { "another-user" } else { "able-user" }, "email": "User@Example.com", "email_verified": true}))
             }
             "/api/auth/oauth2/revoke" => {
                 assert_eq!(params["client_id"], CLIENT_ID);
@@ -216,6 +220,7 @@ fn tampering_denial_missing_tokens_and_timeout_fail_closed() {
         "email",
         "missing-refresh",
         "missing-id",
+        "userinfo",
         "denied",
         "discovery",
         "path",
@@ -319,4 +324,57 @@ fn refuses_symlinks_and_unsafe_permissions() {
     fs::remove_file(account.directory.join("credentials.json")).unwrap();
     fs::set_permissions(&account.directory, fs::Permissions::from_mode(0o755)).unwrap();
     assert!(account.status().is_err());
+}
+
+#[test]
+fn concurrent_refresh_rereads_rotation_and_signout_stays_signed_out() {
+    let _ports = PORTS.lock().unwrap();
+    let (_home, account) = account();
+    login(&account, Port::Cli, "").unwrap();
+    expire(&account);
+    let fixture = SERVER.with(|s| s.borrow().clone());
+    let threads: Vec<_> = (0..2)
+        .map(|_| {
+            let directory = account.directory.clone();
+            let fixture = fixture.clone();
+            std::thread::spawn(move || {
+                SERVER.with(|s| *s.borrow_mut() = fixture);
+                Account { directory }.refresh().unwrap()
+            })
+        })
+        .collect();
+    for thread in threads {
+        assert!(thread.join().unwrap().signed_in);
+    }
+    assert_eq!(
+        account.read().unwrap()["able"]["refresh_token"],
+        "refresh-1"
+    );
+    account.sign_out().unwrap();
+    assert!(!account.refresh().unwrap().signed_in);
+}
+#[test]
+fn account_switch_requires_explicit_confirmation_and_transient_refresh_retains() {
+    let _ports = PORTS.lock().unwrap();
+    let (_home, account) = account();
+    login(&account, Port::Cli, "").unwrap();
+    assert!(login(&account, Port::Desktop, "subject")
+        .err()
+        .unwrap()
+        .contains("confirmation"));
+    assert_eq!(
+        account.status().unwrap().subject.as_deref(),
+        Some("able-user")
+    );
+    SERVER.with(|s| s.borrow_mut().code_used = false);
+    let switched = account
+        .login(Port::Desktop, true, Duration::from_secs(1), |url| {
+            browser(url, "", true)
+        })
+        .unwrap();
+    assert_eq!(switched.subject.as_deref(), Some("another-user"));
+    expire(&account);
+    SERVER.with(|s| s.borrow_mut().tamper = "network".into());
+    assert!(account.refresh().is_err());
+    assert!(account.status().unwrap().signed_in);
 }

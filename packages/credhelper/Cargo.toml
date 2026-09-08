@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.77"
 
 [dependencies]
-appliance-credential-store = { path = "../credential-store", default-features = false, features = ["keyring"] }
+appliance-credential-store = { path = "../credential-store", default-features = false, features = ["keyring", "file"] }
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 dirs = "5"
