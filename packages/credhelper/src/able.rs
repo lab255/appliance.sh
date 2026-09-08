@@ -113,38 +113,42 @@ impl Account {
     }
     fn lock(&self) -> Result<AccountLock> {
         if !self.directory.exists() {
+            #[allow(unused_mut)] // Only Unix adds a creation mode.
             let mut builder = fs::DirBuilder::new();
             #[cfg(unix)]
             {
                 use std::os::unix::fs::DirBuilderExt;
                 builder.mode(0o700);
             }
-            builder
-                .create(&self.directory)
-                .or_else(|e| {
-                    if e.kind() == std::io::ErrorKind::AlreadyExists {
-                        Ok(())
-                    } else {
-                        Err(e)
-                    }
-                })
-                .map_err(|_| "Cannot create account directory")?;
+            match builder.create(&self.directory) {
+                Ok(()) => initialize_created_path(&self.directory)?,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return Err("Cannot create account directory"),
+            }
         }
         secure(&self.directory, true)?;
         let path = self.directory.join("able.lock");
-        if path.exists() {
-            secure(&path, false)?;
-        }
         let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).truncate(false);
+        options.read(true).write(true).create_new(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
         }
-        let file = options
-            .open(&path)
-            .map_err(|_| "Cannot open account lock")?;
+        let file = match options.open(&path) {
+            Ok(file) => {
+                initialize_created_path(&path)?;
+                file
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                secure(&path, false)?;
+                options
+                    .create_new(false)
+                    .open(&path)
+                    .map_err(|_| "Cannot open account lock")?
+            }
+            Err(_) => return Err("Cannot open account lock"),
+        };
         secure(&path, false)?;
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
@@ -166,7 +170,12 @@ impl Account {
                 options.mode(0o600);
             }
             match options.open(&profile_path) {
-                Ok(_) => {
+                Ok(profile_file) => {
+                    if let Err(error) = initialize_created_path(&profile_path) {
+                        drop(profile_file);
+                        let _ = fs::remove_file(&profile_path);
+                        return Err(error);
+                    }
                     return Ok(AccountLock {
                         _os: file,
                         profile_path,
@@ -203,6 +212,7 @@ impl Account {
     fn write(&self, value: &Value) -> Result<()> {
         let mut temp = tempfile::NamedTempFile::new_in(&self.directory)
             .map_err(|_| "Cannot create account replacement")?;
+        initialize_created_path(temp.path())?;
         secure(temp.path(), false)?;
         serde_json::to_writer(&mut temp, value).map_err(|_| "Cannot write account credentials")?;
         temp.as_file()
@@ -585,6 +595,15 @@ fn now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+// Windows may assign an elevated token's default owner (Administrators) to new
+// objects. Set the private owner/DACL only after exclusive creation; never adopt
+// existing paths, which must pass the ownership check below.
+fn initialize_created_path(_path: &Path) -> Result<()> {
+    #[cfg(windows)]
+    appliance_credential_store::restrict_to_current_user(_path)
+        .map_err(|_| "Cannot secure new account storage")?;
+    Ok(())
 }
 fn secure(path: &Path, directory: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(|_| "Cannot inspect account storage")?;
