@@ -37,28 +37,43 @@ exercises digest rejection and release layouts.
 
 The CLI and desktop release workflows consume the canonical Windows artifact
 from [`credential-helper.yml`](../.github/workflows/credential-helper.yml).
-Before exposing that artifact, independent Linux and Windows builds must both
-match the npm pin and each other byte-for-byte. `pr.yml` runs the same gate on
-every PR, including changes to helper source and its credential-store dependency.
-Desktop packaging verifies the artifact again before copying it; the installed
-bundle and staged CLI release also retain their digest guards.
+Before exposing that artifact, Ubuntu 24.04 builds the helper from source and
+checks the committed npm pin. Windows downloads those exact bytes, runs
+`credhelper:digest -- --check` in artifact-verification mode, and executes the
+helper. An agreement job compares the artifacts byte-for-byte before either
+release workflow can publish. `pr.yml` runs this gate on every PR, including
+changes to the helper's credential-store dependency and Cargo.lock.
+Desktop packaging verifies the artifact before copying it; the installed bundle
+and staged CLI release retain their digest guards.
 
-To intentionally update the helper, install Rust 1.96.0 and run:
+The compiler host is part of the build recipe: Cargo's host build-unit metadata
+changes target symbol identities and code layout across hosts even with the same
+Rust/lld version. PE timestamp/GUID normalization cannot repair those code
+changes. The canonical producer is Ubuntu x64 CI; consumers verify its artifact
+instead of performing independent native builds.
 
-```sh
-pnpm --filter @appliance.sh/cli credhelper:digest
-pnpm --filter @appliance.sh/cli credhelper:digest -- --check
-```
+To intentionally update the helper and its pin:
 
-Commit the regenerated `credential-helper-checksums.json` with the source change.
-The recipe uses Rust 1.96.0's bundled rust-lld on every host, the SHA-verified
-2026-08-07 MSVC sysroot, `Cargo.lock`, remapped source paths, a fixed PDB name,
-and PE metadata normalization. It does not use host-installed MSVC or LLVM.
-`APPLIANCE_CREDHELPER_TARGET_DIR` can select a fresh output directory to test
-clean-build reproducibility; `APPLIANCE_CREDHELPER_CACHE_DIR` selects the sysroot
-cache. CI's `APPLIANCE_CREDHELPER_BINARY` is a packaging input, always checked
-against the committed pin, and is never a runtime helper lookup override.
-Releases remain owner-gated; checksum regeneration does not dispatch a release.
+1. Push the source change to a PR. The helper gate uploads its binary, SHA-256,
+   and diagnostic linker map even if the old baked pin fails.
+2. Download `credential-helper-linux` from that PR run, verify the binary's hash
+   against its accompanying `.sha256`, and record that SHA in
+   `credential-helper-checksums.json`. Record the **CI run ID and source SHA** in
+   the PR body. Never generate the pin from a laptop build.
+3. Push the pin and require the Linux, Windows, and byte-agreement jobs to pass
+   on the new head. No release-workflow dispatch is needed for regeneration.
+
+The recipe uses Rust 1.96.0's bundled rust-lld, the SHA-verified 2026-08-07 MSVC
+sysroot, `Cargo.lock`, remapped source paths, a fixed PDB name, and PE metadata
+normalization. It does not use host-installed MSVC or LLVM. Local cross-builds
+with `credhelper:digest -- --check` are diagnostic; they cannot author the pin.
+`APPLIANCE_CREDHELPER_TARGET_DIR` selects a fresh output directory;
+`APPLIANCE_CREDHELPER_CACHE_DIR` selects the sysroot cache. The tarball is cached
+in CI by its checksum and reverified before use.
+
+`APPLIANCE_CREDHELPER_BINARY` is a packaging or digest-check input that requires
+no compiler on the consumer host. It always checks the committed pin and cannot
+regenerate it. It is never a runtime helper lookup override.
 
 The helper accepts typed cluster, agent, and entitlement operations. Writes
 arrive on stdin, reads leave on stdout, and diagnostics use stderr. Windows

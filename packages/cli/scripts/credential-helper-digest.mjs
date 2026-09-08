@@ -82,6 +82,18 @@ async function download(url, destination, redirectsLeft = 5) {
   });
 }
 
+// Artifact consumers check the committed pin without recompiling on their
+// host. This is verification-only: an input binary can never regenerate a pin.
+if (process.env.APPLIANCE_CREDHELPER_BINARY) {
+  if (!checkOnly) throw new Error('An artifact input requires --check; it cannot regenerate the pin.');
+  run(process.execPath, [
+    path.join(scriptDirectory, 'verify-credential-helper-digest.mjs'),
+    target,
+    path.resolve(process.env.APPLIANCE_CREDHELPER_BINARY),
+  ]);
+  process.exit(0);
+}
+
 // Fail before downloading the sysroot when the pinned compiler is unavailable.
 let rustVersion;
 try {
