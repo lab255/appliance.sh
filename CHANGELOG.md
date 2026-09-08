@@ -1,3 +1,17 @@
+## 1.59.0 (2026-09-08)
+
+### Features
+
+- **cli,desktop:** sign in with able — native public-client oauth on both host ports (AP-233) ([#124](https://github.com/lab255/appliance.sh/pull/124))
+
+### Bug Fixes
+
+- **release:** reproducible windows credhelper build — ubuntu canonical artifact, agreement gate, ci-provenance pin (AP-228) ([#123](https://github.com/lab255/appliance.sh/pull/123))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.58.0 (2026-09-07)
 
 ### Features
