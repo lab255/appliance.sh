@@ -5,7 +5,8 @@ const program = new Command().description(
   'optional able identity shared with Appliance Desktop; no login is required to run apps'
 );
 for (const action of ['sign-in', 'status', 'refresh', 'sign-out'] as const) {
-  const command = program.command(action).description(
+  const name = action === 'sign-in' ? 'login' : action === 'sign-out' ? 'logout' : action;
+  const command = program.command(name).description(
     {
       'sign-in': 'sign in with able in the system browser on this host',
       status: 'show the current account without exposing credentials',
@@ -13,6 +14,7 @@ for (const action of ['sign-in', 'status', 'refresh', 'sign-out'] as const) {
       'sign-out': 'sign out CLI and desktop on this host',
     }[action]
   );
+  if (name !== action) command.alias(action);
   if (action === 'sign-in') command.option('--switch-account', 'confirm replacing the current able account');
   command.action(async (options: { switchAccount?: boolean }) => {
     try {

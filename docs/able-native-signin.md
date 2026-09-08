@@ -1,6 +1,6 @@
 # Optional able identity
 
-`appliance account sign-in` and Desktop → Settings → Account → **Sign in with able** open the system browser on the same host. Accounts are optional. Signing in does not authorize a runtime feature, activate a grant, transfer a device, or restore history.
+`appliance account login` and Desktop → Settings → Account → **Sign in with able** open the system browser on the same host. Accounts are optional. Signing in does not authorize a runtime feature, activate a grant, transfer a device, or restore history.
 
 The CLI and Tauri call one native implementation in `packages/credhelper/src/able.rs`, using `openidconnect` 4.0.1. The TypeScript helper and the webview receive redacted identity/status only. Native credentials are never returned over IPC. No client secret or introspection is used.
 
@@ -15,11 +15,13 @@ The CLI and Tauri call one native implementation in `packages/credhelper/src/abl
 | CLI redirect     | `http://localhost:43103/oauth/callback`                        |
 | Desktop redirect | `http://localhost:43104/oauth/callback`                        |
 
-The `localhost` spelling is identical in authorization and code-exchange requests. Listeners bind both `127.0.0.1` and `::1` explicitly, before opening the browser. Either bind failing rolls back the other. There is no alternate port, hostname, scheme, pasted-token, or headless flow. Callback state is random and single-use; nonce, signature, issuer, audience and expiration are verified locally. Userinfo must match the verified subject and supply a verified email. Sign-in expires after five minutes. Close the app or use **Cancel sign-in** / `appliance account sign-out` to cancel.
+The `localhost` spelling is identical in authorization and code-exchange requests. Listeners bind both `127.0.0.1` and `::1` explicitly, before opening the browser. Either bind failing rolls back the other. There is no alternate port, hostname, scheme, pasted-token, or headless flow. Callback state is random and single-use; nonce, signature, issuer, audience and expiration are verified locally. Userinfo must match the verified subject and supply a verified email. Sign-in expires after five minutes. Close the app or use **Cancel sign-in** / `appliance account logout` to cancel.
+
+`sign-in` and `sign-out` remain compatibility aliases for `login` and `logout`.
 
 `appliance account status` prints the identity. `appliance account refresh` refreshes only within 60 seconds of access expiry. Access tokens expire within 3,600 seconds; refresh tokens are bounded to 30 days. Refresh is serialized across native processes and rereads credentials under the OS lock. Rotation is persisted with an atomic replacement. A successful response without a replacement retains the previous refresh token. `invalid_grant` erases the able entry and returns signed out; network failures retain it for a later explicit retry. There is no automatic retry loop or replay of application mutations.
 
-`appliance account sign-out` and the Settings sign-out button erase the shared identity on this host. The native implementation attempts RFC 7009 refresh-token revocation with `client_id` in the body. Local erasure and pending-login cancellation are persisted even when revocation fails; the user sees that upstream revocation could not be confirmed. Browser-wide able logout is not performed. To switch accounts, sign out first; CLI also accepts explicit `sign-in --switch-account` confirmation.
+`appliance account logout` and the Settings sign-out button erase the shared identity on this host. The native implementation attempts RFC 7009 refresh-token revocation with `client_id` in the body. Local erasure and pending-login cancellation are persisted even when revocation fails; the user sees that upstream revocation could not be confirmed. Browser-wide able logout is not performed. To switch accounts, sign out first; CLI also accepts explicit `login --switch-account` confirmation.
 
 ## Storage and coexistence
 
