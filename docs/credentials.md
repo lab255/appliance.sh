@@ -65,7 +65,10 @@ To intentionally update the helper and its pin:
 
 The recipe uses Rust 1.96.0's bundled rust-lld, the SHA-verified 2026-08-07 MSVC
 sysroot, `Cargo.lock`, remapped source paths, a fixed PDB name, and PE metadata
-normalization. It does not use host-installed MSVC or LLVM. Local cross-builds
+normalization. The helper uses platform TLS (Schannel on Windows), with the
+OpenID client’s default rustls feature disabled: no ring/aws-lc C archives or
+MSVC librarian are needed for this target. It does not use host-installed MSVC
+or LLVM. Local cross-builds
 with `credhelper:digest -- --check` are diagnostic; they cannot author the pin.
 `APPLIANCE_CREDHELPER_TARGET_DIR` selects a fresh output directory;
 `APPLIANCE_CREDHELPER_CACHE_DIR` selects the sysroot cache. The tarball is cached

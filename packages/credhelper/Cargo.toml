@@ -15,7 +15,9 @@ dirs = "5"
 fs2 = "0.4.3"
 getrandom = "0.3"
 libc = "0.2"
-openidconnect = { version = "=4.0.1", features = ["reqwest-blocking"] }
+# Use platform TLS (Schannel on Windows). The canonical MSVC cross-build must
+# not pull ring/aws-lc C archives or depend on host-installed lib.exe/LLVM tools.
+openidconnect = { version = "=4.0.1", default-features = false, features = ["reqwest-blocking", "native-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
