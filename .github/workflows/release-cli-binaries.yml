@@ -44,7 +44,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  credential-helper:
+    uses: ./.github/workflows/credential-helper.yml
+
   build:
+    needs: credential-helper
     name: Build + publish CLI binaries
     runs-on: ubuntu-latest
     outputs:
@@ -73,31 +77,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup Rust for Windows credential helper
-        uses: dtolnay/rust-toolchain@1.96.0
+      - name: Download canonical Windows credential helper
+        uses: actions/download-artifact@v4
         with:
-          targets: x86_64-pc-windows-msvc
+          name: credential-helper-canonical
+          path: credential-helper
 
-      - name: Cache credential-helper Cargo inputs
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/credhelper
-
-      - name: Install pinned Windows cross-builder
-        run: cargo install cargo-xwin --version 0.23.1 --locked
-
-      # TODO(AP-202): Authenticode-sign the Windows helper before upload.
-      # Until then, the baked SHA-256 is the release trust boundary.
-      - name: Build + verify Windows credential helper
-        env:
-          APPLIANCE_CREDHELPER_CACHE_DIR: ${{ runner.temp }}/appliance-credhelper-digest
-        run: pnpm --filter @appliance.sh/cli credhelper:digest -- --check
+      - name: Verify canonical Windows credential helper
+        run: node packages/cli/scripts/verify-credential-helper-digest.mjs x86_64-pc-windows-msvc credential-helper/appliance-credhelper.exe
 
       - name: Stage Windows credential helper
         run: |
           set -euo pipefail
           ASSET=appliance-credhelper-x86_64-pc-windows-msvc.exe
-          SOURCE=packages/credhelper/target/x86_64-pc-windows-msvc/release/appliance-credhelper.exe
+          SOURCE=credential-helper/appliance-credhelper.exe
           mkdir -p packages/cli/dist
           cp "$SOURCE" "packages/cli/dist/$ASSET"
           DIGEST=$(sha256sum "packages/cli/dist/$ASSET" | cut -d ' ' -f 1)

@@ -11,13 +11,20 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '../../..');
 const target = 'x86_64-pc-windows-msvc';
 const rustToolchain = '1.96.0';
-const cargoXwinVersion = '0.23.1';
 const sysrootName = 'windows-msvc-sysroot-2026-08-07.tar.xz';
 const sysrootUrl =
   'https://github.com/trcrsired/windows-msvc-sysroot/releases/download/2026-08-07/windows-msvc-sysroot.tar.xz';
 const checksumFile = path.join(scriptDirectory, 'credential-helper-sysroot.sha256');
 const digestManifest = path.join(scriptDirectory, 'credential-helper-checksums.json');
 const checkOnly = process.argv.includes('--check');
+
+// Pin provenance must be the canonical Ubuntu CI compiler host. Even matching
+// Rust versions can emit different code layouts on other compiler hosts.
+if (!checkOnly && (process.platform !== 'linux' || process.arch !== 'x64' || process.env.CI !== 'true')) {
+  console.error('Only the canonical Linux x64 CI build may regenerate the credential-helper pin.');
+  console.error('Download its credential-helper-linux artifact and use that SHA-256; local --check is diagnostic.');
+  process.exit(1);
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -31,17 +38,6 @@ function run(command, args, options = {}) {
     throw new Error(`${command} ${args.join(' ')} failed${detail}`);
   }
   return options.capture ? result.stdout.trim() : '';
-}
-
-function regenerationFallback() {
-  const version = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'packages/cli/package.json'), 'utf8')).version;
-  console.error(`cargo-xwin ${cargoXwinVersion} is required to regenerate the Windows helper digest.`);
-  console.error(`Install it: cargo install cargo-xwin --version ${cargoXwinVersion} --locked`);
-  console.error('Then run: pnpm --filter @appliance.sh/cli credhelper:digest');
-  console.error('GitHub build:');
-  console.error(`  gh workflow run release-cli-binaries.yml --ref "$(git branch --show-current)" -f tag=v${version}`);
-  console.error('Local Actions build:');
-  console.error(`  act workflow_dispatch -W .github/workflows/release-cli-binaries.yml --input tag=v${version}`);
 }
 
 function sha256(file) {
@@ -86,9 +82,26 @@ async function download(url, destination, redirectsLeft = 5) {
   });
 }
 
-const versionOutput = spawnSync('cargo', ['xwin', '--version'], { encoding: 'utf8' });
-if (versionOutput.status !== 0 || !`${versionOutput.stdout}${versionOutput.stderr}`.includes(cargoXwinVersion)) {
-  regenerationFallback();
+// Artifact consumers check the committed pin without recompiling on their
+// host. This is verification-only: an input binary can never regenerate a pin.
+if (process.env.APPLIANCE_CREDHELPER_BINARY) {
+  if (!checkOnly) throw new Error('An artifact input requires --check; it cannot regenerate the pin.');
+  run(process.execPath, [
+    path.join(scriptDirectory, 'verify-credential-helper-digest.mjs'),
+    target,
+    path.resolve(process.env.APPLIANCE_CREDHELPER_BINARY),
+  ]);
+  process.exit(0);
+}
+
+// Fail before downloading the sysroot when the pinned compiler is unavailable.
+let rustVersion;
+try {
+  rustVersion = run('rustc', [`+${rustToolchain}`, '-vV'], { capture: true });
+} catch (error) {
+  console.error(error.message);
+  console.error('Install rustup, then install the pinned credential-helper toolchain:');
+  console.error(`  rustup toolchain install ${rustToolchain} --profile minimal --target ${target}`);
   process.exit(1);
 }
 
@@ -108,44 +121,82 @@ if (actualSysrootDigest !== expectedSysrootDigest) {
   throw new Error(`MSVC sysroot SHA-256 mismatch (expected ${expectedSysrootDigest}, got ${actualSysrootDigest})`);
 }
 
-const xwinCache = path.join(cacheRoot, 'cargo-xwin-cache');
-const extractedSysroot = path.join(xwinCache, 'windows-msvc-sysroot');
+fs.mkdirSync(cacheRoot, { recursive: true });
+const extractedSysroot = path.join(cacheRoot, 'windows-msvc-sysroot');
 const extractionStamp = path.join(extractedSysroot, 'APPLIANCE_SYSROOT_SHA256');
 if (!fs.existsSync(extractionStamp) || fs.readFileSync(extractionStamp, 'utf8').trim() !== expectedSysrootDigest) {
   fs.rmSync(extractedSysroot, { recursive: true, force: true });
-  fs.mkdirSync(extractedSysroot, { recursive: true });
-  run('tar', ['-xJf', archive, '-C', extractedSysroot]);
+  // The archive already contains the windows-msvc-sysroot directory.
+  // Git Bash's GNU tar interprets a drive-letter path as a remote archive.
+  const tar =
+    process.platform === 'win32' ? path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32/tar.exe') : 'tar';
+  run(tar, ['-xJf', archive, '-C', cacheRoot]);
   fs.writeFileSync(extractionStamp, `${expectedSysrootDigest}\n`);
-  // cargo-xwin treats DONE as proof that the local sysroot cache is complete.
-  fs.writeFileSync(path.join(extractedSysroot, 'DONE'), `sha256:${expectedSysrootDigest}\n`);
 }
 
+// Use Rust's bundled linker on EVERY host. Native link.exe and a host-installed
+// lld-link are not equivalent, even with identical source and a fixed timestamp.
+
+const host = rustVersion.match(/^host: (.+)$/m)?.[1];
+if (!host) throw new Error('rustc did not report its host triple');
+const rustSysroot = run('rustc', [`+${rustToolchain}`, '--print', 'sysroot'], { capture: true });
+const linker = path.join(
+  rustSysroot,
+  'lib/rustlib',
+  host,
+  'bin',
+  `rust-lld${process.platform === 'win32' ? '.exe' : ''}`
+);
+const libraryPath = path.join(extractedSysroot, 'lib/x86_64-unknown-windows-msvc');
+const cargoHome = path.resolve(process.env.CARGO_HOME ?? path.join(os.homedir(), '.cargo'));
+const targetDirectory = path.resolve(
+  process.env.APPLIANCE_CREDHELPER_TARGET_DIR ?? path.join(repositoryRoot, 'packages/credhelper/target')
+);
+console.log(rustVersion);
+console.log(run(linker, ['-flavor', 'link', '--version'], { capture: true }));
 run('rustup', ['target', 'add', '--toolchain', rustToolchain, target]);
+const flags = [
+  '-C',
+  `linker=${linker}`,
+  '-C',
+  'linker-flavor=lld-link',
+  '-L',
+  `native=${libraryPath}`,
+  '-C',
+  'link-arg=/timestamp:0',
+  '-C',
+  'link-arg=/pdbaltpath:appliance-credhelper.pdb',
+  '-C',
+  `link-arg=/map:${path.join(targetDirectory, 'credential-helper.map')}`,
+  '--remap-path-prefix',
+  `${repositoryRoot}=/appliance`,
+  '--remap-path-prefix',
+  `${cargoHome}=/cargo`,
+  '--remap-path-prefix',
+  `${rustSysroot}=/rust`,
+];
 run(
   'cargo',
   [
     `+${rustToolchain}`,
-    'xwin',
     'build',
     '--locked',
     '--release',
-    '--cross-compiler',
-    'clang',
-    '--xwin-version',
-    '17',
-    '--xwin-cache-dir',
-    xwinCache,
     '--manifest-path',
     'packages/credhelper/Cargo.toml',
     '--target',
     target,
+    '--target-dir',
+    targetDirectory,
   ],
-  { env: { ...process.env, RUSTFLAGS: '-Clink-arg=/timestamp:0' } }
+  { env: { ...process.env, CARGO_INCREMENTAL: '0', CARGO_ENCODED_RUSTFLAGS: flags.join('\x1f') } }
 );
 
-const binary = path.join(repositoryRoot, 'packages/credhelper/target', target, 'release/appliance-credhelper.exe');
-run('node', [path.join(scriptDirectory, 'normalize-credential-helper-pe.mjs'), binary]);
+const binary = path.join(targetDirectory, target, 'release/appliance-credhelper.exe');
+run(process.execPath, [path.join(scriptDirectory, 'normalize-credential-helper-pe.mjs'), binary]);
 const digest = sha256(binary);
+// Keep evidence even when the baked-pin guard below fails.
+fs.writeFileSync(`${binary}.sha256`, `${digest}  appliance-credhelper.exe\n`);
 const manifest = JSON.parse(fs.readFileSync(digestManifest, 'utf8'));
 
 if (checkOnly) {
