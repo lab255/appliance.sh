@@ -50,6 +50,9 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 //   install-from-file    file-picker installation path
 //   grant-prompt         install grant dialog with an optional mount
 //   entitlements-suggest-revoke Settings suggested-revocation list
+//   account-waiting Settings sign-in waiting for the browser
+//   account-failure Settings sign-in fails with a static native diagnostic
+//   account-revoke-failed Settings sign-out cannot confirm upstream revocation
 //   banner-mv1-disabled MV1 version drift with release trust disabled
 //   banner-legacy-reboot version drift on a pre-MV1 launcher
 //
@@ -84,7 +87,10 @@ type Scenario =
   | 'grant-prompt'
   | 'entitlements-suggest-revoke'
   | 'banner-mv1-disabled'
-  | 'banner-legacy-reboot';
+  | 'banner-legacy-reboot'
+  | 'account-waiting'
+  | 'account-failure'
+  | 'account-revoke-failed';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -169,7 +175,10 @@ function scenario(): Scenario {
     s === 'grant-prompt' ||
     s === 'entitlements-suggest-revoke' ||
     s === 'banner-mv1-disabled' ||
-    s === 'banner-legacy-reboot'
+    s === 'banner-legacy-reboot' ||
+    s === 'account-waiting' ||
+    s === 'account-failure' ||
+    s === 'account-revoke-failed'
     ? s
     : 'ready';
 }
@@ -657,7 +666,7 @@ export function createMockHost(): ConsoleHost {
           },
         ]
       : [];
-  let accountSignedIn = false;
+  let accountSignedIn = scenario() === 'account-revoke-failed';
   const accountStatus = () => ({
     signedIn: accountSignedIn,
     email: accountSignedIn ? 'avery@example.com' : null,
@@ -668,12 +677,15 @@ export function createMockHost(): ConsoleHost {
     account: {
       status: async () => accountStatus(),
       signIn: async () => {
+        if (scenario() === 'account-waiting') return new Promise<ReturnType<typeof accountStatus>>(() => {});
+        if (scenario() === 'account-failure')
+          return Promise.reject('Sign-in port 43104 is in use. Close the process using it and retry.');
         accountSignedIn = true;
         return accountStatus();
       },
       signOut: async () => {
         accountSignedIn = false;
-        return accountStatus();
+        return { ...accountStatus(), revocationFailed: scenario() === 'account-revoke-failed' };
       },
       refresh: async () => accountStatus(),
     },

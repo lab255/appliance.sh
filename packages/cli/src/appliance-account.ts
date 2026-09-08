@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { ableAccount } from '@appliance.sh/helper';
+import { ableAccount, ableAccountStatusJson } from '@appliance.sh/helper';
 
 const program = new Command().description(
   'optional able identity shared with Appliance Desktop; no login is required to run apps'
@@ -16,9 +16,17 @@ for (const action of ['sign-in', 'status', 'refresh', 'sign-out'] as const) {
   );
   if (name !== action) command.alias(action);
   if (action === 'sign-in') command.option('--switch-account', 'confirm replacing the current able account');
-  command.action(async (options: { switchAccount?: boolean }) => {
+  if (action === 'status') command.option('--json', 'print the native helper status JSON verbatim');
+  command.action(async (options: { switchAccount?: boolean; json?: boolean }) => {
     try {
-      if (action === 'sign-in') console.log('Opening your browser. You can keep using Appliance without an account.');
+      if (action === 'status' && options.json) {
+        process.stdout.write(await ableAccountStatusJson());
+        return;
+      }
+      if (action === 'sign-in')
+        console.log(
+          'Opening your browser. Sign-in expires after five minutes. You can keep using Appliance without an account.'
+        );
       const status = await ableAccount(action, options.switchAccount);
       console.log(
         status.signedIn

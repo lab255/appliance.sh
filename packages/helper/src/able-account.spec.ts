@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
-import { ableAccount } from './able-account.js';
+import { ableAccount, ableAccountStatusJson } from './able-account.js';
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
 vi.mock('./credential-helper.js', () => ({ resolveCredHelperPath: () => '/trusted/appliance-credhelper' }));
 const signedOut = { signedIn: false, email: null, subject: null, revocationFailed: false };
@@ -22,10 +22,22 @@ describe('able native helper boundary', () => {
   it('propagates a retryable native failure without serializing exec errors', async () => {
     run.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1) as (error: Error, stdout: string, stderr: string) => void;
-      callback(new Error('exec details'), '', 'Sign-in port is busy; retry');
+      callback(new Error('exec details'), '', 'Sign-in port 43103 is in use. Close the process using it and retry.');
       return {} as ReturnType<typeof execFile>;
     });
-    await expect(ableAccount('sign-in')).rejects.toThrow('Sign-in port is busy; retry');
+    await expect(ableAccount('sign-in')).rejects.toThrow(
+      'Sign-in port 43103 is in use. Close the process using it and retry.'
+    );
+  });
+  it('preserves native status JSON whitespace and trailing newline verbatim', async () => {
+    const json = JSON.stringify(signedOut, null, 2) + '\n';
+    run.mockImplementation((...args: unknown[]) => {
+      const callback = args.at(-1) as (error: null, stdout: string, stderr: string) => void;
+      callback(null, json, '');
+      return {} as ReturnType<typeof execFile>;
+    });
+    expect(await ableAccountStatusJson()).toBe(json);
+    expect(run.mock.calls[0].slice(0, 2)).toEqual(['/trusted/appliance-credhelper', ['account', 'status']]);
   });
   it('rejects malformed helper output', async () => {
     run.mockImplementation((...args: unknown[]) => {

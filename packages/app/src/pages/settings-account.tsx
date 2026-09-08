@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { SectionCard } from '@/components/ui/section-card';
 import { useHost } from '@/providers/host-provider';
@@ -51,7 +52,7 @@ export function AccountSection() {
         <p className="text-sm text-muted-foreground">
           Apps work without an account. Signing in does not activate grants or restore history.
         </p>
-        <p className="text-sm">{status?.signedIn ? `Signed in as ${status.email}` : 'Signed out'}</p>
+        <p className="text-sm">{status?.signedIn ? `Signed in with able as ${status.email}.` : 'Signed out'}</p>
         {busy ? (
           <p role="status" className="text-sm text-muted-foreground">
             Finish sign-in in your browser. This expires after five minutes.
@@ -69,11 +70,7 @@ export function AccountSection() {
             </Button>
           ) : null}
         </div>
-        {error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
+        {error ? <Banner tone="error">{error}</Banner> : null}
         {notice ? (
           <p role="status" className="text-sm text-muted-foreground">
             {notice}

@@ -31,4 +31,4 @@ export {
 export type { MintedApiKey } from './api-server.js';
 export { encodeCredentialIdentifier, resolveCredHelperPath } from './credential-helper.js';
 
-export { ableAccount, type AbleAccountStatus } from './able-account.js';
+export { ableAccount, ableAccountStatusJson, type AbleAccountStatus } from './able-account.js';

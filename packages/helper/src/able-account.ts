@@ -9,10 +9,19 @@ export interface AbleAccountStatus {
   revocationFailed: boolean;
 }
 
-export function ableAccount(
+export async function ableAccount(
   action: 'sign-in' | 'status' | 'refresh' | 'sign-out',
   switchAccount = false
 ): Promise<AbleAccountStatus> {
+  return JSON.parse(await requestAccount(action, switchAccount)) as AbleAccountStatus;
+}
+
+/** Preserve the native helper's redacted JSON byte-for-byte for CLI automation. */
+export function ableAccountStatusJson(): Promise<string> {
+  return requestAccount('status');
+}
+
+function requestAccount(action: 'sign-in' | 'status' | 'refresh' | 'sign-out', switchAccount = false): Promise<string> {
   return new Promise((resolve, reject) => {
     const args = ['account', action];
     if (action === 'sign-in' && switchAccount) args.push('--switch-account');
@@ -22,7 +31,7 @@ export function ableAccount(
       try {
         const status = JSON.parse(stdout) as AbleAccountStatus;
         if (typeof status.signedIn !== 'boolean') throw new Error('Invalid account status');
-        resolve(status);
+        resolve(stdout);
       } catch {
         reject(new Error('Invalid account status from native helper.'));
       }
