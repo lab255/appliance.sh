@@ -18,6 +18,14 @@ const checksumFile = path.join(scriptDirectory, 'credential-helper-sysroot.sha25
 const digestManifest = path.join(scriptDirectory, 'credential-helper-checksums.json');
 const checkOnly = process.argv.includes('--check');
 
+// Pin provenance must be the canonical Ubuntu CI compiler host. Even matching
+// Rust versions can emit different code layouts on other compiler hosts.
+if (!checkOnly && (process.platform !== 'linux' || process.arch !== 'x64' || process.env.CI !== 'true')) {
+  console.error('Only the canonical Linux x64 CI build may regenerate the credential-helper pin.');
+  console.error('Download its credential-helper-linux artifact and use that SHA-256; local --check is diagnostic.');
+  process.exit(1);
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
@@ -74,6 +82,17 @@ async function download(url, destination, redirectsLeft = 5) {
   });
 }
 
+// Fail before downloading the sysroot when the pinned compiler is unavailable.
+let rustVersion;
+try {
+  rustVersion = run('rustc', [`+${rustToolchain}`, '-vV'], { capture: true });
+} catch (error) {
+  console.error(error.message);
+  console.error('Install rustup, then install the pinned credential-helper toolchain:');
+  console.error(`  rustup toolchain install ${rustToolchain} --profile minimal --target ${target}`);
+  process.exit(1);
+}
+
 const expectedSysrootDigest = fs.readFileSync(checksumFile, 'utf8').trim().split(/\s+/)[0];
 const cacheRoot = path.resolve(
   process.env.APPLIANCE_CREDHELPER_CACHE_DIR ?? path.join(os.tmpdir(), 'appliance-credhelper-digest')
@@ -96,13 +115,16 @@ const extractionStamp = path.join(extractedSysroot, 'APPLIANCE_SYSROOT_SHA256');
 if (!fs.existsSync(extractionStamp) || fs.readFileSync(extractionStamp, 'utf8').trim() !== expectedSysrootDigest) {
   fs.rmSync(extractedSysroot, { recursive: true, force: true });
   // The archive already contains the windows-msvc-sysroot directory.
-  run('tar', ['-xJf', archive, '-C', cacheRoot]);
+  // Git Bash's GNU tar interprets a drive-letter path as a remote archive.
+  const tar =
+    process.platform === 'win32' ? path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32/tar.exe') : 'tar';
+  run(tar, ['-xJf', archive, '-C', cacheRoot]);
   fs.writeFileSync(extractionStamp, `${expectedSysrootDigest}\n`);
 }
 
 // Use Rust's bundled linker on EVERY host. Native link.exe and a host-installed
 // lld-link are not equivalent, even with identical source and a fixed timestamp.
-const rustVersion = run('rustc', [`+${rustToolchain}`, '-vV'], { capture: true });
+
 const host = rustVersion.match(/^host: (.+)$/m)?.[1];
 if (!host) throw new Error('rustc did not report its host triple');
 const rustSysroot = run('rustc', [`+${rustToolchain}`, '--print', 'sysroot'], { capture: true });
@@ -132,6 +154,8 @@ const flags = [
   'link-arg=/timestamp:0',
   '-C',
   'link-arg=/pdbaltpath:appliance-credhelper.pdb',
+  '-C',
+  `link-arg=/map:${path.join(targetDirectory, 'credential-helper.map')}`,
   '--remap-path-prefix',
   `${repositoryRoot}=/appliance`,
   '--remap-path-prefix',
