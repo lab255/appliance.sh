@@ -36,6 +36,12 @@ impl Port {
             Self::Desktop => 43104,
         }
     }
+    fn busy_message(self) -> &'static str {
+        match self {
+            Self::Cli => "Sign-in port 43103 is in use. Close the process using it and retry.",
+            Self::Desktop => "Sign-in port 43104 is in use. Close the process using it and retry.",
+        }
+    }
     fn redirect(self) -> String {
         format!("http://localhost:{}/oauth/callback", self.number())
     }
@@ -172,7 +178,7 @@ impl Account {
                 {
                     std::thread::sleep(Duration::from_millis(25))
                 }
-                Err(_) => return Err("Profile credentials are busy; retry"),
+                Err(_) => return Err("Profile credentials are busy; retry. If no Appliance process is running, remove ~/.appliance/profiles.json.lock."),
             }
         }
     }
@@ -258,9 +264,9 @@ impl Account {
         // RAII drops the first listener if the second bind fails. Never bind a hostname.
         let listeners = [
             TcpListener::bind((Ipv4Addr::LOCALHOST, port.number()))
-                .map_err(|_| "Sign-in port is busy; retry")?,
+                .map_err(|_| port.busy_message())?,
             TcpListener::bind((Ipv6Addr::LOCALHOST, port.number()))
-                .map_err(|_| "Sign-in port is busy; retry")?,
+                .map_err(|_| port.busy_message())?,
         ];
         for l in &listeners {
             l.set_nonblocking(true)
@@ -337,11 +343,17 @@ impl Account {
                     };
                     let valid = unique("state").as_deref() == Some(state.secret().as_str());
                     let code = unique("code").filter(|v| !v.is_empty());
-                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-store\r\nConnection: close\r\n\r\nReturn to Appliance to finish sign-in.");
+                    let denied = unique("error").is_some() || code.is_none();
+                    let message = if valid && !denied {
+                        "Return to Appliance to finish sign-in."
+                    } else {
+                        "Sign-in was not completed. Return to Appliance to try again."
+                    };
+                    let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{message}").as_bytes());
                     if !valid {
                         return Err("Sign-in state did not match; retry");
                     }
-                    if unique("error").is_some() || code.is_none() {
+                    if denied {
                         return Err("Sign-in was denied; retry");
                     }
                     break 'receive code.unwrap();
@@ -507,7 +519,7 @@ impl Account {
             }
         }
         credential.access_token = response.access_token().secret().clone();
-        if let Some(refresh) = response.refresh_token() {
+        if let Some(refresh) = response.refresh_token().filter(|t| !t.secret().is_empty()) {
             credential.refresh_token = refresh.secret().clone();
         }
         let ttl = response

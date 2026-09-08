@@ -94,6 +94,7 @@ pub(super) fn request(
                 if server.tamper == "network" { return Err(std::io::Error::other("mock network failure")); }
                 let mut response = json!({"access_token": "mock-access", "refresh_token": format!("refresh-{}", server.refresh), "token_type": "Bearer", "expires_in": 3600, "id_token": jwt(&server)});
                 if server.tamper == "missing-refresh" { response.as_object_mut().unwrap().remove("refresh_token"); }
+                if server.tamper == "empty-refresh" { response["refresh_token"] = json!(""); }
                 if server.tamper == "missing-id" { response.as_object_mut().unwrap().remove("id_token"); }
                 reply(200, response)
             }
@@ -111,6 +112,13 @@ pub(super) fn request(
     })
 }
 fn browser(url: &str, tamper: &str, ipv6: bool) -> Result<()> {
+    browser_response(url, tamper, ipv6).map(|_| ())
+}
+fn browser_response(
+    url: &str,
+    tamper: &str,
+    ipv6: bool,
+) -> Result<std::thread::JoinHandle<String>> {
     let url = reqwest::Url::parse(url).unwrap();
     assert_eq!(
         url.as_str().split('?').next().unwrap(),
@@ -145,11 +153,12 @@ fn browser(url: &str, tamper: &str, ipv6: bool) -> Result<()> {
         "/oauth/callback"
     };
     let query = if tamper == "denied" {
-        format!("error=access_denied&state={state}")
+        format!("error=access_denied&error_description=untrusted-server-text&state={state}")
     } else {
         format!("code=code&state={state}")
     };
-    std::thread::spawn(move || {
+    let (sent, written) = std::sync::mpsc::sync_channel(1);
+    let thread = std::thread::spawn(move || {
         let mut stream = std::net::TcpStream::connect(if ipv6 {
             format!("[::1]:{port}")
         } else {
@@ -161,10 +170,14 @@ fn browser(url: &str, tamper: &str, ipv6: bool) -> Result<()> {
                 format!("GET {path}?{query} HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n").as_bytes(),
             )
             .unwrap();
+        sent.send(()).unwrap();
         let mut body = String::new();
         let _ = stream.read_to_string(&mut body);
+        body
     });
-    Ok(())
+    // Keep a cancelled fixture from connecting to the following test's listener.
+    written.recv().unwrap();
+    Ok(thread)
 }
 fn account() -> (tempfile::TempDir, Account) {
     SERVER.with(|s| *s.borrow_mut() = Server::default());
@@ -180,7 +193,7 @@ fn login(account: &Account, port: Port, tamper: &str) -> Result<Status> {
         s.tamper = tamper.into();
         s.code_used = false;
     });
-    account.login(port, false, Duration::from_millis(250), |url| {
+    account.login(port, false, Duration::from_secs(2), |url| {
         browser(url, tamper, matches!(port, Port::Desktop))
     })
 }
@@ -240,21 +253,30 @@ fn tampering_denial_missing_tokens_and_timeout_fail_closed() {
 #[test]
 fn busy_ipv4_or_ipv6_rolls_back_and_can_retry() {
     let _ports = PORTS.lock().unwrap();
-    for ipv6 in [false, true] {
-        let (_home, account) = account();
-        let busy = TcpListener::bind(if ipv6 {
-            "[::1]:43103"
-        } else {
-            "127.0.0.1:43103"
-        })
-        .unwrap();
-        assert!(account
-            .login(Port::Cli, false, Duration::from_millis(20), |_| panic!(
-                "browser must not open"
-            ))
-            .is_err());
-        drop(busy);
-        assert!(login(&account, Port::Cli, "").unwrap().signed_in);
+    for port in [Port::Cli, Port::Desktop] {
+        for ipv6 in [false, true] {
+            let (_home, account) = account();
+            let address = if ipv6 {
+                format!("[::1]:{}", port.number())
+            } else {
+                format!("127.0.0.1:{}", port.number())
+            };
+            let busy = TcpListener::bind(address).unwrap();
+            let expected = format!(
+                "Sign-in port {} is in use. Close the process using it and retry.",
+                port.number()
+            );
+            assert_eq!(
+                account
+                    .login(port, false, Duration::from_millis(20), |_| panic!(
+                        "browser must not open"
+                    ))
+                    .err(),
+                Some(expected.as_str())
+            );
+            drop(busy);
+            assert!(login(&account, port, "").unwrap().signed_in);
+        }
     }
 }
 #[test]
@@ -377,4 +399,48 @@ fn account_switch_requires_explicit_confirmation_and_transient_refresh_retains()
     SERVER.with(|s| s.borrow_mut().tamper = "network".into());
     assert!(account.refresh().is_err());
     assert!(account.status().unwrap().signed_in);
+}
+
+#[test]
+fn callback_failure_copy_is_static_and_success_copy_stays_distinct() {
+    let _ports = PORTS.lock().unwrap();
+    for tamper in ["", "state", "denied"] {
+        let (_home, account) = account();
+        let mut callback = None;
+        let result = account.login(Port::Cli, false, Duration::from_secs(1), |url| {
+            callback = Some(browser_response(url, tamper, false)?);
+            Ok(())
+        });
+        assert_eq!(result.is_ok(), tamper.is_empty());
+        let response = callback.unwrap().join().unwrap();
+        let body = response.split_once("\r\n\r\n").unwrap().1;
+        assert!(
+            !body.is_empty(),
+            "callback response: {response:?}, tamper: {tamper}"
+        );
+        assert_eq!(
+            body,
+            if tamper.is_empty() {
+                "Return to Appliance to finish sign-in."
+            } else {
+                "Sign-in was not completed. Return to Appliance to try again."
+            }
+        );
+        assert!(!response.contains("untrusted-server-text"));
+    }
+}
+#[test]
+fn refresh_retains_previous_token_when_replacement_is_missing_or_empty() {
+    let _ports = PORTS.lock().unwrap();
+    for tamper in ["missing-refresh", "empty-refresh"] {
+        let (_home, account) = account();
+        login(&account, Port::Cli, "").unwrap();
+        expire(&account);
+        SERVER.with(|s| s.borrow_mut().tamper = tamper.into());
+        assert!(account.refresh().unwrap().signed_in);
+        assert_eq!(
+            account.read().unwrap()["able"]["refresh_token"],
+            "refresh-0"
+        );
+    }
 }

@@ -25,7 +25,10 @@ export function withProfilesLock<T>(lockPath: string, fn: () => T): T {
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
       // Never steal a live native refresh lock or continue unlocked.
-      if (Date.now() > deadline) throw new Error('Profile credentials are busy; retry.');
+      if (Date.now() > deadline)
+        throw new Error(
+          'Profile credentials are busy; retry. If no Appliance process is running, remove ~/.appliance/profiles.json.lock.'
+        );
       sleepSync(50);
     }
   }
