@@ -1,3 +1,8 @@
+/* Keep the route snapshot canvas on the same surface as the app. */
+:root {
+  background-color: var(--color-background);
+}
+
 .journey-stack {
   display: grid;
 }
@@ -39,6 +44,11 @@
 .journey-hosting[data-immediate='true'] {
   animation: none;
 }
+/* Presence cleanup is passive; never paint its retained reduced-motion surface. */
+.journey-frame[data-present='false'][data-immediate='true'] {
+  display: none;
+}
+
 @keyframes journey-enter {
   from {
     opacity: 0;
@@ -69,6 +79,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .journey-frame[data-present='false'] {
+    display: none;
+  }
   .journey-frame,
   .journey-reveal,
   .journey-hosting {
