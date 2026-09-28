@@ -1,6 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import * as m from 'motion/react-m';
+import { AnimatePresence } from 'motion/react';
+import { useTransition } from '../motion/use-transition.js';
 import { X } from 'lucide-react';
 import { cva } from 'class-variance-authority';
 import { cn } from '../lib/utils.js';
@@ -15,6 +18,15 @@ export interface BannerProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   onDismiss?: () => void;
   children: React.ReactNode;
 }
+
+// Keep native HTML animation/drag handlers separate from Motion's gesture props.
+const BannerRoot = m.create(
+  React.forwardRef<HTMLDivElement, { htmlProps: React.HTMLAttributes<HTMLDivElement>; style?: React.CSSProperties }>(
+    ({ htmlProps, style, ...animatedProps }, ref) => (
+      <div {...htmlProps} {...animatedProps} style={{ ...htmlProps.style, ...style }} ref={ref} />
+    )
+  )
+);
 
 const bannerVariants = cva('flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm leading-5', {
   variants: {
@@ -45,9 +57,20 @@ export function Banner({
   role,
   ...props
 }: BannerProps) {
+  const { immediate, transition, exitTransition } = useTransition();
   const inferredRole = tone === 'error' ? 'alert' : tone === 'success' ? 'status' : undefined;
   return (
-    <div role={role ?? inferredRole} className={cn(bannerVariants({ tone }), className)} {...props}>
+    <BannerRoot
+      initial={immediate ? false : { opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={immediate ? undefined : { opacity: 0, transition: exitTransition }}
+      transition={transition}
+      htmlProps={{
+        ...props,
+        role: role ?? inferredRole,
+        className: cn('appliance-ui', bannerVariants({ tone }), className),
+      }}
+    >
       {Icon ? <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> : null}
       <div className="min-w-0 flex-1">
         {title ? <div className="font-medium">{title}</div> : null}
@@ -68,8 +91,13 @@ export function Banner({
           ) : null}
         </div>
       ) : null}
-    </div>
+    </BannerRoot>
   );
 }
 
 export { bannerVariants };
+
+/** Place at the owner of conditional Banner state; initial content stays visible. */
+export function BannerPresence({ children }: { children: React.ReactNode }) {
+  return <AnimatePresence initial={false}>{children}</AnimatePresence>;
+}

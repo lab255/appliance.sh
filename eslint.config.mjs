@@ -27,6 +27,14 @@ export default defineConfig([
   {
     files: ['packages/ui/src/**/*.{ts,tsx}', 'packages/app/src/**/*.{ts,tsx}'],
     rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "ImportDeclaration[source.value='motion/react-m'] > ImportSpecifier, ImportDeclaration[source.value='motion/react-m'] > ImportDefaultSpecifier, ImportDeclaration[source.value='motion/react-m'] > ImportNamespaceSpecifier[local.name!='m'], ImportDeclaration[source.value='motion/react'] > ImportNamespaceSpecifier",
+          message: "Use import * as m from 'motion/react-m'; import Motion hooks by name.",
+        },
+      ],
       'no-restricted-imports': [
         'error',
         {

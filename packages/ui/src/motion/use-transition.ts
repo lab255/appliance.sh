@@ -7,12 +7,13 @@ import { motionTokens } from './tokens.js';
 
 const query = '(prefers-reduced-motion: reduce)';
 const subscribe = (notify: () => void) => {
+  if (!window.matchMedia) return () => {};
   const media = window.matchMedia(query);
   media.addEventListener('change', notify);
   return () => media.removeEventListener('change', notify);
 };
-const snapshot = () => window.matchMedia(query).matches;
-const serverSnapshot = () => true;
+const snapshot = () => window.matchMedia?.(query).matches ?? true;
+const serverSnapshot = (): boolean | null => null;
 
 export function selectTransition(immediate: boolean, speed: 'fast' | 'base' | 'slow' = 'base', crossfade = false) {
   return {
@@ -26,6 +27,6 @@ export function useTransition() {
   // Also subscribe explicitly: preference changes must update existing wrappers.
   const preference = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const ready = useMotionReady();
-  const immediate = !ready || preference || reduced === true;
+  const immediate = !ready || (preference ?? reduced ?? true);
   return { immediate, transition: selectTransition(immediate), exitTransition: selectTransition(immediate, 'fast') };
 }

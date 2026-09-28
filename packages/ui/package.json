@@ -151,6 +151,10 @@
     "./motion-provider": {
       "types": "./dist/motion-provider.d.ts",
       "import": "./dist/motion-provider.js"
+    },
+    "./skeleton-swap": {
+      "types": "./dist/components/skeleton-swap.d.ts",
+      "import": "./dist/components/skeleton-swap.js"
     }
   }
 }

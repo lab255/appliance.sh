@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { spawn, spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '..');
@@ -19,20 +20,42 @@ function run(cwd, command, args) {
 function write(dir, name, contents) {
   writeFileSync(join(dir, name), contents);
 }
-run(join(root, 'packages/ui'), 'pnpm', ['pack', '--pack-destination', temporary]);
-const tarball = join(
-  temporary,
-  readdirSync(temporary).find((name) => name.endsWith('.tgz'))
-);
+if (!process.env.UI_SMOKE_TARBALL) run(join(root, 'packages/ui'), 'pnpm', ['pack', '--pack-destination', temporary]);
+const tarball =
+  process.env.UI_SMOKE_TARBALL ||
+  join(
+    temporary,
+    readdirSync(temporary).find((name) => name.endsWith('.tgz'))
+  );
+const baseline = process.env.UI_SMOKE_BASELINE === '1';
 const interactive = `'use client';
+import { useState } from 'react';
 import { Button } from '@appliance.sh/ui/button';
 import { ToastProvider, useToast } from '@appliance.sh/ui/toast';
+import { ConfirmProvider, useConfirm } from '@appliance.sh/ui/confirm-dialog';
+import { Banner ${baseline ? '' : ', BannerPresence'} } from '@appliance.sh/ui/banner';
+import { Skeleton } from '@appliance.sh/ui/skeleton';
+${baseline ? '' : "import { MotionProvider } from '@appliance.sh/ui/motion-provider'; import { SkeletonSwap } from '@appliance.sh/ui/skeleton-swap';"}
+${baseline ? 'const MotionProvider = ({children}: {children: React.ReactNode}) => children; const BannerPresence = ({children}: {children: React.ReactNode}) => children; const SkeletonSwap = ({loading, fallback, children}: {loading: boolean; fallback: React.ReactNode; children: React.ReactNode}) => loading ? fallback : children;' : ''}
 function Action() {
   const { toast } = useToast();
-  return <Button onClick={() => toast('Packed interaction works')}>Show toast</Button>;
+  const confirm = useConfirm();
+  const [banner, setBanner] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState('No decision');
+  return <div style={{padding:24, display:'grid', gap:16}}>
+    <Button onClick={() => toast('Packed interaction works')}>Show toast</Button>
+    <Button onClick={async () => setResult(await confirm({ title: 'Delete preview?', description: 'This is a motion preview.' }) ? 'Confirmed' : 'Cancelled')}>Open dialog</Button>
+    <span>{result}</span>
+    <Button onClick={() => setBanner(true)}>Show banner</Button>
+    <BannerPresence>{banner ? <Banner key="notice" tone="success" onDismiss={() => setBanner(false)}>Packed banner</Banner> : null}</BannerPresence>
+    <Button onClick={() => setLoading(v => !v)}>Swap content</Button>
+    <SkeletonSwap loading={loading} fallback={<Skeleton className="h-12 w-full" />}><p>Loaded content</p></SkeletonSwap>
+  </div>;
 }
-export default function Interactive() { return <ToastProvider><Action /></ToastProvider>; }
+export default function Interactive() { return <MotionProvider><ToastProvider><ConfirmProvider><Action /></ConfirmProvider></ToastProvider></MotionProvider>; }
 `;
+const measurements = {};
 for (const kind of ['vite', 'next']) {
   const dir = join(temporary, kind);
   mkdirSync(dir);
@@ -48,6 +71,7 @@ for (const kind of ['vite', 'next']) {
           '@appliance.sh/ui': `file:${tarball}`,
           react: '19.2.8',
           'react-dom': '19.2.8',
+          ...(baseline ? {} : { motion: '13.4.4' }),
           ...(kind === 'vite' ? { vite: '6.4.2' } : { next: '15.5.24' }),
         },
         devDependencies: {
@@ -83,6 +107,21 @@ for (const kind of ['vite', 'next']) {
         },
       })
     );
+    write(
+      dir,
+      'vite.config.mjs',
+      `export default { build: { sourcemap: true, manifest: true, rollupOptions: { input: { main: 'index.html', static: 'static.html' } } } };`
+    );
+    write(
+      dir,
+      'static.html',
+      '<html><body><div id="root"></div><script type="module" src="/static.tsx"></script></body></html>'
+    );
+    write(
+      dir,
+      'static.tsx',
+      `import { createRoot } from 'react-dom/client'; import { Tag } from '@appliance.sh/ui/tag'; createRoot(document.getElementById('root')!).render(<Tag>Static only</Tag>);`
+    );
     write(dir, 'interactive.tsx', interactive);
     write(
       dir,
@@ -115,7 +154,14 @@ createRoot(document.getElementById('root')!).render(<PageShell><Tag>Packed stati
         exclude: ['node_modules'],
       })
     );
+    write(dir, 'next.config.mjs', 'export default { productionBrowserSourceMaps: true };');
     mkdirSync(join(dir, 'app'));
+    mkdirSync(join(dir, 'app/static'));
+    write(
+      dir,
+      'app/static/page.tsx',
+      `import { Tag } from '@appliance.sh/ui/tag'; export default function Page() { return <Tag>Static only</Tag>; }`
+    );
     write(dir, 'app/interactive.tsx', interactive);
     write(
       dir,
@@ -138,7 +184,7 @@ export default function Page() { return <PageShell><Tag>Packed static primitive<
   const installed = join(dir, 'node_modules/@appliance.sh/ui');
   const pkg = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
   const client = new Set(
-    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll'.split(
+    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll motion-provider skeleton-swap'.split(
       ' '
     )
   );
@@ -208,10 +254,53 @@ console.log('Standalone tokens parse successfully');
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
-    await page.goto(url);
+    const requests = [];
+    page.on('response', (response) => {
+      if (new URL(response.url()).pathname.endsWith('.js')) requests.push(response.url());
+    });
+    await page.goto(`${url}?mock-host`);
     await page.getByText('Packed static primitive').waitFor();
     await page.getByRole('button', { name: 'Show toast' }).click();
     await page.getByText('Packed interaction works').waitFor();
+    if (!baseline) {
+      const open = page.getByRole('button', { name: 'Open dialog' });
+      await open.click();
+      assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Cancel');
+      await page.keyboard.press('Shift+Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Confirm');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Cancel');
+      assert(await open.evaluate((el) => !!el.closest('[inert]')));
+      assert(
+        await page.getByText('Packed interaction works', { exact: true }).evaluate((el) => !!el.closest('[inert]')),
+        'Sibling toast remains inert during dialog'
+      );
+      await page.keyboard.press('Escape');
+      await page.getByText('Cancelled', { exact: true }).waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Open dialog');
+      for (const reducedMotion of ['reduce', 'no-preference', 'reduce']) {
+        await page.emulateMedia({ reducedMotion });
+        await page.getByRole('button', { name: 'Show banner' }).click();
+        await page.getByText('Packed banner', { exact: true }).waitFor();
+        if (reducedMotion === 'reduce')
+          assert.equal(
+            await page
+              .getByText('Packed banner', { exact: true })
+              .evaluate((el) => getComputedStyle(el.closest('[role=status]')).opacity),
+            '1'
+          );
+        await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+        await page.getByText('Packed banner', { exact: true }).waitFor({ state: 'detached' });
+      }
+      await page.getByRole('button', { name: 'Swap content' }).click();
+      await page.getByText('Loaded content', { exact: true }).waitFor();
+      assert.equal(
+        await page
+          .getByText('Loaded content', { exact: true })
+          .evaluate((el) => getComputedStyle(el.parentElement).opacity),
+        '1'
+      );
+    }
     const fontUrls = await page.evaluate(async () => {
       await document.fonts.ready;
       if (!document.fonts.check('14px "Geist Variable"')) throw new Error('Geist failed to load');
@@ -228,10 +317,85 @@ console.log('Standalone tokens parse successfully');
       'Remote font request'
     );
     assert.deepEqual(errors, []);
+    const files = [...new Set(requests)].map((request) => {
+      const path = new URL(request).pathname;
+      return kind === 'vite' ? join(dir, 'dist', path) : join(dir, '.next', path.replace('/_next/', ''));
+    });
+    const sizes = { initial: 0, lazy: 0, static: 0 };
+    for (const file of files) {
+      const map = JSON.parse(readFileSync(`${file}.map`, 'utf8'));
+      const lazy = map.sources.some(
+        (source) =>
+          source.includes('/ui/dist/motion/features.js') || source.includes('/render/dom/features-animation.mjs')
+      );
+      sizes[lazy ? 'lazy' : 'initial'] += gzipSync(readFileSync(file)).length;
+    }
+    const staticPage = await browser.newPage();
+    const staticRequests = [];
+    staticPage.on('response', (response) => {
+      if (new URL(response.url()).pathname.endsWith('.js')) staticRequests.push(response.url());
+    });
+    await staticPage.goto(`${url}/${kind === 'vite' ? 'static.html' : 'static'}`);
+    await staticPage.getByText('Static only', { exact: true }).waitFor();
+    await staticPage.waitForTimeout(200);
+    for (const request of new Set(staticRequests)) {
+      const path = new URL(request).pathname;
+      const file = kind === 'vite' ? join(dir, 'dist', path) : join(dir, '.next', path.replace('/_next/', ''));
+      const map = JSON.parse(readFileSync(`${file}.map`, 'utf8'));
+      assert(
+        !map.sources.some((source) => /(?:framer-motion|motion-dom|ui\/dist\/motion)/.test(source)),
+        `Motion leaked into static bundle: ${file}`
+      );
+      sizes.static += gzipSync(readFileSync(file)).length;
+    }
+    if (!baseline) {
+      assert(sizes.lazy > 0, 'Missing separate lazy feature chunk');
+      const delayedPage = await browser.newPage();
+      let release;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      await delayedPage.route('**/*.js', async (route) => {
+        const path = new URL(route.request().url()).pathname;
+        const file = kind === 'vite' ? join(dir, 'dist', path) : join(dir, '.next', path.replace('/_next/', ''));
+        const map = JSON.parse(readFileSync(`${file}.map`, 'utf8'));
+        if (
+          map.sources.some(
+            (source) =>
+              source.includes('/ui/dist/motion/features.js') || source.includes('/render/dom/features-animation.mjs')
+          )
+        )
+          await gate;
+        await route.continue();
+      });
+      try {
+        await delayedPage.goto(url, { waitUntil: 'domcontentloaded' });
+        await delayedPage.getByRole('button', { name: 'Show toast', exact: true }).click();
+        const toast = delayedPage.getByText('Packed interaction works', { exact: true });
+        await toast.waitFor();
+        assert.equal(await toast.evaluate((el) => getComputedStyle(el.closest('[role=status]')).opacity), '1');
+        await delayedPage.getByRole('button', { name: 'Open dialog', exact: true }).click();
+        const dialog = delayedPage.getByRole('alertdialog');
+        assert.equal(await dialog.evaluate((el) => getComputedStyle(el).opacity), '1');
+        await delayedPage.keyboard.press('Escape');
+        await dialog.waitFor({ state: 'detached' });
+        await delayedPage.emulateMedia({ reducedMotion: 'reduce' });
+        assert.equal(
+          await delayedPage.locator('.animate-pulse').evaluate((el) => getComputedStyle(el).animationName),
+          'none'
+        );
+      } finally {
+        release();
+        await delayedPage.close();
+      }
+    }
+    measurements[kind] = sizes;
+    console.log(`${kind} gzip bytes: ${JSON.stringify(sizes)}`);
     console.log(`${kind}: hydration, Button/Toast interaction, and local fonts passed`);
   } finally {
     await browser?.close();
     server.kill('SIGTERM');
   }
 }
+write(temporary, 'measurements.json', JSON.stringify(measurements, null, 2));
 console.log(`Packed fixtures passed; retained only in temporary storage: ${temporary}`);

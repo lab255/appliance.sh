@@ -4,9 +4,7 @@ import { cn } from '../lib/utils.js';
  *  loading states keep the destination's geometry instead of swapping
  *  a "Loading…" string in. */
 export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn('appliance-ui', 'appliance-ui animate-pulse rounded-md bg-[var(--color-muted)]', className)} />
-  );
+  return <div className={cn('appliance-ui animate-pulse rounded-md bg-[var(--color-muted)]', className)} />;
 }
 
 /** Skeleton for the bordered row-list layout the list pages share —
