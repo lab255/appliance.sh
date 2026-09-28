@@ -1,0 +1,69 @@
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  /* Crisp text on dark surfaces — the difference between a scaffold and
+     a polished product. Matches Vercel/Geist rendering. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Interaction polish: state changes on interactive elements ease in
+   instead of snapping, and headings tighten their tracking the way
+   Vercel's display type does. Additive — components keep their own
+   colors/focus styles. */
+@layer base {
+  button,
+  a,
+  [role='button'],
+  input,
+  select,
+  textarea {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease,
+      opacity 150ms ease;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.015em;
+  }
+
+  /* Mono runs (URLs, ports, snippets) use lining tabular figures so
+     columns of numbers stay aligned. */
+  code,
+  pre,
+  .font-mono {
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+/* Thin, muted scrollbars — the chunky default rails read as unfinished
+   on a dark dashboard. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted-foreground);
+  }
+}

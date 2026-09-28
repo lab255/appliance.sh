@@ -6,6 +6,7 @@ packages:
   - packages/api-server
   - packages/install-aws
   - packages/appliance.sh
+  - packages/ui
   - packages/app
   - packages/console
   - packages/desktop

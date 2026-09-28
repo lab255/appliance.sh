@@ -8,8 +8,6 @@ import { authFailureCause, isAuthShapedError } from '@/components/friendly-error
 import { handleAuthShapedError, registerAuthHeal } from '@/lib/microvm-heal';
 import { routes } from '@/router/routes';
 import type { ConsoleHost } from '@/lib/host';
-import '@fontsource-variable/geist';
-import '@fontsource-variable/geist-mono';
 import '@/styles.css';
 
 const queryClient = new QueryClient({
