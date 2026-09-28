@@ -40,9 +40,9 @@ export function statusLabel(status: TerminalStatus): string {
  *  Error, muted pulse = Connecting, muted = Ended) stay in lock-step. */
 export function statusDotClass(status: TerminalStatus): string {
   return status === 'open'
-    ? 'animate-pulse bg-green-400'
+    ? 'animate-pulse bg-[var(--color-success)]'
     : status === 'error'
-      ? 'bg-red-400'
+      ? 'bg-[var(--color-destructive)]'
       : status === 'connecting'
         ? 'animate-pulse bg-[var(--color-muted-foreground)]'
         : 'bg-[var(--color-muted-foreground)]';
@@ -359,7 +359,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
         cursorBlink: true,
         fontSize: 12,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
-        theme: { background: '#0a0a0a' },
+        theme: { background: getComputedStyle(document.documentElement).getPropertyValue('--color-background').trim() },
       });
       const fit = new FitAddon();
       term.loadAddon(fit);

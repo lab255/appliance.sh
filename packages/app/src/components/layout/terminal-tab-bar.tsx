@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Check, CircleX, Loader2, Plus, Radio, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import {
   useTerminalSessions,
   statusLabel,
   type AgentTabMeta,
   type TerminalSessionMeta,
 } from '@/providers/terminal-sessions-provider';
+import { AgentStatusBadge } from '@/components/ui/agent-status-badge';
 import { StatusDot } from '@/components/ui/status-dot';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { agentAdapter, agentLabel } from '@/lib/agents';
@@ -34,21 +35,6 @@ function agentStatusLabel(status: AgentTabMeta['status'], mode?: AgentTabMeta['m
   if (status === 'done') return 'finished';
   if (status === 'error') return 'failed';
   return mode === 'interactive' ? 'attached' : 'running';
-}
-
-/** The agent's run status, rendered as a glyph badge DISTINCT from the PTY
- *  connection dot (`StatusDot`): a check when it finished, an x when it
- *  errored, and for a live run a STEADY "live" glyph for an interactive
- *  (attached TTY) agent vs a spinner for a genuinely-working autonomous run.
- *  An interactive agent isn't "working on a task", so a perpetual spinner
- *  would mislead it as stuck (Devon). */
-function AgentStatusBadge({ status, mode }: { status: AgentTabMeta['status']; mode?: AgentTabMeta['mode'] }) {
-  if (status === 'done') return <Check aria-hidden className="h-3 w-3 shrink-0 text-[var(--color-muted-foreground)]" />;
-  if (status === 'error')
-    return <CircleX aria-hidden className="h-3 w-3 shrink-0 text-[var(--color-destructive-foreground)]" />;
-  if (mode === 'interactive')
-    return <Radio aria-hidden className="h-3 w-3 shrink-0 text-[var(--color-info-foreground)]" />;
-  return <Loader2 aria-hidden className="h-3 w-3 shrink-0 animate-spin text-[var(--color-info-foreground)]" />;
 }
 
 function TerminalTab({
