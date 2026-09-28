@@ -39,7 +39,7 @@ export const DropdownMenuItem = React.forwardRef<
     <Primitive.Item
       ref={ref}
       className={cn(
-        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted-raised)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
       {...props}
@@ -54,7 +54,7 @@ export const DropdownMenuRadioItem = React.forwardRef<
     <Primitive.RadioItem
       ref={ref}
       className={cn(
-        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted-raised)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
       {...props}
@@ -69,7 +69,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
     <Primitive.CheckboxItem
       ref={ref}
       className={cn(
-        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted-raised)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
       {...props}
@@ -84,7 +84,7 @@ export const DropdownMenuLabel = React.forwardRef<
     <Primitive.Label
       ref={ref}
       className={cn(
-        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-[var(--color-muted-raised)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
       {...props}

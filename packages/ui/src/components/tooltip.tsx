@@ -21,7 +21,7 @@ export const TooltipContent = React.forwardRef<React.ElementRef<typeof Primitive
           sideOffset={sideOffset}
           data-immediate={immediate || undefined}
           className={cn(
-            'appliance-ui ui-overlay-fast z-50 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2 text-sm shadow-lg outline-none',
+            'appliance-ui ui-overlay-fast z-50 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-2 text-micro shadow-lg outline-none',
             className
           )}
           {...props}

@@ -202,7 +202,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                           onClick={() => (isSelected ? setOpen(false) : selectMutation.mutate(c.id))}
                           disabled={selectMutation.isPending && !pending}
                           className={cn(
-                            'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
+                            'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
                             isSelected && 'bg-[var(--color-muted)]'
                           )}
                         >
@@ -227,7 +227,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                       type="button"
                       role="menuitem"
                       onClick={onSetupWorkspace}
-                      className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                      className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                     >
                       <div className="w-4" />
                       <div>
@@ -259,7 +259,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                         onClick={() => (isSelected ? setOpen(false) : selectMutation.mutate(c.id))}
                         disabled={selectMutation.isPending && !pending}
                         className={cn(
-                          'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
+                          'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
                           isSelected && 'bg-[var(--color-muted)]'
                         )}
                       >
@@ -294,7 +294,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                         navigate('/setup');
                         setOpen(false);
                       }}
-                      className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                      className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                     >
                       <div className="w-4" />
                       <div>
@@ -318,7 +318,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                         navigate(`/machine${suffix}`);
                         setOpen(false);
                       }}
-                      className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                      className="grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                     >
                       <StatusDot
                         tone={vm.running ? 'sandbox' : 'neutral'}
@@ -361,7 +361,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                           }}
                           disabled={selectMutation.isPending && !pending}
                           className={cn(
-                            'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
+                            'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
                             isSelected && 'bg-[var(--color-muted)]'
                           )}
                         >
@@ -408,7 +408,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                           }}
                           disabled={selectMutation.isPending && !pending}
                           className={cn(
-                            'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
+                            'grid w-full grid-cols-[auto_1fr] items-center gap-2 px-3 py-2 text-left text-sm data-[highlighted]:bg-[var(--color-muted-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
                             isSelected && 'bg-[var(--color-muted)]'
                           )}
                         >
@@ -437,7 +437,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
                 // the onboarding Connect form, not the old bare /connect.
                 to="/setup/connect"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-[var(--color-muted)]"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm data-[highlighted]:bg-[var(--color-muted-raised)]"
               >
                 <Plus className="h-4 w-4" />
                 {workspacePresentation ? 'Add a workspace…' : 'Pair a cloud'}

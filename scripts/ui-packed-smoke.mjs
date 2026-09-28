@@ -333,7 +333,7 @@ console.log('Standalone tokens parse successfully');
     assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Charlie');
     await page.keyboard.press('Escape');
     await page.getByRole('menu').waitFor({ state: 'detached' });
-    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Choose target');
+    await page.waitForFunction(() => document.activeElement.textContent === 'Choose target');
     await page.mouse.move(0, 0, { steps: 10 });
     await page.waitForTimeout(400);
     await page.getByRole('button', { name: 'First hint' }).hover();
