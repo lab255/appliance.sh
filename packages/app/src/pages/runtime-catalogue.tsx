@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { CatalogueEntry } from '@appliance.sh/sdk';
 import { Search, ShieldAlert } from 'lucide-react';
-import { Banner } from '@/components/ui/banner';
+import { Banner, BannerPresence } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
@@ -206,11 +206,19 @@ export function CatalogueContent({
           Showing the last verified catalogue. {data.refreshError}
         </Banner>
       ) : null}
-      {installMessage ? (
-        <Banner tone="info" title="Installation" className="mb-4" onDismiss={() => setInstallMessage(null)}>
-          {installMessage}
-        </Banner>
-      ) : null}
+      <BannerPresence>
+        {installMessage ? (
+          <Banner
+            key="installMessage"
+            tone="info"
+            title="Installation"
+            className="mb-4"
+            onDismiss={() => setInstallMessage(null)}
+          >
+            {installMessage}
+          </Banner>
+        ) : null}
+      </BannerPresence>
 
       {loading ? (
         <SectionCard>

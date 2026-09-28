@@ -3,7 +3,7 @@ import './styles.css';
 
 export { LongOperation } from './components/long-operation.js';
 export type { LongOperationStep, LongOperationProps } from './components/long-operation.js';
-export { Banner, bannerVariants } from './components/banner.js';
+export { BannerPresence, Banner, bannerVariants } from './components/banner.js';
 export type { BannerTone, BannerProps } from './components/banner.js';
 export { useConfirm, ConfirmProvider } from './components/confirm-dialog.js';
 export type { ConfirmOptions } from './components/confirm-dialog.js';
@@ -36,3 +36,7 @@ export type { InputProps } from './components/input.js';
 export { Skeleton, ListSkeleton } from './components/skeleton.js';
 export { cn } from './lib/utils.js';
 export { useTailAutoscroll } from './hooks/use-tail-autoscroll.js';
+
+export { MotionProvider } from './motion-provider.js';
+
+export { SkeletonSwap } from './components/skeleton-swap.js';

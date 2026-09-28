@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useClusterCompat } from '@/hooks/use-cluster-compat';
-import { Banner } from '@/components/ui/banner';
+import { Banner, BannerPresence } from '@/components/ui/banner';
 import { useHost } from '@/providers/host-provider';
 
 // Cluster-level version-compat banner (generalized from the deploy
@@ -30,18 +30,21 @@ export function ClusterCompatBanner() {
   }, [updateSuccess]);
   if (updateSuccess) {
     return (
-      <Banner
-        tone="success"
-        role="status"
-        icon={CheckCircle2}
-        className="mb-4"
-        onDismiss={() => setUpdateSuccess(null)}
-      >
-        {updateSuccess}
-      </Banner>
+      <BannerPresence>
+        <Banner
+          key="success"
+          tone="success"
+          role="status"
+          icon={CheckCircle2}
+          className="mb-4"
+          onDismiss={() => setUpdateSuccess(null)}
+        >
+          {updateSuccess}
+        </Banner>
+      </BannerPresence>
     );
   }
-  if (compat.loading) return null;
+  if (compat.loading) return <BannerPresence>{null}</BannerPresence>;
 
   const machineRestart = (
     <>
@@ -111,17 +114,19 @@ export function ClusterCompatBanner() {
   }
   // Server-reported operational warnings ride the same banner, one
   // line each, straight through (already deduplicated by the hook).
-  if (!message && compat.warnings.length === 0) return null;
+  if (!message && compat.warnings.length === 0) return <BannerPresence>{null}</BannerPresence>;
 
   return (
-    <Banner tone="warning" role="status" icon={AlertTriangle} className="mb-4">
-      <span className="flex flex-col gap-1 text-xs leading-4">
-        {message ? <span>{message}</span> : null}
-        {updateError ? <span>Update failed: {updateError}</span> : null}
-        {compat.warnings.map((warning) => (
-          <span key={warning}>{warning}</span>
-        ))}
-      </span>
-    </Banner>
+    <BannerPresence>
+      <Banner key="warning" tone="warning" role="status" icon={AlertTriangle} className="mb-4">
+        <span className="flex flex-col gap-1 text-xs leading-4">
+          {message ? <span>{message}</span> : null}
+          {updateError ? <span>Update failed: {updateError}</span> : null}
+          {compat.warnings.map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
+        </span>
+      </Banner>
+    </BannerPresence>
   );
 }

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { FolderOpen, Grid2X2, Loader2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { localMachineLabel, type EntitlementGrantPrompt, type InstalledRuntimeApp } from '@/lib/host';
-import { Banner } from '@/components/ui/banner';
+import { Banner, BannerPresence } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -406,19 +406,29 @@ export function InstalledAppsPage() {
         }
       />
 
-      {notice ? (
-        <Banner tone="success" title={notice.title} className="mb-4" onDismiss={() => setNotice(null)}>
-          {notice.message}
-        </Banner>
-      ) : null}
+      <BannerPresence>
+        {notice ? (
+          <Banner key="notice" tone="success" title={notice.title} className="mb-4" onDismiss={() => setNotice(null)}>
+            {notice.message}
+          </Banner>
+        ) : null}
+      </BannerPresence>
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
-      {error ? (
-        <Banner tone="error" title="Installed Apps error" className="mb-4" onDismiss={() => setError(null)}>
-          {error}
-        </Banner>
-      ) : null}
+      <BannerPresence>
+        {error ? (
+          <Banner
+            key="error"
+            tone="error"
+            title="Installed Apps error"
+            className="mb-4"
+            onDismiss={() => setError(null)}
+          >
+            {error}
+          </Banner>
+        ) : null}
+      </BannerPresence>
 
       {apps.length > 0 ? (
         <label className="relative mb-5 block max-w-sm">

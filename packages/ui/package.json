@@ -23,7 +23,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vite build && tsc --emitDeclarationOnly",
+    "build": "node scripts/generate-motion.mjs && vite build && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "clean": "rm -rf ./dist"
@@ -34,25 +34,27 @@
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.5",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "motion": "13.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "rollup-plugin-preserve-directives": "^0.4.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.3",
-    "vitest": "^3.0.4",
-    "rollup-plugin-preserve-directives": "^0.4.0"
+    "vitest": "^3.0.4"
   },
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "motion": "^13.4.4"
   },
   "exports": {
     ".": {
@@ -145,6 +147,14 @@
     },
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/tokens.css",
-    "./theme.css": "./dist/theme.css"
+    "./theme.css": "./dist/theme.css",
+    "./motion-provider": {
+      "types": "./dist/motion-provider.d.ts",
+      "import": "./dist/motion-provider.js"
+    },
+    "./skeleton-swap": {
+      "types": "./dist/components/skeleton-swap.d.ts",
+      "import": "./dist/components/skeleton-swap.js"
+    }
   }
 }

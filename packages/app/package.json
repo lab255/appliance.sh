@@ -28,13 +28,14 @@
   },
   "dependencies": {
     "@appliance.sh/sdk": "workspace:*",
+    "@appliance.sh/ui": "workspace:*",
     "@tanstack/react-query": "^5.60.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "buffer": "^6.0.3",
     "lucide-react": "^0.468.0",
-    "react-router": "^7.0.2",
-    "@appliance.sh/ui": "workspace:*"
+    "motion": "13.4.4",
+    "react-router": "^7.0.2"
   },
   "devDependencies": {
     "@appliance.sh/bootstrap": "workspace:*",

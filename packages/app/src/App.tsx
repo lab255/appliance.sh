@@ -1,3 +1,4 @@
+import { MotionProvider } from '@appliance.sh/ui/motion-provider';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createBrowserRouter } from 'react-router';
 import { HostProvider } from '@/providers/host-provider';
@@ -42,15 +43,17 @@ export function Console({ host }: ConsoleProps) {
   return (
     <HostProvider host={host}>
       <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <ConfirmProvider>
-            {/* Above the router so terminal sessions outlive navigation
+        <MotionProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              {/* Above the router so terminal sessions outlive navigation
                 (the route `<Outlet/>` swaps, the sessions don't). */}
-            <TerminalSessionsProvider>
-              <RouterProvider router={router} />
-            </TerminalSessionsProvider>
-          </ConfirmProvider>
-        </ToastProvider>
+              <TerminalSessionsProvider>
+                <RouterProvider router={router} />
+              </TerminalSessionsProvider>
+            </ConfirmProvider>
+          </ToastProvider>
+        </MotionProvider>
       </QueryClientProvider>
     </HostProvider>
   );

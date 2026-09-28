@@ -7,3 +7,19 @@
 @import './base.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @source './components';
+
+@media (prefers-reduced-motion: reduce) {
+  .appliance-ui,
+  .appliance-ui::before,
+  .appliance-ui::after,
+  .appliance-ui *,
+  .appliance-ui *::before,
+  .appliance-ui *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .appliance-ui:active {
+    translate: none !important;
+  }
+}

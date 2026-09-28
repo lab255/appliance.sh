@@ -146,3 +146,61 @@ describe('LongOperation', () => {
     expect(html).toContain('aria-live="polite"');
   });
 });
+
+// The generated constants are checked against the CSS source, not a second JS recipe.
+import { readFileSync } from 'node:fs';
+import { motionTokens } from '../motion/tokens.js';
+import { selectTransition } from '../motion/use-transition.js';
+import { MotionProvider } from '../motion-provider.js';
+import { SkeletonSwap } from './skeleton-swap.js';
+import { Skeleton } from './skeleton.js';
+
+describe('Motion contract', () => {
+  it('generates seconds and bezier tuples from the theme', () => {
+    const theme = readFileSync(new URL('../theme.css', import.meta.url), 'utf8');
+    for (const speed of ['fast', 'base', 'slow'] as const) {
+      expect(motionTokens[speed]).toBe(Number(theme.match(new RegExp(`--duration-${speed}: (\\d+)ms`))![1]) / 1000);
+    }
+    for (const [token, key] of [
+      ['out-quart', 'outQuart'],
+      ['in-out', 'inOut'],
+    ] as const) {
+      expect(motionTokens[key]).toEqual(
+        theme
+          .match(new RegExp(`--ease-${token}: cubic-bezier\\(([^)]+)\\)`))![1]
+          .split(',')
+          .map(Number)
+      );
+    }
+  });
+  it('selects immediate entry, replacement and exit for reduced motion', () => {
+    expect(selectTransition(true).duration).toBe(0);
+    expect(selectTransition(true, 'fast').duration).toBe(0);
+    expect(selectTransition(true, 'base', true).duration).toBe(0);
+    expect(selectTransition(false).duration).toBe(0.2);
+    expect(selectTransition(false, 'fast').duration).toBe(0.12);
+  });
+  it('keeps initial content readable before lazy features, including SSR', () => {
+    const html = renderToStaticMarkup(
+      <MotionProvider>
+        <Banner tone="error">Readable alert</Banner>
+        <SkeletonSwap loading={false} fallback={<Skeleton />}>
+          Ready content
+        </SkeletonSwap>
+      </MotionProvider>
+    );
+    expect(html).toContain('Readable alert');
+    expect(html).toContain('Ready content');
+    expect(html).not.toContain('opacity:0');
+    expect(html).toContain('role="alert"');
+  });
+  it('mounts one provider outside app routes and loads features dynamically', () => {
+    const app = readFileSync(new URL('../../../app/src/App.tsx', import.meta.url), 'utf8');
+    expect(app.match(/<MotionProvider>/g)).toHaveLength(1);
+    expect(app.indexOf('<MotionProvider>')).toBeLessThan(app.indexOf('<RouterProvider'));
+    const provider = readFileSync(new URL('../motion-provider.tsx', import.meta.url), 'utf8');
+    expect(provider).toContain('reducedMotion="user"');
+    expect(provider).toContain('<LazyMotion strict');
+    expect(provider).toContain("import('./motion/features.js')");
+  });
+});
