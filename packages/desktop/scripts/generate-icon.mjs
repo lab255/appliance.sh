@@ -1,139 +1,83 @@
 #!/usr/bin/env node
-// Render the app icon source (src-tauri/icons/source.png, 1024×1024)
-// with zero image dependencies — a hand-rolled PNG encoder over an
-// RGBA raster. The mark mirrors the in-app brand (app-shell.tsx): a
-// dark rounded square carrying the lucide "Server" glyph — two rounded
-// bars, each with an indicator dot.
-//
-// Regenerate the full platform icon set (ico/icns/PNG sizes) with:
-//   node scripts/generate-icon.mjs && pnpm exec tauri icon src-tauri/icons/source.png
-// `tauri icon` writes into src-tauri/icons/, which tauri.conf.json's
-// bundle.icon references. Windows bundling (NSIS/MSI) hard-requires
-// the .ico this produces.
-
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as zlib from 'node:zlib';
+// Shared brand sources → lockup, OG template, both shell favicons and Tauri icons.
+// From the repo root: node packages/desktop/scripts/generate-icon.mjs
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, cpSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { resolve, dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { Resvg } from '@resvg/resvg-js';
 
-const SIZE = 1024;
-const SS = 4; // supersampling factor for clean anti-aliased edges
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const brand = resolve(root, 'packages/app/src/assets/brand');
+const read = (name) => readFileSync(resolve(brand, name), 'utf8');
+const contents = (svg) => svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+const mark = contents(read('mark.svg'));
+const small = contents(read('mark-small.svg'));
+const svg = (size, body) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32">${body}</svg>\n`;
+const tile = '<rect width="32" height="32" rx="7" fill="#171717"/>';
+const favicon = svg(32, `${tile}${small}`);
+const raster = (source, size) => new Resvg(source, { fitTo: { mode: 'width', value: size } }).render().asPng();
 
-// Colors (sRGB). Background matches the app's dark foreground chip;
-// the glyph is near-white, dots use the accent.
-const BG = [23, 23, 23, 255];
-const GLYPH = [250, 250, 250, 255];
-const DOT = [82, 196, 130, 255];
+// Keep the outlined Geist wordmark; refresh the mark from the one full-size source.
+// Four units above the original placement optically balance the bottom-heavy A
+// against Geist's cap band (y11.6–40), with room for the p descender.
+const lockup = read('lockup.svg').replace(
+  /<!-- brand-mark:start -->[\s\S]*?<!-- brand-mark:end -->/,
+  `<!-- brand-mark:start --><g transform="translate(0 0) scale(1.5)">${mark}</g><!-- brand-mark:end -->`
+);
+writeFileSync(resolve(brand, 'lockup.svg'), lockup);
+writeFileSync(
+  resolve(brand, 'og-template.svg'),
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#171717"/><g transform="translate(144 220) scale(3.6)">${contents(lockup)}</g><!-- Add outlined tagline paths inside this group; no font dependency. --><g id="tagline" transform="translate(144 470)" fill="#a3a3a3"/></svg>\n`
+);
 
-/** Signed distance to a rounded rectangle centered at (cx, cy). */
-function sdRoundRect(px, py, cx, cy, halfW, halfH, radius) {
-  const qx = Math.abs(px - cx) - (halfW - radius);
-  const qy = Math.abs(py - cy) - (halfH - radius);
-  const ax = Math.max(qx, 0);
-  const ay = Math.max(qy, 0);
-  return Math.hypot(ax, ay) + Math.min(Math.max(qx, qy), 0) - radius;
+// Tiny PNG-compressed ICO with exactly the dedicated 16 and 32 pixel frames.
+const frames = [16, 32].map((size) => ({ size, png: raster(favicon, size) }));
+const header = Buffer.alloc(6 + frames.length * 16);
+header.writeUInt16LE(1, 2);
+header.writeUInt16LE(frames.length, 4);
+let offset = header.length;
+frames.forEach(({ size, png }, index) => {
+  const entry = 6 + index * 16;
+  header[entry] = size;
+  header[entry + 1] = size;
+  header.writeUInt16LE(1, entry + 4);
+  header.writeUInt16LE(32, entry + 6);
+  header.writeUInt32LE(png.length, entry + 8);
+  header.writeUInt32LE(offset, entry + 12);
+  offset += png.length;
+});
+for (const shell of ['desktop', 'console']) {
+  const publicDir = resolve(root, `packages/${shell}/public`);
+  mkdirSync(publicDir, { recursive: true });
+  writeFileSync(
+    resolve(publicDir, 'favicon.svg'),
+    svg(
+      32,
+      `${tile}<style>.full{display:none}@media(min-width:24px){.small{display:none}.full{display:inline}}</style><g class="small">${small}</g><g class="full">${mark}</g>`
+    )
+  );
+  writeFileSync(resolve(publicDir, 'favicon.ico'), Buffer.concat([header, ...frames.map(({ png }) => png)]));
 }
-
-function sdCircle(px, py, cx, cy, r) {
-  return Math.hypot(px - cx, py - cy) - r;
-}
-
-// Scene in 1024-space. Outer tile: rounded square with the classic
-// app-icon corner radius (~22.5%). Server glyph: two bars.
-const tile = (px, py) => sdRoundRect(px, py, 512, 512, 448, 448, 200);
-const barTop = (px, py) => sdRoundRect(px, py, 512, 400, 232, 76, 48);
-const barBottom = (px, py) => sdRoundRect(px, py, 512, 624, 232, 76, 48);
-const dotTop = (px, py) => sdCircle(px, py, 372, 400, 30);
-const dotBottom = (px, py) => sdCircle(px, py, 372, 624, 30);
-
-function shade(px, py) {
-  if (tile(px, py) > 0) return [0, 0, 0, 0];
-  if (dotTop(px, py) <= 0 || dotBottom(px, py) <= 0) return DOT;
-  if (barTop(px, py) <= 0 || barBottom(px, py) <= 0) return GLYPH;
-  return BG;
-}
-
-function render() {
-  const raster = Buffer.alloc(SIZE * SIZE * 4);
-  const step = 1 / SS;
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      let a = 0;
-      for (let sy = 0; sy < SS; sy++) {
-        for (let sx = 0; sx < SS; sx++) {
-          const [cr, cg, cb, ca] = shade(x + (sx + 0.5) * step, y + (sy + 0.5) * step);
-          r += cr * (ca / 255);
-          g += cg * (ca / 255);
-          b += cb * (ca / 255);
-          a += ca;
-        }
-      }
-      const samples = SS * SS;
-      const alpha = a / samples;
-      const idx = (y * SIZE + x) * 4;
-      // Un-premultiply back to straight alpha for PNG.
-      const w = alpha > 0 ? 255 / alpha : 0;
-      raster[idx] = Math.round(Math.min(255, (r / samples) * w));
-      raster[idx + 1] = Math.round(Math.min(255, (g / samples) * w));
-      raster[idx + 2] = Math.round(Math.min(255, (b / samples) * w));
-      raster[idx + 3] = Math.round(alpha);
-    }
+const desktop = resolve(root, 'packages/desktop');
+const icons = resolve(desktop, 'src-tauri/icons');
+const appIcon = svg(
+  1024,
+  `<rect x="2" y="2" width="28" height="28" rx="6.25" fill="#171717"/><g transform="translate(6 5) scale(.625)">${mark}</g>`
+);
+writeFileSync(resolve(icons, 'source.png'), raster(appIcon, 1024));
+// Tauri also emits mobile assets; keep only this desktop package's platform set.
+const output = mkdtempSync(resolve(tmpdir(), 'appliance-icons-'));
+try {
+  execFileSync('pnpm', ['exec', 'tauri', 'icon', 'src-tauri/icons/source.png', '--output', output], {
+    cwd: desktop,
+    stdio: 'inherit',
+  });
+  for (const entry of readdirSync(output, { withFileTypes: true })) {
+    if (entry.isFile()) cpSync(resolve(output, entry.name), resolve(icons, entry.name));
   }
-  return raster;
+} finally {
+  rmSync(output, { recursive: true, force: true });
 }
-
-// --- minimal PNG writer (8-bit RGBA, no interlace) ---
-const CRC_TABLE = (() => {
-  const table = new Int32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[n] = c;
-  }
-  return table;
-})();
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([len, body, crc]);
-}
-
-function encodePng(raster) {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(SIZE, 0);
-  ihdr.writeUInt32BE(SIZE, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  // scanlines with filter byte 0
-  const stride = SIZE * 4;
-  const rawData = Buffer.alloc((stride + 1) * SIZE);
-  for (let y = 0; y < SIZE; y++) {
-    rawData[y * (stride + 1)] = 0;
-    raster.copy(rawData, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
-  }
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(rawData, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const out = path.resolve(__dirname, '..', 'src-tauri', 'icons', 'source.png');
-fs.mkdirSync(path.dirname(out), { recursive: true });
-fs.writeFileSync(out, encodePng(render()));
-console.log(`generate-icon: wrote ${out} (${SIZE}×${SIZE})`);
