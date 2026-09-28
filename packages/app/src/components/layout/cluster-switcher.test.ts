@@ -43,13 +43,16 @@ describe('workspace switcher presentation', () => {
     expect(html).toContain('--color-info-foreground');
   });
 
-  it('keeps the menu semantics and keyboard contract in the switcher', () => {
+  it('delegates keyboard handling to Radix while preserving switcher semantics', () => {
     const source = readFileSync(fileURLToPath(new URL('./cluster-switcher.tsx', import.meta.url)), 'utf8');
     expect(source).toContain('aria-label={workspacePresentation ? `Workspace: ${currentName}`');
-    expect(source).toContain('role="menu"');
+    expect(source).toContain("from '@appliance.sh/ui/dropdown-menu'");
+    expect(source).toContain('<DropdownMenuTrigger asChild>');
+    expect(source).toContain('<DropdownMenuContent');
     expect(source).toContain('role="menuitemradio"');
     expect(source).toContain('type="button"');
-    expect(source).toContain("event.key === 'ArrowDown'");
-    expect(source).toContain("e.key === 'Escape'");
+    expect(source).toContain('<DropdownMenuItem');
+    // Arrow/typeahead/Escape behavior is exercised in the kit and packed browser suites.
+    expect(source).not.toContain('document.addEventListener');
   });
 });

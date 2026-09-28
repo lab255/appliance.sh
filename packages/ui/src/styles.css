@@ -23,3 +23,66 @@
     translate: none !important;
   }
 }
+
+/* Radix Presence retains closing surfaces until the shared motion contract ends. */
+@keyframes ui-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ui-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ui-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.ui-overlay-fast[data-state='open'],
+.ui-overlay-fast[data-state='delayed-open'],
+.ui-overlay-fast[data-state='instant-open'],
+.ui-dialog-scrim[data-state='open'] {
+  animation: ui-overlay-in var(--duration-fast) var(--ease-out-quart);
+}
+.ui-overlay-fast[data-state='closed'],
+.ui-dialog-scrim[data-state='closed'] {
+  animation: ui-overlay-out var(--duration-fast) var(--ease-out-quart);
+  animation-fill-mode: forwards;
+}
+.ui-dialog-content[data-state='open'] {
+  animation: ui-dialog-in var(--duration-base) var(--ease-out-quart);
+}
+[data-immediate].ui-overlay-fast,
+[data-immediate].ui-dialog-scrim,
+[data-immediate].ui-dialog-content {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-overlay-fast,
+  .ui-dialog-scrim,
+  .ui-dialog-content {
+    animation: none !important;
+  }
+}
+
+/* Content and scrim remain separate so non-modal dialogs and forceMount work. */
+.ui-dialog-content[data-state='closed'] {
+  animation: ui-overlay-out var(--duration-fast) var(--ease-out-quart);
+  animation-fill-mode: forwards;
+}
+.ui-dialog-content[data-immediate][data-state='closed'] {
+  animation: none;
+}

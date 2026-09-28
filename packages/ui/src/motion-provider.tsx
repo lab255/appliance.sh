@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import { TooltipProvider } from './components/tooltip.js';
 import { LazyMotion, MotionConfig } from 'motion/react';
 
 const ReadyContext = createContext(false);
@@ -19,7 +20,9 @@ export function MotionProvider({ children }: { children: ReactNode }) {
   return (
     <MotionConfig reducedMotion="user">
       <LazyMotion strict features={loadFeatures}>
-        <ReadyContext.Provider value={ready}>{children}</ReadyContext.Provider>
+        <ReadyContext.Provider value={ready}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ReadyContext.Provider>
       </LazyMotion>
     </MotionConfig>
   );

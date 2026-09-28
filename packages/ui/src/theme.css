@@ -12,6 +12,7 @@
   --color-surface-raised: hsl(0 0% 9%);
   --color-surface-overlay: hsl(0 0% 11%);
   --color-muted: hsl(0 0% 10%);
+  --color-muted-raised: hsl(0 0% 15%);
   --color-muted-foreground: hsl(0 0% 63%);
   --color-border: hsl(0 0% 18%);
   --color-border-strong: hsl(0 0% 33%);
