@@ -67,6 +67,11 @@ jobs:
           # right before releasing so the atomic commit+tag push can't
           # be rejected by commits that landed while the run waited.
           git pull --rebase origin main
+          # Build and validate the actual post-rebase UI before the train can
+          # publish it. Full isolated Vite/Next hydration runs only on release.
+          pnpm install --frozen-lockfile
+          pnpm exec nx run @appliance.sh/ui:build
+          node scripts/ui-packed-smoke.mjs --install-browser
           pnpm run release:ci
 
       - name: Dispatch downstream release artifact builds

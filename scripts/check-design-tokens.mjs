@@ -2,7 +2,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const root = fileURLToPath(new URL('../packages/app/src/', import.meta.url));
+const root = fileURLToPath(new URL('../', import.meta.url));
+const sources = ['packages/app/src', 'packages/ui/src'];
 // No migration exceptions remain. Black/white modal scrims are intentionally
 // outside this hue/size guard (design-system-spec.md §D).
 const forbidden =
@@ -27,7 +28,10 @@ async function scan(directory) {
   return violations;
 }
 
-const violations = await scan(root);
+const violations = (await Promise.all(sources.map((source) => scan(path.join(root, source))))).reduce(
+  (total, count) => total + count,
+  0
+);
 if (violations) {
   console.error(`Design tokens: ${violations} violation(s). Use semantic colors and named text roles.`);
   process.exitCode = 1;
