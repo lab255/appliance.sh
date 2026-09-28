@@ -1,3 +1,6 @@
+// Vite extracts this into styles.css; emitted JavaScript never imports CSS.
+import './styles.css';
+
 export { LongOperation } from './components/long-operation.js';
 export type { LongOperationStep, LongOperationProps } from './components/long-operation.js';
 export { Banner, bannerVariants } from './components/banner.js';

@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Banner, type BannerTone } from './banner.js';
 import { LogPane } from './log-pane.js';
 import { LongOperation } from './long-operation.js';
@@ -98,6 +98,30 @@ describe('LogPane', () => {
 });
 
 describe('LongOperation', () => {
+  it('keeps server markup deterministic until the live clock starts after hydration', () => {
+    const clock = vi.spyOn(Date, 'now');
+    const render = () =>
+      renderToStaticMarkup(
+        <LongOperation
+          title="Starting"
+          status="running"
+          timeClass="minutes"
+          estimate="A few minutes"
+          leaveSafety="resumable"
+          lastActivityAt={1}
+        />
+      );
+    try {
+      clock.mockReturnValue(10_000);
+      const server = render();
+      clock.mockReturnValue(200_000);
+      expect(render()).toBe(server);
+      expect(server).toContain('0:00');
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('combines its ladder, now-line, honest time copy, and disclosed log', () => {
     const html = renderToStaticMarkup(
       <LongOperation
