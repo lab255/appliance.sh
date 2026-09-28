@@ -27,3 +27,25 @@ All GIFs are at most 800,000 bytes. Start the mock host with
 `pnpm --filter @appliance.sh/desktop dev` after building the app. Capture servers
 used isolated Vite caches and the built app entry to avoid reprocessing the
 library bundle through React's development transform.
+
+## Review recaptures (02c4288)
+
+D1: The old welcome capture reloaded the document; its white frame preceded
+app styles, rather than coming from a route snapshot. The desktop HTML now
+advertises the dark color scheme before JavaScript loads, and journey CSS
+sets the root canvas to the existing background token. The new welcome capture
+includes reload, staged entrance, and the Sandbox route handoff. None of its
+16 captured frames has a white canvas.
+
+D2: Reproduced with reduced motion enabled before page creation, without any
+preference toggle. Chromium observed the outgoing and incoming frames together
+at opacity 1 with animation none: passive presence cleanup left the outgoing
+DOM paintable. CSS now hides an absent immediate frame synchronously, with a
+matching reduced-motion media rule. Across 166 sampled animation frames there
+were zero visible overlaps or animated frames; a retained outgoing frame was
+observed with display none. Forward and Back focus AWS Cloud and New installation.
+
+The two recaptured wizard GIFs include a capture-only activeElement caption.
+The product intentionally suppresses the interactive focus ring on reading
+headings; their programmatic focus remains visible in the caption. Reduced
+motion was configured before navigation and stayed enabled throughout capture.
