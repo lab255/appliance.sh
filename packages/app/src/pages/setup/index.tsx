@@ -1,6 +1,8 @@
+import { useJourneyNavigate, JourneyReveal, JourneySwap } from '@/components/journey-motion';
+import brandMark from '@/assets/brand/mark.svg';
 import * as React from 'react';
-import { Link, useNavigate } from 'react-router';
-import { Bot, Plug, Rocket, Wand, Laptop, Stethoscope } from 'lucide-react';
+import { Link } from 'react-router';
+import { Bot, Plug, Rocket, Wand, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { SectionCard } from '@/components/ui/section-card';
@@ -38,16 +40,22 @@ export function SetupPage() {
   // friendly setup step (Set up / Set up later) — no menu to parse.
   if (!cluster && devMachine.state === 'none' && caps.any && !showAll && !onboardingDismissed()) {
     return (
-      <FirstRunWelcome
-        onLater={() => {
-          dismissOnboarding();
-          setShowAll(true);
-        }}
-        onMore={() => setShowAll(true)}
-      />
+      <JourneySwap step="welcome">
+        <FirstRunWelcome
+          onLater={() => {
+            dismissOnboarding();
+            setShowAll(true);
+          }}
+          onMore={() => setShowAll(true)}
+        />
+      </JourneySwap>
     );
   }
-  return <GetStarted caps={caps} canBootstrap={canBootstrap} />;
+  return (
+    <JourneySwap step="options">
+      <GetStarted caps={caps} canBootstrap={canBootstrap} />
+    </JourneySwap>
+  );
 }
 
 // The very first launch: one decision, one button. "Get started" boots the
@@ -57,7 +65,11 @@ export function SetupPage() {
 // further clicks. "Set up later" and "More options" fall back to the full
 // GetStarted menu.
 function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () => void }) {
-  const navigate = useNavigate();
+  const navigate = useJourneyNavigate();
+  const heading = React.useRef<HTMLHeadingElement>(null);
+  React.useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, []);
   const getStarted = (intent: 'agent' | 'host') => {
     const values: WizardValues = { mode: 'microvm', intent };
     localStorage.setItem('appliance.firstRunIntent', intent);
@@ -65,20 +77,27 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
   };
   return (
     <PageShell rail="focused" className="flex min-h-[60vh] flex-col justify-center space-y-7 py-8 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <Laptop className="h-6 w-6 text-[var(--color-foreground)]" aria-hidden />
-      </div>
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome to Appliance</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Your computer, with a safe machine-in-a-machine: run coding agents in a Sandbox or host apps with live local
-          URLs — no cloud account needed.
-        </p>
-      </div>
+      <JourneyReveal>
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <img src={brandMark} className="h-8 w-8" alt="" />
+        </div>
+      </JourneyReveal>
+      <JourneyReveal order={1}>
+        <div className="space-y-2">
+          <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold tracking-tight">
+            Welcome to Appliance
+          </h1>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            Your computer, with a safe machine-in-a-machine: run coding agents in a Sandbox or host apps with live local
+            URLs — no cloud account needed.
+          </p>
+        </div>
+      </JourneyReveal>
       <div>
         <h2 className="mb-3 text-sm font-semibold">What do you want to do first?</h2>
         <div className="grid gap-3 text-left sm:grid-cols-2">
           <IntentCard
+            order={2}
             icon={Bot}
             title="Run a coding agent"
             body="Claude Code and friends work in an isolated Sandbox. Your files stay yours and their internet access is guarded."
@@ -87,6 +106,7 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
             onClick={() => getStarted('agent')}
           />
           <IntentCard
+            order={3}
             icon={Rocket}
             title="Host an app"
             body="Deploy an app to this computer and get a live local URL. Free, private, and available while this computer is on."
@@ -115,6 +135,7 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
 }
 
 function IntentCard({
+  order,
   icon: Icon,
   title,
   body,
@@ -122,6 +143,7 @@ function IntentCard({
   action,
   onClick,
 }: {
+  order: number;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   title: string;
   body: string;
@@ -130,21 +152,23 @@ function IntentCard({
   onClick: () => void;
 }) {
   return (
-    <SectionCard
-      className="flex h-full flex-col"
-      title={
-        <span className="inline-flex items-center gap-2">
-          <Icon className="h-4 w-4" aria-hidden />
-          {title}
-        </span>
-      }
-    >
-      <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">{body}</p>
-      <p className="mt-3 text-xs font-medium leading-4">{duration}</p>
-      <Button className="mt-4 w-full" onClick={onClick}>
-        {action}
-      </Button>
-    </SectionCard>
+    <JourneyReveal order={order}>
+      <SectionCard
+        className="journey-card flex h-full flex-col"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Icon className="h-4 w-4" aria-hidden />
+            {title}
+          </span>
+        }
+      >
+        <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">{body}</p>
+        <p className="mt-3 text-xs font-medium leading-4">{duration}</p>
+        <Button className="mt-4 w-full" onClick={onClick}>
+          {action}
+        </Button>
+      </SectionCard>
+    </JourneyReveal>
   );
 }
 

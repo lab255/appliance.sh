@@ -225,3 +225,40 @@ describe('mock host installed-app scenarios', () => {
     expect((await exited.installedApps!.list('microvm'))[0]).toMatchObject({ state: 'exited', exitCode: 17 });
   });
 });
+
+describe('journey motion fixture', () => {
+  it('starts empty and reports healthy hosting only after provisioning', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    vi.stubGlobal('localStorage', memoryStorage());
+    const realFetch = vi.fn();
+    vi.stubGlobal('window', {
+      location: { search: '?mock-host&scenario=journey', href: 'http://localhost:1420/' },
+      fetch: realFetch,
+    });
+    try {
+      expect(mockHostEnabled()).toBe(true);
+      const host = createMockHost();
+      await host.catalogue!.fetchCatalogue();
+      const list = host.vm!.list();
+      await vi.runAllTimersAsync();
+      expect(await list).toEqual([]);
+      const vm = host.vm!.instance('appliance');
+      expect((await window.fetch('http://api.appliance.localhost:8100/healthz')).status).toBe(503);
+      const phases: string[] = [];
+      const boot = vm.devUp!(({ message }) => phases.push(message));
+      await vi.runAllTimersAsync();
+      await boot;
+      expect(phases.slice(0, 3)).toEqual(['Sandbox: media', 'Sandbox: booting', 'Sandbox: network']);
+      expect((await window.fetch('http://api.appliance.localhost:8100/healthz')).status).toBe(503);
+      const hosting = vm.clusterUp(() => {});
+      await vi.runAllTimersAsync();
+      await hosting;
+      expect((await window.fetch('http://api.appliance.localhost:8100/healthz')).status).toBe(200);
+      expect(realFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+});

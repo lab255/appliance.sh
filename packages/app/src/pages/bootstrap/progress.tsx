@@ -1,5 +1,6 @@
+import { useJourneyNavigate, JourneyReveal, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
-import { useLocation, useNavigate, Navigate } from 'react-router';
+import { useLocation, Navigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApplianceBaseType } from '@appliance.sh/sdk/models';
 import { Button } from '@/components/ui/button';
@@ -83,7 +84,7 @@ export function BootstrapProgressPage() {
 
 function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
   const host = useHost();
-  const navigate = useNavigate();
+  const navigate = useJourneyNavigate();
   const queryClient = useQueryClient();
 
   const [phases, setPhases] = React.useState<Record<BootstrapPhase, PhaseState>>({
@@ -460,7 +461,7 @@ type MicroVmOutcome = 'running' | 'ready' | 'failed';
 function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
   const host = useHost();
   const terminals = useTerminalSessions();
-  const navigate = useNavigate();
+  const navigate = useJourneyNavigate();
   const queryClient = useQueryClient();
   const name = values.name?.trim() || 'appliance';
   const vmHost = host.vm;
@@ -659,16 +660,21 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     []
   );
 
-  if (!vmHost) {
-    return <Navigate to="/cloud/bootstrap" replace />;
-  }
-
   // The rung currently in focus: the high-water mark, defaulting to the
   // first rung before any phase has been reported so the ladder never
   // looks stalled (engines predating phase reporting just spin rung 0
   // until up() resolves, then every rung checks).
   const cur = reached < 0 ? 0 : reached;
   const ready = outcome === 'ready';
+  const headingSurface = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const heading = headingSurface.current?.querySelector<HTMLElement>('[data-present="true"] h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }, [ready]);
+
   const title = ready
     ? clusterRequested
       ? 'Ready to host apps'
@@ -676,10 +682,18 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     : clusterRequested
       ? 'Starting the Sandbox and App hosting'
       : 'Starting the Sandbox';
+  if (!vmHost) {
+    return <Navigate to="/cloud/bootstrap" replace />;
+  }
+
   const openShell = () => terminals.openSession({ target: name, engine: 'microvm', clusterName: name, mode: 'dev' });
   return (
     <PageShell rail="focused" className="space-y-6 pt-8">
-      <PageHeader focused title={title} description={`Sandbox · ${name}`} />
+      <div ref={headingSurface}>
+        <JourneySwap step={title} direction={0}>
+          <PageHeader focused title={title} description={`Sandbox · ${name}`} />
+        </JourneySwap>
+      </div>
       <SectionCard>
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {logAnnouncement}
@@ -689,8 +703,12 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
           status={outcome === 'running' ? 'running' : ready ? 'success' : 'error'}
           steps={ladder.map((rung) => ({
             key: rung.phase,
-            label: rung.label,
-            runningLabel: rung.runningLabel,
+            label: (
+              <JourneyReveal key={`${rung.phase}-${cur >= ladder.indexOf(rung)}`} order={0}>
+                {rung.label}
+              </JourneyReveal>
+            ),
+            runningLabel: <JourneyReveal>{rung.runningLabel ?? rung.label}</JourneyReveal>,
             detail: rung.detail,
           }))}
           activeStep={cur}
@@ -747,21 +765,23 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
         />
       </SectionCard>
       {ready ? (
-        <SectionCard title="Technical details">
-          <KeyValueList
-            items={[
-              { key: 'sandbox', label: 'Sandbox', value: name, mono: true },
-              ...(clusterRequested
-                ? [{ key: 'target', label: 'Target profile', value: microVmClusterId(name), mono: true }]
-                : []),
-            ]}
-          />
-          <p className="mt-3 text-xs leading-4 text-[var(--color-muted-foreground)]">
-            {clusterRequested
-              ? 'Your machine is running with App hosting on. Deploys get a live local URL.'
-              : "An isolated machine is running on this computer. Agents use its shared workspace; internet access is guarded and sign-in details stay outside the Sandbox. App hosting isn't set up yet — add it any time from Machine or on your first deploy."}
-          </p>
-        </SectionCard>
+        <JourneyReveal>
+          <SectionCard title="Technical details">
+            <KeyValueList
+              items={[
+                { key: 'sandbox', label: 'Sandbox', value: name, mono: true },
+                ...(clusterRequested
+                  ? [{ key: 'target', label: 'Target profile', value: microVmClusterId(name), mono: true }]
+                  : []),
+              ]}
+            />
+            <p className="mt-3 text-xs leading-4 text-[var(--color-muted-foreground)]">
+              {clusterRequested
+                ? 'Your machine is running with App hosting on. Deploys get a live local URL.'
+                : "An isolated machine is running on this computer. Agents use its shared workspace; internet access is guarded and sign-in details stay outside the Sandbox. App hosting isn't set up yet — add it any time from Machine or on your first deploy."}
+            </p>
+          </SectionCard>
+        </JourneyReveal>
       ) : null}
     </PageShell>
   );

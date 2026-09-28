@@ -27,6 +27,8 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 // (persisted in sessionStorage so SPA navigation keeps it). Pick the
 // preflight/runtime fixture with `?scenario=`:
 //
+//   journey      fresh developer welcome with observable boot phases
+//   journey-ledger core Sandbox while a cloud target stays selected
 //   ready        all tools installed, daemon up (default)
 //   running      daemon up, workloads populated
 //   daemon-down  docker installed but VM stopped, auto-startable (colima)
@@ -62,6 +64,8 @@ import type { EntitlementRecord, EntitlementSuggestion, InstalledApp } from '@ap
 // `import.meta.env.DEV`.
 
 type Scenario =
+  | 'journey'
+  | 'journey-ledger'
   | 'ready'
   | 'running'
   | 'daemon-down'
@@ -115,6 +119,16 @@ export function mockHostEnabled(): boolean {
     const scenario = params.get('scenario');
     if (scenario) {
       sessionStorage.setItem(SCENARIO_KEY, scenario);
+      if (scenario === 'journey') {
+        sessionStorage.setItem(APP_MODE_KEY, 'developer');
+        writeState({ clusters: [], selectedClusterId: null });
+        for (const name of Object.keys(microVms)) delete microVms[name];
+        localStorage.removeItem('appliance.onboarding.localRuntime.dismissed');
+      }
+      if (scenario === 'journey-ledger') {
+        sessionStorage.setItem(APP_MODE_KEY, 'developer');
+        configureWorkspaceScenario('user-mode-no-vm');
+      }
       if (scenario === 'first-run') sessionStorage.removeItem(APP_MODE_KEY);
       if (
         scenario === 'user-mode' ||
@@ -141,6 +155,7 @@ export function mockHostEnabled(): boolean {
       }
     }
   }
+  if (scenario() === 'journey' || scenario() === 'journey-ledger') installJourneyHealthFixture();
   return sessionStorage.getItem(ENABLED_KEY) === '1';
 }
 
@@ -151,7 +166,9 @@ function mockPlatform(): HostPlatform {
 
 function scenario(): Scenario {
   const s = sessionStorage.getItem(SCENARIO_KEY);
-  return s === 'running' ||
+  return s === 'journey' ||
+    s === 'journey-ledger' ||
+    s === 'running' ||
     s === 'daemon-down' ||
     s === 'daemon-manual' ||
     s === 'missing' ||
@@ -184,6 +201,40 @@ function scenario(): Scenario {
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Keep the existing cloud selection stable while observing the local hosting flip.
+// Only this fixture's cloud identity and the mock VM health probe are intercepted.
+function installJourneyHealthFixture(): void {
+  const fixtureWindow = window as typeof window & { __applianceJourneyFixtureInstalled?: boolean };
+  if (fixtureWindow.__applianceJourneyFixtureInstalled) return;
+  fixtureWindow.__applianceJourneyFixtureInstalled = true;
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, window.location.href);
+    if (
+      scenario() === 'journey-ledger' &&
+      url.hostname === 'appliance.acme.example' &&
+      url.pathname === '/api/v1/keys/self'
+    ) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: 'apikey_cloud', name: 'Mock admin', role: 'admin' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+    }
+    const vm = Object.values(microVms).find((item) => String(item.hostPort) === url.port);
+    if (url.hostname === 'api.appliance.localhost' && url.pathname === '/healthz' && vm) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: vm.running && vm.clusterProvisioned ? 200 : 503,
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+    }
+    return realFetch(input, init);
+  };
+}
 
 function installBannerClusterInfoFixture(): void {
   const fixtureWindow = window as typeof window & { __applianceBannerFixtureInstalled?: boolean };
@@ -1138,18 +1189,20 @@ export function createMockHost(): ConsoleHost {
       async list() {
         await sleep(80);
         if (scenario() === 'user-mode-no-vm') return [];
-        return Object.values(microVms).map((vm) => ({
-          name: vm.name,
-          running: vm.running,
-          clusterProvisioned: vm.clusterProvisioned,
-          clusterReady: vm.running && vm.clusterProvisioned,
-          phase: vm.running ? ('ready' as const) : undefined,
-          hostPort: vm.hostPort,
-          apiPort: vm.apiPort,
-          registryPort: vm.registryPort,
-          egressPort: vm.egressPort,
-          clusterId: vm.name === 'appliance' ? 'microvm' : `microvm-${vm.name}`,
-        }));
+        return Object.values(microVms)
+          .filter((vm) => scenario() !== 'journey' || vm.exists)
+          .map((vm) => ({
+            name: vm.name,
+            running: vm.running,
+            clusterProvisioned: vm.clusterProvisioned,
+            clusterReady: vm.running && vm.clusterProvisioned,
+            phase: vm.phase ?? (vm.running ? ('ready' as const) : undefined),
+            hostPort: vm.hostPort,
+            apiPort: vm.apiPort,
+            registryPort: vm.registryPort,
+            egressPort: vm.egressPort,
+            clusterId: vm.name === 'appliance' ? 'microvm' : `microvm-${vm.name}`,
+          }));
       },
       async install() {
         await sleep(800);
@@ -1169,7 +1222,7 @@ export function createMockHost(): ConsoleHost {
               kubeconfigReady: vm.running && vm.clusterProvisioned,
               controlPlaneUpdateCapable: vm.running && scenario() !== 'banner-legacy-reboot',
               selfUpdateEnabled: scenario() !== 'banner-mv1-disabled',
-              phase: vm.running ? ('ready' as const) : undefined,
+              phase: vm.phase ?? (vm.running ? ('ready' as const) : undefined),
               dev: vm.dev,
               // Mock a shared workspace for dev VMs so the agent launcher
               // (gated on devMount) is exercisable in the browser shell.
@@ -1192,6 +1245,14 @@ export function createMockHost(): ConsoleHost {
             vm.running = true;
           },
           async devUp(onEvent: (event: { message: string }) => void, opts?: { mount?: string }) {
+            if (scenario() === 'journey') {
+              for (const phase of ['media', 'booting', 'network'] as const) {
+                vm.phase = phase;
+                onEvent({ message: `Sandbox: ${phase}` });
+                await sleep(1800);
+              }
+            }
+
             const lines = [
               `starting VM '${vm.name}' as a dev environment (host pid 4242)`,
               'waiting for core sandbox......',
@@ -1207,8 +1268,10 @@ export function createMockHost(): ConsoleHost {
             vm.exists = true;
             vm.running = true;
             vm.dev = true;
+            vm.phase = 'ready';
           },
           async clusterUp(onEvent: (event: { message: string }) => void) {
+            vm.phase = 'cluster';
             const profile = vm.name === 'appliance' ? 'microvm' : `microvm-${vm.name}`;
             const lines = [
               `promoting VM '${vm.name}' to the deployment layer`,
@@ -1224,6 +1287,7 @@ export function createMockHost(): ConsoleHost {
             vm.exists = true;
             vm.running = true;
             vm.clusterProvisioned = true;
+            vm.phase = 'ready';
             registerMockMicroVmCluster(vm);
           },
           async update(version?: string, onEvent?: (event: { message: string }) => void) {
@@ -1473,6 +1537,7 @@ function encodeMockAppWindowDescriptor(descriptor: RuntimeAppWindowDescriptor): 
 interface MockVm {
   name: string;
   exists: boolean;
+  phase?: 'media' | 'booting' | 'network' | 'cluster' | 'ready';
   running: boolean;
   clusterProvisioned: boolean;
   /** Provisioned as a development environment (`appliance vm dev up`). */

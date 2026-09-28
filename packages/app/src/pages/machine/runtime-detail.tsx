@@ -1,3 +1,4 @@
+import { HostingStatus } from '@/components/journey-motion';
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -807,12 +808,14 @@ function CapabilityLedger({
       <div className="grid gap-2 p-3 sm:grid-cols-[7rem_8rem_minmax(0,1fr)] sm:items-center">
         <div className="text-sm font-medium">App hosting</div>
         <div className="inline-flex items-center gap-2 text-sm">
-          <StatusDot
-            tone={hostingServing ? 'success' : hostingBusy || (hostingProvisioned && running) ? 'info' : 'neutral'}
-            activity={hostingBusy || (hostingProvisioned && running && !hostingServing) ? 'pulse' : 'static'}
-            label={hostingLabel}
-          />
-          {hostingLabel}
+          <HostingStatus on={hostingLabel === 'On'}>
+            <StatusDot
+              tone={hostingServing ? 'success' : hostingBusy || (hostingProvisioned && running) ? 'info' : 'neutral'}
+              activity={hostingBusy || (hostingProvisioned && running && !hostingServing) ? 'pulse' : 'static'}
+              label={hostingLabel}
+            />
+            {hostingLabel}
+          </HostingStatus>
         </div>
         <div className="space-y-2 text-xs leading-4 text-[var(--color-muted-foreground)]">
           <p>
