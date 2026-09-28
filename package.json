@@ -25,7 +25,7 @@
   "scripts": {
     "build": "nx run-many --target=build --all",
     "clean": "rm -rf ./node_modules && pnpm -r run clean",
-    "lint:check": "pnpm exec eslint . && prettier . --check",
+    "lint:check": "node scripts/check-design-tokens.mjs && pnpm exec eslint . && prettier . --check",
     "lint:fix": "pnpm exec eslint --fix . && prettier . --fix --write",
     "dev": "nx run-many --target=build --all && concurrently -k -n sdk,infra,server -c blue,magenta,green \"pnpm --filter @appliance.sh/sdk run build:watch\" \"pnpm --filter @appliance.sh/infra run build:watch\" \"pnpm --filter @appliance.sh/api-server run start:dev\"",
     "dev:setup": "pnpm --filter @appliance.sh/sdk run dev:setup && pnpm --filter @appliance.sh/cli run dev:setup && pnpm --filter @appliance.sh/infra run dev:setup",
