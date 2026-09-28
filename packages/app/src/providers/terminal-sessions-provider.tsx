@@ -36,11 +36,11 @@ export function statusLabel(status: TerminalStatus): string {
 }
 
 /** Tailwind classes for the small status dot, keyed by status — also shared
- *  by both surfaces so the colour semantics (green pulse = Live, red =
+ *  by both surfaces so the colour semantics (info pulse = Live, red =
  *  Error, muted pulse = Connecting, muted = Ended) stay in lock-step. */
 export function statusDotClass(status: TerminalStatus): string {
   return status === 'open'
-    ? 'animate-pulse bg-[var(--color-success)]'
+    ? 'animate-pulse bg-[var(--color-info)]'
     : status === 'error'
       ? 'bg-[var(--color-destructive)]'
       : status === 'connecting'
