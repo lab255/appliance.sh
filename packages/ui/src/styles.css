@@ -1,0 +1,9 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import './theme.css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import 'tailwindcss/preflight.css' layer(base);
+@import './base.css';
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@source './components';

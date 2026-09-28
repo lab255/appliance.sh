@@ -141,6 +141,9 @@
     "./use-tail-autoscroll": {
       "types": "./dist/hooks/use-tail-autoscroll.d.ts",
       "import": "./dist/hooks/use-tail-autoscroll.js"
-    }
+    },
+    "./styles.css": "./dist/styles.css",
+    "./tokens.css": "./dist/tokens.css",
+    "./theme.css": "./dist/theme.css"
   }
 }
