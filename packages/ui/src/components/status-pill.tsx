@@ -33,6 +33,7 @@ export function StatusPill({ tone, label, activity = 'static', dot = true, class
   return (
     <span
       className={cn(
+        'appliance-ui',
         'inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4',
         statusToneVariants({ tone }),
         className
@@ -43,7 +44,13 @@ export function StatusPill({ tone, label, activity = 'static', dot = true, class
         activity === 'spin' ? (
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         ) : (
-          <span className={cn('h-1.5 w-1.5 rounded-full bg-current', activity === 'pulse' && 'animate-pulse')} />
+          <span
+            className={cn(
+              'appliance-ui',
+              'h-1.5 w-1.5 rounded-full bg-current',
+              activity === 'pulse' && 'animate-pulse'
+            )}
+          />
         )
       ) : null}
       <span>{label}</span>

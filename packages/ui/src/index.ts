@@ -36,3 +36,5 @@ export type { InputProps } from './components/input.js';
 export { Skeleton, ListSkeleton } from './components/skeleton.js';
 export { cn } from './lib/utils.js';
 export { useTailAutoscroll } from './hooks/use-tail-autoscroll.js';
+
+export { MotionProvider } from './motion-provider.js';

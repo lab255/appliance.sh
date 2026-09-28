@@ -24,6 +24,24 @@ export default defineConfig([
       'react/react-in-jsx-scope': 'off',
     },
   },
+  {
+    files: ['packages/ui/src/**/*.{ts,tsx}', 'packages/app/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'motion/react',
+              importNames: ['motion', 'm', 'domMax'],
+              message: 'Use import * as m from motion/react-m and lazy domAnimation.',
+            },
+          ],
+          patterns: ['framer-motion', 'framer-motion/*'],
+        },
+      ],
+    },
+  },
   tseslint.configs.recommended,
   pluginReact.configs.flat['jsx-runtime'],
   globalIgnores([

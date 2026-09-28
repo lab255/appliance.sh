@@ -68,6 +68,7 @@ export function LogPane({
   return (
     <div
       className={cn(
+        'appliance-ui',
         'overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-background)]',
         height === 'fill' && 'flex min-h-0 flex-1 flex-col',
         className
@@ -82,7 +83,10 @@ export function LogPane({
           className="flex w-full flex-1 items-center justify-between gap-3 px-3 py-2 text-xs font-medium text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
         >
           <span>{label}</span>
-          <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
+          <ChevronRight
+            className={cn('appliance-ui', 'h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+            aria-hidden
+          />
         </button>
         {copyText !== undefined ? (
           <button
@@ -115,6 +119,7 @@ export function LogPane({
             onViewportScroll?.(event);
           }}
           className={cn(
+            'appliance-ui',
             'overflow-auto whitespace-pre-wrap border-t border-[var(--color-border)] px-3 py-2 font-mono text-xs leading-relaxed tabular-nums text-[var(--color-foreground)]',
             height === 'compact' && 'max-h-40',
             height === 'default' && 'h-72',

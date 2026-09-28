@@ -94,7 +94,7 @@ export function LongOperation({
   const statusTone: StatusTone = status === 'running' ? 'info' : status === 'error' ? 'error' : successTone;
 
   return (
-    <div className={cn('space-y-3', className)} {...props}>
+    <div className={cn('appliance-ui', 'space-y-3', className)} {...props}>
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         <div role="status" aria-live="polite" aria-atomic="true">
@@ -122,7 +122,7 @@ export function LongOperation({
                     <Circle className="h-2.5 w-2.5 text-[var(--color-muted-foreground)]" />
                   )}
                 </span>
-                <div className={cn(!current && !complete && 'text-[var(--color-muted-foreground)]')}>
+                <div className={cn('appliance-ui', !current && !complete && 'text-[var(--color-muted-foreground)]')}>
                   <div>{label}</div>
                   {step.detail ? (
                     <div className="text-xs leading-4 text-[var(--color-muted-foreground)]">{step.detail}</div>

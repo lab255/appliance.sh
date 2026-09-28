@@ -29,7 +29,7 @@ export function LiveUrl({ url, className }: { url: string; className?: string })
 
   const label = url.replace(/^https?:\/\//, '');
   return (
-    <span className={cn('group/url inline-flex min-w-0 items-center gap-1', className)}>
+    <span className={cn('appliance-ui', 'group/url inline-flex min-w-0 items-center gap-1', className)}>
       <a
         href={url}
         target="_blank"

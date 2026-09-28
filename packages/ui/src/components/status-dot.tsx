@@ -92,11 +92,22 @@ export function StatusDot(props: StatusDotProps | LegacyStatusDotProps) {
   const dim = size === 'md' ? 'h-2.5 w-2.5' : 'h-2 w-2';
   const color = dotTones[resolved.tone];
   return (
-    <span {...htmlProps} role="img" aria-label={resolved.label} className={cn('relative inline-flex', dim, className)}>
+    <span
+      {...htmlProps}
+      role="img"
+      aria-label={resolved.label}
+      className={cn('appliance-ui', 'relative inline-flex', dim, className)}
+    >
       {resolved.activity === 'pulse' ? (
-        <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-60', color)} />
+        <span
+          className={cn(
+            'appliance-ui',
+            'absolute inline-flex h-full w-full animate-ping rounded-full opacity-60',
+            color
+          )}
+        />
       ) : null}
-      <span className={cn('relative inline-block h-full w-full rounded-full', color)} />
+      <span className={cn('appliance-ui', 'relative inline-block h-full w-full rounded-full', color)} />
     </span>
   );
 }
