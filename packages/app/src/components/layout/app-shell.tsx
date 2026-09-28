@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { Wand, Server, Laptop, Cloud, Folder, Bot, Cog, Grid2X2, ShoppingBag } from 'lucide-react';
+import { Wand, Laptop, Cloud, Folder, Bot, Cog, Grid2X2, ShoppingBag } from 'lucide-react';
+import brandMark from '@/assets/brand/mark.svg';
 import { cn } from '@/lib/utils';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
@@ -100,8 +101,8 @@ export function AppShell() {
         {/* Brand — height + divider align with the content header so the
             top-left corner reads as one clean grid, not two strips. */}
         <div className="flex h-[57px] shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--color-foreground)] text-[var(--color-background)]">
-            <Server className="h-3.5 w-3.5" aria-hidden />
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-black">
+            <img src={brandMark} className="h-6 w-6" alt="" aria-hidden="true" />
           </div>
           <span className="hidden text-sm font-semibold tracking-tight sm:block">Appliance</span>
         </div>
