@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { Banner, type BannerTone } from './banner';
-import { LogPane } from './log-pane';
-import { LongOperation } from './long-operation';
-import { StatusDot } from './status-dot';
-import { StatusPill, type StatusTone } from './status-pill';
+import { Banner, type BannerTone } from './banner.js';
+import { LogPane } from './log-pane.js';
+import { LongOperation } from './long-operation.js';
+import { StatusDot } from './status-dot.js';
+import { StatusPill, type StatusTone } from './status-pill.js';
 
 describe('Banner', () => {
   it.each<BannerTone>(['neutral', 'info', 'sandbox', 'success', 'warning', 'error'])(

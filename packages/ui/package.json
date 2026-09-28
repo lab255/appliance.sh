@@ -52,5 +52,95 @@
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./long-operation": {
+      "types": "./dist/components/long-operation.d.ts",
+      "import": "./dist/components/long-operation.js"
+    },
+    "./banner": {
+      "types": "./dist/components/banner.d.ts",
+      "import": "./dist/components/banner.js"
+    },
+    "./confirm-dialog": {
+      "types": "./dist/components/confirm-dialog.d.ts",
+      "import": "./dist/components/confirm-dialog.js"
+    },
+    "./section-card": {
+      "types": "./dist/components/section-card.d.ts",
+      "import": "./dist/components/section-card.js"
+    },
+    "./log-pane": {
+      "types": "./dist/components/log-pane.d.ts",
+      "import": "./dist/components/log-pane.js"
+    },
+    "./key-value-list": {
+      "types": "./dist/components/key-value-list.d.ts",
+      "import": "./dist/components/key-value-list.js"
+    },
+    "./status-pill": {
+      "types": "./dist/components/status-pill.d.ts",
+      "import": "./dist/components/status-pill.js"
+    },
+    "./page-shell": {
+      "types": "./dist/components/page-shell.d.ts",
+      "import": "./dist/components/page-shell.js"
+    },
+    "./field": {
+      "types": "./dist/components/field.d.ts",
+      "import": "./dist/components/field.js"
+    },
+    "./entity-label": {
+      "types": "./dist/components/entity-label.d.ts",
+      "import": "./dist/components/entity-label.js"
+    },
+    "./empty-state": {
+      "types": "./dist/components/empty-state.d.ts",
+      "import": "./dist/components/empty-state.js"
+    },
+    "./status-dot": {
+      "types": "./dist/components/status-dot.d.ts",
+      "import": "./dist/components/status-dot.js"
+    },
+    "./live-url": {
+      "types": "./dist/components/live-url.d.ts",
+      "import": "./dist/components/live-url.js"
+    },
+    "./tag": {
+      "types": "./dist/components/tag.d.ts",
+      "import": "./dist/components/tag.js"
+    },
+    "./command-snippet": {
+      "types": "./dist/components/command-snippet.d.ts",
+      "import": "./dist/components/command-snippet.js"
+    },
+    "./button": {
+      "types": "./dist/components/button.d.ts",
+      "import": "./dist/components/button.js"
+    },
+    "./toast": {
+      "types": "./dist/components/toast.d.ts",
+      "import": "./dist/components/toast.js"
+    },
+    "./input": {
+      "types": "./dist/components/input.d.ts",
+      "import": "./dist/components/input.js"
+    },
+    "./skeleton": {
+      "types": "./dist/components/skeleton.d.ts",
+      "import": "./dist/components/skeleton.js"
+    },
+    "./utils": {
+      "types": "./dist/lib/utils.d.ts",
+      "import": "./dist/lib/utils.js"
+    },
+    "./use-tail-autoscroll": {
+      "types": "./dist/hooks/use-tail-autoscroll.d.ts",
+      "import": "./dist/hooks/use-tail-autoscroll.js"
+    }
   }
 }
