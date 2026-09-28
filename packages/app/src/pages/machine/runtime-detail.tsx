@@ -808,7 +808,7 @@ function CapabilityLedger({
       <div className="grid gap-2 p-3 sm:grid-cols-[7rem_8rem_minmax(0,1fr)] sm:items-center">
         <div className="text-sm font-medium">App hosting</div>
         <div className="inline-flex items-center gap-2 text-sm">
-          <HostingStatus on={hostingLabel === 'On'}>
+          <HostingStatus on={hostingServing && !hostingBusy}>
             <StatusDot
               tone={hostingServing ? 'success' : hostingBusy || (hostingProvisioned && running) ? 'info' : 'neutral'}
               activity={hostingBusy || (hostingProvisioned && running && !hostingServing) ? 'pulse' : 'static'}

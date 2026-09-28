@@ -83,6 +83,10 @@
   }
 }
 
+.journey-handoff::view-transition {
+  pointer-events: none;
+}
+
 .journey-handoff::view-transition-old(root),
 .journey-handoff::view-transition-new(root) {
   animation-duration: var(--duration-slow);
