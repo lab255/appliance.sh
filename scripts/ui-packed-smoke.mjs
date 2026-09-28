@@ -35,6 +35,10 @@ import { ToastProvider, useToast } from '@appliance.sh/ui/toast';
 import { ConfirmProvider, useConfirm } from '@appliance.sh/ui/confirm-dialog';
 import { Banner ${baseline ? '' : ', BannerPresence'} } from '@appliance.sh/ui/banner';
 import { Skeleton } from '@appliance.sh/ui/skeleton';
+import { Dialog } from '@appliance.sh/ui/dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@appliance.sh/ui/dropdown-menu';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@appliance.sh/ui/tooltip';
+import { Popover, PopoverTrigger, PopoverContent } from '@appliance.sh/ui/popover';
 ${baseline ? '' : "import { MotionProvider } from '@appliance.sh/ui/motion-provider'; import { SkeletonSwap } from '@appliance.sh/ui/skeleton-swap';"}
 ${baseline ? 'const MotionProvider = ({children}: {children: React.ReactNode}) => children; const BannerPresence = ({children}: {children: React.ReactNode}) => children; const SkeletonSwap = ({loading, fallback, children}: {loading: boolean; fallback: React.ReactNode; children: React.ReactNode}) => loading ? fallback : children;' : ''}
 function Action() {
@@ -47,6 +51,11 @@ function Action() {
     <Button onClick={() => toast('Packed interaction works')}>Show toast</Button>
     <Button onClick={async () => setResult(await confirm({ title: 'Delete preview?', description: 'This is a motion preview.' }) ? 'Confirmed' : 'Cancelled')}>Open dialog</Button>
     <span>{result}</span>
+    <Dialog />
+    <DropdownMenu><DropdownMenuTrigger>Choose target</DropdownMenuTrigger><DropdownMenuContent loop><DropdownMenuItem>Alpha</DropdownMenuItem><DropdownMenuItem disabled>Unavailable</DropdownMenuItem><DropdownMenuItem>Bravo</DropdownMenuItem><DropdownMenuItem>Charlie</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+    <Tooltip><TooltipTrigger>First hint</TooltipTrigger><TooltipContent>First tooltip</TooltipContent></Tooltip>
+    <Tooltip><TooltipTrigger>Second hint</TooltipTrigger><TooltipContent>Second tooltip</TooltipContent></Tooltip>
+    <Popover><PopoverTrigger>Details</PopoverTrigger><PopoverContent>Popover gallery content</PopoverContent></Popover>
     <Button onClick={() => setBanner(true)}>Show banner</Button>
     <BannerPresence>{banner ? <Banner key="notice" tone="success" onDismiss={() => setBanner(false)}>Packed banner</Banner> : null}</BannerPresence>
     <Button onClick={() => setLoading(v => !v)}>Swap content</Button>
@@ -184,7 +193,7 @@ export default function Page() { return <PageShell><Tag>Packed static primitive<
   const installed = join(dir, 'node_modules/@appliance.sh/ui');
   const pkg = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
   const client = new Set(
-    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll motion-provider skeleton-swap'.split(
+    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll motion-provider skeleton-swap dialog dropdown-menu tooltip popover'.split(
       ' '
     )
   );
@@ -263,20 +272,29 @@ console.log('Standalone tokens parse successfully');
     await page.getByRole('button', { name: 'Show toast' }).click();
     await page.getByText('Packed interaction works').waitFor();
     if (!baseline) {
-      const open = page.getByRole('button', { name: 'Open dialog' });
+      const open = page.getByRole('button', { name: 'Open dialog', includeHidden: true });
       await open.click();
       assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Cancel');
       await page.keyboard.press('Shift+Tab');
       assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Confirm');
       await page.keyboard.press('Tab');
       assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Cancel');
-      assert(await open.evaluate((el) => !!el.closest('[inert]')));
       assert(
-        await page.getByText('Packed interaction works', { exact: true }).evaluate((el) => !!el.closest('[inert]')),
+        await open.evaluate(
+          (el) => !!el.closest('[aria-hidden="true"]') && getComputedStyle(document.body).pointerEvents === 'none'
+        )
+      );
+      assert(
+        await page
+          .getByText('Packed interaction works', { exact: true })
+          .evaluate(
+            (el) => !!el.closest('[aria-hidden="true"]') && getComputedStyle(document.body).pointerEvents === 'none'
+          ),
         'Sibling toast remains inert during dialog'
       );
       await page.keyboard.press('Escape');
       await page.getByText('Cancelled', { exact: true }).waitFor();
+      await page.getByRole('alertdialog').waitFor({ state: 'detached' });
       assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Open dialog');
       for (const reducedMotion of ['reduce', 'no-preference', 'reduce']) {
         await page.emulateMedia({ reducedMotion });
@@ -301,6 +319,43 @@ console.log('Standalone tokens parse successfully');
         '1'
       );
     }
+    // Real browser checks: focus, typeahead, delay and preference changes.
+    await page.getByRole('button', { name: 'Choose target' }).focus();
+    await page.keyboard.press('ArrowDown');
+    await page.getByRole('menu').waitFor();
+    assert.equal(await page.getByRole('menu').evaluate((el) => getComputedStyle(el).animationName), 'none');
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Alpha');
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => document.activeElement.textContent === 'Bravo');
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Bravo');
+    await page.keyboard.press('c');
+    await page.waitForTimeout(30);
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Charlie');
+    await page.keyboard.press('Escape');
+    await page.getByRole('menu').waitFor({ state: 'detached' });
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Choose target');
+    await page.mouse.move(0, 0, { steps: 10 });
+    await page.waitForTimeout(400);
+    await page.getByRole('button', { name: 'First hint' }).hover();
+    await page.waitForTimeout(150);
+    assert.equal(await page.getByRole('tooltip').count(), 0);
+    await page.getByRole('tooltip').waitFor();
+    await page.mouse.move(0, 0, { steps: 10 });
+    await page.getByRole('tooltip').waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Second hint' }).hover();
+    await page.waitForTimeout(50);
+    assert.equal(await page.getByRole('tooltip').textContent(), 'Second tooltip');
+    await page.mouse.move(0, 0, { steps: 10 });
+    await page.getByRole('button', { name: 'Details' }).click();
+    await page.getByText('Popover gallery content').waitFor();
+    await page.keyboard.press('Escape');
+    await page.getByText('Popover gallery content').waitFor({ state: 'detached' });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByRole('button', { name: 'Open dialog' }).click();
+    assert.equal(await page.getByRole('alertdialog').evaluate((el) => getComputedStyle(el).animationName), 'none');
+    assert.equal(await page.getByRole('alertdialog').evaluate((el) => getComputedStyle(el).opacity), '1');
+    await page.mouse.click(5, 5);
+    await page.getByRole('alertdialog').waitFor({ state: 'detached' });
     const fontUrls = await page.evaluate(async () => {
       await document.fonts.ready;
       if (!document.fonts.check('14px "Geist Variable"')) throw new Error('Geist failed to load');

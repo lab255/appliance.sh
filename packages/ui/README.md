@@ -36,3 +36,28 @@ are loaded. Static-only packed routes assert that Motion stays out of their JS.
 The fixture reports gzip bytes for initial, lazy-feature, and static-route JS;
 `UI_SMOKE_BASELINE=1 UI_SMOKE_TARBALL=/path/to/pre-motion.tgz` measures the same
 consumer against the extraction artifact.
+
+### Overlays
+
+Import `Dialog`, `DropdownMenu`, `Tooltip`, and `Popover` compositions from
+`@appliance.sh/ui/dialog`, `/dropdown-menu`, `/tooltip`, and `/popover`. Content
+components portal to the document body and accept Radix content props and refs.
+Use `asChild` on triggers/items to keep native button or link semantics.
+
+The application's single `MotionProvider` also mounts one `TooltipProvider`, so
+all routes share the 400 ms first-open delay and 300 ms subsequent-open grace
+period. Standalone consumers can mount `TooltipProvider` themselves. Do not add
+one provider per tooltip. Popovers are available as a kit primitive; the packed
+smoke fixture and overlay design-system tests include an interactive example.
+
+Radix owns modal focus trapping, Escape/outside dismissal, screen-reader isolation
+(`aria-hidden`) and background pointer blocking. `ConfirmProvider` keeps the
+promise-based `useConfirm` API, Cancel autofocus, and programmatic-opener focus
+restoration. Background isolation is tested behaviorally rather than requiring
+the previous implementation's literal `inert` attribute.
+
+Radix Presence retains closing surfaces for CSS animations using the existing
+motion tokens: dialog entry is 200 ms opacity plus 0.98→1 scale, its scrim and exit
+are 120 ms, and menus/tooltips/popovers fade over 120 ms. `useTransition` disables
+animation until lazy features are ready; reduced-motion CSS makes all transitions
+immediate. No separate duration or easing constants are introduced.

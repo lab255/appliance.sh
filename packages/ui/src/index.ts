@@ -40,3 +40,7 @@ export { useTailAutoscroll } from './hooks/use-tail-autoscroll.js';
 export { MotionProvider } from './motion-provider.js';
 
 export { SkeletonSwap } from './components/skeleton-swap.js';
+export * from './components/dialog.js';
+export * from './components/dropdown-menu.js';
+export * from './components/tooltip.js';
+export * from './components/popover.js';
