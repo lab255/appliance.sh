@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Play, Settings } from 'lucide-react';
+import { LogPane } from '@/components/ui/log-pane';
 import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
 import { useHost } from '@/providers/host-provider';
@@ -57,7 +58,6 @@ export function StartMachineRecovery({
   const [busy, setBusy] = React.useState<'install' | 'up' | null>(null);
   const [log, setLog] = React.useState<string[]>([]);
   const [startError, setStartError] = React.useState<string | null>(null);
-  const logRef = React.useRef<HTMLPreElement | null>(null);
 
   // Shares the machine page's status key so the two never double-poll.
   const statusQuery = useQuery({
@@ -70,10 +70,6 @@ export function StartMachineRecovery({
     },
   });
   const status = statusQuery.data;
-
-  React.useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [log]);
 
   // Self-dismiss: if the machine reaches ready (started here, on the
   // machine page, or from the CLI), refetch everything so the parent's
@@ -155,17 +151,18 @@ export function StartMachineRecovery({
         </Button>
       </div>
       {busy === 'up' || log.length > 0 ? (
-        <pre
-          ref={logRef}
-          className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 font-mono text-[11px] leading-relaxed"
-        >
-          {log.join('\n') || 'Starting…'}
-        </pre>
+        <LogPane height="compact" defaultOpen empty="Starting…">
+          {log.length > 0 ? log.join('\n') : undefined}
+        </LogPane>
       ) : null}
       {cannotStart ? (
-        <p className="text-xs text-amber-200">{status?.message ?? 'This computer can’t run the Dev Machine engine.'}</p>
+        <p className="text-xs text-[var(--color-warning-foreground)]">
+          {status?.message ?? 'This computer can’t run the Dev Machine engine.'}
+        </p>
       ) : null}
-      {startError ? <p className="text-xs text-red-300">Couldn’t start the machine: {startError}</p> : null}
+      {startError ? (
+        <p className="text-xs text-[var(--color-destructive-foreground)]">Couldn’t start the machine: {startError}</p>
+      ) : null}
     </div>
   );
 

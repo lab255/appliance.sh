@@ -209,7 +209,7 @@ export function LaunchAgentButton({
           <Button variant="outline" size="sm" disabled>
             <Bot className="h-4 w-4" /> Run agent
           </Button>
-          <span role="note" className="max-w-[18rem] text-[11px] leading-snug text-[var(--color-muted-foreground)]">
+          <span role="note" className="max-w-[18rem] text-micro leading-snug text-[var(--color-muted-foreground)]">
             {disabledReason}
           </span>
         </span>
