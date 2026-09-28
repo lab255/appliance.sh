@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('../packages/app/src/', import.meta.url));
 // No migration exceptions remain. Black/white modal scrims are intentionally
 // outside this hue/size guard (design-system-spec.md §D).
 const forbidden =
-  /text-\[\d+(?:\.\d+)?px\]|\b[\w-]+-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-(?:50|[1-9]\d{2})\b/g;
+  /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{1,5})?\b|text-\[\d+(?:\.\d+)?(?:px|rem)\]|\b[\w-]+-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-(?:50|[1-9]\d{2})\b/g;
 
 async function scan(directory) {
   let violations = 0;
@@ -32,5 +32,5 @@ if (violations) {
   console.error(`Design tokens: ${violations} violation(s). Use semantic colors and named text roles.`);
   process.exitCode = 1;
 } else {
-  console.log('Design tokens: zero raw hue or pixel text-size violations.');
+  console.log('Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.');
 }
