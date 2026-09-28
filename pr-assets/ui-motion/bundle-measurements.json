@@ -1,0 +1,33 @@
+{
+  "units": "gzip bytes, sum of per-file gzip",
+  "versions": {
+    "motion": "13.4.4",
+    "react": "19.2.8",
+    "vite": "6.4.2",
+    "next": "15.5.24"
+  },
+  "before": {
+    "vite": {
+      "initial": 73257,
+      "lazy": 0,
+      "static": 68293
+    },
+    "next": {
+      "initial": 118472,
+      "lazy": 0,
+      "static": 102936
+    }
+  },
+  "after": {
+    "vite": {
+      "initial": 90960,
+      "lazy": 14840,
+      "static": 68293
+    },
+    "next": {
+      "initial": 137642,
+      "lazy": 14731,
+      "static": 102969
+    }
+  }
+}
