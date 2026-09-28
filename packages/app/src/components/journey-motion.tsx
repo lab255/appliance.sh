@@ -93,16 +93,25 @@ export function HostingStatus({ on, children }: { on: boolean; children: React.R
   const immediate = useJourneyImmediate();
   const previous = React.useRef(on);
   const [revision, setRevision] = React.useState(0);
+  const [acknowledging, setAcknowledging] = React.useState(false);
   React.useEffect(() => {
-    if (on && !previous.current) setRevision((value) => value + 1);
+    if (on && !previous.current) {
+      setRevision((value) => value + 1);
+      setAcknowledging(!immediate);
+    } else if (!on || immediate) {
+      setAcknowledging(false);
+    }
     previous.current = on;
-  }, [on]);
+  }, [on, immediate]);
   return (
     <span role="status" aria-live="polite" aria-atomic="true">
       <span
         key={revision}
+        onAnimationEnd={(event) => {
+          if (event.target === event.currentTarget) setAcknowledging(false);
+        }}
         className={
-          revision > 0 && on ? 'journey-hosting inline-flex items-center gap-2' : 'inline-flex items-center gap-2'
+          acknowledging && on ? 'journey-hosting inline-flex items-center gap-2' : 'inline-flex items-center gap-2'
         }
         data-immediate={immediate}
       >

@@ -56,6 +56,28 @@ describe('journey motion', () => {
     expect(container.querySelector('.journey-hosting')).not.toBe(first);
   });
 
+  it('does not replay a completed or reduced acknowledgement when preferences change', async () => {
+    await render(<HostingStatus on={false}>Off</HostingStatus>);
+    await render(<HostingStatus on>On</HostingStatus>);
+    await act(() =>
+      container.querySelector('.journey-hosting')!.dispatchEvent(new Event('animationend', { bubbles: true }))
+    );
+    expect(container.querySelector('.journey-hosting')).toBeNull();
+    reduced = true;
+    await act(() => {
+      for (const listener of listeners) listener();
+    });
+    await render(<HostingStatus on={false}>Off</HostingStatus>);
+    await render(<HostingStatus on>On</HostingStatus>);
+    expect(container.querySelector('.journey-hosting')).toBeNull();
+    reduced = false;
+    await act(() => {
+      for (const listener of listeners) listener();
+    });
+    expect(container.querySelector('.journey-hosting')).toBeNull();
+    expect(container.textContent).toBe('On');
+  });
+
   it('removes exiting surfaces immediately under reduced motion, including preference changes', async () => {
     await render(
       <JourneySwap step="one">
