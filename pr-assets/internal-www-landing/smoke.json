@@ -1,0 +1,28 @@
+{
+  "browser": "149.0.7827.55",
+  "evidence": [
+    {
+      "width": 1280,
+      "route": "/",
+      "overflow": false
+    },
+    {
+      "width": 1280,
+      "route": "/catalogue",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "route": "/",
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "route": "/catalogue",
+      "overflow": false
+    }
+  ],
+  "noJavaScript": "pass: visible hero, working CLI anchor, catalogue cards",
+  "reducedMotion": "pass: initial preference and live change",
+  "pageErrors": []
+}
