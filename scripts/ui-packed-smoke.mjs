@@ -28,6 +28,40 @@ const tarball =
     readdirSync(temporary).find((name) => name.endsWith('.tgz'))
   );
 const baseline = process.env.UI_SMOKE_BASELINE === '1';
+// Audit the extracted tarball before installing any consumer dependencies.
+run(temporary, 'tar', ['-xzf', tarball]);
+auditPackage(join(temporary, 'package'));
+if (process.argv.includes('--audit-only')) {
+  console.log('Packed exports, directives, CSS, tokens, and fonts passed');
+  process.exit(0);
+}
+function auditPackage(installed) {
+  const pkg = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
+  const client = new Set(
+    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll motion-provider skeleton-swap dialog dropdown-menu tooltip popover'.split(
+      ' '
+    )
+  );
+  for (const [key, entry] of Object.entries(pkg.exports)) {
+    if (typeof entry === 'string') {
+      readFileSync(join(installed, entry));
+      continue;
+    }
+    readFileSync(join(installed, entry.types));
+    const source = readFileSync(join(installed, entry.import), 'utf8');
+    assert.equal(/^['"]use client['"];/.test(source), client.has(key.slice(2)), key);
+    assert(!source.includes('.css'), `JS loads CSS: ${key}`);
+  }
+  const css = readFileSync(join(installed, 'dist/styles.css'), 'utf8');
+  assert(!/@theme|@source|@tailwind/.test(css));
+  const fonts = [...css.matchAll(/url\((?:["'])?(\.\/assets\/[^)"']+)/g)];
+  assert.equal(fonts.length, 11);
+  for (const [, font] of fonts) readFileSync(join(installed, 'dist', font));
+  const tokens = readFileSync(join(installed, 'dist/tokens.css'), 'utf8');
+  const theme = readFileSync(join(installed, 'dist/theme.css'), 'utf8');
+  assert(!/@theme|@import|@font-face/.test(tokens));
+  assert.equal((tokens.match(/--[\w-]+:/g) ?? []).length, (theme.match(/--[\w-]+:/g) ?? []).length);
+}
 const interactive = `'use client';
 import { useState } from 'react';
 import { Button } from '@appliance.sh/ui/button';
@@ -191,33 +225,9 @@ export default function Page() { return <PageShell><Tag>Packed static primitive<
   }
   run(dir, 'npm', ['install', '--no-audit', '--no-fund']);
   const installed = join(dir, 'node_modules/@appliance.sh/ui');
-  const pkg = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
-  const client = new Set(
-    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll motion-provider skeleton-swap dialog dropdown-menu tooltip popover'.split(
-      ' '
-    )
-  );
-  for (const [key, entry] of Object.entries(pkg.exports)) {
-    if (typeof entry === 'string') {
-      readFileSync(join(installed, entry));
-      continue;
-    }
-    readFileSync(join(installed, entry.types));
-    const source = readFileSync(join(installed, entry.import), 'utf8');
-    assert.equal(/^['"]use client['"];/.test(source), client.has(key.slice(2)), key);
-    assert(!source.includes('.css'), `JS loads CSS: ${key}`);
-  }
-  const css = readFileSync(join(installed, 'dist/styles.css'), 'utf8');
-  assert(!/@theme|@source|@tailwind/.test(css));
-  const fonts = [...css.matchAll(/url\((?:["'])?(\.\/assets\/[^)"']+)/g)];
-  assert.equal(fonts.length, 11);
-  for (const [, font] of fonts) readFileSync(join(installed, 'dist', font));
-  const tokens = readFileSync(join(installed, 'dist/tokens.css'), 'utf8');
+  auditPackage(installed);
   mkdirSync(join(dir, 'public'), { recursive: true });
-  write(dir, 'public/tokens.css', tokens);
-  const theme = readFileSync(join(installed, 'dist/theme.css'), 'utf8');
-  assert(!/@theme|@import|@font-face/.test(tokens));
-  assert.equal((tokens.match(/--[\w-]+:/g) ?? []).length, (theme.match(/--[\w-]+:/g) ?? []).length);
+  write(dir, 'public/tokens.css', readFileSync(join(installed, 'dist/tokens.css'), 'utf8'));
   write(
     dir,
     'audit.mjs',
@@ -233,6 +243,9 @@ console.log('Standalone tokens parse successfully');
   run(dir, 'node', ['audit.mjs']);
 
   run(dir, 'npm', ['run', 'build']);
+  if (process.argv.includes('--install-browser')) {
+    run(dir, process.execPath, ['node_modules/playwright/cli.js', 'install', '--with-deps', 'chromium']);
+  }
   const { chromium } = await import(pathToFileURL(join(dir, 'node_modules/playwright/index.mjs')).href);
   const port = kind === 'vite' ? 41731 : 41732;
   const server = spawn(

@@ -1,6 +1,5 @@
 {
   "name": "@appliance.sh/ui",
-  "private": true,
   "version": "1.59.0",
   "description": "Shared Appliance UI primitives, styles, and tokens",
   "license": "MIT",
@@ -155,6 +154,7 @@
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/tokens.css",
     "./theme.css": "./dist/theme.css",
+    "./package.json": "./package.json",
     "./motion-provider": {
       "types": "./dist/motion-provider.d.ts",
       "import": "./dist/motion-provider.js"

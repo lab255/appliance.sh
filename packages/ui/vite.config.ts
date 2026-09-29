@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -18,6 +19,12 @@ export default defineConfig({
       enforce: 'post',
       generateBundle(_options, bundle) {
         const theme = readFileSync(new URL('./src/theme.css', import.meta.url), 'utf8');
+        // This substitution is intentionally limited to one flat, self-contained
+        // theme block. Imports or additional blocks need a real CSS transform.
+        assert(
+          /^\s*@theme static\s*\{[^{}@]*\}\s*$/.test(theme.replace(/\/\*[\s\S]*?\*\//g, '')),
+          'tokens.css requires exactly one flat @theme static block without imports'
+        );
         this.emitFile({ type: 'asset', fileName: 'theme.css', source: theme });
         this.emitFile({
           type: 'asset',

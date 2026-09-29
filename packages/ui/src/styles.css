@@ -7,6 +7,7 @@
 @import './base.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @source './components';
+@source not './components/design-system.test.tsx';
 
 @media (prefers-reduced-motion: reduce) {
   .appliance-ui,

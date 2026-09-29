@@ -52,6 +52,9 @@ jobs:
       # and the Virtualization.framework backend compiles.
       - name: Build
         run: pnpm run build
+      # Cheap tarball checks run on every PR, including all UI changes.
+      - name: Audit packed UI
+        run: node scripts/ui-packed-smoke.mjs --audit-only
       - name: Typecheck
         run: pnpm exec nx run-many --target=typecheck --all
       - name: Check linting and code style
