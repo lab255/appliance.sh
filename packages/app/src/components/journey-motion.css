@@ -1,0 +1,118 @@
+/* Keep the route snapshot canvas on the same surface as the app. */
+:root {
+  background-color: var(--color-background);
+}
+
+.journey-stack {
+  display: grid;
+}
+.journey-frame {
+  grid-area: 1 / 1;
+  min-width: 0;
+  animation: journey-enter var(--duration-slow) var(--ease-in-out);
+}
+.journey-frame[data-present='false'] {
+  pointer-events: none;
+  animation: journey-leave var(--duration-slow) var(--ease-in-out) forwards;
+}
+.journey-reveal {
+  animation: journey-settle var(--duration-base) var(--ease-out-quart) backwards;
+  animation-delay: calc(var(--journey-order, 0) * var(--duration-fast));
+}
+.journey-hosting {
+  animation: journey-settle var(--duration-slow) var(--ease-in-out);
+}
+.journey-card {
+  transition:
+    background-color var(--duration-fast) var(--ease-out-quart),
+    border-color var(--duration-fast) var(--ease-out-quart),
+    transform var(--duration-fast) var(--ease-out-quart);
+}
+.journey-card:hover {
+  transform: translateY(-2px);
+  background-color: var(--color-surface-raised);
+}
+.journey-card:active {
+  transform: translateY(0);
+}
+.journey-card[data-selected='true'] {
+  border-color: var(--color-ring);
+  background-color: var(--color-surface-raised);
+}
+.journey-frame[data-immediate='true'],
+.journey-reveal[data-immediate='true'],
+.journey-hosting[data-immediate='true'] {
+  animation: none;
+}
+/* Presence cleanup is passive; never paint its retained reduced-motion surface. */
+.journey-frame[data-present='false'][data-immediate='true'] {
+  display: none;
+}
+
+@keyframes journey-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--journey-offset, 0px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes journey-leave {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--journey-offset, 0px)));
+  }
+}
+@keyframes journey-settle {
+  from {
+    opacity: 0.45;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey-frame[data-present='false'] {
+    display: none;
+  }
+  .journey-frame,
+  .journey-reveal,
+  .journey-hosting {
+    animation: none;
+  }
+  .journey-card {
+    transition: none;
+  }
+  .journey-card:hover,
+  .journey-card:active {
+    transform: none;
+  }
+}
+
+.journey-handoff::view-transition {
+  pointer-events: none;
+}
+
+.journey-handoff::view-transition-old(root),
+.journey-handoff::view-transition-new(root) {
+  animation-duration: var(--duration-slow);
+  animation-timing-function: var(--ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey-handoff::view-transition-old(root),
+  .journey-handoff::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+/* Headings receive reading focus, not an interactive-control focus ring. */
+.journey-frame h1[tabindex='-1']:focus {
+  outline: none;
+}

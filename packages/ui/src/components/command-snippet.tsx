@@ -43,6 +43,7 @@ export function CommandSnippet({
   return (
     <div
       className={cn(
+        'appliance-ui',
         'flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-2',
         className
       )}

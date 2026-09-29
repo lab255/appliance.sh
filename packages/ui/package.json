@@ -22,7 +22,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vite build && tsc --emitDeclarationOnly",
+    "build": "node scripts/generate-motion.mjs && vite build && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "clean": "rm -rf ./dist"
@@ -30,26 +30,35 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/geist-mono": "^5.2.8",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-popover": "^1.1.23",
     "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-tooltip": "^1.2.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.5",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "26.1.0",
+    "motion": "13.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "rollup-plugin-preserve-directives": "^0.4.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.3",
-    "vitest": "^3.0.4",
-    "rollup-plugin-preserve-directives": "^0.4.0"
+    "vitest": "^3.0.4"
   },
   "peerDependencies": {
+    "motion": "^13.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -145,6 +154,30 @@
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/tokens.css",
     "./theme.css": "./dist/theme.css",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./motion-provider": {
+      "types": "./dist/motion-provider.d.ts",
+      "import": "./dist/motion-provider.js"
+    },
+    "./skeleton-swap": {
+      "types": "./dist/components/skeleton-swap.d.ts",
+      "import": "./dist/components/skeleton-swap.js"
+    },
+    "./dialog": {
+      "types": "./dist/components/dialog.d.ts",
+      "import": "./dist/components/dialog.js"
+    },
+    "./dropdown-menu": {
+      "types": "./dist/components/dropdown-menu.d.ts",
+      "import": "./dist/components/dropdown-menu.js"
+    },
+    "./tooltip": {
+      "types": "./dist/components/tooltip.d.ts",
+      "import": "./dist/components/tooltip.js"
+    },
+    "./popover": {
+      "types": "./dist/components/popover.d.ts",
+      "import": "./dist/components/popover.js"
+    }
   }
 }

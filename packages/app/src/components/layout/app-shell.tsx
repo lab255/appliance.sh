@@ -12,7 +12,7 @@ import { TerminalLayer } from '@/pages/local-runtime/terminal-drawer';
 import { ClusterSwitcher } from './cluster-switcher';
 import { WorkspaceSwitcher } from './workspace-switcher';
 import { TerminalDock } from './terminal-dock';
-import { Banner } from '@/components/ui/banner';
+import { Banner, BannerPresence } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ModeChoicePage } from '@/pages/mode-choice';
@@ -228,27 +228,31 @@ function AuthExpiredBanner() {
   React.useEffect(() => {
     if (!expired) setHidden(false);
   }, [expired]);
-  if (!expired || hidden) return null;
   return (
-    <Banner
-      tone="warning"
-      role="alert"
-      className="mb-4"
-      action={
-        <>
-          <Link
-            to="/setup/connect"
-            className="rounded-md border border-[var(--color-warning-border)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--color-warning-background)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-          >
-            Reconnect
-          </Link>
-          <Button variant="ghost" size="sm" onClick={() => setHidden(true)}>
-            Hide for now
-          </Button>
-        </>
-      }
-    >
-      Your connection to the server expired.
-    </Banner>
+    <BannerPresence>
+      {expired && !hidden ? (
+        <Banner
+          key="auth-expired"
+          tone="warning"
+          role="alert"
+          className="mb-4"
+          action={
+            <>
+              <Link
+                to="/setup/connect"
+                className="rounded-md border border-[var(--color-warning-border)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--color-warning-background)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+              >
+                Reconnect
+              </Link>
+              <Button variant="ghost" size="sm" onClick={() => setHidden(true)}>
+                Hide for now
+              </Button>
+            </>
+          }
+        >
+          Your connection to the server expired.
+        </Banner>
+      ) : null}
+    </BannerPresence>
   );
 }

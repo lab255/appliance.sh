@@ -1,6 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import * as m from 'motion/react-m';
+import { AnimatePresence } from 'motion/react';
+import { useTransition } from '../motion/use-transition.js';
 import { AlertTriangle, CheckCircle2, Info, XCircle, X } from 'lucide-react';
 import { cn } from '../lib/utils.js';
 
@@ -28,6 +31,7 @@ export function useToast(): ToastContextValue {
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { immediate, transition, exitTransition } = useTransition();
   const [toasts, setToasts] = React.useState<ToastItem[]>([]);
   const nextId = React.useRef(0);
 
@@ -52,43 +56,49 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2">
-        {toasts.map((t) => {
-          const styles: Record<ToastVariant, string> = {
-            success: 'border-[var(--color-success-border)] text-[var(--color-success-foreground)]',
-            info: 'border-[var(--color-info-border)] text-[var(--color-info-foreground)]',
-            warning: 'border-[var(--color-warning-border)] text-[var(--color-warning-foreground)]',
-            error: 'border-[var(--color-destructive-border)] text-[var(--color-destructive-foreground)]',
-          };
-          const Icon =
-            t.variant === 'success'
-              ? CheckCircle2
-              : t.variant === 'info'
-                ? Info
-                : t.variant === 'warning'
-                  ? AlertTriangle
-                  : XCircle;
-          return (
-            <div
-              key={t.id}
-              role={t.variant === 'error' ? 'alert' : 'status'}
-              className={cn(
-                'pointer-events-auto flex items-start gap-2 rounded-md border bg-[var(--color-surface-raised)] px-3 py-2.5 text-sm shadow-lg',
-                styles[t.variant]
-              )}
-            >
-              <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <div className="min-w-0 flex-1 break-words text-[var(--color-foreground)]">{t.message}</div>
-              <button
-                type="button"
-                onClick={() => dismiss(t.id)}
-                aria-label="Dismiss notification"
-                className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+        <AnimatePresence initial={false}>
+          {toasts.map((t) => {
+            const styles: Record<ToastVariant, string> = {
+              success: 'border-[var(--color-success-border)] text-[var(--color-success-foreground)]',
+              info: 'border-[var(--color-info-border)] text-[var(--color-info-foreground)]',
+              warning: 'border-[var(--color-warning-border)] text-[var(--color-warning-foreground)]',
+              error: 'border-[var(--color-destructive-border)] text-[var(--color-destructive-foreground)]',
+            };
+            const Icon =
+              t.variant === 'success'
+                ? CheckCircle2
+                : t.variant === 'info'
+                  ? Info
+                  : t.variant === 'warning'
+                    ? AlertTriangle
+                    : XCircle;
+            return (
+              <m.div
+                initial={immediate ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={immediate ? undefined : { opacity: 0, transition: exitTransition }}
+                transition={transition}
+                key={t.id}
+                role={t.variant === 'error' ? 'alert' : 'status'}
+                className={cn(
+                  'appliance-ui pointer-events-auto flex items-start gap-2 rounded-md border bg-[var(--color-surface-raised)] px-3 py-2.5 text-sm shadow-lg',
+                  styles[t.variant]
+                )}
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        })}
+                <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <div className="min-w-0 flex-1 break-words text-[var(--color-foreground)]">{t.message}</div>
+                <button
+                  type="button"
+                  onClick={() => dismiss(t.id)}
+                  aria-label="Dismiss notification"
+                  className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </m.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   );

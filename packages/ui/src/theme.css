@@ -1,4 +1,9 @@
 @theme static {
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   /* Vercel-style dark: true-black page, near-black surfaces, hairline
      neutral borders, white primary actions, opaque semantic states. */
   --color-background: hsl(0 0% 4%);
@@ -7,6 +12,7 @@
   --color-surface-raised: hsl(0 0% 9%);
   --color-surface-overlay: hsl(0 0% 11%);
   --color-muted: hsl(0 0% 10%);
+  --color-muted-raised: hsl(0 0% 15%);
   --color-muted-foreground: hsl(0 0% 63%);
   --color-border: hsl(0 0% 18%);
   --color-border-strong: hsl(0 0% 33%);

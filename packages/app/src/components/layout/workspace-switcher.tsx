@@ -1,3 +1,5 @@
+'use client';
+
 import { ClusterSwitcher, useCurrentWorkspace } from './cluster-switcher';
 
 export { useCurrentWorkspace };

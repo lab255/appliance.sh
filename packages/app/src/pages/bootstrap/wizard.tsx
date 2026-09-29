@@ -1,5 +1,6 @@
+import { useJourneyNavigate, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Cloud, ChevronLeft, Laptop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -75,7 +76,7 @@ type PickerChoice = 'aws' | 'local';
 
 export function BootstrapWizardPage() {
   const host = useHost();
-  const navigate = useNavigate();
+  const navigate = useJourneyNavigate();
   const [searchParams] = useSearchParams();
   const caps = localRuntimeCapabilities(host);
   const bootstrapAvailable = Boolean(host.bootstrap);
@@ -88,6 +89,14 @@ export function BootstrapWizardPage() {
     local: localAvailable,
   });
   const [choice, setChoice] = React.useState<PickerChoice | null>(presetChoice);
+  const surface = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const heading = surface.current?.querySelector<HTMLElement>('[data-present="true"] h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }, [choice]);
 
   if (!bootstrapAvailable && !localAvailable) {
     return (
@@ -102,37 +111,34 @@ export function BootstrapWizardPage() {
     );
   }
 
-  if (!choice) {
-    return (
-      <ModePicker
-        awsAvailable={bootstrapAvailable}
-        localAvailable={localAvailable}
-        sandboxDefault={caps.canSandbox}
-        onPick={(c) => setChoice(c)}
-        onCancel={() => navigate('/')}
-      />
-    );
-  }
-
-  if (choice === 'aws') {
-    return (
-      <AwsForm
-        onBack={presetChoice ? null : () => setChoice(null)}
-        onSubmit={(values) => navigate('/cloud/bootstrap/run', { state: values })}
-      />
-    );
-  }
-
-  return (
+  const content = !choice ? (
+    <ModePicker
+      awsAvailable={bootstrapAvailable}
+      localAvailable={localAvailable}
+      sandboxDefault={caps.canSandbox}
+      onPick={setChoice}
+      onCancel={() => navigate('/')}
+    />
+  ) : choice === 'aws' ? (
+    <AwsForm
+      onBack={presetChoice ? null : () => setChoice(null)}
+      onSubmit={(values) => navigate('/cloud/bootstrap/run', { state: values })}
+    />
+  ) : (
     <LocalRuntimeForm
       onBack={presetChoice ? null : () => setChoice(null)}
       onSubmit={(values) => {
-        if (values.mode === 'microvm' && values.intent) {
-          localStorage.setItem('appliance.firstRunIntent', values.intent);
-        }
+        if (values.mode === 'microvm' && values.intent) localStorage.setItem('appliance.firstRunIntent', values.intent);
         navigate('/cloud/bootstrap/run', { state: values });
       }}
     />
+  );
+  return (
+    <div ref={surface}>
+      <JourneySwap step={choice ?? 'picker'} direction={choice ? 1 : -1}>
+        {content}
+      </JourneySwap>
+    </div>
   );
 }
 

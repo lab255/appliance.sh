@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './dialog.js';
 import { Button } from './button.js';
 
 export interface ConfirmOptions {
@@ -30,10 +31,14 @@ interface PendingConfirm {
 }
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const previousFocus = React.useRef<HTMLElement | null>(null);
+  const lastOptions = React.useRef<ConfirmOptions | null>(null);
   const [pending, setPending] = React.useState<PendingConfirm | null>(null);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
 
   const confirm = React.useCallback<ConfirmFn>((opts) => {
+    if (!lastOptions.current) previousFocus.current = document.activeElement as HTMLElement;
+    lastOptions.current = opts;
     return new Promise<boolean>((resolve) => {
       // A second confirm while one is open auto-cancels the first —
       // mirrors window.confirm, which can't stack either.
@@ -51,54 +56,56 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Programmatic confirmations have no DialogTrigger. Restore as soon as the
+  // promise settles, matching the motion layer while its scrim fades out.
   React.useEffect(() => {
-    if (!pending) return;
-    // Focus lands on Cancel so Enter/Space can't destroy by accident.
-    cancelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') settle(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [pending, settle]);
+    if (pending) cancelRef.current?.focus();
+    else previousFocus.current?.focus();
+  }, [pending]);
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      {pending ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) settle(false);
+      <Dialog
+        open={!!pending}
+        onOpenChange={(open) => {
+          if (!open) settle(false);
+        }}
+      >
+        <DialogContent
+          role="alertdialog"
+          aria-modal="true"
+          {...(!lastOptions.current?.description ? { 'aria-describedby': undefined } : {})}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            cancelRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            previousFocus.current?.focus();
+            lastOptions.current = null;
           }}
         >
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="confirm-dialog-title"
-            className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-5 shadow-xl"
-          >
-            <h2 id="confirm-dialog-title" className="text-sm font-semibold">
-              {pending.opts.title}
-            </h2>
-            {pending.opts.description ? (
-              <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">{pending.opts.description}</p>
-            ) : null}
-            <div className="mt-5 flex justify-end gap-2">
-              <Button ref={cancelRef} variant="outline" size="sm" onClick={() => settle(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant={pending.opts.destructive === false ? 'default' : 'destructive'}
-                size="sm"
-                onClick={() => settle(true)}
-              >
-                {pending.opts.confirmLabel ?? 'Confirm'}
-              </Button>
-            </div>
+          <DialogTitle className="text-sm font-semibold">{lastOptions.current?.title}</DialogTitle>
+          {lastOptions.current?.description ? (
+            <DialogDescription className="mt-2 text-sm text-[var(--color-muted-foreground)]">
+              {lastOptions.current.description}
+            </DialogDescription>
+          ) : null}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button ref={cancelRef} variant="outline" size="sm" onClick={() => settle(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant={lastOptions.current?.destructive === false ? 'default' : 'destructive'}
+              size="sm"
+              onClick={() => settle(true)}
+            >
+              {lastOptions.current?.confirmLabel ?? 'Confirm'}
+            </Button>
           </div>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
     </ConfirmContext.Provider>
   );
 }
