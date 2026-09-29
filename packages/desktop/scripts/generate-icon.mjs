@@ -21,11 +21,10 @@ const favicon = svg(32, `${tile}${small}`);
 const raster = (source, size) => new Resvg(source, { fitTo: { mode: 'width', value: size } }).render().asPng();
 
 // Keep the outlined Geist wordmark; refresh the mark from the one full-size source.
-// Four units above the original placement optically balance the bottom-heavy A
-// against Geist's cap band (y11.6–40), with room for the p descender.
+// Center the Server glyph against Geist's cap band, with room for the p descender.
 const lockup = read('lockup.svg').replace(
   /<!-- brand-mark:start -->[\s\S]*?<!-- brand-mark:end -->/,
-  `<!-- brand-mark:start --><g transform="translate(0 0) scale(1.5)">${mark}</g><!-- brand-mark:end -->`
+  `<!-- brand-mark:start --><g transform="translate(0 2) scale(1.5)">${mark}</g><!-- brand-mark:end -->`
 );
 writeFileSync(resolve(brand, 'lockup.svg'), lockup);
 writeFileSync(
@@ -65,7 +64,7 @@ const desktop = resolve(root, 'packages/desktop');
 const icons = resolve(desktop, 'src-tauri/icons');
 const appIcon = svg(
   1024,
-  `<rect x="2" y="2" width="28" height="28" rx="6.25" fill="#171717"/><g transform="translate(6 5) scale(.625)">${mark}</g>`
+  `<rect x="2" y="2" width="28" height="28" rx="6.25" fill="#171717"/><g transform="translate(6 6) scale(.625)">${mark}</g>`
 );
 writeFileSync(resolve(icons, 'source.png'), raster(appIcon, 1024));
 // Tauri also emits mobile assets; keep only this desktop package's platform set.
