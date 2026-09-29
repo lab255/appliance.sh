@@ -1,0 +1,46 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "styles": {
+      "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(10, 10, 10)"
+    },
+    "fonts": [
+      {
+        "url": "http://localhost:3417/_next/static/media/19f9c92546aa300c.9ff55a8a.woff2",
+        "status": 200
+      }
+    ],
+    "immediate": {
+      "opacity": "0.99257",
+      "transform": "matrix(1, 0, 0, 1, 0, 0.0550329)"
+    },
+    "offlineFont": true,
+    "errors": [],
+    "requestOrigins": [
+      "http://localhost:3417"
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "styles": {
+      "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+      "background": "rgb(10, 10, 10)"
+    },
+    "fonts": [
+      {
+        "url": "http://localhost:3417/_next/static/media/19f9c92546aa300c.9ff55a8a.woff2",
+        "status": 200
+      }
+    ],
+    "immediate": {
+      "opacity": "1",
+      "transform": "none"
+    },
+    "offlineFont": true,
+    "errors": [],
+    "requestOrigins": [
+      "http://localhost:3417"
+    ]
+  }
+]
