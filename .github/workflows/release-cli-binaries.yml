@@ -11,7 +11,7 @@ on:
         required: false
         default: ''
       publish:
-        description: Upload assets to the GitHub release; signing is added only when AP-226's protected secret exists. Disable for a build-only dry run.
+        description: Upload signed assets to the GitHub release; requires the protected signing secret by default. Disable for a build-only dry run.
         type: boolean
         required: false
         default: true
@@ -20,10 +20,10 @@ on:
         required: false
         default: ''
       require_signature:
-        description: Fail publishing when APPLIANCE_RELEASE_SIGNING_KEY is absent. AP-226 flips this default to true after provisioning.
+        description: Fail publishing when APPLIANCE_RELEASE_SIGNING_KEY is absent.
         type: boolean
         required: false
-        default: false
+        default: true
       image_digest_poll_attempts:
         description: Number of GHCR manifest-resolution attempts before signing fails.
         type: number

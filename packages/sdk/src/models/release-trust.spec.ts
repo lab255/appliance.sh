@@ -45,15 +45,26 @@ function release(overrides: Partial<ReleaseEnvelope> = {}): ReleaseEnvelope {
 const now = new Date('2026-08-30T00:00:00Z');
 
 describe('control-plane release trust', () => {
-  it('ships no release trust root before AP-226', () => {
-    expect(Object.keys(PINNED_RELEASE_TRUST.keys)).toHaveLength(0);
+  it('pins a production key whose keyId derives from its public key', async () => {
+    const entries = Object.entries(PINNED_RELEASE_TRUST.keys);
+    expect(entries).toHaveLength(1);
+    const [keyId, publicKey] = entries[0]!;
+    expect(publicKey).toMatch(/^ed25519:[A-Za-z0-9_-]+$/);
+    const rawPublicKey = Buffer.from(publicKey.slice('ed25519:'.length), 'base64url');
+    expect(rawPublicKey).toHaveLength(32);
+    const hash = Buffer.from(await crypto.subtle.digest('SHA-256', rawPublicKey)).toString('hex');
+    expect(keyId).toBe(`ed25519:sha256:${hash}`);
+    expect(PINNED_RELEASE_TRUST.generationFloor).toBe(1);
   });
 
-  it('names AP-226 when the empty production pin rejects a signature', async () => {
+  it('rejects a valid test-key signature against the production pin', async () => {
     const payload = release();
-    await expect(
-      verifyReleaseEnvelope(payload, await signReleaseEnvelope(payload, privateKey), PINNED_RELEASE_TRUST, { now })
-    ).rejects.toMatchObject({ code: 'unknown-key', message: expect.stringContaining('AP-226') });
+    const envelope = await signReleaseEnvelope(payload, privateKey);
+    await expect(verifyReleaseEnvelope(payload, envelope, trust, { now })).resolves.toMatchObject({ payload });
+    await expect(verifyReleaseEnvelope(payload, envelope, undefined, { now })).rejects.toMatchObject({
+      code: 'unknown-key',
+      message: 'release signer is not pinned',
+    });
   });
 
   it('accepts a valid release envelope', async () => {

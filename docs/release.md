@@ -18,9 +18,8 @@ independently.
 
 Before AP-226, `publish=true` without `APPLIANCE_RELEASE_SIGNING_KEY` uploads the
 unsigned binaries and `SHA256SUMS`, writes **UNSIGNED release — AP-226 not
-provisioned** to the job summary, and publishes no payload/envelope. Setting
-`require_signature=true` makes a missing secret fatal; AP-226 changes its default
-to true only after provisioning. `publish=false` uploads nothing but executes a
+provisioned** to the job summary, and publishes no payload/envelope. The default is now
+`require_signature=true` (AP-226), making a missing secret fatal. `publish=false` uploads nothing but executes a
 throwaway-key sign-and-verify self-check. The secret value is standard base64
 for exactly one raw 32-byte Ed25519 seed. Never paste, log, or commit it.
 
@@ -29,7 +28,7 @@ patch`. The signing script rejects a generation that does not match the version
 or fails to exceed the newest previously published signed payload, preventing an
 old tag rerun from minting a signed downgrade with a newer workflow-run number.
 
-AP-226 owner steps, in order:
+AP-226 provisioning checklist (production public key pinned and signature default enabled):
 
 1. Generate the offline production Ed25519 identity and record its custody,
    backup, rotation, and revocation procedure. Signed blacklist distribution is
