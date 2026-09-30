@@ -13,8 +13,7 @@ healthy recovery reports the prior-image re-pin, while exhausted recovery points
 
 Desktop CloudFormation-v1 profiles call this SDK route through the selected cluster client and render queued, mirror, CloudFormation,
 health, recovered, and failed states in the existing panel. The sidecar remains only for legacy installs during the two-release
-deprecation window. `--local` preserves the operator-machine mirror/UpdateStack path. Production self-update remains deliberately
-disabled until AP-226 pins the production key.
+deprecation window. `--local` preserves the operator-machine mirror/UpdateStack path. Production self-update requires evidence signed by the offline production key pinned by AP-226.
 
 ## CU1 shipped (AP-219)
 
@@ -22,7 +21,7 @@ The cloud server now exposes owner-admin signed POST/GET self-update routes, per
 re-signs job-id-only worker dispatch, independently verifies production release evidence, mirrors the bound digest with pinned crane,
 and performs previous-template `ImageUri`-only CloudFormation update/recovery. Scoped self-update and CloudFormation service roles plus
 the protected-resource stack policy bound the mutation surface. Both route and worker call MV0's `verifyReleaseEnvelope` directly with
-`PINNED_RELEASE_TRUST`; its intentionally empty key set fails closed with AP-226 guidance. CU2 only re-points the CLI/desktop/SDK to
+`PINNED_RELEASE_TRUST`; its production key pin rejects untrusted signers. CU2 only re-points the CLI/desktop/SDK to
 these routes and supplies signed release evidence. CU1 does not change existing client triggers.
 
 Owner live proof, on a disposable installation:
@@ -273,7 +272,7 @@ baseline actions. CU1 therefore remains far below the direct-body limit.
   next daily check. Every outcome is persisted as `self-update-last-check`; signed cluster-info and the CLI/desktop render it, while
   unauthenticated bootstrap exposes only the memoized availability boolean.
 
-CU3 owner runbook (after AP-226 provisions production trust), on a disposable installation:
+CU3 owner runbook (with production trust pinned by AP-226), on a disposable installation:
 
 Set the installation coordinates once (replace the three example values):
 
@@ -294,7 +293,7 @@ export AWS_REGION=us-east-1
    appliance cloud update --status --json | jq '.lastCheck, .available'
    ```
 
-   Expect `notify`, `CREATE_COMPLETE`/`UPDATE_COMPLETE`, then `notify (notify-marked)`, then a `lastCheck.reason` of `notify-marked` and an available version. Before AP-226,
+   Expect `notify`, `CREATE_COMPLETE`/`UPDATE_COMPLETE`, then `notify (notify-marked)`, then a `lastCheck.reason` of `notify-marked` and an available version. With an explicitly empty development trust policy,
    expect the explicit inactive message and `lastCheck.reason == "no-pinned-release-trust"`. The desktop must show **Update available
    (vX)**; its **Update now** action independently resolves the latest signed release. `/bootstrap/status` may expose only
    `selfUpdateAvailable`, never version, generation, digest, reason, or trust state.
@@ -345,20 +344,19 @@ export AWS_REGION=us-east-1
 **MV1 shipped (AP-222):** capable VZ and WSL guests now have the protected persistent release volume, raw artifact transport,
 same-open-handle verification, atomic pointer-file promotion, two-minute versioned health gate, and automatic rollback described below.
 `appliance vm update` and the Desktop compatibility banner use the same signed host transport. VMs booted by an older launcher are
-detected before transfer and retain the signed restage-and-reboot path. Production self-update remains intentionally disabled until
-AP-226 fills `PINNED_RELEASE_TRUST` with the offline release key.
+detected before transfer and retain the signed restage-and-reboot path. Production self-update requires signed evidence verified against the offline release key in `PINNED_RELEASE_TRUST` (AP-226).
 For owner testing only, a non-release build may load the same trust-policy JSON shape from
-`APPLIANCE_RELEASE_TRUST_FILE=<path>`. Release builds ignore that variable with a loud warning and retain the empty/production pin set;
+`APPLIANCE_RELEASE_TRUST_FILE=<path>`. Release builds ignore that variable with a loud warning and retain the production pin set;
 the escape hatch never permits unsigned in-place replacement.
 A build is non-release when the CLI `VERSION` starts with `0.0.0` or contains `-dev`. The file shape is
 `{"keys":{"<keyId>":"<pubkey>"},"generationFloor":N,"blacklistedKeyIds":[]}`, with `blacklistedKeyIds` optional.
 
 **MV0 shipped (AP-225):** release assets now include `SHA256SUMS`, `control-plane-release.json`, and
 `control-plane-release.sig.json` under the distinct `control-plane-release` Ed25519 role.
-The protected `release-signing` environment signs only when `APPLIANCE_RELEASE_SIGNING_KEY` exists; pre-AP-226 publishing remains unsigned.
+The protected `release-signing` environment requires `APPLIANCE_RELEASE_SIGNING_KEY` for publishing by default (`require_signature=true`); a missing secret stops the release.
 Create/restage verifies the envelope, generation, validity, version, architecture, size, and SHA-256 before its first write.
 VZ and WSL use verified hash/size and keyId sidecars without `jq`, and compare the sidecar keyId to the trust pin rendered explicitly
-by the CLI rather than deriving trust from media; AP-226 replaces the intentionally empty production pin set.
+by the CLI rather than deriving trust from media; AP-226 pins the offline production release key.
 
 MV0 first adds a `control-plane-release` envelope role and changes the workflow to publish `SHA256SUMS` plus its Ed25519/RFC-8785
 production release envelope covering both
@@ -368,8 +366,8 @@ generation floor/high-water protection, expiry, and blacklist gate. The release 
 currently requires a CLI upgrade; signed blacklist distribution is an AP-226/CU2 follow-up. Key custody/rotation is a separate owner card.
 Only releases produced after MV0 are eligible for either cloud or microVM self-update.
 
-MV0 makes `stageFromRelease` verify an available envelope before writing. While the production pin set is empty, legacy unsigned release
-seeds remain bootable with a loud warning and self-update disabled; once AP-226 pins a key, release builds fail closed on missing evidence.
+MV0 makes `stageFromRelease` verify an available envelope before writing. With the production key pinned, release builds fail closed on missing evidence.
+The legacy warning-only seed path is reachable only with an explicitly empty trust policy (`keys: {}`).
 `--allow-unsigned` remains development-only. The guest accepts a signed seed copy from boot media only when it matches the verified
 sidecars. Restage+reboot becomes a sanctioned update fallback only for signed post-MV0 releases.
 
@@ -438,7 +436,7 @@ pass identical supervisor tests.
 | Cloud re-pin exhausted                                      | persisted terminal recovery state        | clear lease + alert                                                                          | new request or `--local`          |
 | Cloud re-pin submitted but unobserved                       | deadline with recovery in progress       | retain phase/holder state; resume after lease expiry                                         | GET resumes recovery              |
 | Cloud stable `*_FAILED` / rollback failed                   | stack status + events                    | stop submission loop, redact events, mark exhausted; scoped role permits operator rollback   | new request or operator recovery  |
-| Pre-MV0 release                                             | empty production pin / missing envelope  | allow initial seed with loud warning and disable self-update; refuse after AP-226 pins trust | install a signed post-MV0 release |
+| Pre-MV0 release                                             | missing signed envelope                  | refuse initial seed with production trust pinned by AP-226; signed release evidence required | install a signed post-MV0 release |
 | Old launcher after MV0                                      | capability probe                         | no in-place transfer                                                                         | signed restage+reboot             |
 | microVM signature/hash/transfer failure                     | host + guest verifier                    | discard `.partial`; no swap                                                                  | old release, retry command        |
 | microVM lower signed generation                             | guest persisted generation high-water    | refuse candidate before pending pointer                                                      | newer signed release              |
@@ -468,7 +466,7 @@ CU0/CU1 live verification uses a disposable install and CloudTrail to remove adm
 actions, confirm only the scoped CFN PassRole and no GetFunction, and prove baseline/IAM/S3/KMS mutation denied. Then update N→N+1,
 reject concurrency, kill a worker and resume, force CFN failure, force healthy-wrong-version re-pin, and retry good.
 
-CU2's owner timing gate is live-only and feeds AP-223; unit fakes are not evidence. After AP-226 pins the production key, run three
+CU2's owner timing gate is live-only and feeds AP-223; unit fakes are not evidence. With the production key pinned by AP-226, run three
 consecutive signed updates on a disposable CloudFormation-v1 installation with `appliance cloud update --json` (use three monotonically
 new signed releases, or another owner-approved sequence that creates three real jobs). Use only fresh, uninterrupted jobs as timing
 samples. Preserve each terminal JSON record, its `phaseDurationsMs`, and its explicit `totalMs`. For every run record:
@@ -529,5 +527,5 @@ AP-223 consumes the live steps after CU0/CU1 and MV0/MV1 test environments exist
 - One signed production release envelope gates two transports: the GHCR manifest digest before cloud crane copy and guest binary plus
   console hashes before VM transfer.
 - CU0 de-admins both system Lambda execution roles before CU1/CU2; CU1 adds the scoped self-update/CFN roles and stack policy.
-- MV0 may preserve unsigned initial boot before AP-226, but Cloud CU2 and MV1 accept only signed post-MV0 releases; checksum-only
+- With AP-226 production trust pinned, MV0, Cloud CU2 and MV1 accept only signed post-MV0 releases; checksum-only
   self-update is never allowed.

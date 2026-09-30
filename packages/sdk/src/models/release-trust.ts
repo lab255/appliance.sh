@@ -80,10 +80,13 @@ export interface ReleaseTrustPolicy {
   blacklistedKeyIds?: readonly string[] | ReadonlySet<string>;
 }
 
-// AP-226 replaces this empty production pin set with the offline release
-// public key and its SHA-256 keyId. Never ship a deterministic development key.
+// Offline production release public key and its SHA-256 keyId (AP-226).
+// Never ship a deterministic development key.
 export const PINNED_RELEASE_TRUST: ReleaseTrustPolicy = Object.freeze({
-  keys: Object.freeze({}),
+  keys: Object.freeze({
+    'ed25519:sha256:5cb0581b63d3ec87dd4ed609652307bdc7421a9d158b8037ceb8c67649ef9084':
+      'ed25519:mYiyN41pANphR_ACsli2AqyJw_IiI7hZTSeZtJ5WfVs',
+  }),
   generationFloor: 1,
 });
 

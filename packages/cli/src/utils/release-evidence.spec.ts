@@ -36,9 +36,11 @@ async function fixture() {
 }
 
 describe('release evidence', () => {
-  it('fails before network access while AP-226 pins are empty', async () => {
+  it('fails before network access with an explicitly empty trust policy', async () => {
     const fetcher = vi.fn<typeof fetch>();
-    await expect(resolveReleaseEvidence({ version: '1.58.0', fetcher })).rejects.toThrow(SELF_UPDATE_DISABLED_AP226);
+    await expect(
+      resolveReleaseEvidence({ version: '1.58.0', fetcher, trust: { keys: {}, generationFloor: 1 } })
+    ).rejects.toThrow(SELF_UPDATE_DISABLED_AP226);
     expect(fetcher).not.toHaveBeenCalled();
   });
 

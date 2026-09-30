@@ -4,7 +4,13 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getPublicKeyAsync } from '@noble/ed25519';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VERSION, signReleaseEnvelope, type ReleaseEnvelope, type ReleaseTrustPolicy } from '@appliance.sh/sdk';
+import {
+  PINNED_RELEASE_TRUST,
+  VERSION,
+  signReleaseEnvelope,
+  type ReleaseEnvelope,
+  type ReleaseTrustPolicy,
+} from '@appliance.sh/sdk';
 
 import {
   ensureApiServerArtifacts,
@@ -250,7 +256,7 @@ describe('stageFromRelease signed metadata gate', () => {
     );
   });
 
-  it('refuses an unsigned release once a trust key is pinned without touching staged assets', async () => {
+  it('refuses an unsigned release with the production pin without touching staged assets', async () => {
     fs.writeFileSync(path.join(destination, 'appliance-api-server'), 'existing');
     await expect(
       stageFromRelease({
@@ -258,18 +264,18 @@ describe('stageFromRelease signed metadata gate', () => {
         arch: 'x64',
         destinationDir: destination,
         fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
-        trust: devTrust,
       })
     ).rejects.toThrow('pinned release trust requires signed metadata');
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'), 'utf8')).toBe('existing');
   });
 
-  it('stages an unsigned pre-MV0 release while the production pin set is empty', async () => {
+  it('stages an unsigned pre-MV0 release with an explicitly empty trust policy', async () => {
     await stageFromRelease({
       version: '1.56.0',
       arch: 'x64',
       destinationDir: destination,
       fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
+      trust: { keys: {}, generationFloor: 1 },
     });
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('UNSIGNED PRE-MV0 RELEASE'));
     expect(fs.readFileSync(path.join(destination, 'appliance-api-server'))).toEqual(binary);
@@ -335,7 +341,7 @@ describe('stageFromRelease signed metadata gate', () => {
     const environment = { APPLIANCE_RELEASE_TRUST_FILE: trustFile };
 
     expect(releaseTrustFromEnvironment(environment, '0.0.0-dev')).toEqual(devTrust);
-    expect(releaseTrustFromEnvironment(environment, '1.57.0').keys).toEqual({});
+    expect(releaseTrustFromEnvironment(environment, '1.57.0')).toBe(PINNED_RELEASE_TRUST);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('ignored by release builds'));
   });
 
@@ -485,6 +491,7 @@ describe('stageFromRelease signed metadata gate', () => {
       arch: 'x64',
       destinationDir: destination,
       fetcher: fakeFetcher({ 'appliance-api-server-linux-x64': binary }),
+      trust: { keys: {}, generationFloor: 1 },
     });
     expect(fs.readFileSync(path.join(destination, 'release-generation.high-water'), 'utf8')).toBe('225\n');
     expect(fs.existsSync(path.join(destination, 'control-plane-release.json'))).toBe(false);

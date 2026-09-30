@@ -434,8 +434,8 @@ describe('compareVersionStamp', () => {
     expect(signed.severity).toBe('ok');
     expect(signed.detail).toContain(`staged asset signed by keyId ${keyId}`);
     const unsigned = compareVersionStamp('1.51.2:arm64', 'v1.51.2', null);
-    expect(unsigned.severity).toBe('warn');
-    expect(unsigned.detail).toContain('unsigned pre-MV0 release; self-update disabled');
+    expect(unsigned.severity).toBe('fail');
+    expect(unsigned.detail).toContain('unsigned even though production release trust is pinned');
   });
 
   it('warns when staged evidence names an unrecognized signing key', () => {
@@ -459,7 +459,7 @@ describe('compareVersionStamp', () => {
 
   it('suggests a RESTART when the running server predates the staged stamp', () => {
     const f = compareVersionStamp('v1.51.2:arm64', 'v1.51.2', 'v1.50.0');
-    expect(f.severity).toBe('warn');
+    expect(f.severity).toBe('fail');
     expect(f.detail).toContain('booted before the restage');
     expect(f.remediation).toContain('appliance vm stop && appliance vm up');
   });
@@ -472,7 +472,7 @@ describe('compareVersionStamp', () => {
 
   it('suggests a RESTAGE when the stamp trails the CLI', () => {
     const f = compareVersionStamp('v1.50.0:arm64', 'v1.51.2', null);
-    expect(f.severity).toBe('warn');
+    expect(f.severity).toBe('fail');
     expect(f.remediation).toContain('appliance vm up');
   });
 

@@ -342,7 +342,7 @@ describe('SelfUpdateService durable route state', () => {
     }
   );
 
-  it('fails closed against the empty production pin set with AP-226 guidance', async () => {
+  it('fails closed when the signer is not in the production pin set', async () => {
     const productionService = new SelfUpdateService({ storage, dispatcher, now: () => new Date(nowMs) });
     await expect(
       productionService.create(
@@ -359,9 +359,9 @@ describe('SelfUpdateService durable route state', () => {
           },
         },
         { keyId: 'admin-a', tenantId: 'default', secret: 'secret' },
-        'production-pins-empty'
+        'production-signer-unknown'
       )
-    ).rejects.toMatchObject({ code: 'unknown-key', message: expect.stringContaining('AP-226') });
+    ).rejects.toMatchObject({ code: 'unknown-key', message: 'release signer is not pinned' });
     expect([...store.values.keys()].filter((key) => key.startsWith(`${SELF_UPDATE_JOBS}/`))).toEqual([]);
   });
 
