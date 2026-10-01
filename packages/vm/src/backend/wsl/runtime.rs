@@ -89,7 +89,7 @@ fn spawn_tcp_listener(host: u16, target: ForwardTarget) -> Result<ListenerHandle
                     }
                     let _ = stream.set_nonblocking(false);
                     if thread_active
-                        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                        .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                             (count < MAX_RELAY_CONNECTIONS).then_some(count + 1)
                         })
                         .is_err()
