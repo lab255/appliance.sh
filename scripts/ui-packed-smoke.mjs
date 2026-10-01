@@ -83,7 +83,7 @@ function Action() {
   const [result, setResult] = useState('No decision');
   return <div style={{padding:24, display:'grid', gap:16}}>
     <Button onClick={() => toast('Packed interaction works')}>Show toast</Button>
-    <Button onClick={async () => setResult(await confirm({ title: 'Delete preview?', description: 'This is a motion preview.' }) ? 'Confirmed' : 'Cancelled')}>Open dialog</Button>
+    <Button onClick={async () => { setResult('No decision'); setResult(await confirm({ title: 'Delete preview?', description: 'This is a motion preview.' }) ? 'Confirmed' : 'Cancelled'); }}>Open dialog</Button>
     <span>{result}</span>
     <Dialog />
     <DropdownMenu><DropdownMenuTrigger>Choose target</DropdownMenuTrigger><DropdownMenuContent loop><DropdownMenuItem>Alpha</DropdownMenuItem><DropdownMenuItem disabled>Unavailable</DropdownMenuItem><DropdownMenuItem>Bravo</DropdownMenuItem><DropdownMenuItem>Charlie</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
@@ -98,6 +98,23 @@ function Action() {
 }
 export default function Interactive() { return <MotionProvider><ToastProvider><ConfirmProvider><Action /></ConfirmProvider></ToastProvider></MotionProvider>; }
 `;
+async function waitForImmediateDialog(page) {
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector('[role="alertdialog"][data-state="open"][data-immediate="true"]');
+    return dialog?.contains(document.activeElement) && document.activeElement.textContent.trim() === 'Cancel';
+  });
+  const dialog = page.getByRole('alertdialog');
+  assert.equal(await dialog.evaluate((el) => getComputedStyle(el).animationName), 'none');
+  assert.equal(await dialog.evaluate((el) => getComputedStyle(el).opacity), '1');
+  return dialog;
+}
+async function clickDialogScrim(page) {
+  // Radix registers its outside-pointer listener in a zero-delay timer. Focus
+  // and data-state can be ready before that task runs on an immediate mount.
+  // Cross the pending timer task before a stable, hit-tested single click.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await page.locator('.ui-dialog-scrim[data-state="open"]').click({ position: { x: 5, y: 5 } });
+}
 const measurements = {};
 for (const kind of ['vite', 'next']) {
   const dir = join(temporary, kind);
@@ -365,10 +382,11 @@ console.log('Standalone tokens parse successfully');
     await page.getByText('Popover gallery content').waitFor({ state: 'detached' });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.getByRole('button', { name: 'Open dialog' }).click();
-    assert.equal(await page.getByRole('alertdialog').evaluate((el) => getComputedStyle(el).animationName), 'none');
-    assert.equal(await page.getByRole('alertdialog').evaluate((el) => getComputedStyle(el).opacity), '1');
-    await page.mouse.click(5, 5);
+    await waitForImmediateDialog(page);
+    await clickDialogScrim(page);
+    await page.getByText('Cancelled', { exact: true }).waitFor();
     await page.getByRole('alertdialog').waitFor({ state: 'detached' });
+    await page.waitForFunction(() => document.activeElement.textContent.trim() === 'Open dialog');
     const fontUrls = await page.evaluate(async () => {
       await document.fonts.ready;
       if (!document.fonts.check('14px "Geist Variable"')) throw new Error('Geist failed to load');
@@ -419,6 +437,7 @@ console.log('Standalone tokens parse successfully');
     if (!baseline) {
       assert(sizes.lazy > 0, 'Missing separate lazy feature chunk');
       const delayedPage = await browser.newPage();
+      let blockedFeatures = 0;
       let release;
       const gate = new Promise((resolve) => {
         release = resolve;
@@ -432,8 +451,10 @@ console.log('Standalone tokens parse successfully');
             (source) =>
               source.includes('/ui/dist/motion/features.js') || source.includes('/render/dom/features-animation.mjs')
           )
-        )
+        ) {
+          blockedFeatures++;
           await gate;
+        }
         await route.continue();
       });
       try {
@@ -442,12 +463,20 @@ console.log('Standalone tokens parse successfully');
         const toast = delayedPage.getByText('Packed interaction works', { exact: true });
         await toast.waitFor();
         assert.equal(await toast.evaluate((el) => getComputedStyle(el.closest('[role=status]')).opacity), '1');
-        await delayedPage.getByRole('button', { name: 'Open dialog', exact: true }).click();
-        const dialog = delayedPage.getByRole('alertdialog');
-        assert.equal(await dialog.evaluate((el) => getComputedStyle(el).opacity), '1');
-        await delayedPage.keyboard.press('Escape');
-        await dialog.waitFor({ state: 'detached' });
-        await delayedPage.emulateMedia({ reducedMotion: 'reduce' });
+        // Keep features blocked through both dismissal methods and preference modes.
+        for (const reducedMotion of ['no-preference', 'reduce']) {
+          await delayedPage.emulateMedia({ reducedMotion });
+          for (const close of ['Escape', 'scrim']) {
+            await delayedPage.getByRole('button', { name: 'Open dialog', exact: true }).click();
+            const dialog = await waitForImmediateDialog(delayedPage);
+            if (close === 'Escape') await delayedPage.keyboard.press('Escape');
+            else await clickDialogScrim(delayedPage);
+            await delayedPage.getByText('Cancelled', { exact: true }).waitFor();
+            await dialog.waitFor({ state: 'detached' });
+            await delayedPage.waitForFunction(() => document.activeElement.textContent.trim() === 'Open dialog');
+          }
+        }
+        assert(blockedFeatures > 0, 'Motion feature request was not blocked');
         assert.equal(
           await delayedPage.locator('.animate-pulse').evaluate((el) => getComputedStyle(el).animationName),
           'none'

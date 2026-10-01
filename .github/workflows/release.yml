@@ -54,25 +54,25 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check linting and code style
         run: pnpm run lint:check
+      - name: Sync release tip
+        run: |
+          git config --global user.email "eliot.lim@gmail.com"
+          git config --global user.name "Eliot Lim"
+          # Validate the actual tip after the release environment approval.
+          # Do not rebase again between this gate and versioning/publishing.
+          git pull --rebase origin main
+          pnpm install --frozen-lockfile
+      - name: Gate release on UI packed smoke
+        run: |
+          pnpm exec nx run @appliance.sh/ui:build
+          node scripts/ui-packed-smoke.mjs --install-browser
       - name: Release
         id: nx_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
           NPM_CONFIG_ACCESS: public
-        run: |
-          git config --global user.email "eliot.lim@gmail.com"
-          git config --global user.name "Eliot Lim"
-          # Close the approval-latency window: sync to the remote tip
-          # right before releasing so the atomic commit+tag push can't
-          # be rejected by commits that landed while the run waited.
-          git pull --rebase origin main
-          # Build and validate the actual post-rebase UI before the train can
-          # publish it. Full isolated Vite/Next hydration runs only on release.
-          pnpm install --frozen-lockfile
-          pnpm exec nx run @appliance.sh/ui:build
-          node scripts/ui-packed-smoke.mjs --install-browser
-          pnpm run release:ci
+        run: pnpm run release:ci
 
       - name: Dispatch downstream release artifact builds
         # `nx release` writes a `chore(release): publish X.Y.Z` commit
