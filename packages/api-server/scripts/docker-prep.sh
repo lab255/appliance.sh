@@ -6,25 +6,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 pushd "$REPO_ROOT" > /dev/null
 
-echo "Building SDK..."
-pnpm --filter @appliance.sh/sdk run build
-
-echo "Building infra..."
-pnpm --filter @appliance.sh/infra run build
-
-# The web console (@appliance.sh/app) type-checks against
-# @appliance.sh/bootstrap (src/lib/host.ts imports its types), so its
-# .d.ts must exist before the app's `tsc --emitDeclarationOnly`. bootstrap
-# depends on sdk+infra, already built above.
-echo "Building bootstrap..."
-pnpm --filter @appliance.sh/bootstrap run build
-
-echo "Building api-server..."
-pnpm --filter @appliance.sh/api-server run build
-
-echo "Building web console..."
-pnpm --filter @appliance.sh/app run build
-pnpm --filter @appliance.sh/console run build
+# Follow Nx's ^build dependencies so the app's workspace packages (including
+# @appliance.sh/ui, whose exports point at dist/) exist before it builds.
+# The console depends on app; api-server and console are the image's roots.
+echo "Building api-server and web console with workspace dependencies..."
+pnpm exec nx run-many -t build -p @appliance.sh/api-server @appliance.sh/console
 
 popd > /dev/null
 
