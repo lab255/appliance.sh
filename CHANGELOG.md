@@ -1,3 +1,14 @@
+## 1.60.1 (2026-10-01)
+
+### Bug Fixes
+
+- order image workspace builds through nx ([#136](https://github.com/lab255/appliance.sh/pull/136))
+- **ci:** authenticate signing job to GHCR before digest resolution ([#137](https://github.com/lab255/appliance.sh/pull/137))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.60.0 (2026-10-01)
 
 ### Features
