@@ -1,3 +1,13 @@
+## 1.60.2 (2026-10-01)
+
+### Bug Fixes
+
+- **ci:** synchronize immediate dialog smoke before release ([#138](https://github.com/lab255/appliance.sh/pull/138))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.60.1 (2026-10-01)
 
 ### Bug Fixes
