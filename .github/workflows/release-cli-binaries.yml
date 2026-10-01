@@ -318,7 +318,10 @@ jobs:
           VERSION="${TAG#v}"
           ACTUAL=""
           for attempt in $(seq 1 "$POLL_ATTEMPTS"); do
-            ACTUAL=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" 2>/dev/null | awk '$1 == "Digest:" { print $2; exit }')
+            if ! ACTUAL=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" | awk '$1 == "Digest:" && !found { print $2; found = 1 }'); then
+              echo "Manifest inspection failed for ${IMAGE}:${VERSION} (${attempt}/${POLL_ATTEMPTS}); retrying"
+              ACTUAL=""
+            fi
             [ -n "$ACTUAL" ] && break
             echo "Waiting for sibling api-server image ${IMAGE}:${VERSION} (${attempt}/${POLL_ATTEMPTS})"
             sleep "$POLL_SECONDS"
