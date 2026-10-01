@@ -1,3 +1,28 @@
+## 1.60.0 (2026-10-01)
+
+### Features
+
+- **app:** polish desktop onboarding and journey motion ([#132](https://github.com/lab255/appliance.sh/pull/132))
+- **brand:** integrate socket a across app and desktop ([#128](https://github.com/lab255/appliance.sh/pull/128))
+- **sdk:** pin production release-signing key (AP-226) ([#135](https://github.com/lab255/appliance.sh/pull/135))
+- **ui:** extract shared primitives with packed vite and next support ([#129](https://github.com/lab255/appliance.sh/pull/129))
+- **ui:** add accessible lazy primitive motion ([#130](https://github.com/lab255/appliance.sh/pull/130))
+- **ui:** add radix overlays and migrate switcher menus ([#133](https://github.com/lab255/appliance.sh/pull/133))
+- **ui:** enable distribution with packed release checks ([#131](https://github.com/lab255/appliance.sh/pull/131))
+
+### Bug Fixes
+
+- **brand:** restore the original server identity ([#134](https://github.com/lab255/appliance.sh/pull/134))
+- **release:** cli workflow owns shared credhelper asset publication (AP-236) ([#125](https://github.com/lab255/appliance.sh/pull/125))
+
+### Documentation
+
+- **rfc:** define ds v2 package and consumer contract ([#126](https://github.com/lab255/appliance.sh/pull/126))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.59.0 (2026-09-08)
 
 ### Features
