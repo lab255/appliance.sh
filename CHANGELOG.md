@@ -1,3 +1,14 @@
+## 1.60.3 (2026-10-02)
+
+### Bug Fixes
+
+- **ci:** retry transient signing digest inspection failures ([#139](https://github.com/lab255/appliance.sh/pull/139))
+- **vm:** rename deprecated atomic fetch_update to try_update ([#140](https://github.com/lab255/appliance.sh/pull/140))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.60.2 (2026-10-01)
 
 ### Bug Fixes

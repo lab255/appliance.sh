@@ -1,6 +1,6 @@
 {
   "name": "@appliance.sh/bootstrap",
-  "version": "1.60.2",
+  "version": "1.60.3",
   "private": true,
   "description": "Shared bootstrap orchestrator for the Appliance CLI and Desktop shells",
   "license": "MIT",
