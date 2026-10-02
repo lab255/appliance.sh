@@ -1,3 +1,4 @@
+mod cluster_gc;
 mod terminal;
 
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -1837,6 +1838,41 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
     let _guard = config_lock();
     let mut persisted = read_persisted_config(&app)?;
     migrate_legacy(&app, &mut persisted)?;
+
+    // Consult the engine registry before exposing any signing credentials.
+    let home = home_dir().ok_or_else(|| std::io::Error::other("home unavailable"))?;
+    let mut gone = Vec::new();
+    for cluster in &persisted.clusters {
+        if cluster_gc::is_gone(&home, &cluster.id)? {
+            gone.push(cluster.id.clone());
+        }
+    }
+    if !gone.is_empty() {
+        persisted.clusters.retain(|c| !gone.contains(&c.id));
+        if persisted
+            .selected_cluster_id
+            .as_ref()
+            .is_some_and(|id| gone.contains(id))
+        {
+            persisted.selected_cluster_id = None;
+        }
+        // Remove CLI-owned entries too; the usual mirror preserves them.
+        if let Some(mut shared) = read_shared_profiles() {
+            shared.profiles.retain(|id, _| !gone.contains(id));
+            if shared
+                .active_profile
+                .as_ref()
+                .is_some_and(|id| gone.contains(id))
+            {
+                shared.active_profile = None;
+            }
+            write_shared_profiles(&shared)?;
+        }
+        write_persisted_config(&app, &persisted)?;
+        for id in &gone {
+            delete_api_key(&cluster_keychain_account(id));
+        }
+    }
 
     let api_key = persisted
         .selected_cluster_id

@@ -77,6 +77,7 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
   },
   desktop: true,
   async getConfig(): Promise<HostConfig> {
+    // Native get_config removes missing-VM records before returning signing keys.
     return invoke<HostConfig>('get_config');
   },
 
