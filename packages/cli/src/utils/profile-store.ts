@@ -1,3 +1,4 @@
+import { microVmGone } from './cluster-gc.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -223,6 +224,9 @@ export function resolveProfile(file: ProfilesFile, opts: ResolveOptions = {}): R
   if (!name) return null;
   const profile = file.profiles[name];
   if (!profile) return null;
+  if (microVmGone(name)) {
+    throw new Error(`Cluster "${name}" is unreachable: its microVM is gone. Run appliance cluster rm ${name}.`);
+  }
   return { name, profile };
 }
 

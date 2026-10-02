@@ -1,3 +1,4 @@
+import { microVmGone } from './utils/cluster-gc.js';
 import { Command } from 'commander';
 import { confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
@@ -48,9 +49,10 @@ program
       // padding a colorized cell miscounts chalk's ANSI bytes (the same
       // idiom `appliance vm list` uses).
       const kind = (c.kind === 'local' ? chalk.cyan : chalk.magenta)(c.kind.padEnd(6));
-      const stateText = stateLabel(c.kind, c.vmName, states);
+      const stateText = microVmGone(c.name) ? 'unreachable' : stateLabel(c.kind, c.vmName, states);
       const state = (stateText === 'running' ? chalk.green : chalk.dim)(stateText.padEnd(8));
       console.log(`${marker}${c.name.padEnd(width)}  ${kind}  ${state}  ${chalk.dim(c.apiUrl)}`);
+      if (stateText === 'unreachable') console.log(`    Remove stale credentials: appliance cluster rm ${c.name}`);
     }
   });
 
