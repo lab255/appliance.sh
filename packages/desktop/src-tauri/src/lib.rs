@@ -1,4 +1,5 @@
 mod cluster_gc;
+mod profiles_lock;
 mod terminal;
 
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -1836,12 +1837,14 @@ fn derive_name_from_url(url: &str) -> String {
 #[tauri::command]
 fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
     let _guard = config_lock();
+    let home = home_dir().ok_or_else(|| std::io::Error::other("home unavailable"))?;
+    // Lock before re-reading either registry. Hold through GC decisions,
+    // shared-file replacement, mirroring and keychain cleanup.
+    let _profiles_guard = profiles_lock::ProfilesLock::acquire(&home)?;
     let mut persisted = read_persisted_config(&app)?;
     migrate_legacy(&app, &mut persisted)?;
 
     // Consult the engine registry before exposing any signing credentials.
-    let home = home_dir().ok_or_else(|| std::io::Error::other("home unavailable"))?;
-    let mut gone = Vec::new();
     let mut shared = read_shared_profiles();
     let mut profiles: BTreeMap<String, String> = persisted.clusters.iter()
         .map(|c| (c.id.clone(), c.api_server_url.clone())).collect();
@@ -1850,11 +1853,7 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
         profiles.extend(shared.profiles.iter().map(|(id, p)| (id.clone(), p.api_url.clone())));
     }
     cluster_gc::add_default_aliases(&mut profiles);
-    for (id, url) in &profiles {
-        if cluster_gc::is_gone(&home, id, url)? {
-            gone.push(id.clone());
-        }
-    }
+    let cluster_gc::GcDecisions { gone, unavailable } = cluster_gc::classify_profiles(&home, &profiles);
     if !gone.is_empty() {
         persisted.clusters.retain(|c| !gone.contains(&c.id));
         if persisted
@@ -1885,6 +1884,7 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
     let api_key = persisted
         .selected_cluster_id
         .as_deref()
+        .filter(|id| !unavailable.contains(*id))
         .and_then(|id| read_api_key(&cluster_keychain_account(id)));
 
     Ok(HostConfig {

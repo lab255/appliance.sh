@@ -2,7 +2,7 @@
 use std::{fs, io, path::Path};
 
 use crate::{MICROVM_NAME, SHARED_PROFILES_DIR};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 fn vm_name<'a>(id: &'a str, api_url: &str) -> Option<&'a str> {
     if id == "local" {
@@ -36,6 +36,29 @@ pub fn add_default_aliases(profiles: &mut BTreeMap<String, String>) {
             .or_insert_with(|| url.clone());
         profiles.entry("microvm".into()).or_insert(url);
     }
+}
+
+#[derive(Default)]
+pub struct GcDecisions {
+    pub gone: HashSet<String>,
+    pub unavailable: HashSet<String>,
+}
+
+pub fn classify_profiles(home: &Path, profiles: &BTreeMap<String, String>) -> GcDecisions {
+    let mut decisions = GcDecisions::default();
+    for (id, url) in profiles {
+        match is_gone(home, id, url) {
+            Ok(true) => {
+                decisions.gone.insert(id.clone());
+            }
+            Ok(false) => {}
+            Err(error) => {
+                eprintln!("warn: cannot check VM for cluster {id}: {error}; keeping record without credentials");
+                decisions.unavailable.insert(id.clone());
+            }
+        }
+    }
+    decisions
 }
 
 pub fn is_gone(home: &Path, id: &str, api_url: &str) -> io::Result<bool> {
@@ -99,6 +122,22 @@ mod tests {
         profiles.insert("local".into(), "https://example.com".into());
         add_default_aliases(&mut profiles);
         assert_eq!(profiles["local"], "https://example.com");
+    }
+
+    #[test]
+    fn gc_registry_error_does_not_hide_remote_clusters() {
+        let home = std::env::temp_dir().join(format!("gc-partial-{}", std::process::id()));
+        let profiles = BTreeMap::from([
+            ("microvm-invalid/name".into(), "http://localhost".into()),
+            ("microvm-gone".into(), "http://localhost".into()),
+            ("local".into(), "https://remote.example".into()),
+        ]);
+        let decisions = classify_profiles(&home, &profiles);
+        assert_eq!(decisions.gone, HashSet::from(["microvm-gone".into()]));
+        assert_eq!(
+            decisions.unavailable,
+            HashSet::from(["microvm-invalid/name".into()])
+        );
     }
 
     #[test]
