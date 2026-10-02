@@ -43,6 +43,15 @@ describe('mock host app mode', () => {
     expect(config.selectedClusterId).toBe('microvm');
   });
 
+  it('collects a missing VM even when another VM owns its port', async () => {
+    vi.stubGlobal('window', { location: { search: '?mock-host&scenario=stale-clusters' } });
+    expect(mockHostEnabled()).toBe(true);
+    const config = await createMockHost().getConfig();
+    expect(config.clusters.map((c) => c.id)).toEqual(['microvm', 'mock-acme-prod']);
+    expect(config.selectedClusterId).toBeNull();
+    expect(config.apiKey).toBeNull();
+  });
+
   it('provides a user-mode scenario without a local VM', async () => {
     vi.stubGlobal('window', { location: { search: '?mock-host&scenario=user-mode-no-vm' } });
     expect(mockHostEnabled()).toBe(true);

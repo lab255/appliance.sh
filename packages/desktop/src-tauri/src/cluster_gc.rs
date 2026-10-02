@@ -59,5 +59,10 @@ mod tests {
     #[test]
     fn gc_unknown_registry_is_error_not_deletion() {
         assert!(is_gone(Path::new("/unused"), "microvm-../other").is_err());
+        let home = std::env::temp_dir().join(format!("gc-error-{}", std::process::id()));
+        fs::create_dir_all(home.join(".appliance")).unwrap();
+        fs::write(home.join(".appliance/vm"), "not a directory").unwrap();
+        assert!(is_gone(&home, "microvm-test").is_err());
+        fs::remove_dir_all(home).unwrap();
     }
 }
