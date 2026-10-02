@@ -61,6 +61,54 @@ pub fn classify_profiles(home: &Path, profiles: &BTreeMap<String, String>) -> Gc
     decisions
 }
 
+/// Windows may report a missing path for a non-directory ancestor or a
+/// broken reparse point. Only a successful listing that lacks an entry proves
+/// absence; a present but unstatable entry (or an unreadable parent) is unknown.
+fn confirm_missing(path: &Path, stat_error: io::Error) -> io::Result<()> {
+    let mut candidate = path;
+    loop {
+        let Some(parent) = candidate.parent().filter(|p| *p != candidate) else {
+            return Err(stat_error);
+        };
+        let Some(name) = candidate.file_name() else {
+            return Err(stat_error);
+        };
+        let name = name.to_string_lossy().to_lowercase();
+        let stem = name.split('.').next().unwrap_or_default();
+        let device = matches!(stem, "con" | "prn" | "aux" | "nul")
+            || ["com", "lpt"].iter().any(|prefix| {
+                stem.strip_prefix(prefix).is_some_and(|suffix| {
+                    matches!(
+                        suffix,
+                        "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                    )
+                })
+            });
+        if name
+            .chars()
+            .any(|c| c.is_control() || "<>:\"|?*".contains(c))
+            || name.ends_with(['.', ' '])
+            || device
+        {
+            return Err(stat_error);
+        }
+        let entries = match fs::read_dir(parent) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                candidate = parent;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        for entry in entries {
+            if entry?.file_name().to_string_lossy().to_lowercase() == name {
+                return Err(stat_error);
+            }
+        }
+        return Ok(());
+    }
+}
+
 pub fn is_gone(home: &Path, id: &str, api_url: &str) -> io::Result<bool> {
     let Some(name) = vm_name(id, api_url) else {
         return Ok(false);
@@ -73,14 +121,14 @@ pub fn is_gone(home: &Path, id: &str, api_url: &str) -> io::Result<bool> {
     }
     // The engine migrates vmm -> vm on first use. Preserve either registry.
     for root in ["vm", "vmm"] {
-        match fs::metadata(
-            home.join(SHARED_PROFILES_DIR)
-                .join(root)
-                .join(name)
-                .join("vm.json"),
-        ) {
+        let spec = home
+            .join(SHARED_PROFILES_DIR)
+            .join(root)
+            .join(name)
+            .join("vm.json");
+        match fs::metadata(&spec) {
             Ok(_) => return Ok(false),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => confirm_missing(&spec, e)?,
             Err(e) => return Err(e), // Unknown existence: withhold credentials, don't delete.
         }
     }
@@ -90,6 +138,37 @@ pub fn is_gone(home: &Path, id: &str, api_url: &str) -> io::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gc_ambiguous_not_found_requires_directory_evidence() {
+        let home = std::env::temp_dir().join(format!("gc-ambiguous-{}", std::process::id()));
+        let vm = home.join(SHARED_PROFILES_DIR).join("vm").join("test");
+        fs::create_dir_all(&vm).unwrap();
+        let spec = vm.join("vm.json");
+        fs::write(&spec, "{}").unwrap();
+        assert!(confirm_missing(&spec, io::ErrorKind::NotFound.into()).is_err());
+        fs::remove_file(&spec).unwrap();
+        assert!(confirm_missing(&spec, io::ErrorKind::NotFound.into()).is_ok());
+        fs::remove_dir(&vm).unwrap();
+        fs::write(&vm, "not a directory").unwrap();
+        assert!(confirm_missing(&spec, io::ErrorKind::NotFound.into()).is_err());
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn gc_invalid_windows_path_is_unknown_not_gone() {
+        let home = std::env::temp_dir().join(format!("gc-invalid-{}", std::process::id()));
+        for name in [
+            "bad:name",
+            "bad?name",
+            "trailing.",
+            "trailing ",
+            "NUL",
+            "COM1",
+        ] {
+            assert!(is_gone(&home, &format!("microvm-{name}"), "http://localhost").is_err());
+        }
+    }
 
     #[test]
     fn gc_missing_vm_but_not_remote_cluster() {

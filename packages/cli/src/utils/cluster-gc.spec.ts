@@ -32,11 +32,87 @@ describe('microVmGone', () => {
     expect(microVmGone('microvm-test', dir)).toBe(false);
   });
   it('does not treat registry errors as deletion', () => {
+    const denied = Object.assign(new Error('registry access denied'), { code: 'EACCES' });
+    vi.spyOn(fs, 'statSync').mockImplementation(() => {
+      throw denied;
+    });
+    expect(() => microVmGone('microvm-test', home())).toThrow(denied);
+  });
+  it.each(['EPERM', 'EBUSY', 'EIO', 'ELOOP', 'ENOTDIR'])('propagates %s without declaring deletion', (code) => {
+    const error = Object.assign(new Error(code), { code });
+    vi.spyOn(fs, 'statSync').mockImplementation(() => {
+      throw error;
+    });
+    expect(() => microVmGone('microvm-test', home())).toThrow(error);
+  });
+  it.each(['vm', 'vmm'])('keeps a record when %s is a file (Windows ENOENT, Unix ENOTDIR)', (root) => {
+    const dir = home();
+    fs.mkdirSync(path.join(dir, '.appliance'));
+    fs.writeFileSync(path.join(dir, '.appliance', root), 'not a directory');
+    let code: string | undefined;
+    try {
+      fs.statSync(path.join(dir, '.appliance', root, 'test', 'vm.json'));
+    } catch (error) {
+      code = (error as NodeJS.ErrnoException).code;
+    }
+    expect(code).toBe(process.platform === 'win32' ? 'ENOENT' : 'ENOTDIR');
+    expect(() => microVmGone('microvm-test', dir)).toThrow();
+  });
+  it('handles Windows ENOENT for both stat and directory traversal through a file', () => {
     const dir = home();
     fs.mkdirSync(path.join(dir, '.appliance'));
     fs.writeFileSync(path.join(dir, '.appliance', 'vm'), 'not a directory');
-    expect(() => microVmGone('microvm-test', dir)).toThrow();
+    const missing = Object.assign(new Error('ambiguous Windows ENOENT'), { code: 'ENOENT' });
+    vi.spyOn(fs, 'statSync').mockImplementationOnce(() => {
+      throw missing;
+    });
+    vi.spyOn(fs, 'readdirSync')
+      .mockImplementationOnce(() => {
+        throw missing;
+      })
+      .mockImplementationOnce(() => {
+        throw missing;
+      });
+    expect(() => microVmGone('microvm-test', dir)).toThrow(missing);
   });
+  it('keeps a present but unstatable entry, including a broken reparse point', () => {
+    const dir = home();
+    const vm = path.join(dir, '.appliance', 'vm', 'test');
+    fs.mkdirSync(vm, { recursive: true });
+    fs.writeFileSync(path.join(vm, 'vm.json'), '{}');
+    const missing = Object.assign(new Error('unstatable entry'), { code: 'ENOENT' });
+    vi.spyOn(fs, 'statSync').mockImplementationOnce(() => {
+      throw missing;
+    });
+    expect(() => microVmGone('microvm-test', dir)).toThrow(missing);
+  });
+  it('does not infer absence when parent enumeration is denied', () => {
+    const missing = Object.assign(new Error('ambiguous'), { code: 'ENOENT' });
+    const denied = Object.assign(new Error('listing denied'), { code: 'EACCES' });
+    vi.spyOn(fs, 'statSync').mockImplementationOnce(() => {
+      throw missing;
+    });
+    vi.spyOn(fs, 'readdirSync').mockImplementationOnce(() => {
+      throw denied;
+    });
+    expect(() => microVmGone('microvm-test', home())).toThrow(denied);
+  });
+  it('keeps records when the drive or root cannot be inspected', () => {
+    const missing = Object.assign(new Error('unavailable root'), { code: 'ENOENT' });
+    vi.spyOn(fs, 'statSync').mockImplementation(() => {
+      throw missing;
+    });
+    vi.spyOn(fs, 'readdirSync').mockImplementation(() => {
+      throw missing;
+    });
+    expect(() => microVmGone('microvm-test', home())).toThrow(missing);
+  });
+  it.each(['bad:name', 'bad?name', 'trailing.', 'trailing ', 'NUL', 'COM1'])(
+    'keeps an ambiguous Win32 name: %s',
+    (name) => {
+      expect(() => microVmGone(`microvm-${name}`, home())).toThrow();
+    }
+  );
 });
 
 describe('default profile safety', () => {
@@ -55,6 +131,8 @@ describe('default profile safety', () => {
     vi.spyOn(fs, 'statSync').mockImplementation(() => {
       throw Object.assign(new Error('gone'), { code: 'ENOENT' });
     });
+    // An actual absence additionally requires a successful directory listing.
+    vi.spyOn(fs, 'readdirSync').mockReturnValue([]);
     const file: ProfilesFile = {
       version: 1,
       activeProfile: 'local',
