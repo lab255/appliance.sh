@@ -1842,9 +1842,17 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
     // Consult the engine registry before exposing any signing credentials.
     let home = home_dir().ok_or_else(|| std::io::Error::other("home unavailable"))?;
     let mut gone = Vec::new();
-    for cluster in &persisted.clusters {
-        if cluster_gc::is_gone(&home, &cluster.id)? {
-            gone.push(cluster.id.clone());
+    let mut shared = read_shared_profiles();
+    let mut profiles: BTreeMap<String, String> = persisted.clusters.iter()
+        .map(|c| (c.id.clone(), c.api_server_url.clone())).collect();
+    if let Some(shared) = &shared {
+        // Shared profiles are authoritative, including a remote login named local.
+        profiles.extend(shared.profiles.iter().map(|(id, p)| (id.clone(), p.api_url.clone())));
+    }
+    cluster_gc::add_default_aliases(&mut profiles);
+    for (id, url) in &profiles {
+        if cluster_gc::is_gone(&home, id, url)? {
+            gone.push(id.clone());
         }
     }
     if !gone.is_empty() {
@@ -1857,7 +1865,7 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
             persisted.selected_cluster_id = None;
         }
         // Remove CLI-owned entries too; the usual mirror preserves them.
-        if let Some(mut shared) = read_shared_profiles() {
+        if let Some(ref mut shared) = shared {
             shared.profiles.retain(|id, _| !gone.contains(id));
             if shared
                 .active_profile
@@ -1866,7 +1874,7 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
             {
                 shared.active_profile = None;
             }
-            write_shared_profiles(&shared)?;
+            write_shared_profiles(shared)?;
         }
         write_persisted_config(&app, &persisted)?;
         for id in &gone {

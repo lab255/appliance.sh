@@ -52,6 +52,27 @@ describe('mock host app mode', () => {
     expect(config.apiKey).toBeNull();
   });
 
+  it('collects the default local alias but preserves a remote login named local', async () => {
+    vi.stubGlobal('window', { location: { search: '?mock-host&scenario=user-mode' } });
+    mockHostEnabled();
+    const host = createMockHost();
+    await host.vm!.instance('appliance').delete();
+    const local = {
+      id: 'local',
+      name: 'local',
+      apiServerUrl: 'http://localhost:8081',
+      createdAt: '',
+      apiKey: { id: 'old', secret: 'old' },
+    };
+    sessionStorage.setItem('mock-host:clusters', JSON.stringify({ clusters: [local], selectedClusterId: 'local' }));
+    expect((await host.getConfig()).clusters).toEqual([]);
+    local.apiServerUrl = 'https://remote.example';
+    sessionStorage.setItem('mock-host:clusters', JSON.stringify({ clusters: [local], selectedClusterId: 'local' }));
+    const config = await host.getConfig();
+    expect(config.selectedClusterId).toBe('local');
+    expect(config.apiKey?.id).toBe('old');
+  });
+
   it('provides a user-mode scenario without a local VM', async () => {
     vi.stubGlobal('window', { location: { search: '?mock-host&scenario=user-mode-no-vm' } });
     expect(mockHostEnabled()).toBe(true);

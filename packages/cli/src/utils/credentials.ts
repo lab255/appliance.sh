@@ -82,7 +82,7 @@ export function saveCredentials(credentials: Credentials, profileName?: string):
  */
 export function clearCredentials(): boolean {
   const file = readProfiles();
-  const resolved = resolveProfile(file, { override: activeProfileOverride });
+  const resolved = resolveProfile(file, { override: activeProfileOverride, allowUnavailable: true });
   if (!resolved) return false;
   return removeProfileFromStore(resolved.name);
 }

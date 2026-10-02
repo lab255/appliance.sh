@@ -1,3 +1,4 @@
+import { microVmNameFromClusterId } from '@appliance.sh/app';
 import type {
   AddClusterInput,
   AgentInfo,
@@ -756,7 +757,7 @@ export function createMockHost(): ConsoleHost {
     async getConfig(): Promise<HostConfig> {
       const state = readState();
       state.clusters = state.clusters.filter((c) => {
-        const name = c.id === 'microvm' ? 'appliance' : c.id.startsWith('microvm-') ? c.id.slice(8) : null;
+        const name = microVmNameFromClusterId(c.id, c.apiServerUrl);
         return name === null || Boolean(microVms[name]?.exists);
       });
       if (!state.clusters.some((c) => c.id === state.selectedClusterId)) state.selectedClusterId = null;

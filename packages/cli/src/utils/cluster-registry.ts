@@ -40,7 +40,7 @@ export interface ClusterEntry {
  *  isMicroVmClusterId), and bootstrapped-ness is read straight off the
  *  profile's persisted state-backend / bootstrap-input fields. */
 export function classifyCluster(name: string, profile: Profile, active: boolean): ClusterEntry {
-  const vmName = vmNameForProfile(name);
+  const vmName = vmNameForProfile(name, profile.apiUrl);
   return {
     name,
     apiUrl: profile.apiUrl,
