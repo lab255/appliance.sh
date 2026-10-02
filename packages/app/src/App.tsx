@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { subscribeToVmConfigChanges } from '@/lib/vm-config-sync';
 import { MotionProvider } from '@appliance.sh/ui/motion-provider';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createBrowserRouter } from 'react-router';
@@ -37,6 +39,7 @@ export interface ConsoleProps {
 }
 
 export function Console({ host }: ConsoleProps) {
+  useEffect(() => subscribeToVmConfigChanges(queryClient, host), [host]);
   // The query cache's error handler runs outside React — hand it the
   // host + client it needs to attempt a credential self-heal.
   registerAuthHeal(host, queryClient);

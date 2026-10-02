@@ -1629,8 +1629,9 @@ fn build_ingested_config(
 /// process that performs its own read-modify-write of profiles.json
 /// (e.g. `appliance keys rotate`). The CLI now takes a cross-process
 /// advisory lockfile (profiles.json.lock) around its own RMW cycles;
-/// the remaining piece is having THIS desktop adopt the same lockfile —
-/// see docs/credentials.md. Until it does, a desktop↔CLI interleave is
+/// get_config's GC also takes that lock before re-reading profiles. Other
+/// desktop write paths have not yet adopted it — see docs/credentials.md.
+/// On those paths, a desktop↔CLI interleave is
 /// still last-writer-wins (both sides do atomic temp-file renames, so
 /// neither can read a half-written file; the residual risk is purely a
 /// lost write on interleaved full read→write cycles).
@@ -1846,11 +1847,16 @@ fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
 
     // Consult the engine registry before exposing any signing credentials.
     let mut shared = read_shared_profiles();
-    let mut profiles: BTreeMap<String, String> = persisted.clusters.iter()
-        .map(|c| (c.id.clone(), c.api_server_url.clone())).collect();
+    let mut profiles: BTreeMap<String, String> = persisted
+        .clusters
+        .iter()
+        .map(|c| (c.id.clone(), c.api_server_url.clone()))
+        .collect();
     if let Some(shared) = &shared {
         // Shared profiles are authoritative, including a remote login named local.
-        profiles.extend(shared.profiles.iter().map(|(id, p)| (id.clone(), p.api_url.clone())));
+        profiles.extend(
+            shared.profiles.iter().map(|(id, p)| (id.clone(), p.api_url.clone())),
+        );
     }
     cluster_gc::add_default_aliases(&mut profiles);
     let cluster_gc::GcDecisions { gone, unavailable } = cluster_gc::classify_profiles(&home, &profiles);

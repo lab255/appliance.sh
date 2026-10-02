@@ -53,10 +53,12 @@ describe('mock host app mode', () => {
   });
 
   it('collects the default local alias but preserves a remote login named local', async () => {
+    vi.resetModules();
+    const isolated = await import('./mock-host');
     vi.stubGlobal('window', { location: { search: '?mock-host&scenario=user-mode' } });
-    mockHostEnabled();
-    const host = createMockHost();
-    await host.vm!.instance('appliance').delete();
+    isolated.mockHostEnabled();
+    const host = isolated.createMockHost();
+    await host.vm!.instance('appliance').remove();
     const local = {
       id: 'local',
       name: 'local',

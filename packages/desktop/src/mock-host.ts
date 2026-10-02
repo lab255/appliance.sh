@@ -1,4 +1,5 @@
-import { microVmNameFromClusterId } from '@appliance.sh/app';
+// Use the pure host contract without bootstrapping the browser router.
+import { microVmNameFromClusterId } from '../../app/src/lib/host';
 import type {
   AddClusterInput,
   AgentInfo,

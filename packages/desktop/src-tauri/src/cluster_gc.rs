@@ -119,9 +119,17 @@ mod tests {
         let mut profiles = BTreeMap::from([("microvm".into(), "http://localhost:8081".into())]);
         add_default_aliases(&mut profiles);
         assert!(profiles.contains_key("local"));
+        assert_eq!(
+            classify_profiles(&home, &profiles).gone,
+            HashSet::from(["local".into(), "microvm".into()])
+        );
         profiles.insert("local".into(), "https://example.com".into());
         add_default_aliases(&mut profiles);
         assert_eq!(profiles["local"], "https://example.com");
+        assert_eq!(
+            classify_profiles(&home, &profiles).gone,
+            HashSet::from(["microvm".into()])
+        );
     }
 
     #[test]

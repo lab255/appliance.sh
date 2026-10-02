@@ -93,5 +93,3 @@ export type {
   AvailableUpdate,
   UpdateProgress,
 } from './lib/host';
-
-export { microVmNameFromClusterId } from './lib/host';
