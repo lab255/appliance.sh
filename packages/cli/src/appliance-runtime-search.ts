@@ -1,5 +1,5 @@
-import { loadCatalogueIndex } from './utils/catalogue-index';
-import { runtimeRoot } from './utils/runtime-registry';
+import { loadCatalogueIndex } from './utils/catalogue-index.js';
+import { runtimeRoot } from './utils/runtime-registry.js';
 import {
   PINNED_CATALOGUE_TRUST,
   freeCatalogueEntries,

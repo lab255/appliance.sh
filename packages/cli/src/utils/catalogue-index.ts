@@ -6,7 +6,7 @@ import {
   verifyCatalogueIndexPair,
   type CatalogueTrustPolicy,
 } from '@appliance.sh/sdk';
-import { withProfilesLock } from './profiles-lock';
+import { withProfilesLock } from './profiles-lock.js';
 
 interface IndexCache {
   indexJson: string;

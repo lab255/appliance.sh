@@ -1,5 +1,5 @@
-import { withProfilesLock } from './utils/profiles-lock';
-import { cachedCatalogueIndex, loadCatalogueIndex } from './utils/catalogue-index';
+import { withProfilesLock } from './utils/profiles-lock.js';
+import { cachedCatalogueIndex, loadCatalogueIndex } from './utils/catalogue-index.js';
 import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
