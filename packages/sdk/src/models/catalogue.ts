@@ -36,13 +36,29 @@ export const catalogueEntrySchema = z.strictObject({
   publisher: cataloguePublisherSchema,
 });
 
-export const catalogueIndexSchema = z.strictObject({
-  schema: z.literal('appliance.catalogue-index/v1'),
-  generation: z.int().positive(),
-  issuedAt: rfc3339,
-  expiresAt: rfc3339,
-  entries: z.array(catalogueEntrySchema).max(10_000),
-});
+function withValidityCap<T extends z.ZodType<{ issuedAt: string; expiresAt: string }>>(schema: T, days: number) {
+  return schema.superRefine((value, context) => {
+    const span = Date.parse(value.expiresAt) - Date.parse(value.issuedAt);
+    if (span <= 0 || span > days * 24 * 60 * 60 * 1000) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expiresAt'],
+        message: `validity must be positive and at most ${days} days`,
+      });
+    }
+  });
+}
+
+export const catalogueIndexSchema = withValidityCap(
+  z.strictObject({
+    schema: z.literal('appliance.catalogue-index/v1'),
+    generation: z.int().positive(),
+    issuedAt: rfc3339,
+    expiresAt: rfc3339,
+    entries: z.array(catalogueEntrySchema).max(10_000),
+  }),
+  14
+);
 
 const blacklistEntrySchema = z
   .strictObject({
@@ -54,13 +70,16 @@ const blacklistEntrySchema = z
   })
   .refine((entry) => Boolean(entry.digest || entry.appId || entry.publisherKeyId), 'a blacklist selector is required');
 
-export const catalogueBlacklistSchema = z.strictObject({
-  schema: z.literal('appliance.blacklist/v1'),
-  generation: z.int().positive(),
-  issuedAt: rfc3339,
-  expiresAt: rfc3339,
-  entries: z.array(blacklistEntrySchema).max(10_000),
-});
+export const catalogueBlacklistSchema = withValidityCap(
+  z.strictObject({
+    schema: z.literal('appliance.blacklist/v1'),
+    generation: z.int().positive(),
+    issuedAt: rfc3339,
+    expiresAt: rfc3339,
+    entries: z.array(blacklistEntrySchema).max(10_000),
+  }),
+  7
+);
 
 export const signatureEnvelopeSchema = z.strictObject({
   alg: z.literal('ed25519'),

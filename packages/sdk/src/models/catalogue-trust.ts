@@ -308,13 +308,25 @@ async function verifyPair<T extends { generation: number; issuedAt: string; expi
 
 function parseIndex(value: unknown): CatalogueIndex {
   const parsed = catalogueIndexSchema.safeParse(value);
-  if (!parsed.success) throw new CatalogueTrustError('invalid-schema', 'catalogue index schema is invalid');
+  if (!parsed.success)
+    throw new CatalogueTrustError(
+      parsed.error.issues.some((issue) => issue.code === 'custom' && issue.path[0] === 'expiresAt')
+        ? 'invalid-validity'
+        : 'invalid-schema',
+      'catalogue index schema is invalid'
+    );
   return parsed.data;
 }
 
 function parseBlacklist(value: unknown): CatalogueBlacklist {
   const parsed = catalogueBlacklistSchema.safeParse(value);
-  if (!parsed.success) throw new CatalogueTrustError('invalid-schema', 'catalogue blacklist schema is invalid');
+  if (!parsed.success)
+    throw new CatalogueTrustError(
+      parsed.error.issues.some((issue) => issue.code === 'custom' && issue.path[0] === 'expiresAt')
+        ? 'invalid-validity'
+        : 'invalid-schema',
+      'catalogue blacklist schema is invalid'
+    );
   return parsed.data;
 }
 

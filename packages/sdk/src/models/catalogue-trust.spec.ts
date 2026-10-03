@@ -236,3 +236,16 @@ it('verifies every blacklist reason and enforces its separate seven-day validity
     code: 'invalid-validity',
   });
 });
+
+it('enforces the producer validity caps in the exported wire schemas too', async () => {
+  const { catalogueIndexSchema, catalogueBlacklistSchema } = await import('./catalogue');
+  expect(catalogueIndexSchema.safeParse(index({ expiresAt: '2026-09-10T00:00:00Z' })).success).toBe(false);
+  expect(
+    catalogueBlacklistSchema.safeParse({
+      ...index(),
+      schema: 'appliance.blacklist/v1',
+      entries: [],
+      expiresAt: '2026-08-28T00:00:00Z',
+    }).success
+  ).toBe(false);
+});
