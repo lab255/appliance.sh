@@ -6,21 +6,35 @@ export const CATALOGUE_BLACKLIST_MAX_BYTES = 1024 * 1024;
 export const CATALOGUE_INDEX_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const CATALOGUE_BLACKLIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-// RFC 0001's public, non-secret interoperability identity. This is the
-// currently shipped catalogue pin until owners publish a root-authorised
-// production delegation. Never add a private key alongside this value.
-export const RFC0001_FIXTURE_PUBLIC_KEY = 'ed25519:A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg';
-export const RFC0001_FIXTURE_KEY_ID = 'ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c';
-
 export interface CatalogueTrustPolicy {
   keys: Readonly<Record<string, string>>;
   generationFloor: number;
   highestGeneration?: number;
 }
 
+/** OWNER-FILL release manifest: review root authorization and legacy inventory before enabling.
+ * Empty pins deliberately disable catalogue trust; never substitute a test identity.
+ * Rotation ships old + new records here, each envelope still has exactly one signer.
+ */
+export const CATALOGUE_RELEASE_MANIFEST: {
+  readonly keys: Readonly<Record<string, string>>;
+  readonly legacyMaximum: number | null;
+} = Object.freeze({ keys: Object.freeze({}), legacyMaximum: null });
+
+export function catalogueCutoverFloor(legacyMaximum: number): number {
+  if (!Number.isSafeInteger(legacyMaximum) || legacyMaximum < 1 || legacyMaximum >= Number.MAX_SAFE_INTEGER) {
+    throw new Error('A reviewed safe legacy generation inventory is required');
+  }
+  return Math.max(2, legacyMaximum + 1);
+}
+
 export const PINNED_CATALOGUE_TRUST: CatalogueTrustPolicy = Object.freeze({
-  keys: Object.freeze({ [RFC0001_FIXTURE_KEY_ID]: RFC0001_FIXTURE_PUBLIC_KEY }),
-  generationFloor: 1,
+  keys: CATALOGUE_RELEASE_MANIFEST.keys,
+  // Unfilled inventory fails closed. No trusted production artifacts means OWNER sets L = 1.
+  generationFloor:
+    CATALOGUE_RELEASE_MANIFEST.legacyMaximum === null
+      ? Number.MAX_SAFE_INTEGER
+      : catalogueCutoverFloor(CATALOGUE_RELEASE_MANIFEST.legacyMaximum),
 });
 
 export class CatalogueTrustError extends Error {
@@ -264,6 +278,16 @@ async function verifyPair<T extends { generation: number; issuedAt: string; expi
   if (!publicKey) throw new CatalogueTrustError('unknown-key', 'catalogue signer is not pinned');
   const envelope = await verifySignatureEnvelope(rawPayload, envelopeValue, options.expectedRole, publicKey);
   const payload = options.parse(rawPayload);
+  if (options.expectedRole === 'index') {
+    for (const entry of (payload as unknown as CatalogueIndex).entries) {
+      if (entry.publisher.keyId && entry.publisher.publicKey) {
+        const raw = decodeBase64url(entry.publisher.publicKey.slice('ed25519:'.length), 32);
+        if (`ed25519:sha256:${hex(await sha256(raw))}` !== entry.publisher.keyId) {
+          throw new CatalogueTrustError('key-id-mismatch', 'publisher key id does not match its public key');
+        }
+      }
+    }
+  }
   checkTrustGeneration(payload.generation, options.policy);
   const now = options.now ?? new Date();
   const stale = checkTrustValidity(

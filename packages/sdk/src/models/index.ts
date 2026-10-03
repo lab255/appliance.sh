@@ -17,3 +17,4 @@ export * from './release-trust';
 export * from './self-update';
 export * from './installed-app';
 export * from './entitlement';
+export * from './catalogue-transport';

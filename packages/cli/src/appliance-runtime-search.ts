@@ -1,5 +1,6 @@
 import {
   PINNED_CATALOGUE_TRUST,
+  fetchCataloguePair,
   freeCatalogueEntries,
   verifyCatalogueIndexPair,
   type CatalogueEntry,
@@ -17,36 +18,29 @@ function catalogueOrigin(): string {
   return url.toString().replace(/\/$/, '');
 }
 
-async function responseBytes(response: Response): Promise<Uint8Array> {
-  if (!response.ok) throw new Error(`catalogue request failed (${response.status})`);
-  return new Uint8Array(await response.arrayBuffer());
-}
-
 export async function searchCatalogue(
   query: string,
   options: { origin?: string; fetch?: typeof fetch; policy?: CatalogueTrustPolicy; now?: Date } = {}
 ): Promise<{ entries: CatalogueEntry[]; stale: boolean; verifiedAt: string }> {
   const origin = (options.origin ?? catalogueOrigin()).replace(/\/$/, '');
   const fetcher = options.fetch ?? fetch;
-  const [indexResponse, signatureResponse] = await Promise.all([
-    fetcher(`${origin}/catalogue/index.json`, { headers: { Accept: 'application/json' } }),
-    fetcher(`${origin}/catalogue/index.json.sig`, { headers: { Accept: 'application/json' } }),
-  ]);
-  const [indexBytes, envelopeBytes] = await Promise.all([
-    responseBytes(indexResponse),
-    responseBytes(signatureResponse),
-  ]);
-  const verified = await verifyCatalogueIndexPair({
-    indexBytes,
-    envelopeBytes,
-    policy: options.policy ?? PINNED_CATALOGUE_TRUST,
-    now: options.now,
-    allowExpired: true,
+  const { verified } = await fetchCataloguePair({
+    origin,
+    fetch: fetcher,
+    role: 'index',
+    verify: (indexBytes, envelopeBytes) =>
+      verifyCatalogueIndexPair({
+        indexBytes,
+        envelopeBytes,
+        policy: options.policy ?? PINNED_CATALOGUE_TRUST,
+        now: options.now,
+        allowExpired: true,
+      }),
   });
   const needle = query.trim().toLocaleLowerCase();
   const entries = freeCatalogueEntries(verified.payload).filter((entry) => {
     if (!needle) return true;
-    return [entry.id, entry.name, entry.description, entry.license, entry.publisher.name, entry.category ?? '']
+    return [entry.appId, entry.name, entry.description, entry.license, entry.publisher.name, ...entry.categories]
       .join('\n')
       .toLocaleLowerCase()
       .includes(needle);

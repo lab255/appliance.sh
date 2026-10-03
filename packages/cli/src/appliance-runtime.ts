@@ -434,7 +434,7 @@ async function runtimeRun(args: string[]): Promise<void> {
     }
 
     const signature = loaded.signature ? (loaded.signature.valid ? 'valid' : 'invalid') : 'unsigned';
-    const knownPublisher = Boolean(evidence && signature === 'valid');
+    const knownPublisher = Boolean(evidence && evidence.entry.publisher.tier !== 'unknown' && signature === 'valid');
     const warningDue =
       !knownPublisher &&
       (!installed || unknownPublisherWarningDue(installed, now) || installed.verification.signature !== signature);

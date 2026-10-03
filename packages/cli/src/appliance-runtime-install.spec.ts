@@ -219,15 +219,15 @@ describe('runtime install', () => {
     const bundle = await unsignedBundle(directory);
     const url = 'https://journal.appliance.zip/';
     const entry = {
-      id: 'journal',
+      appId: 'journal',
       name: 'Journal',
       version: '1.2.0',
       description: 'Private daily notes.',
       license: 'MIT',
-      publisher: { name: 'Local developer' },
-      tier: 'known-publisher' as const,
-      url,
-      digest: `sha256:${'9'.repeat(64)}`,
+      publisher: { name: 'Local developer', tier: 'known' as const },
+      paid: false,
+      categories: [],
+      bundle: { url, digest: `sha256:${'9'.repeat(64)}` },
     };
     const index: VerifiedCatalogue<CatalogueIndex> = {
       payload: {
@@ -302,15 +302,15 @@ describe('runtime install', () => {
         expiresAt: '2026-09-03T00:00:00.000Z',
         entries: [
           {
-            id: 'journal',
+            appId: 'journal',
             name: 'Journal',
             version: '1.2.0',
             description: 'Private daily notes.',
             license: 'MIT',
-            publisher: { name: 'Local developer' },
-            tier: 'known-publisher',
-            url,
-            digest: `sha256:${'9'.repeat(64)}`,
+            publisher: { name: 'Local developer', tier: 'known' as const },
+            paid: false,
+            categories: [],
+            bundle: { url, digest: `sha256:${'9'.repeat(64)}` },
           },
         ],
       },

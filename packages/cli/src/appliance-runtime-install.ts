@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import {
   PINNED_CATALOGUE_TRUST,
+  fetchCataloguePair,
   freeCatalogueEntries,
   verifyCatalogueBlacklistPair,
   verifyCatalogueIndexPair,
@@ -154,7 +155,7 @@ export async function installBundle(source: string, options: InstallBundleOption
       );
 
     const signature = verified.signature ? (verified.signature.valid ? 'valid' : 'invalid') : 'unsigned';
-    const tier = expectedEntry && signature === 'valid' ? expectedEntry.entry.tier : 'unknown';
+    const tier = expectedEntry && signature === 'valid' ? expectedEntry.entry.publisher.tier : 'unknown';
     const controlsSummary = controlsSummaryForManifest(verified.manifest);
     const unknownDetails: UnknownPublisherDetails = {
       appId: verified.manifest.name,
@@ -292,11 +293,6 @@ function catalogueOrigin(value?: string): string {
   return url.toString().replace(/\/$/, '');
 }
 
-async function responseBytes(response: Response, label: string): Promise<Uint8Array> {
-  if (!response.ok) throw new Error(`${label} request failed (${response.status}).`);
-  return new Uint8Array(await response.arrayBuffer());
-}
-
 async function fetchVerifiedIndex(
   fetcher: typeof fetch,
   originValue: string | undefined,
@@ -304,16 +300,13 @@ async function fetchVerifiedIndex(
   now: Date
 ): Promise<VerifiedCatalogue<CatalogueIndex>> {
   const origin = catalogueOrigin(originValue);
-  const [index, signature] = await Promise.all([
-    fetcher(`${origin}/catalogue/index.json`, { headers: { Accept: 'application/json' } }),
-    fetcher(`${origin}/catalogue/index.json.sig`, { headers: { Accept: 'application/json' } }),
-  ]);
-  return verifyCatalogueIndexPair({
-    indexBytes: await responseBytes(index, 'Catalogue index'),
-    envelopeBytes: await responseBytes(signature, 'Catalogue index signature'),
-    policy,
-    now,
+  const { verified } = await fetchCataloguePair({
+    origin,
+    fetch: fetcher,
+    role: 'index',
+    verify: (indexBytes, envelopeBytes) => verifyCatalogueIndexPair({ indexBytes, envelopeBytes, policy, now }),
   });
+  return verified;
 }
 
 function catalogueCacheDirectory(root: string): string {
@@ -335,7 +328,7 @@ export async function readCachedIndex(
     return await verifyCatalogueIndexPair({
       indexBytes: new TextEncoder().encode(cache.indexJson),
       envelopeBytes: new TextEncoder().encode(cache.signatureJson),
-      policy: { ...policy, highestGeneration: cache.highestGeneration },
+      policy: { ...policy, highestGeneration: Math.max(policy.highestGeneration ?? 0, cache.highestGeneration ?? 0) },
       now,
       allowExpired: true,
     });
@@ -349,7 +342,7 @@ function findCatalogueEntry(
   url: string
 ): { entry: CatalogueEntry; generation: number } | undefined {
   if (!index || index.stale) return undefined;
-  const entry = freeCatalogueEntries(index.payload).find((candidate) => candidate.url === url);
+  const entry = freeCatalogueEntries(index.payload).find((candidate) => candidate.bundle.url === url);
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
 
@@ -360,7 +353,7 @@ export function findLocalEvidence(
   if (!index || index.stale) return undefined;
   const prelim = verifyBundle(stagedPath);
   const entry = freeCatalogueEntries(index.payload).find(
-    (candidate) => candidate.id === prelim.manifest.name && candidate.digest === prelim.digest
+    (candidate) => candidate.appId === prelim.manifest.name && candidate.bundle.digest === prelim.digest
   );
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
@@ -370,10 +363,10 @@ export function assertIndexBinding(
   digest: string,
   manifest: ReturnType<typeof verifyBundle>['manifest']
 ): void {
-  if (entry.digest !== digest)
-    throw new Error(`Catalogue digest mismatch: expected ${entry.digest}, received ${digest}.`);
+  if (entry.bundle.digest !== digest)
+    throw new Error(`Catalogue digest mismatch: expected ${entry.bundle.digest}, received ${digest}.`);
   if (
-    entry.id !== manifest.name ||
+    entry.appId !== manifest.name ||
     entry.version !== manifest.version ||
     entry.license !== manifest.license ||
     entry.publisher.name !== manifest.publisher.name ||
@@ -446,17 +439,20 @@ export async function loadBlacklist(options: {
   }
   try {
     const origin = catalogueOrigin(options.catalogueOrigin);
-    const [payloadResponse, signatureResponse] = await Promise.all([
-      options.fetcher(`${origin}/catalogue/blacklist.json`, { headers: { Accept: 'application/json' } }),
-      options.fetcher(`${origin}/catalogue/blacklist.json.sig`, { headers: { Accept: 'application/json' } }),
-    ]);
-    const payloadBytes = await responseBytes(payloadResponse, 'Blacklist');
-    const envelopeBytes = await responseBytes(signatureResponse, 'Blacklist signature');
-    const verified = await verifyCatalogueBlacklistPair({
-      blacklistBytes: payloadBytes,
-      envelopeBytes,
-      policy: options.policy,
-      now: options.now,
+    const { payloadBytes, envelopeBytes, verified } = await fetchCataloguePair({
+      origin,
+      fetch: options.fetcher,
+      role: 'blacklist',
+      verify: (blacklistBytes, envelopeBytes) =>
+        verifyCatalogueBlacklistPair({
+          blacklistBytes,
+          envelopeBytes,
+          policy: {
+            ...options.policy,
+            highestGeneration: Math.max(options.policy.highestGeneration ?? 0, cached?.payload.generation ?? 0),
+          },
+          now: options.now,
+        }),
     });
     atomicJson(cacheFile, {
       blacklistJson: new TextDecoder().decode(payloadBytes),

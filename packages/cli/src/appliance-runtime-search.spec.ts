@@ -16,10 +16,10 @@ it('searches only free entries after verifying the pair', async () => {
     version: '1.0.0',
     description: 'A useful app',
     license: 'MIT',
-    publisher: { name: 'Fixture' },
-    tier: 'known-publisher' as const,
-    url: 'https://fixture.appliance.zip',
-    digest: `sha256:${'a'.repeat(64)}`,
+    publisher: { name: 'Fixture', tier: 'known' as const },
+    paid: false,
+    categories: [],
+    bundle: { url: 'https://fixture.appliance.zip', digest: `sha256:${'a'.repeat(64)}` },
   };
   const index: CatalogueIndex = {
     schema: 'appliance.catalogue-index/v1',
@@ -27,13 +27,13 @@ it('searches only free entries after verifying the pair', async () => {
     issuedAt: '2026-08-20T00:00:00Z',
     expiresAt: '2026-08-28T00:00:00Z',
     entries: [
-      { ...common, id: 'journal', name: 'Journal' },
-      { ...common, id: 'premium', name: 'Premium secret', paid: true },
+      { ...common, appId: 'journal', name: 'Journal' },
+      { ...common, appId: 'premium', name: 'Premium secret', paid: true },
     ],
   };
   const sig = await signAsync(await catalogueSigningInput(index, 'index'), privateKey);
   const responses = [
-    new Response(JSON.stringify(index)),
+    new Response(JSON.stringify(index), { headers: { 'X-Appliance-Catalogue-Snapshot': 'a'.repeat(64) } }),
     new Response(JSON.stringify({ alg: 'ed25519', keyId, role: 'index', sig: Buffer.from(sig).toString('base64url') })),
   ];
   const fetcher = async () => responses.shift()!;
@@ -45,5 +45,5 @@ it('searches only free entries after verifying the pair', async () => {
       policy,
       now: new Date('2026-08-27T00:00:00Z'),
     })
-  ).resolves.toMatchObject({ entries: [{ id: 'journal' }] });
+  ).resolves.toMatchObject({ entries: [{ appId: 'journal' }] });
 });
