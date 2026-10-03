@@ -1,3 +1,4 @@
+import { fetchDesktopCatalogue } from './catalogue';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { open as openShell } from '@tauri-apps/plugin-shell';
 import { sendNotification } from '@tauri-apps/plugin-notification';
@@ -116,33 +117,9 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
 
   catalogue: {
     async fetchCatalogue(): Promise<CatalogueFetchResult> {
-      const origin = 'https://www.appliance.sh';
       const nativeCache = await invoke<NativeCatalogueCache | null>('get_catalogue_cache');
       const cached: CatalogueFetchResult | null = nativeCache ? { ...nativeCache, source: 'cache' } : null;
-      try {
-        const [indexResponse, signatureResponse] = await Promise.all([
-          fetch(`${origin}/catalogue/index.json`, { headers: { Accept: 'application/json' } }),
-          fetch(`${origin}/catalogue/index.json.sig`, { headers: { Accept: 'application/json' } }),
-        ]);
-        if (!indexResponse.ok || !signatureResponse.ok) {
-          throw new Error(`catalogue refresh failed (${indexResponse.status}/${signatureResponse.status})`);
-        }
-        return {
-          indexJson: await indexResponse.text(),
-          signatureJson: await signatureResponse.text(),
-          fetchedAt: new Date().toISOString(),
-          source: 'network',
-          highestGeneration: cached?.highestGeneration,
-          maxSeenWallClock: cached?.maxSeenWallClock,
-        };
-      } catch (cause) {
-        if (!cached) throw cause;
-        return {
-          ...cached,
-          source: 'cache',
-          refreshError: cause instanceof Error ? cause.message : 'catalogue refresh failed',
-        };
-      }
+      return fetchDesktopCatalogue(cached);
     },
     async cacheVerified(pair: CatalogueFetchResult, generation: number, verifiedAt: string): Promise<void> {
       // The native host writes the exact pair atomically under

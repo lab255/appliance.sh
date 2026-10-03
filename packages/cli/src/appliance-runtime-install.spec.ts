@@ -189,10 +189,18 @@ describe('runtime install', () => {
       ...PINNED_CATALOGUE_TRUST,
       keys: { ...PINNED_CATALOGUE_TRUST.keys, [key.keyId]: key.publicKeyWire },
     };
+    const signerOnly = await installBundle(signed.outputPath, {
+      root: path.join(directory, 'runtime'),
+      verifiedBlacklist: null,
+      policy,
+    }).catch((cause: unknown) => cause);
+    expect(signerOnly).toBeInstanceOf(UnknownPublisherError);
+    expect((signerOnly as UnknownPublisherError).details.signature).toBe('invalid');
     const error = await installBundle(signed.outputPath, {
       root: path.join(directory, 'runtime'),
       verifiedBlacklist: null,
       policy,
+      bundlePublicKeys: { [key.keyId]: key.publicKeyWire },
     }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(UnknownPublisherError);
     expect((error as UnknownPublisherError).details.signature).toBe('valid');
@@ -219,15 +227,15 @@ describe('runtime install', () => {
     const bundle = await unsignedBundle(directory);
     const url = 'https://journal.appliance.zip/';
     const entry = {
-      id: 'journal',
+      appId: 'journal',
       name: 'Journal',
       version: '1.2.0',
       description: 'Private daily notes.',
       license: 'MIT',
-      publisher: { name: 'Local developer' },
-      tier: 'known-publisher' as const,
-      url,
-      digest: `sha256:${'9'.repeat(64)}`,
+      publisher: { name: 'Local developer', tier: 'known' as const },
+      paid: false,
+      categories: [],
+      bundle: { url, digest: `sha256:${'9'.repeat(64)}` },
     };
     const index: VerifiedCatalogue<CatalogueIndex> = {
       payload: {
@@ -302,15 +310,15 @@ describe('runtime install', () => {
         expiresAt: '2026-09-03T00:00:00.000Z',
         entries: [
           {
-            id: 'journal',
+            appId: 'journal',
             name: 'Journal',
             version: '1.2.0',
             description: 'Private daily notes.',
             license: 'MIT',
-            publisher: { name: 'Local developer' },
-            tier: 'known-publisher',
-            url,
-            digest: `sha256:${'9'.repeat(64)}`,
+            publisher: { name: 'Local developer', tier: 'known' as const },
+            paid: false,
+            categories: [],
+            bundle: { url, digest: `sha256:${'9'.repeat(64)}` },
           },
         ],
       },
@@ -524,3 +532,67 @@ describe('runtime uninstall/list', () => {
   });
 });
 import { generateKeyPairSync } from 'node:crypto';
+
+it.each(['known', 'unknown'] as const)(
+  'installs using the canonical %s publisher key without granting catalogue signer bundle authority',
+  async (tier) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'catalogue-publisher-'));
+    roots.push(directory);
+    const unsigned = await unsignedBundle(directory);
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const keyFile = path.join(directory, 'publisher.pem');
+    fs.writeFileSync(keyFile, privateKey.export({ type: 'pkcs8', format: 'pem' }));
+    const key = readDevSigningKey(keyFile);
+    const bundle = await writeBundle({
+      outputPath: path.join(directory, 'signed.appliance.zip'),
+      manifest: unsigned.manifest,
+      files: [
+        { path: 'payload/image.tar', data: tinyOciTar(process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64') },
+      ],
+      signingKeyPath: keyFile,
+    });
+    const verifiedIndex: VerifiedCatalogue<CatalogueIndex> = {
+      payload: {
+        schema: 'appliance.catalogue-index/v1',
+        generation: 8,
+        issuedAt: '2026-10-01T00:00:00Z',
+        expiresAt: '2026-10-08T00:00:00Z',
+        entries: [
+          {
+            appId: bundle.manifest.name,
+            name: 'Journal',
+            version: bundle.manifest.version,
+            license: bundle.manifest.license!,
+            description: 'Notes',
+            paid: false,
+            categories: ['collaboration'],
+            bundle: { url: 'https://example.test/journal.zip', digest: bundle.digest },
+            publisher: { name: bundle.manifest.publisher.name, tier, keyId: key.keyId, publicKey: key.publicKeyWire },
+          },
+        ],
+      },
+      envelope: {
+        alg: 'ed25519',
+        role: 'index',
+        keyId: `ed25519:sha256:${'a'.repeat(64)}`,
+        sig: 'test-only-preverified',
+      },
+      stale: false,
+      verifiedAt: '2026-10-03T00:00:00Z',
+    };
+    const options = {
+      root: path.join(directory, 'runtime'),
+      verifiedIndex,
+      verifiedBlacklist: null,
+      now: new Date('2026-10-03'),
+    };
+    if (tier === 'unknown')
+      await expect(installBundle(bundle.outputPath, options)).rejects.toBeInstanceOf(UnknownPublisherError);
+    const installed = await installBundle(bundle.outputPath, {
+      ...options,
+      acceptUnknownPublisher: tier === 'unknown',
+    });
+    expect(installed.publisher.tier).toBe(tier);
+    expect(installed.verification.signature).toBe('valid');
+  }
+);

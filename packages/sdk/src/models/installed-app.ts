@@ -38,7 +38,7 @@ export const installedAppSchema = z.strictObject({
   publisher: z.strictObject({
     name: z.string().min(1).max(160),
     keyId: keyIdSchema.optional(),
-    tier: z.enum(['first-party', 'verified-account', 'known-publisher', 'unknown']),
+    tier: z.enum(['first-party', 'known', 'verified-account', 'known-publisher', 'unknown']),
   }),
   digest: digestSchema,
   bundlePath: z.string().min(1),

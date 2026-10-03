@@ -1,12 +1,14 @@
+import { withProfilesLock } from './utils/profiles-lock.js';
+import { cachedCatalogueIndex, loadCatalogueIndex } from './utils/catalogue-index.js';
 import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import {
   PINNED_CATALOGUE_TRUST,
+  fetchCataloguePair,
   freeCatalogueEntries,
   verifyCatalogueBlacklistPair,
-  verifyCatalogueIndexPair,
   type CatalogueBlacklist,
   type CatalogueEntry,
   type CatalogueIndex,
@@ -94,6 +96,8 @@ export interface InstallBundleOptions {
   fetcher?: typeof fetch;
   catalogueOrigin?: string;
   policy?: CatalogueTrustPolicy;
+  /** Explicit bundle verification material; catalogue signer pins never grant bundle authority. */
+  bundlePublicKeys?: Readonly<Record<string, string>>;
   now?: Date;
   verifiedIndex?: VerifiedCatalogue<CatalogueIndex>;
   verifiedBlacklist?: VerifiedCatalogue<CatalogueBlacklist> | null;
@@ -116,13 +120,22 @@ export async function installBundle(source: string, options: InstallBundleOption
     const index =
       options.verifiedIndex ??
       (sourceUrl
-        ? await fetchVerifiedIndex(options.fetcher ?? fetch, options.catalogueOrigin, policy, now)
+        ? await loadCatalogueIndex({
+            root,
+            origin: catalogueOrigin(options.catalogueOrigin),
+            fetch: options.fetcher,
+            policy,
+            now,
+          })
         : await readCachedIndex(policy, now, root));
     const expectedEntry = sourceUrl
       ? findCatalogueEntry(index, sourceUrl.toString())
       : findLocalEvidence(index, staging);
     const verified = verifyBundle(staging, {
-      resolvePublicKey: (keyId) => policy.keys[keyId],
+      resolvePublicKey: (keyId) =>
+        expectedEntry?.entry.publisher.keyId === keyId
+          ? expectedEntry.entry.publisher.publicKey
+          : options.bundlePublicKeys?.[keyId],
     });
 
     if (expectedEntry) assertIndexBinding(expectedEntry.entry, verified.digest, verified.manifest);
@@ -154,7 +167,7 @@ export async function installBundle(source: string, options: InstallBundleOption
       );
 
     const signature = verified.signature ? (verified.signature.valid ? 'valid' : 'invalid') : 'unsigned';
-    const tier = expectedEntry && signature === 'valid' ? expectedEntry.entry.tier : 'unknown';
+    const tier = expectedEntry && signature === 'valid' ? expectedEntry.entry.publisher.tier : 'unknown';
     const controlsSummary = controlsSummaryForManifest(verified.manifest);
     const unknownDetails: UnknownPublisherDetails = {
       appId: verified.manifest.name,
@@ -187,14 +200,14 @@ export async function installBundle(source: string, options: InstallBundleOption
     const destination = immutableBundlePath(verified.digest, root);
     fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
     if (fs.existsSync(destination)) {
-      const existing = verifyBundle(destination, { resolvePublicKey: (keyId) => policy.keys[keyId] });
+      const existing = verifyBundle(destination);
       if (existing.digest !== verified.digest) throw new Error('Existing immutable bundle copy has the wrong digest.');
     } else {
       fs.renameSync(staging, destination);
       keepStaging = true;
       fs.chmodSync(destination, 0o400);
     }
-    const immutable = verifyBundle(destination, { resolvePublicKey: (keyId) => policy.keys[keyId] });
+    const immutable = verifyBundle(destination);
     if (immutable.digest !== verified.digest) throw new Error('Immutable bundle copy changed during installation.');
 
     const installed: InstalledApp = {
@@ -292,30 +305,6 @@ function catalogueOrigin(value?: string): string {
   return url.toString().replace(/\/$/, '');
 }
 
-async function responseBytes(response: Response, label: string): Promise<Uint8Array> {
-  if (!response.ok) throw new Error(`${label} request failed (${response.status}).`);
-  return new Uint8Array(await response.arrayBuffer());
-}
-
-async function fetchVerifiedIndex(
-  fetcher: typeof fetch,
-  originValue: string | undefined,
-  policy: CatalogueTrustPolicy,
-  now: Date
-): Promise<VerifiedCatalogue<CatalogueIndex>> {
-  const origin = catalogueOrigin(originValue);
-  const [index, signature] = await Promise.all([
-    fetcher(`${origin}/catalogue/index.json`, { headers: { Accept: 'application/json' } }),
-    fetcher(`${origin}/catalogue/index.json.sig`, { headers: { Accept: 'application/json' } }),
-  ]);
-  return verifyCatalogueIndexPair({
-    indexBytes: await responseBytes(index, 'Catalogue index'),
-    envelopeBytes: await responseBytes(signature, 'Catalogue index signature'),
-    policy,
-    now,
-  });
-}
-
 function catalogueCacheDirectory(root: string): string {
   return path.join(path.dirname(root), 'catalogue');
 }
@@ -325,23 +314,7 @@ export async function readCachedIndex(
   now: Date,
   root: string
 ): Promise<VerifiedCatalogue<CatalogueIndex> | undefined> {
-  const file = path.join(catalogueCacheDirectory(root), 'verified-pair.json');
-  try {
-    const cache = JSON.parse(fs.readFileSync(file, 'utf8')) as {
-      indexJson: string;
-      signatureJson: string;
-      highestGeneration?: number;
-    };
-    return await verifyCatalogueIndexPair({
-      indexBytes: new TextEncoder().encode(cache.indexJson),
-      envelopeBytes: new TextEncoder().encode(cache.signatureJson),
-      policy: { ...policy, highestGeneration: cache.highestGeneration },
-      now,
-      allowExpired: true,
-    });
-  } catch {
-    return undefined;
-  }
+  return cachedCatalogueIndex(root, policy, now);
 }
 
 function findCatalogueEntry(
@@ -349,7 +322,7 @@ function findCatalogueEntry(
   url: string
 ): { entry: CatalogueEntry; generation: number } | undefined {
   if (!index || index.stale) return undefined;
-  const entry = freeCatalogueEntries(index.payload).find((candidate) => candidate.url === url);
+  const entry = freeCatalogueEntries(index.payload).find((candidate) => candidate.bundle.url === url);
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
 
@@ -360,7 +333,7 @@ export function findLocalEvidence(
   if (!index || index.stale) return undefined;
   const prelim = verifyBundle(stagedPath);
   const entry = freeCatalogueEntries(index.payload).find(
-    (candidate) => candidate.id === prelim.manifest.name && candidate.digest === prelim.digest
+    (candidate) => candidate.appId === prelim.manifest.name && candidate.bundle.digest === prelim.digest
   );
   return entry ? { entry, generation: index.payload.generation } : undefined;
 }
@@ -370,10 +343,10 @@ export function assertIndexBinding(
   digest: string,
   manifest: ReturnType<typeof verifyBundle>['manifest']
 ): void {
-  if (entry.digest !== digest)
-    throw new Error(`Catalogue digest mismatch: expected ${entry.digest}, received ${digest}.`);
+  if (entry.bundle.digest !== digest)
+    throw new Error(`Catalogue digest mismatch: expected ${entry.bundle.digest}, received ${digest}.`);
   if (
-    entry.id !== manifest.name ||
+    entry.appId !== manifest.name ||
     entry.version !== manifest.version ||
     entry.license !== manifest.license ||
     entry.publisher.name !== manifest.publisher.name ||
@@ -387,6 +360,27 @@ interface BlacklistCache {
   blacklistJson: string;
   signatureJson: string;
   verifiedAt: string;
+  generation?: number;
+}
+
+function blacklistPolicy(cacheFile: string, policy: CatalogueTrustPolicy, now: Date): CatalogueTrustPolicy {
+  let cache: BlacklistCache;
+  try {
+    cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as BlacklistCache;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return policy;
+    throw error;
+  }
+  const generation = cache.generation;
+  if (generation !== undefined && (!Number.isSafeInteger(generation) || generation < 1))
+    throw new Error('Invalid cached blacklist generation');
+  if (!Number.isFinite(Date.parse(cache.verifiedAt)) || now.getTime() < Date.parse(cache.verifiedAt))
+    throw new Error('System clock moved backwards or blacklist cache clock is invalid');
+  // Legacy caches must recover their generation by verifying the signed pair,
+  // never by parsing unverified payload bytes into a rollback floor.
+  return generation === undefined
+    ? policy
+    : { ...policy, highestGeneration: Math.max(policy.highestGeneration ?? 0, generation) };
 }
 
 async function readCachedBlacklist(
@@ -439,43 +433,55 @@ export async function loadBlacklist(options: {
 }): Promise<VerifiedCatalogue<CatalogueBlacklist> | null> {
   const directory = catalogueCacheDirectory(options.root);
   const cacheFile = path.join(directory, 'verified-blacklist.json');
-  const cached = await readCachedBlacklist(cacheFile, options.policy, options.now);
+  const storedPolicy = blacklistPolicy(cacheFile, options.policy, options.now);
+  const cached = await readCachedBlacklist(cacheFile, storedPolicy, options.now);
+  const policy = {
+    ...storedPolicy,
+    highestGeneration: Math.max(storedPolicy.highestGeneration ?? 0, cached?.payload.generation ?? 0),
+  };
   if (cached && !cached.stale && !blacklistRefreshDue(cached, options.now)) {
     assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
     return cached;
   }
   try {
     const origin = catalogueOrigin(options.catalogueOrigin);
-    const [payloadResponse, signatureResponse] = await Promise.all([
-      options.fetcher(`${origin}/catalogue/blacklist.json`, { headers: { Accept: 'application/json' } }),
-      options.fetcher(`${origin}/catalogue/blacklist.json.sig`, { headers: { Accept: 'application/json' } }),
-    ]);
-    const payloadBytes = await responseBytes(payloadResponse, 'Blacklist');
-    const envelopeBytes = await responseBytes(signatureResponse, 'Blacklist signature');
-    const verified = await verifyCatalogueBlacklistPair({
-      blacklistBytes: payloadBytes,
-      envelopeBytes,
-      policy: options.policy,
-      now: options.now,
+    const { payloadBytes, envelopeBytes, verified } = await fetchCataloguePair({
+      origin,
+      fetch: options.fetcher,
+      role: 'blacklist',
+      verify: (blacklistBytes, envelopeBytes) =>
+        verifyCatalogueBlacklistPair({
+          blacklistBytes,
+          envelopeBytes,
+          policy,
+          now: options.now,
+        }),
     });
-    atomicJson(cacheFile, {
-      blacklistJson: new TextDecoder().decode(payloadBytes),
-      signatureJson: new TextDecoder().decode(envelopeBytes),
-      generation: verified.payload.generation,
-      verifiedAt: verified.verifiedAt,
+    withProfilesLock(`${cacheFile}.lock`, () => {
+      const current = blacklistPolicy(cacheFile, policy, options.now);
+      if (verified.payload.generation < Math.max(current.generationFloor, current.highestGeneration ?? 0))
+        throw new Error('Blacklist generation regressed during refresh');
+      atomicJson(cacheFile, {
+        blacklistJson: new TextDecoder().decode(payloadBytes),
+        signatureJson: new TextDecoder().decode(envelopeBytes),
+        generation: verified.payload.generation,
+        verifiedAt: verified.verifiedAt,
+      });
     });
     return verified;
   } catch (networkError) {
-    if (cached) {
-      assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
-      if (cached.stale) {
+    // Another process may have advanced the role floor during this request.
+    const fallback = await readCachedBlacklist(cacheFile, blacklistPolicy(cacheFile, policy, options.now), options.now);
+    if (fallback) {
+      assertBlacklistStaleness(fallback, options.now, options.networkInstall, options.preOpen);
+      if (fallback.stale) {
         console.error(
           chalk.yellow(
             'Warning: unsafe-app blacklist refresh failed; evaluating the last verified stale blacklist for this operation.'
           )
         );
       }
-      return cached;
+      return fallback;
     }
     if (options.networkInstall) {
       const detail = networkError instanceof Error ? networkError.message : '';
