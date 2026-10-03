@@ -189,10 +189,18 @@ describe('runtime install', () => {
       ...PINNED_CATALOGUE_TRUST,
       keys: { ...PINNED_CATALOGUE_TRUST.keys, [key.keyId]: key.publicKeyWire },
     };
+    const signerOnly = await installBundle(signed.outputPath, {
+      root: path.join(directory, 'runtime'),
+      verifiedBlacklist: null,
+      policy,
+    }).catch((cause: unknown) => cause);
+    expect(signerOnly).toBeInstanceOf(UnknownPublisherError);
+    expect((signerOnly as UnknownPublisherError).details.signature).toBe('invalid');
     const error = await installBundle(signed.outputPath, {
       root: path.join(directory, 'runtime'),
       verifiedBlacklist: null,
       policy,
+      bundlePublicKeys: { [key.keyId]: key.publicKeyWire },
     }).catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(UnknownPublisherError);
     expect((error as UnknownPublisherError).details.signature).toBe('valid');

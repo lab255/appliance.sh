@@ -96,6 +96,8 @@ export interface InstallBundleOptions {
   fetcher?: typeof fetch;
   catalogueOrigin?: string;
   policy?: CatalogueTrustPolicy;
+  /** Explicit bundle verification material; catalogue signer pins never grant bundle authority. */
+  bundlePublicKeys?: Readonly<Record<string, string>>;
   now?: Date;
   verifiedIndex?: VerifiedCatalogue<CatalogueIndex>;
   verifiedBlacklist?: VerifiedCatalogue<CatalogueBlacklist> | null;
@@ -133,7 +135,7 @@ export async function installBundle(source: string, options: InstallBundleOption
       resolvePublicKey: (keyId) =>
         expectedEntry?.entry.publisher.keyId === keyId
           ? expectedEntry.entry.publisher.publicKey
-          : options.policy?.keys[keyId],
+          : options.bundlePublicKeys?.[keyId],
     });
 
     if (expectedEntry) assertIndexBinding(expectedEntry.entry, verified.digest, verified.manifest);
