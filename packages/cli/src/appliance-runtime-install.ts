@@ -1,3 +1,5 @@
+import { withProfilesLock } from './utils/profiles-lock';
+import { cachedCatalogueIndex, loadCatalogueIndex } from './utils/catalogue-index';
 import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -7,7 +9,6 @@ import {
   fetchCataloguePair,
   freeCatalogueEntries,
   verifyCatalogueBlacklistPair,
-  verifyCatalogueIndexPair,
   type CatalogueBlacklist,
   type CatalogueEntry,
   type CatalogueIndex,
@@ -117,13 +118,22 @@ export async function installBundle(source: string, options: InstallBundleOption
     const index =
       options.verifiedIndex ??
       (sourceUrl
-        ? await fetchVerifiedIndex(options.fetcher ?? fetch, options.catalogueOrigin, policy, now)
+        ? await loadCatalogueIndex({
+            root,
+            origin: catalogueOrigin(options.catalogueOrigin),
+            fetch: options.fetcher,
+            policy,
+            now,
+          })
         : await readCachedIndex(policy, now, root));
     const expectedEntry = sourceUrl
       ? findCatalogueEntry(index, sourceUrl.toString())
       : findLocalEvidence(index, staging);
     const verified = verifyBundle(staging, {
-      resolvePublicKey: (keyId) => policy.keys[keyId],
+      resolvePublicKey: (keyId) =>
+        expectedEntry?.entry.publisher.keyId === keyId
+          ? expectedEntry.entry.publisher.publicKey
+          : options.policy?.keys[keyId],
     });
 
     if (expectedEntry) assertIndexBinding(expectedEntry.entry, verified.digest, verified.manifest);
@@ -293,22 +303,6 @@ function catalogueOrigin(value?: string): string {
   return url.toString().replace(/\/$/, '');
 }
 
-async function fetchVerifiedIndex(
-  fetcher: typeof fetch,
-  originValue: string | undefined,
-  policy: CatalogueTrustPolicy,
-  now: Date
-): Promise<VerifiedCatalogue<CatalogueIndex>> {
-  const origin = catalogueOrigin(originValue);
-  const { verified } = await fetchCataloguePair({
-    origin,
-    fetch: fetcher,
-    role: 'index',
-    verify: (indexBytes, envelopeBytes) => verifyCatalogueIndexPair({ indexBytes, envelopeBytes, policy, now }),
-  });
-  return verified;
-}
-
 function catalogueCacheDirectory(root: string): string {
   return path.join(path.dirname(root), 'catalogue');
 }
@@ -318,23 +312,7 @@ export async function readCachedIndex(
   now: Date,
   root: string
 ): Promise<VerifiedCatalogue<CatalogueIndex> | undefined> {
-  const file = path.join(catalogueCacheDirectory(root), 'verified-pair.json');
-  try {
-    const cache = JSON.parse(fs.readFileSync(file, 'utf8')) as {
-      indexJson: string;
-      signatureJson: string;
-      highestGeneration?: number;
-    };
-    return await verifyCatalogueIndexPair({
-      indexBytes: new TextEncoder().encode(cache.indexJson),
-      envelopeBytes: new TextEncoder().encode(cache.signatureJson),
-      policy: { ...policy, highestGeneration: Math.max(policy.highestGeneration ?? 0, cache.highestGeneration ?? 0) },
-      now,
-      allowExpired: true,
-    });
-  } catch {
-    return undefined;
-  }
+  return cachedCatalogueIndex(root, policy, now);
 }
 
 function findCatalogueEntry(
@@ -380,6 +358,22 @@ interface BlacklistCache {
   blacklistJson: string;
   signatureJson: string;
   verifiedAt: string;
+  generation?: number;
+}
+
+function blacklistPolicy(cacheFile: string, policy: CatalogueTrustPolicy, now: Date): CatalogueTrustPolicy {
+  let cache: BlacklistCache;
+  try {
+    cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as BlacklistCache;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return policy;
+    throw error;
+  }
+  const generation = cache.generation ?? (JSON.parse(cache.blacklistJson) as CatalogueBlacklist).generation;
+  if (!Number.isSafeInteger(generation) || generation < 1) throw new Error('Invalid cached blacklist generation');
+  if (!Number.isFinite(Date.parse(cache.verifiedAt)) || now.getTime() < Date.parse(cache.verifiedAt))
+    throw new Error('System clock moved backwards or blacklist cache clock is invalid');
+  return { ...policy, highestGeneration: Math.max(policy.highestGeneration ?? 0, generation) };
 }
 
 async function readCachedBlacklist(
@@ -432,7 +426,8 @@ export async function loadBlacklist(options: {
 }): Promise<VerifiedCatalogue<CatalogueBlacklist> | null> {
   const directory = catalogueCacheDirectory(options.root);
   const cacheFile = path.join(directory, 'verified-blacklist.json');
-  const cached = await readCachedBlacklist(cacheFile, options.policy, options.now);
+  const policy = blacklistPolicy(cacheFile, options.policy, options.now);
+  const cached = await readCachedBlacklist(cacheFile, policy, options.now);
   if (cached && !cached.stale && !blacklistRefreshDue(cached, options.now)) {
     assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
     return cached;
@@ -447,18 +442,20 @@ export async function loadBlacklist(options: {
         verifyCatalogueBlacklistPair({
           blacklistBytes,
           envelopeBytes,
-          policy: {
-            ...options.policy,
-            highestGeneration: Math.max(options.policy.highestGeneration ?? 0, cached?.payload.generation ?? 0),
-          },
+          policy,
           now: options.now,
         }),
     });
-    atomicJson(cacheFile, {
-      blacklistJson: new TextDecoder().decode(payloadBytes),
-      signatureJson: new TextDecoder().decode(envelopeBytes),
-      generation: verified.payload.generation,
-      verifiedAt: verified.verifiedAt,
+    withProfilesLock(`${cacheFile}.lock`, () => {
+      const current = blacklistPolicy(cacheFile, policy, options.now);
+      if (verified.payload.generation < Math.max(current.generationFloor, current.highestGeneration ?? 0))
+        throw new Error('Blacklist generation regressed during refresh');
+      atomicJson(cacheFile, {
+        blacklistJson: new TextDecoder().decode(payloadBytes),
+        signatureJson: new TextDecoder().decode(envelopeBytes),
+        generation: verified.payload.generation,
+        verifiedAt: verified.verifiedAt,
+      });
     });
     return verified;
   } catch (networkError) {

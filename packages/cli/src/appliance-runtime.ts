@@ -397,9 +397,14 @@ async function runtimeRun(args: string[]): Promise<void> {
   const originalBundlePath = installed?.bundlePath ?? inputPath;
   let opened: VerifiedRuntimeOpenCopy | null = null;
   try {
-    opened = stageAndVerifyRuntimeOpenCopy(originalBundlePath, installed?.digest);
-    const { loaded, bundlePath } = opened;
     const now = new Date();
+    const index = await readCachedIndex(PINNED_CATALOGUE_TRUST, now, runtimeRoot());
+    opened = stageAndVerifyRuntimeOpenCopy(originalBundlePath, installed?.digest, undefined, (keyId) =>
+      index && !index.stale
+        ? index.payload.entries.find((entry) => entry.publisher.keyId === keyId)?.publisher.publicKey
+        : undefined
+    );
+    const { loaded, bundlePath } = opened;
     const blacklist = await loadBlacklist({
       fetcher: fetch,
       policy: PINNED_CATALOGUE_TRUST,
@@ -418,7 +423,6 @@ async function runtimeRun(args: string[]): Promise<void> {
       );
     }
 
-    const index = await readCachedIndex(PINNED_CATALOGUE_TRUST, now, runtimeRoot());
     const evidence = findLocalEvidence(index, bundlePath);
     if (installed?.verification.indexBound) {
       const expectedGeneration = installed.verification.indexBound.generation;
@@ -720,7 +724,8 @@ export interface VerifiedRuntimeOpenCopy {
 export function stageAndVerifyRuntimeOpenCopy(
   source: string,
   expectedDigest?: string,
-  directory = path.join(runtimeRoot(), 'preopen')
+  directory = path.join(runtimeRoot(), 'preopen'),
+  resolvePublicKey?: (keyId: string) => string | undefined
 ): VerifiedRuntimeOpenCopy {
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   fs.chmodSync(directory, 0o700);
@@ -735,9 +740,7 @@ export function stageAndVerifyRuntimeOpenCopy(
     if (bounded.classification !== 'runnable') {
       throw new Error('runtime run requires a manifest v2 runnable bundle');
     }
-    const loaded = verifyBundle(destination, {
-      resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
-    });
+    const loaded = verifyBundle(destination, { resolvePublicKey });
     if (expectedDigest && loaded.digest !== expectedDigest) {
       throw new Error('installed bundle integrity check failed for the exact immutable pre-open copy');
     }
@@ -1027,9 +1030,7 @@ export function rewriteEffectivePolicyAfterRevocation(
   if (!runtime) return;
   const manifest = dependencies.readManifest
     ? dependencies.readManifest(runtime.bundlePath)
-    : verifyBundle(runtime.bundlePath, {
-        resolvePublicKey: (keyId) => PINNED_CATALOGUE_TRUST.keys[keyId],
-      }).manifest;
+    : verifyBundle(runtime.bundlePath).manifest;
   const grants = dependencies.readCurrentGrants
     ? dependencies.readCurrentGrants(appId)
     : (latestEntitlement(readEntitlementStore().records, appId)?.grants ?? []);

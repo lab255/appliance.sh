@@ -1,8 +1,8 @@
+import { loadCatalogueIndex } from './utils/catalogue-index';
+import { runtimeRoot } from './utils/runtime-registry';
 import {
   PINNED_CATALOGUE_TRUST,
-  fetchCataloguePair,
   freeCatalogueEntries,
-  verifyCatalogueIndexPair,
   type CatalogueEntry,
   type CatalogueTrustPolicy,
 } from '@appliance.sh/sdk';
@@ -20,22 +20,17 @@ function catalogueOrigin(): string {
 
 export async function searchCatalogue(
   query: string,
-  options: { origin?: string; fetch?: typeof fetch; policy?: CatalogueTrustPolicy; now?: Date } = {}
+  options: { root?: string; origin?: string; fetch?: typeof fetch; policy?: CatalogueTrustPolicy; now?: Date } = {}
 ): Promise<{ entries: CatalogueEntry[]; stale: boolean; verifiedAt: string }> {
   const origin = (options.origin ?? catalogueOrigin()).replace(/\/$/, '');
   const fetcher = options.fetch ?? fetch;
-  const { verified } = await fetchCataloguePair({
+  const verified = await loadCatalogueIndex({
+    root: options.root ?? runtimeRoot(),
     origin,
     fetch: fetcher,
-    role: 'index',
-    verify: (indexBytes, envelopeBytes) =>
-      verifyCatalogueIndexPair({
-        indexBytes,
-        envelopeBytes,
-        policy: options.policy ?? PINNED_CATALOGUE_TRUST,
-        now: options.now,
-        allowExpired: true,
-      }),
+    policy: options.policy ?? PINNED_CATALOGUE_TRUST,
+    now: options.now ?? new Date(),
+    allowExpired: true,
   });
   const needle = query.trim().toLocaleLowerCase();
   const entries = freeCatalogueEntries(verified.payload).filter((entry) => {

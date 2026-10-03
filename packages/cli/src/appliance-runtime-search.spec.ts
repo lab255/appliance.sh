@@ -1,3 +1,9 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach } from 'vitest';
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'catalogue-search-'));
+afterEach(() => fs.rmSync(directory, { recursive: true, force: true }));
 import { getPublicKeyAsync, signAsync } from '@noble/ed25519';
 import { catalogueSigningInput, type CatalogueIndex, type CatalogueTrustPolicy } from '@appliance.sh/sdk';
 import { expect, it } from 'vitest';
@@ -40,6 +46,7 @@ it('searches only free entries after verifying the pair', async () => {
 
   await expect(
     searchCatalogue('', {
+      root: path.join(directory, 'runtime'),
       origin: 'https://example.test',
       fetch: fetcher,
       policy,
