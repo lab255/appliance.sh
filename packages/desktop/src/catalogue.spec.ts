@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import { canonicaliseJson, verifyCatalogueIndexPair } from '@appliance.sh/sdk';
 import { fetchDesktopCatalogue } from './catalogue';
 
-it('fetches and verifies a producer-signed snapshot and preserves the native cache floors', async () => {
+it('verifies a producer-signed snapshot with platform Link headers and preserves the native cache floors', async () => {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const raw = Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64url');
   const keyId = `ed25519:sha256:${createHash('sha256').update(raw).digest('hex')}`;
@@ -40,7 +40,7 @@ it('fetches and verifies a producer-signed snapshot and preserves the native cac
       : new Response(canonicaliseJson(payload) + '\n', {
           headers: {
             'X-Appliance-Catalogue-Snapshot': snapshot,
-            Link: `</catalogue/index.json.sig?snapshot=${snapshot}>; rel="signature"`,
+            Link: `</_next/x.js>; rel=preload; title="platform, preload", </catalogue/index.json.sig?snapshot=${snapshot}>; rel="signature"`,
           },
         })
   );

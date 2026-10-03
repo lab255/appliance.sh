@@ -249,3 +249,20 @@ it('enforces the producer validity caps in the exported wire schemas too', async
     }).success
   ).toBe(false);
 });
+
+it('rejects bundle URL credentials while retaining explicit HTTPS ports', async () => {
+  const { catalogueEntrySchema } = await import('./catalogue');
+  const entry = index().entries[0]!;
+  for (const url of [
+    'https://user@example.test/app.zip',
+    'https://user:password@example.test/app.zip',
+    'https://:password@example.test/app.zip',
+    'https://',
+  ]) {
+    expect(catalogueEntrySchema.safeParse({ ...entry, bundle: { ...entry.bundle, url } }).success).toBe(false);
+  }
+  expect(
+    catalogueEntrySchema.safeParse({ ...entry, bundle: { ...entry.bundle, url: 'https://example.test:8443/app.zip' } })
+      .success
+  ).toBe(true);
+});

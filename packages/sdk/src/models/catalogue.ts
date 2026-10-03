@@ -32,7 +32,20 @@ export const catalogueEntrySchema = z.strictObject({
   license: z.string().min(1).max(100),
   paid: z.boolean(),
   categories: z.array(z.string().min(1).max(50)).max(20).default([]),
-  bundle: z.strictObject({ url: z.url().startsWith('https://'), digest }),
+  bundle: z.strictObject({
+    url: z
+      .url()
+      .startsWith('https://')
+      .refine((value) => {
+        try {
+          const url = new URL(value);
+          return !url.username && !url.password;
+        } catch {
+          return false;
+        }
+      }, 'bundle URL must not contain credentials'),
+    digest,
+  }),
   publisher: cataloguePublisherSchema,
 });
 

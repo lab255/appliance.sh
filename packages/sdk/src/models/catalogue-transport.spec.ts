@@ -21,7 +21,10 @@ it.each(['missing', 'mismatch'])('retries a complete latest pair exactly once on
 it('rejects untrusted snapshot links and malformed IDs without fetching them', async () => {
   for (const headers of [
     { 'X-Appliance-Catalogue-Snapshot': '../evil' },
-    { 'X-Appliance-Catalogue-Snapshot': snapshot, Link: '<https://evil.test/signature>' },
+    {
+      'X-Appliance-Catalogue-Snapshot': snapshot,
+      Link: `<https://evil.test/catalogue/index.json.sig?snapshot=${snapshot}>`,
+    },
   ]) {
     const fetcher = vi.fn(async () => new Response('{}', { headers }));
     await expect(
@@ -49,4 +52,40 @@ it('computes cutover above the reviewed legacy maximum and refuses unsafe invent
   expect(catalogueCutoverFloor(1)).toBe(2);
   expect(catalogueCutoverFloor(202610030001)).toBe(202610030002);
   for (const value of [0, -1, NaN, 1.5, Number.MAX_SAFE_INTEGER]) expect(() => catalogueCutoverFloor(value)).toThrow();
+});
+
+it.each([
+  '</_next/x.js>; rel=preload',
+  '</_next/x.js>; title="preload, </catalogue/index.json.sig?snapshot=wrong>"; rel=preload',
+  String.raw`</_next/x.js>; title="escaped \" quote, </catalogue/index.json.sig?snapshot=wrong>"; rel=preload`,
+  '<https://other.test/unrelated>; rel=preload',
+])('ignores unrelated platform links: %s', async (platformLink) => {
+  const link = `${platformLink}, </catalogue/index.json.sig?snapshot=${snapshot}>; rel="signature", </_next/y.js>; rel=preload`;
+  const fetcher = vi.fn(
+    async () => new Response('{}', { headers: { 'X-Appliance-Catalogue-Snapshot': snapshot, Link: link } })
+  );
+  await expect(
+    fetchCataloguePair({ origin: 'https://example.test', role: 'index', fetch: fetcher, verify: async () => true })
+  ).resolves.toMatchObject({ verified: true });
+  expect(fetcher.mock.calls).toHaveLength(2);
+});
+
+it.each([
+  `https://evil.test/catalogue/index.json.sig?snapshot=${snapshot}`,
+  '/catalogue/index.json.sig?snapshot=wrong',
+  `/catalogue/index.json.sig?snapshot=${snapshot}#fragment`,
+])('rejects a wrong signature target alongside unrelated and valid links: %s', async (target) => {
+  const fetcher = vi.fn(
+    async () =>
+      new Response('{}', {
+        headers: {
+          'X-Appliance-Catalogue-Snapshot': snapshot,
+          Link: `</_next/x.js>; rel=preload, </catalogue/index.json.sig?snapshot=${snapshot}>; rel="signature", <${target}>; rel="signature"`,
+        },
+      })
+  );
+  await expect(
+    fetchCataloguePair({ origin: 'https://example.test', role: 'index', fetch: fetcher, verify: async () => true })
+  ).rejects.toThrow('Invalid catalogue signature link');
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

@@ -18,7 +18,9 @@ export interface CatalogueTrustPolicy {
  * Owner: run `node scripts/catalogue-public-key.mjs` with the private key already in
  * APPLIANCE_INDEX_SIGNING_KEY; review its public output and root authorization, then
  * fill keys below. Freeze legacy publication and inventory every signed production
- * artifact before filling legacyMaximum (1 only when none existed). Record the
+ * artifact before filling legacyMaximum (1 only when none existed). Include TIME-BASED
+ * generations, such as fixture-era epoch-seconds previews around 1.7e9, not just edit counts.
+ * Record the
  * computed generationFloor with the client release and use the same floor in TP1.
  * Do not activate production routes until that client release and Sasha's gate pass.
  */

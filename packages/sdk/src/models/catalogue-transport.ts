@@ -28,6 +28,37 @@ async function readBounded(response: Response, remaining: number): Promise<Uint8
   return bytes;
 }
 
+/** Link fields may contain quoted commas (and commas inside URI references). */
+function splitLinks(value: string): string[] {
+  const entries: string[] = [];
+  let start = 0;
+  let quoted = false;
+  let escaped = false;
+  let target = false;
+  for (let i = 0; i < value.length; i++) {
+    const character = value[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quoted && character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (!target && character === '"') quoted = !quoted;
+    if (!quoted) {
+      if (character === '<') target = true;
+      else if (character === '>') target = false;
+      else if (character === ',' && !target) {
+        entries.push(value.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+  }
+  entries.push(value.slice(start).trim());
+  return entries;
+}
+
 /** Fetch immutable pairs, retrying the entire latest lookup once on 404 or signature mismatch. */
 export async function fetchCataloguePair<T>(options: {
   origin: string;
@@ -47,11 +78,19 @@ export async function fetchCataloguePair<T>(options: {
       const signatureUrl = new URL(`${payloadUrl.pathname}.sig`, payloadUrl);
       signatureUrl.searchParams.set('snapshot', snapshot);
       // Never follow an arbitrary Link target, even if a server supplies one.
-      const link = payload.headers.get('Link');
-      if (link) {
-        const target = /^<([^>]+)>(?:;.*)?$/.exec(link)?.[1];
-        if (!target || new URL(target, payloadUrl).href !== signatureUrl.href)
-          throw new Error('Invalid catalogue signature link');
+      for (const link of splitLinks(payload.headers.get('Link') ?? '')) {
+        const target = /^<([^>]+)>/.exec(link)?.[1];
+        if (!target) continue;
+        let linkedUrl: URL;
+        try {
+          linkedUrl = new URL(target, payloadUrl);
+        } catch {
+          continue;
+        }
+        // Platforms may append unrelated preload/early-hint links. Only the
+        // canonical signature path makes a claim about this snapshot's pair.
+        if (linkedUrl.pathname !== signatureUrl.pathname) continue;
+        if (linkedUrl.href !== signatureUrl.href) throw new Error('Invalid catalogue signature link');
       }
       const payloadBytes = await readBounded(payload, cap);
       const signature = await fetcher(signatureUrl.href, {
