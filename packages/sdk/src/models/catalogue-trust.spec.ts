@@ -139,13 +139,31 @@ describe('catalogue trust', () => {
   });
 });
 
-it('rejects the public RFC0001 fixture identity in production defaults', async () => {
-  const options = await pair(index());
-  const envelope = JSON.parse(new TextDecoder().decode(options.envelopeBytes));
-  envelope.keyId = 'ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c';
+it('rejects a valid RFC0001 fixture-signed pair in production defaults', async () => {
+  const payload = index();
+  const options = await pair(payload);
+  const fixturePrivate = Uint8Array.from({ length: 32 }, (_, i) => i);
+  const fixturePublic = await getPublicKeyAsync(fixturePrivate);
+  const fixtureId = `ed25519:sha256:${await sha256(fixturePublic)}`;
+  expect(fixtureId).toBe('ed25519:sha256:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c');
+  const envelopeBytes = encoder.encode(
+    JSON.stringify({
+      alg: 'ed25519',
+      keyId: fixtureId,
+      role: 'index',
+      sig: base64url(await signAsync(await catalogueSigningInput(payload, 'index'), fixturePrivate)),
+    })
+  );
   await expect(
-    verifyCatalogueIndexPair({ ...options, policy: undefined, envelopeBytes: encoder.encode(JSON.stringify(envelope)) })
-  ).rejects.toMatchObject({ code: 'unknown-key' });
+    verifyCatalogueIndexPair({
+      ...options,
+      envelopeBytes,
+      policy: { keys: { [fixtureId]: `ed25519:${base64url(fixturePublic)}` }, generationFloor: 2 },
+    })
+  ).resolves.toMatchObject({ payload });
+  await expect(verifyCatalogueIndexPair({ ...options, envelopeBytes, policy: undefined })).rejects.toMatchObject({
+    code: 'unknown-key',
+  });
 });
 
 it('accepts either single signer during release-distributed dual-pin overlap', async () => {

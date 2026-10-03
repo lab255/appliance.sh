@@ -459,16 +459,18 @@ export async function loadBlacklist(options: {
     });
     return verified;
   } catch (networkError) {
-    if (cached) {
-      assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
-      if (cached.stale) {
+    // Another process may have advanced the role floor during this request.
+    const fallback = await readCachedBlacklist(cacheFile, blacklistPolicy(cacheFile, policy, options.now), options.now);
+    if (fallback) {
+      assertBlacklistStaleness(fallback, options.now, options.networkInstall, options.preOpen);
+      if (fallback.stale) {
         console.error(
           chalk.yellow(
             'Warning: unsafe-app blacklist refresh failed; evaluating the last verified stale blacklist for this operation.'
           )
         );
       }
-      return cached;
+      return fallback;
     }
     if (options.networkInstall) {
       const detail = networkError instanceof Error ? networkError.message : '';

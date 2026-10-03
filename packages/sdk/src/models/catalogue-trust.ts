@@ -15,6 +15,12 @@ export interface CatalogueTrustPolicy {
 /** OWNER-FILL release manifest: review root authorization and legacy inventory before enabling.
  * Empty pins deliberately disable catalogue trust; never substitute a test identity.
  * Rotation ships old + new records here, each envelope still has exactly one signer.
+ * Owner: run `node scripts/catalogue-public-key.mjs` with the private key already in
+ * APPLIANCE_INDEX_SIGNING_KEY; review its public output and root authorization, then
+ * fill keys below. Freeze legacy publication and inventory every signed production
+ * artifact before filling legacyMaximum (1 only when none existed). Record the
+ * computed generationFloor with the client release and use the same floor in TP1.
+ * Do not activate production routes until that client release and Sasha's gate pass.
  */
 export const CATALOGUE_RELEASE_MANIFEST: {
   readonly keys: Readonly<Record<string, string>>;
