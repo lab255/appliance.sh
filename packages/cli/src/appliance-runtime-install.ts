@@ -200,14 +200,14 @@ export async function installBundle(source: string, options: InstallBundleOption
     const destination = immutableBundlePath(verified.digest, root);
     fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
     if (fs.existsSync(destination)) {
-      const existing = verifyBundle(destination, { resolvePublicKey: (keyId) => policy.keys[keyId] });
+      const existing = verifyBundle(destination);
       if (existing.digest !== verified.digest) throw new Error('Existing immutable bundle copy has the wrong digest.');
     } else {
       fs.renameSync(staging, destination);
       keepStaging = true;
       fs.chmodSync(destination, 0o400);
     }
-    const immutable = verifyBundle(destination, { resolvePublicKey: (keyId) => policy.keys[keyId] });
+    const immutable = verifyBundle(destination);
     if (immutable.digest !== verified.digest) throw new Error('Immutable bundle copy changed during installation.');
 
     const installed: InstalledApp = {
@@ -371,11 +371,16 @@ function blacklistPolicy(cacheFile: string, policy: CatalogueTrustPolicy, now: D
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return policy;
     throw error;
   }
-  const generation = cache.generation ?? (JSON.parse(cache.blacklistJson) as CatalogueBlacklist).generation;
-  if (!Number.isSafeInteger(generation) || generation < 1) throw new Error('Invalid cached blacklist generation');
+  const generation = cache.generation;
+  if (generation !== undefined && (!Number.isSafeInteger(generation) || generation < 1))
+    throw new Error('Invalid cached blacklist generation');
   if (!Number.isFinite(Date.parse(cache.verifiedAt)) || now.getTime() < Date.parse(cache.verifiedAt))
     throw new Error('System clock moved backwards or blacklist cache clock is invalid');
-  return { ...policy, highestGeneration: Math.max(policy.highestGeneration ?? 0, generation) };
+  // Legacy caches must recover their generation by verifying the signed pair,
+  // never by parsing unverified payload bytes into a rollback floor.
+  return generation === undefined
+    ? policy
+    : { ...policy, highestGeneration: Math.max(policy.highestGeneration ?? 0, generation) };
 }
 
 async function readCachedBlacklist(
@@ -428,8 +433,12 @@ export async function loadBlacklist(options: {
 }): Promise<VerifiedCatalogue<CatalogueBlacklist> | null> {
   const directory = catalogueCacheDirectory(options.root);
   const cacheFile = path.join(directory, 'verified-blacklist.json');
-  const policy = blacklistPolicy(cacheFile, options.policy, options.now);
-  const cached = await readCachedBlacklist(cacheFile, policy, options.now);
+  const storedPolicy = blacklistPolicy(cacheFile, options.policy, options.now);
+  const cached = await readCachedBlacklist(cacheFile, storedPolicy, options.now);
+  const policy = {
+    ...storedPolicy,
+    highestGeneration: Math.max(storedPolicy.highestGeneration ?? 0, cached?.payload.generation ?? 0),
+  };
   if (cached && !cached.stale && !blacklistRefreshDue(cached, options.now)) {
     assertBlacklistStaleness(cached, options.now, options.networkInstall, options.preOpen);
     return cached;

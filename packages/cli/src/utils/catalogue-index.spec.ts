@@ -122,6 +122,21 @@ it('keeps blacklist generations separate from index generations and pins exact b
     'https://example.test/catalogue/blacklist.json',
     `https://example.test/catalogue/blacklist.json.sig?snapshot=${'b'.repeat(64)}`,
   ]);
+  const cacheFile = path.join(directory, 'catalogue', 'verified-blacklist.json');
+  const legacyCache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  delete legacyCache.generation;
+  fs.writeFileSync(cacheFile, JSON.stringify(legacyCache));
+  fetcher.mockClear();
+  await expect(loadBlacklist(options)).resolves.toMatchObject({ payload });
+  expect(fetcher).not.toHaveBeenCalled();
+  // Neither malformed JSON nor a forged high generation in an unsigned legacy
+  // payload may become a floor before the pair has been reverified.
+  for (const blacklistJson of ['not JSON', JSON.stringify({ ...payload, generation: Number.MAX_SAFE_INTEGER })]) {
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...legacyCache, blacklistJson }));
+    fetcher.mockClear();
+    await expect(loadBlacklist(options)).resolves.toMatchObject({ payload });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  }
   fetcher.mockRejectedValue(new Error('offline'));
   await expect(loadBlacklist({ ...options, now: new Date('2026-10-04') })).resolves.toMatchObject({ payload });
   await expect(loadBlacklist({ ...options, now: new Date('2026-10-02') })).rejects.toThrow('clock moved backwards');
