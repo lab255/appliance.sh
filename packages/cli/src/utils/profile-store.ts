@@ -1,3 +1,4 @@
+import { microVmGone } from './cluster-gc.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -206,6 +207,8 @@ function writeProfilesLocked(file: ProfilesFile): void {
 export interface ResolveOptions {
   /** Explicit profile name override (e.g. from a CLI --profile flag). */
   override?: string;
+  /** Logout/removal must work even when the backing VM has disappeared. */
+  allowUnavailable?: boolean;
 }
 
 export interface ResolvedProfile {
@@ -223,6 +226,9 @@ export function resolveProfile(file: ProfilesFile, opts: ResolveOptions = {}): R
   if (!name) return null;
   const profile = file.profiles[name];
   if (!profile) return null;
+  if (!opts.allowUnavailable && microVmGone(name, undefined, profile.apiUrl)) {
+    throw new Error(`Cluster "${name}" is unreachable: its microVM is gone. Run appliance cluster rm ${name}.`);
+  }
   return { name, profile };
 }
 

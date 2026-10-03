@@ -1,3 +1,5 @@
+mod cluster_gc;
+mod profiles_lock;
 mod terminal;
 
 #[cfg(not(any(windows, target_os = "macos")))]
@@ -1627,8 +1629,9 @@ fn build_ingested_config(
 /// process that performs its own read-modify-write of profiles.json
 /// (e.g. `appliance keys rotate`). The CLI now takes a cross-process
 /// advisory lockfile (profiles.json.lock) around its own RMW cycles;
-/// the remaining piece is having THIS desktop adopt the same lockfile —
-/// see docs/credentials.md. Until it does, a desktop↔CLI interleave is
+/// get_config's GC also takes that lock before re-reading profiles. Other
+/// desktop write paths have not yet adopted it — see docs/credentials.md.
+/// On those paths, a desktop↔CLI interleave is
 /// still last-writer-wins (both sides do atomic temp-file renames, so
 /// neither can read a half-written file; the residual risk is purely a
 /// lost write on interleaved full read→write cycles).
@@ -1835,12 +1838,59 @@ fn derive_name_from_url(url: &str) -> String {
 #[tauri::command]
 fn get_config(app: AppHandle) -> Result<HostConfig, HostError> {
     let _guard = config_lock();
+    let home = home_dir().ok_or_else(|| std::io::Error::other("home unavailable"))?;
+    // Lock before re-reading either registry. Hold through GC decisions,
+    // shared-file replacement, mirroring and keychain cleanup.
+    let _profiles_guard = profiles_lock::ProfilesLock::acquire(&home)?;
     let mut persisted = read_persisted_config(&app)?;
     migrate_legacy(&app, &mut persisted)?;
+
+    // Consult the engine registry before exposing any signing credentials.
+    let mut shared = read_shared_profiles();
+    let mut profiles: BTreeMap<String, String> = persisted
+        .clusters
+        .iter()
+        .map(|c| (c.id.clone(), c.api_server_url.clone()))
+        .collect();
+    if let Some(shared) = &shared {
+        // Shared profiles are authoritative, including a remote login named local.
+        profiles.extend(
+            shared.profiles.iter().map(|(id, p)| (id.clone(), p.api_url.clone())),
+        );
+    }
+    cluster_gc::add_default_aliases(&mut profiles);
+    let cluster_gc::GcDecisions { gone, unavailable } = cluster_gc::classify_profiles(&home, &profiles);
+    if !gone.is_empty() {
+        persisted.clusters.retain(|c| !gone.contains(&c.id));
+        if persisted
+            .selected_cluster_id
+            .as_ref()
+            .is_some_and(|id| gone.contains(id))
+        {
+            persisted.selected_cluster_id = None;
+        }
+        // Remove CLI-owned entries too; the usual mirror preserves them.
+        if let Some(ref mut shared) = shared {
+            shared.profiles.retain(|id, _| !gone.contains(id));
+            if shared
+                .active_profile
+                .as_ref()
+                .is_some_and(|id| gone.contains(id))
+            {
+                shared.active_profile = None;
+            }
+            write_shared_profiles(shared)?;
+        }
+        write_persisted_config(&app, &persisted)?;
+        for id in &gone {
+            delete_api_key(&cluster_keychain_account(id));
+        }
+    }
 
     let api_key = persisted
         .selected_cluster_id
         .as_deref()
+        .filter(|id| !unavailable.contains(*id))
         .and_then(|id| read_api_key(&cluster_keychain_account(id)));
 
     Ok(HostConfig {

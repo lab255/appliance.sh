@@ -1,3 +1,5 @@
+// Use the pure host contract without bootstrapping the browser router.
+import { microVmNameFromClusterId } from '../../app/src/lib/host';
 import type {
   AddClusterInput,
   AgentInfo,
@@ -94,7 +96,8 @@ type Scenario =
   | 'banner-legacy-reboot'
   | 'account-waiting'
   | 'account-failure'
-  | 'account-revoke-failed';
+  | 'account-revoke-failed'
+  | 'stale-clusters';
 
 const SCENARIO_KEY = 'mock-host:scenario';
 const ENABLED_KEY = 'mock-host:enabled';
@@ -128,6 +131,16 @@ export function mockHostEnabled(): boolean {
       if (scenario === 'journey-ledger') {
         sessionStorage.setItem(APP_MODE_KEY, 'developer');
         configureWorkspaceScenario('user-mode-no-vm');
+      }
+      if (scenario === 'stale-clusters') {
+        configureWorkspaceScenario('user-mode');
+        const state = readState();
+        const stale = { ...state.clusters[0], id: 'microvm-deleted', name: 'Deleted VM' };
+        // A different registered VM now owns this URL; GC must use identity.
+        stale.apiServerUrl = `http://api.appliance.localhost:${microVms.appliance.hostPort}`;
+        state.clusters.push(stale);
+        state.selectedClusterId = stale.id;
+        writeState(state);
       }
       if (scenario === 'first-run') sessionStorage.removeItem(APP_MODE_KEY);
       if (
@@ -744,6 +757,12 @@ export function createMockHost(): ConsoleHost {
     desktop: true,
     async getConfig(): Promise<HostConfig> {
       const state = readState();
+      state.clusters = state.clusters.filter((c) => {
+        const name = microVmNameFromClusterId(c.id, c.apiServerUrl);
+        return name === null || Boolean(microVms[name]?.exists);
+      });
+      if (!state.clusters.some((c) => c.id === state.selectedClusterId)) state.selectedClusterId = null;
+      writeState(state);
       const selected = state.clusters.find((c) => c.id === state.selectedClusterId) ?? null;
       return {
         clusters: state.clusters.map(({ apiKey: _apiKey, ...cluster }) => cluster),

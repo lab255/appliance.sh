@@ -73,7 +73,24 @@ export function vmKubeconfigPath(vmName: string): string {
  * appliance-vm.ts: the default VM owns the bare `microvm` profile, and
  * each additional VM owns `microvm-<name>`.
  */
-export function vmNameForProfile(profile: string | undefined): string | null {
+export function vmNameForProfile(profile: string | undefined, apiUrl?: string): string | null {
+  // `local` is user-selectable: only the loopback endpoint identifies the
+  // canonical default-VM profile, never a remote login with the same name.
+  if (profile === 'local' && apiUrl) {
+    try {
+      const { hostname, protocol } = new URL(apiUrl);
+      if (
+        (protocol === 'http:' || protocol === 'https:') &&
+        (hostname === 'localhost' ||
+          hostname.endsWith('.localhost') ||
+          /^127\.\d+\.\d+\.\d+$/.test(hostname) ||
+          hostname === '[::1]')
+      )
+        return DEFAULT_VM_NAME;
+    } catch {
+      /* An invalid URL is not evidence of a local VM. */
+    }
+  }
   if (!profile) return null;
   if (profile === 'microvm') return DEFAULT_VM_NAME;
   if (profile.startsWith('microvm-')) return profile.slice('microvm-'.length);

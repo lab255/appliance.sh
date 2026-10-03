@@ -542,7 +542,22 @@ export function microVmClusterId(name: string): string {
 
 /** The VM name behind a cluster id, or null if the id isn't a microVM
  *  cluster. `microvm` → `appliance`; `microvm-<name>` → `<name>`. */
-export function microVmNameFromClusterId(clusterId: string): string | null {
+export function microVmNameFromClusterId(clusterId: string, apiUrl?: string): string | null {
+  if (clusterId === 'local' && apiUrl) {
+    try {
+      const { hostname, protocol } = new URL(apiUrl);
+      if (
+        (protocol === 'http:' || protocol === 'https:') &&
+        (hostname === 'localhost' ||
+          hostname.endsWith('.localhost') ||
+          /^127\.\d+\.\d+\.\d+$/.test(hostname) ||
+          hostname === '[::1]')
+      )
+        return DEFAULT_MICROVM_NAME;
+    } catch {
+      /* Preserve remote or invalid user-named profiles. */
+    }
+  }
   if (clusterId === MICROVM_CLUSTER_ID) return DEFAULT_MICROVM_NAME;
   const prefix = `${MICROVM_CLUSTER_ID}-`;
   return clusterId.startsWith(prefix) ? clusterId.slice(prefix.length) : null;
