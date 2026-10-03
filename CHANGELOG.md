@@ -1,3 +1,13 @@
+## 1.60.4 (2026-10-03)
+
+### Bug Fixes
+
+- **auth:** stale microvm cluster gc + credential refusal on both ports ([#141](https://github.com/lab255/appliance.sh/pull/141))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.60.3 (2026-10-02)
 
 ### Bug Fixes

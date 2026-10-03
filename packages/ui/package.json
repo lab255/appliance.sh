@@ -1,6 +1,6 @@
 {
   "name": "@appliance.sh/ui",
-  "version": "1.60.3",
+  "version": "1.60.4",
   "description": "Shared Appliance UI primitives, styles, and tokens",
   "license": "MIT",
   "author": "Eliot Lim",
