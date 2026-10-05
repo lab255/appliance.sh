@@ -62,7 +62,7 @@ export function CataloguePage() {
   const installEntry = async (entry: CatalogueEntry): Promise<string> => {
     if (!host.installedApps) throw new Error('Installation is available in the Appliance desktop app.');
     try {
-      const installed = await host.installedApps.installBundle(entry.url, target);
+      const installed = await host.installedApps.installBundle(entry.bundle.url, target);
       return `${installed.name} ${installed.version} was installed.`;
     } catch (cause) {
       const prompt = parseUnknownPublisherError(cause);
@@ -82,7 +82,7 @@ export function CataloguePage() {
     if (!pending || !host.installedApps) return;
     setInstalling(true);
     try {
-      await host.installedApps.installBundle(pending.entry.url, target, { acceptUnknownPublisher: true });
+      await host.installedApps.installBundle(pending.entry.bundle.url, target, { acceptUnknownPublisher: true });
       setPending(null);
     } catch (cause) {
       console.error('[catalogue] unknown-publisher install failed', cause);
@@ -120,8 +120,7 @@ export function CataloguePage() {
   );
 }
 
-type Category = 'All' | NonNullable<CatalogueEntry['category']>;
-const CATEGORIES: Category[] = ['All', 'Productivity', 'Media', 'Data', 'Dev tools'];
+type Category = string;
 
 function relativeVerifiedAt(value: string, now = Date.now()): string {
   const elapsedSeconds = Math.max(0, Math.floor((now - Date.parse(value)) / 1000));
@@ -156,6 +155,10 @@ export function CatalogueContent({
   const [query, setQuery] = React.useState(() =>
     typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('q') ?? '')
   );
+  const CATEGORIES = [
+    'All',
+    ...new Set((data?.entries ?? []).filter((entry) => !entry.paid).flatMap((entry) => entry.categories)),
+  ];
   const [category, setCategory] = React.useState<Category>('All');
   const [installMessage, setInstallMessage] = React.useState<string | null>(null);
   const categoryRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -163,7 +166,7 @@ export function CatalogueContent({
     const needle = query.trim().toLocaleLowerCase();
     return (data?.entries ?? []).filter((entry) => {
       if (entry.paid === true) return false;
-      if (category !== 'All' && entry.category !== category) return false;
+      if (category !== 'All' && !entry.categories.includes(category)) return false;
       if (!needle) return true;
       return [entry.name, entry.description, entry.license, entry.publisher.name]
         .join('\n')
@@ -310,7 +313,7 @@ export function CatalogueContent({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {entries.map((entry) => (
                 <article
-                  key={entry.id}
+                  key={entry.appId}
                   className="flex min-h-48 flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4"
                 >
                   <div className="flex items-start justify-between gap-3">

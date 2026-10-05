@@ -10,16 +10,15 @@ import { HostProvider } from '@/providers/host-provider';
 import { CatalogueContent, CataloguePage } from '../runtime-catalogue';
 
 const entry: CatalogueEntry = vi.hoisted(() => ({
-  id: 'journal',
+  appId: 'journal',
   name: 'Journal',
   version: '1.2.0',
   description: 'Private daily notes.',
   license: 'MIT',
-  publisher: { name: 'Lab 255' },
-  tier: 'known-publisher',
-  url: 'https://journal.appliance.zip',
-  digest: `sha256:${'1'.repeat(64)}`,
-  category: 'Productivity',
+  publisher: { name: 'Lab 255', tier: 'known' as const },
+  paid: false,
+  bundle: { url: 'https://journal.appliance.zip', digest: `sha256:${'1'.repeat(64)}` },
+  categories: ['Productivity'],
 }));
 
 vi.mock('@/components/layout/workspace-switcher', () => ({
@@ -67,7 +66,7 @@ describe('CatalogueContent', () => {
     const html = renderToStaticMarkup(
       <CatalogueContent
         data={{
-          entries: [entry, { ...entry, id: 'paid-hidden', name: 'Paid Hidden', paid: true }],
+          entries: [entry, { ...entry, appId: 'paid-hidden', name: 'Paid Hidden', paid: true }],
           stale: false,
           verifiedAt: '2026-08-27T00:00:00Z',
           generation: 1,
