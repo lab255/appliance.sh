@@ -1,3 +1,13 @@
+## 1.61.0 (2026-10-05)
+
+### Features
+
+- **sdk:** canonical catalogue contract + production trust cutover (TP4) ([#142](https://github.com/lab255/appliance.sh/pull/142))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.60.4 (2026-10-03)
 
 ### Bug Fixes
