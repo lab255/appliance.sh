@@ -24,7 +24,7 @@ For the migration inventory:
 
 ### A1. Exact `styles.css` `@theme` block changes
 
-Keep every existing neutral token unless explicitly replaced below. Replace `--color-info` and the two destructive declarations at current lines 21–23, and insert the remaining declarations in `@theme`. Values are opaque by design: component recipes must not synthesize semantic backgrounds with `/5`, `/10`, `/15`, or `/40` opacity utilities.
+Keep every existing neutral token unless explicitly replaced below. Replace `--color-info` and the two destructive declarations at current lines 21–23, and insert the remaining declarations in `@theme`. Values are opaque by design: component recipes must not synthesize semantic backgrounds with `/5`, `/10`, `/15`, or `/40` opacity utilities. Interaction backgrounds must use `--color-hover`/`--color-active` (subtle/strong); the four designed semantic hovers (primary white, destructive ×2, warning) are the only exceptions — guard-enforced in `design-system.test.tsx`.
 
 ```css
 @theme {
@@ -34,6 +34,9 @@ Keep every existing neutral token unless explicitly replaced below. Replace `--c
   --color-surface: hsl(0 0% 7%);
   --color-surface-raised: hsl(0 0% 9%);
   --color-surface-overlay: hsl(0 0% 11%);
+  /* Neutral interaction fills; alias muted/accent strengths. */
+  --color-hover: hsl(0 0% 10%);
+  --color-active: hsl(0 0% 14%);
   --color-muted: hsl(0 0% 10%);
   --color-muted-foreground: hsl(0 0% 63%);
   --color-border: hsl(0 0% 18%);

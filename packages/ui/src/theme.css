@@ -11,6 +11,9 @@
   --color-surface: hsl(0 0% 7%);
   --color-surface-raised: hsl(0 0% 9%);
   --color-surface-overlay: hsl(0 0% 11%);
+  /* Preserve the existing subtle and stronger neutral interaction fills. */
+  --color-hover: hsl(0 0% 10%);
+  --color-active: hsl(0 0% 14%);
   --color-muted: hsl(0 0% 10%);
   --color-muted-raised: hsl(0 0% 15%);
   --color-muted-foreground: hsl(0 0% 63%);

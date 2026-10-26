@@ -14,9 +14,9 @@ const buttonVariants = cva(
         // secondary borders brighten on hover instead of filling.
         default: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] shadow-sm hover:bg-white',
         outline:
-          'border border-[var(--color-border)] bg-transparent text-[var(--color-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-accent)]',
+          'border border-[var(--color-border)] bg-transparent text-[var(--color-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-active)]',
         ghost:
-          'text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)]',
+          'text-[var(--color-muted-foreground)] hover:bg-[var(--color-active)] hover:text-[var(--color-accent-foreground)]',
         destructive:
           'border border-[var(--color-destructive-border)] bg-transparent text-[var(--color-destructive-foreground)] hover:bg-[var(--color-destructive-background)]',
       },

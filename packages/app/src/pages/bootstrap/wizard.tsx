@@ -217,7 +217,7 @@ function ModeCard({
       onClick={available ? onClick : undefined}
       disabled={!available}
       aria-describedby={!available ? `${title.toLowerCase().replaceAll(' ', '-')}-disabled` : undefined}
-      className="flex flex-col items-start gap-2 rounded-md border border-[var(--color-border)] p-4 text-left transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex flex-col items-start gap-2 rounded-md border border-[var(--color-border)] p-4 text-left transition-colors hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Icon className="h-6 w-6 text-[var(--color-muted-foreground)]" aria-hidden />
       <div className="text-sm font-semibold">{title}</div>
