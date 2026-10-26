@@ -340,7 +340,7 @@ function statusSpan(text: string, className?: string, ariaHidden = false): HTMLS
 }
 
 const APP_WINDOW_CSS = `
-  :root { color-scheme: dark; font-family: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif; }
+  :root { color-scheme: dark; font-family: var(--font-sans); }
   * { box-sizing: border-box; }
   html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; background: hsl(0 0% 4%); color: hsl(0 0% 93%); }
   .appliance-app-window { display: grid; grid-template-rows: minmax(0, 1fr) 28px; width: 100%; height: 100%; }
