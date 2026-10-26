@@ -28,8 +28,8 @@
     "clean": "rm -rf ./dist"
   },
   "dependencies": {
-    "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource-variable/inter": "5.2.8",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@radix-ui/react-popover": "^1.1.23",
@@ -47,6 +47,7 @@
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "fontkit": "^2.0.4",
     "jsdom": "26.1.0",
     "motion": "13.4.4",
     "react": "^19.0.0",
