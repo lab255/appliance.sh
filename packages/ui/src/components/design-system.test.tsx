@@ -190,13 +190,13 @@ describe('Motion contract', () => {
       ['base', 'moderate', 0.16, 0.12, 0],
       ['slow', 'slow', 0.24, 0.16, 0.12],
     ] as const) {
-      expect(spring[ffTier]).toEqual({
+      expect(motionTokens[tier]).toEqual({
         type: 'spring',
         duration,
         bounce,
         exit: { type: 'tween', duration: exitDuration },
       });
-      expect(motionTokens[tier]).toBe(spring[ffTier]);
+      expect(spring[ffTier]).toMatchObject({ type: 'spring', duration, bounce, exit: { duration: exitDuration } });
       expect(exitFallbackMs(spring[ffTier])).toBe(Math.round(exitDuration * 1000) + 100);
     }
     expect(selectTransition(false).type).toBe('spring');

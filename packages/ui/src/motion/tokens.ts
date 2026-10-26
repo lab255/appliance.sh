@@ -1,9 +1,12 @@
 import { spring } from '../lib/springs.js';
 
-// JS tiers alias the FF source; "base" is our name for FF's "moderate".
+// JS tiers wrap the pristine FF source; "base" is our name for FF's "moderate".
 // CSS durations/eases remain in theme.css, checked by generate-motion.mjs.
+const tier = <T extends { exit: { duration: number } }>(t: T) =>
+  ({ ...t, exit: { type: 'tween', ...t.exit } }) as const;
+
 export const motionTokens = {
-  fast: spring.fast,
-  base: spring.moderate,
-  slow: spring.slow,
+  fast: tier(spring.fast),
+  base: tier(spring.moderate),
+  slow: tier(spring.slow),
 } as const;
