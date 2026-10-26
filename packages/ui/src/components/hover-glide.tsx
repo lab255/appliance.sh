@@ -10,6 +10,7 @@ type Rect = { x: number; y: number; width: number; height: number };
 
 /** One measured highlight per list. Mark rows with data-hover-glide-item.
  * Gaps remain inert, and nested controls keep their own click/focus behavior.
+ * The glide is pointer-only; keyboard users rely on the existing focus-visible rings — deliberate.
  * Transforms need only domAnimation; no shared-layout feature bundle is loaded.
  */
 export function HoverGlide({
@@ -57,6 +58,7 @@ export function HoverGlide({
       clear();
       return;
     }
+    if (row === active.current) return;
     active.current = row;
     measure();
   };
