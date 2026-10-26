@@ -3,7 +3,7 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans);
   /* Crisp text on dark surfaces — the difference between a scaffold and
-     a polished product. Matches Vercel/Geist rendering. */
+     a polished product. Matches Vercel-style antialiased rendering. */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

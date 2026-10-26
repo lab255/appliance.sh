@@ -1,7 +1,8 @@
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
 @import './theme.css';
-@import '@fontsource-variable/geist';
+/* Explicit full-axis build: the default Inter import is weight-only. */
+@import '@fontsource-variable/inter/standard.css';
 @import '@fontsource-variable/geist-mono';
 @import 'tailwindcss/preflight.css' layer(base);
 @import './base.css';
@@ -60,7 +61,7 @@
 }
 .ui-overlay-fast[data-state='closed'],
 .ui-dialog-scrim[data-state='closed'] {
-  animation: ui-overlay-out var(--duration-fast) var(--ease-out-quart);
+  animation: ui-overlay-out var(--duration-fast-exit) var(--ease-out-quart);
   animation-fill-mode: forwards;
 }
 .ui-dialog-content[data-state='open'] {
@@ -81,7 +82,7 @@
 
 /* Content and scrim remain separate so non-modal dialogs and forceMount work. */
 .ui-dialog-content[data-state='closed'] {
-  animation: ui-overlay-out var(--duration-fast) var(--ease-out-quart);
+  animation: ui-overlay-out var(--duration-base-exit) var(--ease-out-quart);
   animation-fill-mode: forwards;
 }
 .ui-dialog-content[data-immediate][data-state='closed'] {

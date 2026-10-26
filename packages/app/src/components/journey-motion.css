@@ -17,6 +17,9 @@
 }
 .journey-reveal {
   animation: journey-settle var(--duration-base) var(--ease-out-quart) backwards;
+  /* 80ms stagger step verified against the 160ms settle + 240ms enter (frame-by-frame,
+     2026-10-27): the cascade reads top-down only at this ratio — retiming either value
+     requires re-verifying the composition, not just the scale. */
   animation-delay: calc(var(--journey-order, 0) * var(--duration-fast));
 }
 .journey-hosting {
