@@ -157,6 +157,17 @@ import { SkeletonSwap } from './skeleton-swap.js';
 import { Skeleton } from './skeleton.js';
 
 describe('Motion contract', () => {
+  it('keeps base transitions on the motion token scale', () => {
+    const base = readFileSync(new URL('../base.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const transitions = [...base.matchAll(/\btransition(?:-[\w-]+)?\s*:\s*([^;}]+)/g)];
+    expect(transitions.length).toBeGreaterThan(0);
+    for (const [, value] of transitions) {
+      expect(value).not.toMatch(/(?<![\w-])(?:\d*\.)?\d+m?s\b/i);
+      expect(value.replace(/var\(--(?:duration|ease)-[\w-]+\)/g, '')).not.toMatch(
+        /(?<![\w-])(ease(-in|-out|-in-out)?|linear|step-start|step-end|steps|cubic-bezier)\(?\b/
+      );
+    }
+  });
   it('keeps the CSS lane and exported CSS mirror in milliseconds', () => {
     const theme = readFileSync(new URL('../theme.css', import.meta.url), 'utf8');
     const exported = readFileSync(new URL('../../dist/tokens.css', import.meta.url), 'utf8');
