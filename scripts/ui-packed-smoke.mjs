@@ -55,7 +55,26 @@ function auditPackage(installed) {
   const css = readFileSync(join(installed, 'dist/styles.css'), 'utf8');
   assert(!/@theme|@source|@tailwind/.test(css));
   const fonts = [...css.matchAll(/url\((?:["'])?(\.\/assets\/[^)"']+)/g)];
-  assert.equal(fonts.length, 11);
+  // Offline font composition: seven Inter sans subsets and six Geist Mono subsets.
+  const expectedFaces = { 'Inter Variable': 7, 'Geist Mono Variable': 6 };
+  const faces = {};
+  for (const [rule] of css.matchAll(/@font-face\s*\{[^}]*\}/g)) {
+    const family = rule
+      .match(/font-family\s*:\s*([^;]+)/)?.[1]
+      .trim()
+      .replace(/["']/g, '');
+    faces[family] = (faces[family] ?? 0) + 1;
+  }
+  assert.deepEqual(
+    faces,
+    expectedFaces,
+    'Packed CSS must contain seven Inter Variable and six Geist Mono Variable faces'
+  );
+  assert.equal(
+    fonts.length,
+    Object.values(expectedFaces).reduce((sum, count) => sum + count, 0),
+    'Each font face must reference a local asset'
+  );
   for (const [, font] of fonts) readFileSync(join(installed, 'dist', font));
   const tokens = readFileSync(join(installed, 'dist/tokens.css'), 'utf8');
   const theme = readFileSync(join(installed, 'dist/theme.css'), 'utf8');
