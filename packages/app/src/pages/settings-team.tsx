@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Copy, Link2, Loader2, Trash2, UserPlus } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
+import { FriendlyError } from '@/components/friendly-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
@@ -198,7 +199,7 @@ function PendingInvites() {
   const [revokingId, setRevokingId] = React.useState<string | null>(null);
   const [revokeError, setRevokeError] = React.useState<{ id: string; name: string; message: string } | null>(null);
 
-  const { data: invites } = useQuery({
+  const invitesQuery = useQuery({
     queryKey: ['invites', cluster?.id],
     enabled: Boolean(client && cluster),
     queryFn: async () => {
@@ -208,7 +209,26 @@ function PendingInvites() {
     },
   });
 
-  const pending = (invites ?? []).filter((i) => !i.redeemedAt && new Date(i.expiresAt).getTime() > Date.now());
+  const pending = (invitesQuery.data ?? []).filter(
+    (i) => !i.redeemedAt && new Date(i.expiresAt).getTime() > Date.now()
+  );
+  if (invitesQuery.error && !invitesQuery.data)
+    return (
+      <FriendlyError
+        error={invitesQuery.error}
+        headline="Couldn't load pending invites"
+        actions={
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={invitesQuery.isFetching}
+            onClick={() => void invitesQuery.refetch()}
+          >
+            Retry
+          </Button>
+        }
+      />
+    );
   if (pending.length === 0) return null;
 
   const revoke = async (id: string, name: string) => {
@@ -292,7 +312,7 @@ function MembersList() {
     },
   });
 
-  const { data: keys } = useQuery({
+  const keysQuery = useQuery({
     queryKey: ['keys', 'list', cluster?.id],
     enabled: Boolean(client && cluster),
     queryFn: async () => {
@@ -302,6 +322,19 @@ function MembersList() {
     },
   });
 
+  const keys = keysQuery.data;
+  if (keysQuery.error && !keys)
+    return (
+      <FriendlyError
+        error={keysQuery.error}
+        headline="Couldn't load people with access"
+        actions={
+          <Button size="sm" variant="outline" disabled={keysQuery.isFetching} onClick={() => void keysQuery.refetch()}>
+            Retry
+          </Button>
+        }
+      />
+    );
   if (!keys || keys.length === 0) return null;
 
   const revoke = async (id: string, name: string) => {
