@@ -14,8 +14,8 @@ function Layer({ children, immediate }: { children: ReactNode; immediate: boolea
       aria-hidden={!present || undefined}
       initial={immediate ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={immediate ? undefined : { opacity: 0 }}
-      transition={selectTransition(immediate, 'base', true)}
+      exit={immediate ? undefined : { opacity: 0, transition: selectTransition(immediate, 'base', 'exit') }}
+      transition={selectTransition(immediate, 'base')}
     >
       {children}
     </m.div>

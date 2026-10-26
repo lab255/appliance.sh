@@ -1,7 +1,10 @@
 @theme static {
-  --duration-fast: 120ms;
-  --duration-base: 200ms;
-  --duration-slow: 320ms;
+  --duration-fast: 80ms;
+  --duration-base: 160ms;
+  --duration-slow: 240ms;
+  --duration-fast-exit: 60ms;
+  --duration-base-exit: 120ms;
+  --duration-slow-exit: 160ms;
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   /* Vercel-style dark: true-black page, near-black surfaces, hairline
