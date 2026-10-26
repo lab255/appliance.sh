@@ -1,0 +1,14 @@
+{
+  "substrate": "rgb(18, 18, 18)",
+  "hover": "rgb(26, 26, 26)",
+  "active": "rgb(36, 36, 36)",
+  "border": "rgb(46, 46, 46)",
+  "text": "rgb(237, 237, 237)",
+  "features": [
+    "http://localhost:41776/@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_t95prr5g5f-1/appliance.sh/packages/app/dist/features-CuXtOy-x.js"
+  ],
+  "reduced": {
+    "layers": 0,
+    "fill": "rgb(26, 26, 26)"
+  }
+}

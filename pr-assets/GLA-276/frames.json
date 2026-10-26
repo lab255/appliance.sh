@@ -1,0 +1,252 @@
+[
+  {
+    "t": 5985.2,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6001.9,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6018.5,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6035.2,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6051.9,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6068.5,
+    "opacity": "0",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6085.1,
+    "opacity": "0.840748",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6101.8,
+    "opacity": "0.967942",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6118.5,
+    "opacity": "0.993368",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6135.2,
+    "opacity": "0.998937",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6151.9,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6168.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6185.1,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6201.9,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6218.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6235.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6251.9,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6268.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6285.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6301.8,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6318.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6335.1,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6351.9,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6368.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 148)"
+  },
+  {
+    "t": 6385.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 167.844)"
+  },
+  {
+    "t": 6401.8,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 178.692)"
+  },
+  {
+    "t": 6418.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 181.282)"
+  },
+  {
+    "t": 6435.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 181.87)"
+  },
+  {
+    "t": 6451.8,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6468.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6485.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6501.8,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6518.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6535.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6551.8,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6568.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6585.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6601.8,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6618.5,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6635.2,
+    "opacity": "1",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6651.8,
+    "opacity": "0.2924",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6668.5,
+    "opacity": "0.062282",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6685.1,
+    "opacity": "0",
+    "transform": "matrix(1, 0, 0, 1, 8, 182)"
+  },
+  {
+    "t": 6701.9,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6718.4,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6735.1,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6751.8,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6768.5,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6785.2,
+    "opacity": null,
+    "transform": null
+  },
+  {
+    "t": 6801.9,
+    "opacity": null,
+    "transform": null
+  }
+]
