@@ -200,7 +200,7 @@ describe('Motion contract', () => {
     expect(app.indexOf('<MotionProvider>')).toBeLessThan(app.indexOf('<RouterProvider'));
     const provider = readFileSync(new URL('../motion-provider.tsx', import.meta.url), 'utf8');
     expect(provider).toContain('reducedMotion="user"');
-    expect(provider).toContain('<LazyMotion strict');
+    expect(provider).toContain('<LazyMotion features={loadFeatures}>');
     expect(provider).toContain("import('./motion/features.js')");
   });
 });

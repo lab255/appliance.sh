@@ -19,7 +19,7 @@ export function MotionProvider({ children }: { children: ReactNode }) {
   );
   return (
     <MotionConfig reducedMotion="user">
-      <LazyMotion strict features={loadFeatures}>
+      <LazyMotion features={loadFeatures}>
         <ReadyContext.Provider value={ready}>
           <TooltipProvider>{children}</TooltipProvider>
         </ReadyContext.Provider>
