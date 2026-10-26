@@ -144,8 +144,8 @@ export function ProjectDetailPage() {
               <Skeleton className="h-5 w-64" />
             </div>
             <Skeleton className="h-[86px] w-full" />
-            <Skeleton className="h-[207px] w-full" />
-            <Skeleton className="h-[207px] w-full" />
+            <Skeleton className="h-[99px] w-full" />
+            <Skeleton className="h-[99px] w-full" />
             <Skeleton className="h-[86px] w-full" />
           </div>
         }
@@ -205,13 +205,11 @@ export function ProjectDetailPage() {
                 />
               ) : null}
               <SkeletonSwap
-                className="min-h-40"
                 loading={environmentsQuery.isLoading && !environmentsQuery.data}
                 fallback={
-                  <div role="status" aria-label="Loading" className="space-y-3 p-4">
+                  <div role="status" aria-label="Loading" className="px-4 py-2">
                     <Skeleton className="h-5 w-40" />
                     <Skeleton className="h-4 w-64" />
-                    <Skeleton className="h-5 w-40" />
                   </div>
                 }
               >
@@ -272,13 +270,11 @@ export function ProjectDetailPage() {
                 />
               ) : null}
               <SkeletonSwap
-                className="min-h-40"
                 loading={deploymentsQuery.isLoading && !deploymentsQuery.data}
                 fallback={
-                  <div role="status" aria-label="Loading" className="space-y-3 p-4">
+                  <div role="status" aria-label="Loading" className="px-4 py-2">
                     <Skeleton className="h-5 w-40" />
                     <Skeleton className="h-4 w-64" />
-                    <Skeleton className="h-5 w-40" />
                   </div>
                 }
               >
