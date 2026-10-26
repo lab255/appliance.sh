@@ -110,7 +110,16 @@ describe('journey motion', () => {
       </JourneySwap>
     );
     const exiting = container.querySelector('[inert]')!;
-    await act(() => exiting.dispatchEvent(new Event('animationend', { bubbles: true })));
+    const childEnd = new Event('transitionend', { bubbles: true });
+    Object.defineProperty(childEnd, 'propertyName', { value: 'opacity' });
+    await act(() => exiting.querySelector('h1')!.dispatchEvent(childEnd));
+    const transformEnd = new Event('transitionend', { bubbles: true });
+    Object.defineProperty(transformEnd, 'propertyName', { value: 'transform' });
+    await act(() => exiting.dispatchEvent(transformEnd));
+    expect(container.querySelector('[inert]')).toBe(exiting);
+    const end = new Event('transitionend', { bubbles: true });
+    Object.defineProperty(end, 'propertyName', { value: 'opacity' });
+    await act(() => exiting.dispatchEvent(end));
     expect(container.querySelector('[inert]')).toBeNull();
     expect(container.textContent).toBe('Two');
   });

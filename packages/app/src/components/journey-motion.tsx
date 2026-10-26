@@ -57,9 +57,9 @@ function JourneyFrame({ children, direction }: { children: React.ReactNode; dire
       aria-hidden={!present || undefined}
       style={{ '--journey-offset': `${(present ? direction : exitDirection) * 12}px` } as React.CSSProperties}
       initial={false}
-      onAnimationEnd={(event) => {
+      onTransitionEnd={(event) => {
         // Only visual cleanup; navigation and focus have already happened.
-        if (event.target === event.currentTarget && !present) remove?.();
+        if (event.target === event.currentTarget && event.propertyName === 'opacity' && !present) remove?.();
       }}
     >
       {children}
