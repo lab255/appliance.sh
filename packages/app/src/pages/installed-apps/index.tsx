@@ -1,3 +1,4 @@
+import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { FolderOpen, Grid2X2, Loader2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -60,7 +61,10 @@ export function InstalledAppCard({
 }) {
   const app = item.app;
   return (
-    <article className="flex min-h-56 flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+    <article
+      data-hover-glide-item=""
+      className="hover-glide-card hover-glide-card-raised flex min-h-56 flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
@@ -455,7 +459,7 @@ export function InstalledAppsPage() {
       ) : visible.length === 0 ? (
         <InstalledAppsEmptyState filtered={apps.length > 0} onInstall={() => void pickAndInstall()} />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <HoverGlide className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => (
             <InstalledAppCard
               key={item.app.appId}
@@ -472,7 +476,7 @@ export function InstalledAppsPage() {
               }
             />
           ))}
-        </div>
+        </HoverGlide>
       )}
 
       {pending?.kind === 'publisher' ? (

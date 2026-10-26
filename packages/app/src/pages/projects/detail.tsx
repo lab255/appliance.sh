@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
+import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, Rocket, Trash2 } from 'lucide-react';
@@ -219,15 +219,15 @@ export function ProjectDetailPage() {
                     <EmptyState title="No environments yet" />
                   </div>
                 ) : (
-                  <ul className="divide-y divide-[var(--color-border)]">
+                  <HoverGlide as="ul" className="divide-y divide-[var(--color-border)]">
                     {environmentsQuery.data.map((env) => {
                       const url = urlByEnvId.get(env.id);
                       return (
-                        <li key={env.id}>
+                        <li data-hover-glide-item="" key={env.id}>
                           <Link
                             to={`/projects/${env.projectId}/environments/${env.id}`}
                             aria-label={`${env.name}, ${resolveStatusDot(env.status).label}, ${env.lastDeployedAt ? relativeTime(env.lastDeployedAt) : 'never deployed'}`}
-                            className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                            className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                           >
                             <div className="min-w-0">
                               <div className="text-sm font-medium">{env.name}</div>
@@ -245,7 +245,7 @@ export function ProjectDetailPage() {
                         </li>
                       );
                     })}
-                  </ul>
+                  </HoverGlide>
                 )}
               </SkeletonSwap>
             </section>
@@ -284,13 +284,13 @@ export function ProjectDetailPage() {
                     <EmptyState title="No deployments yet" />
                   </div>
                 ) : (
-                  <ul className="divide-y divide-[var(--color-border)]">
+                  <HoverGlide as="ul" className="divide-y divide-[var(--color-border)]">
                     {deploymentsQuery.data.map((d) => (
-                      <li key={d.id}>
+                      <li data-hover-glide-item="" key={d.id}>
                         <Link
                           to={`/deployments/${d.id}`}
                           aria-label={`${d.action}, ${envsById.get(d.environmentId) ?? d.environmentId}, ${resolveStatusDot(d.status).label}, ${relativeTime(d.startedAt)}`}
-                          className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                          className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                         >
                           <StatusPill {...resolveStatusDot(d.status)} />
                           <div className="min-w-0 text-sm">
@@ -307,7 +307,7 @@ export function ProjectDetailPage() {
                         </Link>
                       </li>
                     ))}
-                  </ul>
+                  </HoverGlide>
                 )}
               </SkeletonSwap>
             </section>

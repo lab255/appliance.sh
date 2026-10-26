@@ -1,3 +1,4 @@
+import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
@@ -319,7 +320,7 @@ function Overview({
       ) : projects.length === 0 ? (
         <EmptyApps canManageApps={canManageApps} />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <HoverGlide className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((project) => (
             <AppCard
               key={project.id}
@@ -334,7 +335,7 @@ function Overview({
               No apps match “{filter.trim()}”.
             </p>
           ) : null}
-        </div>
+        </HoverGlide>
       )}
 
       {projects.length > 0 ? (
@@ -392,7 +393,10 @@ function AppCard({
   const summary = summarizeHealth(healthQueries.map((q) => q.data));
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors hover:border-[var(--color-border-strong)]">
+    <div
+      data-hover-glide-item=""
+      className="hover-glide-card group relative flex flex-col rounded-lg border border-[var(--color-border)] transition-colors hover:border-[var(--color-border-strong)]"
+    >
       {/* Per-card delete (folded from ConnectedProjects) — a sibling of the
           navigation Link, not nested inside it, so the markup stays valid.
           Revealed on hover / keyboard focus. */}
@@ -542,16 +546,19 @@ function RecentActivity({
           No deployments yet. Runs started from a terminal or this app show up here.
         </p>
       ) : (
-        <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+        <HoverGlide
+          as="ul"
+          className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+        >
           {deployments.map((d) => {
             const env = envs.get(d.environmentId);
             const url = env?.url ?? extractDeploymentUrl(d.message);
             return (
-              <li key={d.id}>
+              <li data-hover-glide-item="" key={d.id}>
                 <Link
                   to={`/deployments/${d.id}`}
                   aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${env?.name ?? d.environmentId}, ${d.action}, ${statusPill(d.status).label}, ${relativeTime(d.startedAt)}`}
-                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                 >
                   <StatusPill {...statusPill(d.status)} />
                   <div className="min-w-0 text-sm">
@@ -577,7 +584,7 @@ function RecentActivity({
               </li>
             );
           })}
-        </ul>
+        </HoverGlide>
       )}
     </section>
   );

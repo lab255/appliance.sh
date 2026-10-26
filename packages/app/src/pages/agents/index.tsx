@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
+import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Check, Circle, Server, Square, Terminal as TerminalIcon, Trash2, X } from 'lucide-react';
@@ -506,11 +506,14 @@ function RunsList() {
         ) : runs.length === 0 ? (
           <NoRunsState hasRuntime={runningVms.length > 0} />
         ) : (
-          <ul className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
+          <HoverGlide
+            as="ul"
+            className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]"
+          >
             {runs.map((run) => (
               <RunRow key={`${run.vmName}:${run.sessionId}`} run={run} onObserve={() => observe(run)} />
             ))}
-          </ul>
+          </HoverGlide>
         )}
       </SkeletonSwap>
     </section>
@@ -559,6 +562,7 @@ function RunRow({ run, onObserve }: { run: AgentInfo & { vmName: string }; onObs
           : 'Ended';
   return (
     <li
+      data-hover-glide-item=""
       aria-label={`${agentLabel(run.type)}, ${run.task || 'no task'}, Sandbox ${run.vmName}, ${run.mode ?? 'interactive'} mode, ${statusLabel}`}
     >
       <div className="flex items-center gap-3 px-3 py-2.5">

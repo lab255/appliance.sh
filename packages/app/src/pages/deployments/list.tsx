@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { SkeletonSwap } from '@appliance.sh/ui';
+import { HoverGlide, SkeletonSwap } from '@appliance.sh/ui';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -115,13 +115,16 @@ export function DeploymentsPage() {
           deploymentsQuery.data.length === 0 ? (
           <EmptyState title="No deployments yet" description="Deploy an environment and its runs will show up here." />
         ) : (
-          <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <HoverGlide
+            as="ul"
+            className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+          >
             {visible.map((d) => (
-              <li key={d.id}>
+              <li data-hover-glide-item="" key={d.id}>
                 <Link
                   to={`/deployments/${d.id}`}
                   aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${envs.get(d.environmentId)?.name ?? d.environmentId}, ${d.action}, ${resolveStatusDot(d.status).label}, ${durationOf(d) ?? 'in progress'}, ${relativeTime(d.startedAt)}`}
-                  className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                  className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                 >
                   <StatusPill {...resolveStatusDot(d.status)} className="transition-colors" />
                   <div className="min-w-0">
@@ -144,7 +147,7 @@ export function DeploymentsPage() {
                 </Link>
               </li>
             ))}
-          </ul>
+          </HoverGlide>
         )}
       </SkeletonSwap>
     </PageShell>
