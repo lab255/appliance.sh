@@ -12,22 +12,26 @@ export interface CatalogueTrustPolicy {
   highestGeneration?: number;
 }
 
-/** OWNER-FILL release manifest: review root authorization and legacy inventory before enabling.
- * Empty pins deliberately disable catalogue trust; never substitute a test identity.
- * Rotation ships old + new records here, each envelope still has exactly one signer.
- * Owner: run `node scripts/catalogue-public-key.mjs` with the private key already in
- * APPLIANCE_INDEX_SIGNING_KEY; review its public output and root authorization, then
- * fill keys below. Freeze legacy publication and inventory every signed production
- * artifact before filling legacyMaximum (1 only when none existed). Include TIME-BASED
- * generations, such as fixture-era epoch-seconds previews around 1.7e9, not just edit counts.
- * Record the
- * computed generationFloor with the client release and use the same floor in TP1.
- * Do not activate production routes until that client release and Sasha's gate pass.
- */
-export const CATALOGUE_RELEASE_MANIFEST: {
+export interface CatalogueReleaseManifest {
   readonly keys: Readonly<Record<string, string>>;
   readonly legacyMaximum: number | null;
-} = Object.freeze({ keys: Object.freeze({}), legacyMaximum: null });
+}
+
+/** Owner-filled production identity, reviewed 2026-10-19.
+ * The reviewed legacy inventory includes TIME-BASED generations, not just edit counts:
+ * fixture-era previews minted epoch-seconds generations (<= ~1.792e9 at fill time).
+ * L = 1.8e9 is a round safe integer above all pre-cutover generations, including
+ * clock skew; catalogueCutoverFloor(L) = 1800000001, shared with TP1.
+ * Rotation ships old + new reviewed public records here; each envelope has one signer.
+ * Never add a private key or learn a replacement pin from catalogue responses.
+ */
+export const CATALOGUE_RELEASE_MANIFEST: CatalogueReleaseManifest = Object.freeze({
+  keys: Object.freeze({
+    'ed25519:sha256:893bc44557cff6153897870749209d92873e381dc3388aa33643be2481da6a58':
+      'ed25519:CmosXsTg3GLHC--OakJwzMN9UqSJplNV5C2MqHCc-rE',
+  }),
+  legacyMaximum: 1800000000,
+});
 
 export function catalogueCutoverFloor(legacyMaximum: number): number {
   if (!Number.isSafeInteger(legacyMaximum) || legacyMaximum < 1 || legacyMaximum >= Number.MAX_SAFE_INTEGER) {
@@ -36,14 +40,17 @@ export function catalogueCutoverFloor(legacyMaximum: number): number {
   return Math.max(2, legacyMaximum + 1);
 }
 
-export const PINNED_CATALOGUE_TRUST: CatalogueTrustPolicy = Object.freeze({
-  keys: CATALOGUE_RELEASE_MANIFEST.keys,
-  // Unfilled inventory fails closed. No trusted production artifacts means OWNER sets L = 1.
-  generationFloor:
-    CATALOGUE_RELEASE_MANIFEST.legacyMaximum === null
-      ? Number.MAX_SAFE_INTEGER
-      : catalogueCutoverFloor(CATALOGUE_RELEASE_MANIFEST.legacyMaximum),
-});
+/** Keep an unfilled manifest fail-closed, including during release preparation. */
+export function catalogueTrustPolicyFromManifest(manifest: CatalogueReleaseManifest): CatalogueTrustPolicy {
+  return Object.freeze({
+    keys: manifest.keys,
+    // No trusted production artifacts means the owner explicitly supplies L = 1.
+    generationFloor:
+      manifest.legacyMaximum === null ? Number.MAX_SAFE_INTEGER : catalogueCutoverFloor(manifest.legacyMaximum),
+  });
+}
+
+export const PINNED_CATALOGUE_TRUST = catalogueTrustPolicyFromManifest(CATALOGUE_RELEASE_MANIFEST);
 
 export class CatalogueTrustError extends Error {
   constructor(

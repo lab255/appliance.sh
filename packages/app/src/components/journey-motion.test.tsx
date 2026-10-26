@@ -10,6 +10,22 @@ import { BootstrapWizardPage } from '@/pages/bootstrap/wizard';
 import { HostProvider } from '@/providers/host-provider';
 import type { ConsoleHost } from '@/lib/host';
 
+const removeFrame = vi.hoisted(() => vi.fn());
+vi.mock('motion/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('motion/react')>();
+  return {
+    ...actual,
+    usePresence: () => {
+      const [present, remove] = actual.usePresence();
+      const trackedRemove = React.useCallback(() => {
+        removeFrame();
+        remove?.();
+      }, [remove]);
+      return [present, trackedRemove];
+    },
+  };
+});
+
 vi.mock('@appliance.sh/ui/motion-provider', () => ({ useMotionReady: () => true }));
 let reduced = false;
 let listeners: Set<() => void>;
@@ -17,6 +33,7 @@ let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
   reduced = false;
+  removeFrame.mockClear();
   listeners = new Set();
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   window.matchMedia = vi.fn().mockImplementation(() => ({
@@ -35,6 +52,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
 });
 
 async function render(children: React.ReactNode) {
@@ -110,9 +128,65 @@ describe('journey motion', () => {
       </JourneySwap>
     );
     const exiting = container.querySelector('[inert]')!;
-    await act(() => exiting.dispatchEvent(new Event('animationend', { bubbles: true })));
+    const childEnd = new Event('transitionend', { bubbles: true });
+    Object.defineProperty(childEnd, 'propertyName', { value: 'opacity' });
+    await act(() => exiting.querySelector('h1')!.dispatchEvent(childEnd));
+    const transformEnd = new Event('transitionend', { bubbles: true });
+    Object.defineProperty(transformEnd, 'propertyName', { value: 'transform' });
+    await act(() => exiting.dispatchEvent(transformEnd));
+    expect(container.querySelector('[inert]')).toBe(exiting);
+    const end = new Event('transitionend', { bubbles: true });
+    Object.defineProperty(end, 'propertyName', { value: 'opacity' });
+    await act(() => exiting.dispatchEvent(end));
     expect(container.querySelector('[inert]')).toBeNull();
     expect(container.textContent).toBe('Two');
+  });
+
+  it('cancels exit cleanup when the retained frame revives mid-exit', async () => {
+    vi.useFakeTimers();
+    const page = (step: string) => (
+      <JourneySwap step={step} direction={0}>
+        <h1>{step}</h1>
+      </JourneySwap>
+    );
+    await render(page('A'));
+    const original = container.querySelector('.journey-frame');
+    await render(page('B'));
+    expect(original?.getAttribute('data-present')).toBe('false');
+    await act(() => vi.advanceTimersByTime(80));
+    await render(page('A'));
+    expect(container.querySelector('[data-present="true"]')).toBe(original);
+    expect(original?.hasAttribute('inert')).toBe(false);
+    // A's original safety deadline passes, but B's later exit is still pending.
+    await act(() => vi.advanceTimersByTime(280));
+    expect(removeFrame).not.toHaveBeenCalled();
+    expect(original?.getAttribute('data-present')).toBe('true');
+    await act(() => vi.advanceTimersByTime(80));
+    expect(removeFrame).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.journey-frame')).toBe(original);
+    expect(container.textContent).toBe('A');
+  });
+
+  it('retires a transitionless exit after the safety deadline', async () => {
+    vi.useFakeTimers();
+    await render(
+      <JourneySwap step="A" direction={0}>
+        <h1>A</h1>
+      </JourneySwap>
+    );
+    await render(
+      <JourneySwap step="B" direction={0}>
+        <h1>B</h1>
+      </JourneySwap>
+    );
+    // No transitionend is dispatched: both opacity and transform may stay unchanged.
+    await act(() => vi.advanceTimersByTime(359));
+    expect(container.querySelector('[inert]')).not.toBeNull();
+    expect(removeFrame).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTime(1));
+    expect(removeFrame).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[inert]')).toBeNull();
+    expect(container.textContent).toBe('B');
   });
 
   it.each([false, true])('focuses the current wizard heading forward and back (reduced=%s)', async (reduce) => {
