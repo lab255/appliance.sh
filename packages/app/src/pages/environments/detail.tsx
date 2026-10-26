@@ -167,7 +167,7 @@ export function EnvironmentDetailPage() {
       ) : null}
 
       <SkeletonSwap
-        loading={!env && envQuery.isLoading}
+        loading={!env && envQuery.isPending}
         fallback={
           <div className="space-y-6" role="status" aria-label="Loading environment">
             <div className="space-y-1">

@@ -136,7 +136,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       <SkeletonSwap
-        loading={!project && projectQuery.isLoading}
+        loading={!project && projectQuery.isPending}
         fallback={
           <div className="space-y-6" role="status" aria-label="Loading app">
             <div className="space-y-1">

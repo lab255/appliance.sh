@@ -1,18 +1,23 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Routes, Route } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { HostProvider } from '@/providers/host-provider';
 import type { ConsoleHost } from '@/lib/host';
+import { ProjectDetailPage } from './projects/detail';
 import { AccountSection } from './settings-account';
 import { DeploymentsPage } from './deployments/list';
 
+const state = vi.hoisted(() => ({ enabled: true }));
 const client = vi.hoisted(() => ({ listDeployments: vi.fn() }));
-vi.mock('@/hooks/use-appliance-client', () => ({ useApplianceClient: () => client }));
+vi.mock('@/hooks/use-appliance-client', () => ({ useApplianceClient: () => (state.enabled ? client : null) }));
 vi.mock('@/hooks/use-selected-cluster', () => ({ useSelectedCluster: () => ({ cluster: { id: 'test' } }) }));
 vi.mock('@/hooks/use-lookups', () => ({ useEnvironmentsMap: () => new Map(), useProjectsMap: () => new Map() }));
+
+vi.mock('@/components/ui/confirm-dialog', () => ({ useConfirm: () => vi.fn() }));
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 async function flush() {
   await act(async () => {
@@ -21,6 +26,32 @@ async function flush() {
 }
 
 describe('async read recovery', () => {
+  it('keeps pending detail reads skeletal before the API client is ready', async () => {
+    state.enabled = false;
+    const queryClient = new QueryClient();
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          <MemoryRouter initialEntries={['/projects/p1']}>
+            <QueryClientProvider client={queryClient}>
+              <Routes>
+                <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              </Routes>
+            </QueryClientProvider>
+          </MemoryRouter>
+        )
+      );
+      expect(container.querySelector('[aria-label="Loading app"]')).not.toBeNull();
+      expect(container.textContent).not.toContain('Not found');
+    } finally {
+      await act(async () => root.unmount());
+      queryClient.clear();
+      state.enabled = true;
+    }
+  });
+
   it('retries a failed deployment read without discarding cached rows or remounting their links', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const deployment = {

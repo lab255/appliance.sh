@@ -91,7 +91,7 @@ export function DeploymentDetailPage() {
 
       <SkeletonSwap
         loading={
-          (!d && deploymentQuery.isLoading) ||
+          (!d && deploymentQuery.isPending) ||
           (!!d &&
             ((!projectQuery.data && projectQuery.isLoading) || (!environmentQuery.data && environmentQuery.isLoading)))
         }
