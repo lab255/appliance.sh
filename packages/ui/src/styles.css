@@ -1,7 +1,8 @@
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
 @import './theme.css';
-@import '@fontsource-variable/geist';
+/* Explicit full-axis build: the default Inter import is weight-only. */
+@import '@fontsource-variable/inter/standard.css';
 @import '@fontsource-variable/geist-mono';
 @import 'tailwindcss/preflight.css' layer(base);
 @import './base.css';

@@ -3,7 +3,7 @@
 1. Replace raw Tailwind status colors with opaque semantic token triplets; blue means information/progress, cyan means Sandbox capability, and green means apps can run here.
 2. Consolidate 31 source-level colored message recipes into one `Banner`, and seven status implementations into `StatusPill` plus the existing `StatusDot`.
 3. Standardize operational output on `LogPane`, which is the log/disclosure half of the UX spec's `LongOperation`, across 12 current source locations.
-4. Keep the true-black, hairline, Geist aesthetic; add only quiet surface tiers and an 11 px minimum dense role, with no light-mode UI in v1.
+4. Keep the true-black, hairline aesthetic with Inter Variable sans and Geist Mono; add only quiet surface tiers and an 11 px minimum dense role, with no light-mode UI in v1. Owner amendment (2026-10-26): Inter replaces Geist sans because Fluid Functionalism’s weight-without-reflow pairs weight changes with optical-size shifts and requires an `opsz` axis, which Geist lacks. Ship Inter’s full `wght` (100–900) and `opsz` (14–32) axes offline. Geist Mono and the true-black/hairline aesthetic remain unchanged.
 5. Migrate mechanically using the APIs, class recipes, state mappings, and file:line table below; delete raw status utilities and 10 px text after parity is reached.
 
 Status: implementation specification. Scope: the React frontend in `packages/app`.
