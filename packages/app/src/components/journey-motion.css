@@ -9,11 +9,16 @@
 .journey-frame {
   grid-area: 1 / 1;
   min-width: 0;
-  animation: journey-enter var(--duration-slow) var(--ease-in-out);
+  transition:
+    opacity var(--duration-slow) var(--ease-in-out),
+    transform var(--duration-slow) var(--ease-in-out);
+  opacity: 1;
+  transform: translateX(0);
 }
 .journey-frame[data-present='false'] {
   pointer-events: none;
-  animation: journey-leave var(--duration-slow) var(--ease-in-out) forwards;
+  opacity: 0;
+  transform: translateX(calc(-1 * var(--journey-offset, 0px)));
 }
 .journey-reveal {
   animation: journey-settle var(--duration-base) var(--ease-out-quart) backwards;
@@ -46,29 +51,18 @@
 .journey-reveal[data-immediate='true'],
 .journey-hosting[data-immediate='true'] {
   animation: none;
+  transition: none;
 }
 /* Presence cleanup is passive; never paint its retained reduced-motion surface. */
 .journey-frame[data-present='false'][data-immediate='true'] {
   display: none;
 }
 
-@keyframes journey-enter {
-  from {
+/* Transitions reverse from the painted state when Back revives a retained frame. */
+@starting-style {
+  .journey-frame {
     opacity: 0;
     transform: translateX(var(--journey-offset, 0px));
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-@keyframes journey-leave {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-    transform: translateX(calc(-1 * var(--journey-offset, 0px)));
   }
 }
 @keyframes journey-settle {
@@ -89,6 +83,7 @@
   .journey-reveal,
   .journey-hosting {
     animation: none;
+    transition: none;
   }
   .journey-card {
     transition: none;

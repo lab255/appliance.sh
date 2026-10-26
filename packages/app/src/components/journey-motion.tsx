@@ -6,6 +6,9 @@ import { useNavigate, type NavigateOptions, type To } from 'react-router';
 import { useMotionReady } from '@appliance.sh/ui/motion-provider';
 import './journey-motion.css';
 
+// Cleanup only: 1.5 × --duration-slow (240ms), for exits with no transitionend.
+const JOURNEY_EXIT_CLEANUP_MS = 360;
+
 const subscribe = (notify: () => void) => {
   const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   media?.addEventListener('change', notify);
@@ -46,7 +49,13 @@ function JourneyFrame({ children, direction }: { children: React.ReactNode; dire
   const [present, remove] = usePresence();
   const exitDirection = usePresenceData() as number;
   React.useEffect(() => {
-    if (!present && immediate) remove?.();
+    if (present) return;
+    if (immediate) {
+      remove?.();
+      return;
+    }
+    const timer = window.setTimeout(() => remove?.(), JOURNEY_EXIT_CLEANUP_MS);
+    return () => window.clearTimeout(timer);
   }, [present, immediate, remove]);
   return (
     <m.div
@@ -57,9 +66,9 @@ function JourneyFrame({ children, direction }: { children: React.ReactNode; dire
       aria-hidden={!present || undefined}
       style={{ '--journey-offset': `${(present ? direction : exitDirection) * 12}px` } as React.CSSProperties}
       initial={false}
-      onAnimationEnd={(event) => {
+      onTransitionEnd={(event) => {
         // Only visual cleanup; navigation and focus have already happened.
-        if (event.target === event.currentTarget && !present) remove?.();
+        if (event.target === event.currentTarget && event.propertyName === 'opacity' && !present) remove?.();
       }}
     >
       {children}
