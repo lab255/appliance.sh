@@ -1,0 +1,19 @@
+GLA-283 HoverGlide merge spot-check at 1ed8b6e
+Main's HoverGlide lists are inside the retained SkeletonSwap success branches. Retry/error/empty branches remain outside HoverGlide; skeletons have no glide.
+Same 1280x900 viewport, 1600ms read delays and fixture objects as original captures. Prior feature reference: after-project.gif (8923134; a68a357 changes only health error fallback and flash-policy documentation). Post-merge: merge-project.gif. Arrival height: 0px before merge → 0px after merge. Deployment list 0px → 0px; agents retain 84px provider-form residual.
+Added populated-agent fixture exercises RunRow/HoverGlide. Hover highlights are position:absolute. Row width/height unchanged for project, deployment and populated agent rows. Playwright hover scrolls the offscreen agent row into view; raw viewport y therefore changes during that hover, not during data arrival. Arrival rectangles are collected before hovering.
+Commands: pnpm --filter @appliance.sh/ui test; pnpm --filter @appliance.sh/app test; NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify (foreground); all Rust build/test/clippy commands from scripts/verify.sh explicitly afterward because CLI fixture stops verify before Rust.
+UI 51 passed / 6 files; app 98 passed / 19 files. Full verification: 11 builds, 6 typechecks, lint/token/format passed; TS 1415 passed, 1 skipped, 1 known CLI Docker ELF fixture failure; 145 files passed, 1 failed. Same environmental class previously reproduced on unchanged base (PR #154 class); verify exit 1.
+Rust: 352 passed, 1 ignored, 10 known VM failures. All three builds and all three clippy gates passed.
+
+failures:
+    egress::tests::brokered_injection_requires_exact_lease_peer
+    egress::tests::netstack_policy_forces_deny_and_bakes_allowlist
+    egress::tests::peer_guard_pins_exact_guest_ip_when_known
+    egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease
+    egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist
+    egress::tests::proxy_url_prefers_the_recorded_gateway
+    netstack::guard::tests::denied_flow_is_dropped_and_logged
+    netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed
+    traffic::tests::records_path_for_intercepted
+    traffic::tests::tail_limits_and_parses
