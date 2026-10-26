@@ -1,0 +1,15 @@
+{
+  "images": [
+    {
+      "complete": true,
+      "width": 32,
+      "inline": true
+    }
+  ],
+  "restAnimations": [],
+  "reduced": {
+    "frames": 1,
+    "animations": 0
+  },
+  "focus": "New installation"
+}
