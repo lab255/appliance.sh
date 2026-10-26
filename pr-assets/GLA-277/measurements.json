@@ -1,0 +1,119 @@
+{
+  "after-sidebar": {
+    "frames": 128,
+    "maxSiblingShiftPx": 0,
+    "maxRowWidthDeltaPx": 0,
+    "weightValues": [
+      "\"wght\" 400",
+      "\"wght\" 400.316",
+      "\"wght\" 400.324",
+      "\"wght\" 400.326",
+      "\"wght\" 400.331",
+      "\"wght\" 404.69",
+      "\"wght\" 404.736",
+      "\"wght\" 404.744",
+      "\"wght\" 404.76",
+      "\"wght\" 423.251",
+      "\"wght\" 423.306",
+      "\"wght\" 423.412",
+      "\"wght\" 477.203",
+      "\"wght\" 477.277",
+      "\"wght\" 477.42",
+      "\"wght\" 477.772",
+      "\"wght\" 522.228",
+      "\"wght\" 522.531",
+      "\"wght\" 522.58",
+      "\"wght\" 522.797",
+      "\"wght\" 576.588",
+      "\"wght\" 576.675",
+      "\"wght\" 576.694",
+      "\"wght\" 576.749",
+      "\"wght\" 595.24",
+      "\"wght\" 595.256",
+      "\"wght\" 595.264",
+      "\"wght\" 595.289",
+      "\"wght\" 599.669",
+      "\"wght\" 599.673",
+      "\"wght\" 599.674",
+      "\"wght\" 599.676",
+      "\"wght\" 600"
+    ],
+    "transitionDuration": [
+      "0.08s"
+    ],
+    "opticalSizing": [
+      "auto"
+    ]
+  },
+  "after-tabs": {
+    "frames": 112,
+    "maxSiblingShiftPx": 0,
+    "maxRowWidthDeltaPx": 0,
+    "weightValues": [
+      "\"wght\" 400",
+      "\"wght\" 400.323",
+      "\"wght\" 400.324",
+      "\"wght\" 404.734",
+      "\"wght\" 404.741",
+      "\"wght\" 404.743",
+      "\"wght\" 423.404",
+      "\"wght\" 423.431",
+      "\"wght\" 423.439",
+      "\"wght\" 477.183",
+      "\"wght\" 477.272",
+      "\"wght\" 477.747",
+      "\"wght\" 522.253",
+      "\"wght\" 522.639",
+      "\"wght\" 522.728",
+      "\"wght\" 522.817",
+      "\"wght\" 576.527",
+      "\"wght\" 576.561",
+      "\"wght\" 576.569",
+      "\"wght\" 576.596",
+      "\"wght\" 595.247",
+      "\"wght\" 595.257",
+      "\"wght\" 595.259",
+      "\"wght\" 595.266",
+      "\"wght\" 599.675",
+      "\"wght\" 599.676",
+      "\"wght\" 599.677",
+      "\"wght\" 600"
+    ],
+    "transitionDuration": [
+      "0.08s"
+    ],
+    "opticalSizing": [
+      "auto"
+    ]
+  },
+  "reduced-sidebar": {
+    "frames": 127,
+    "maxSiblingShiftPx": 0,
+    "maxRowWidthDeltaPx": 0,
+    "weightValues": [
+      "\"wght\" 400",
+      "\"wght\" 600"
+    ],
+    "transitionDuration": [
+      "0s"
+    ],
+    "opticalSizing": [
+      "auto"
+    ]
+  },
+  "reduced-tabs": {
+    "frames": 109,
+    "maxSiblingShiftPx": 0,
+    "maxRowWidthDeltaPx": 0,
+    "weightValues": [
+      "\"wght\" 400",
+      "\"wght\" 600"
+    ],
+    "transitionDuration": [
+      "0s"
+    ],
+    "opticalSizing": [
+      "auto"
+    ]
+  }
+}
