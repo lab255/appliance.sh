@@ -274,7 +274,28 @@ function Overview({
         classifyError(error) === 'network' && startableVm ? (
           <StartMachineRecovery vmName={startableVm} error={error} />
         ) : (
-          <FriendlyError error={error} fallbackHeadline="Couldn't load your apps" />
+          <FriendlyError
+            error={error}
+            fallbackHeadline="Couldn't load your apps"
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  projectsQuery.isFetching ||
+                  deploymentsQuery.isFetching ||
+                  environmentQueries.some((q) => q.isFetching)
+                }
+                onClick={() => {
+                  void projectsQuery.refetch();
+                  void deploymentsQuery.refetch();
+                  environmentQueries.forEach((q) => void q.refetch());
+                }}
+              >
+                Retry
+              </Button>
+            }
+          />
         )
       ) : null}
 
