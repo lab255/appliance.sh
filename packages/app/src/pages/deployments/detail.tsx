@@ -1,3 +1,4 @@
+import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, Navigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
@@ -72,129 +73,163 @@ export function DeploymentDetailPage() {
       </div>
 
       {deploymentQuery.error ? (
-        <FriendlyError error={deploymentQuery.error} fallbackHeadline="Couldn't load this deployment" />
+        <FriendlyError
+          error={deploymentQuery.error}
+          fallbackHeadline="Couldn't load this deployment"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deploymentQuery.isFetching}
+              onClick={() => void deploymentQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        />
       ) : null}
 
-      {deploymentQuery.error ? null : !d && deploymentQuery.isLoading ? (
-        <div className="text-sm text-[var(--color-muted-foreground)]">Loading…</div>
-      ) : !d ? (
-        <div className="text-sm text-[var(--color-muted-foreground)]">Not found.</div>
-      ) : (
-        <>
-          <PageHeader
-            title={
-              <>
-                <EntityLabel id={d.projectId} name={projectQuery.data?.name} /> /{' '}
-                <EntityLabel id={d.environmentId} name={environmentQuery.data?.name} />
-              </>
-            }
-            description={`${d.action} deploy`}
-            action={
-              <div role="status" aria-live="polite" aria-atomic="true">
-                <StatusPill {...resolveStatusDot(d.status)} />
-              </div>
-            }
-          />
-
-          {(() => {
-            const url = extractDeploymentUrl(d.message) ?? environmentQuery.data?.url;
-            if (!url) return null;
-            return (
-              <Banner
-                tone="success"
-                title="Deployed at"
-                action={
-                  <Button asChild size="sm">
-                    <a href={url} target="_blank" rel="noreferrer">
-                      Open app <ExternalLink className="h-4 w-4" aria-hidden />
-                      <span className="sr-only"> (opens in a new window)</span>
-                    </a>
-                  </Button>
-                }
-              >
-                <code className="font-mono text-xs">{url}</code>
-              </Banner>
-            );
-          })()}
-
-          {d.message ? (
-            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-3 text-xs">
-              {d.message}
+      <SkeletonSwap
+        loading={
+          (!d && deploymentQuery.isLoading) ||
+          (!!d &&
+            ((!projectQuery.data && projectQuery.isLoading) || (!environmentQuery.data && environmentQuery.isLoading)))
+        }
+        fallback={
+          <div className="space-y-6" role="status" aria-label="Loading deployment">
+            <div className="space-y-1">
+              <Skeleton className="h-7 w-48" />
+              <Skeleton className="h-5 w-64" />
             </div>
-          ) : null}
+            <Skeleton className="h-[60px] w-full" />
+            <Skeleton className="h-[42px] w-full" />
+            <Skeleton className="h-[150px] w-full" />
+            <Skeleton className="h-[50px] w-full" />
+            <Skeleton className="h-[16px] w-full" />
+          </div>
+        }
+      >
+        {!d ? (
+          deploymentQuery.error ? null : (
+            <p className="text-sm text-[var(--color-muted-foreground)]">Not found.</p>
+          )
+        ) : (
+          <div className="space-y-6">
+            <PageHeader
+              title={
+                <>
+                  <EntityLabel id={d.projectId} name={projectQuery.data?.name} /> /{' '}
+                  <EntityLabel id={d.environmentId} name={environmentQuery.data?.name} />
+                </>
+              }
+              description={`${d.action} deploy`}
+              action={
+                <div role="status" aria-live="polite" aria-atomic="true">
+                  <StatusPill {...resolveStatusDot(d.status)} />
+                </div>
+              }
+            />
 
-          <section className="grid gap-x-6 gap-y-3 rounded-md border border-[var(--color-border)] p-4 sm:grid-cols-2">
-            <Row label="Status" value={d.status} />
-            <Row label="Action" value={d.action} />
-            <Row
-              label="App"
-              value={
-                projectQuery.data ? (
-                  <Link to={`/projects/${d.projectId}`} className="underline-offset-2 hover:underline">
-                    {projectQuery.data.name}
-                  </Link>
-                ) : (
-                  <EntityLabel id={d.projectId} />
-                )
-              }
-            />
-            <Row
-              label="Environment"
-              value={
-                environmentQuery.data ? (
-                  <Link
-                    to={`/projects/${d.projectId}/environments/${d.environmentId}`}
-                    className="underline-offset-2 hover:underline"
-                  >
-                    {environmentQuery.data.name}
-                  </Link>
-                ) : (
-                  <EntityLabel id={d.environmentId} />
-                )
-              }
-            />
-            <Row
-              label="Started"
-              value={
-                <span title={d.startedAt}>
-                  {relativeTime(d.startedAt)} · {new Date(d.startedAt).toLocaleTimeString()}
-                </span>
-              }
-            />
-            <Row
-              label="Completed"
-              value={
-                d.completedAt ? (
-                  <span title={d.completedAt}>
-                    {relativeTime(d.completedAt)} · {new Date(d.completedAt).toLocaleTimeString()}
+            {(() => {
+              const url = extractDeploymentUrl(d.message) ?? environmentQuery.data?.url;
+              if (!url) return null;
+              return (
+                <Banner
+                  tone="success"
+                  title="Deployed at"
+                  action={
+                    <Button asChild size="sm">
+                      <a href={url} target="_blank" rel="noreferrer">
+                        Open app <ExternalLink className="h-4 w-4" aria-hidden />
+                        <span className="sr-only"> (opens in a new window)</span>
+                      </a>
+                    </Button>
+                  }
+                >
+                  <code className="font-mono text-xs">{url}</code>
+                </Banner>
+              );
+            })()}
+
+            {d.message ? (
+              <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-3 text-xs">
+                {d.message}
+              </div>
+            ) : null}
+
+            <section className="grid gap-x-6 gap-y-3 rounded-md border border-[var(--color-border)] p-4 sm:grid-cols-2">
+              <Row label="Status" value={d.status} />
+              <Row label="Action" value={d.action} />
+              <Row
+                label="App"
+                value={
+                  projectQuery.data ? (
+                    <Link to={`/projects/${d.projectId}`} className="underline-offset-2 hover:underline">
+                      {projectQuery.data.name}
+                    </Link>
+                  ) : (
+                    <EntityLabel id={d.projectId} />
+                  )
+                }
+              />
+              <Row
+                label="Environment"
+                value={
+                  environmentQuery.data ? (
+                    <Link
+                      to={`/projects/${d.projectId}/environments/${d.environmentId}`}
+                      className="underline-offset-2 hover:underline"
+                    >
+                      {environmentQuery.data.name}
+                    </Link>
+                  ) : (
+                    <EntityLabel id={d.environmentId} />
+                  )
+                }
+              />
+              <Row
+                label="Started"
+                value={
+                  <span title={d.startedAt}>
+                    {relativeTime(d.startedAt)} · {new Date(d.startedAt).toLocaleTimeString()}
                   </span>
-                ) : (
-                  <span className="text-[var(--color-muted-foreground)]">—</span>
-                )
-              }
-            />
-            <Row label="Duration" value={durationMs(d.startedAt, d.completedAt) ?? '—'} />
-          </section>
+                }
+              />
+              <Row
+                label="Completed"
+                value={
+                  d.completedAt ? (
+                    <span title={d.completedAt}>
+                      {relativeTime(d.completedAt)} · {new Date(d.completedAt).toLocaleTimeString()}
+                    </span>
+                  ) : (
+                    <span className="text-[var(--color-muted-foreground)]">—</span>
+                  )
+                }
+              />
+              <Row label="Duration" value={durationMs(d.startedAt, d.completedAt) ?? '—'} />
+            </section>
 
-          <details className="rounded-md border border-[var(--color-border)] p-4">
-            <summary className="cursor-pointer text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
-              Technical details
-            </summary>
-            <KeyValueList
-              className="mt-3"
-              items={[
-                { key: 'deployment', label: 'Deployment ID', value: d.id, mono: true },
-                ...(d.buildId ? [{ key: 'build', label: 'Build ID', value: d.buildId, mono: true }] : []),
-                ...(d.idempotentNoop ? [{ key: 'changes', label: 'Changes', value: 'No changes were needed.' }] : []),
-              ]}
-            />
-          </details>
+            <details className="rounded-md border border-[var(--color-border)] p-4">
+              <summary className="cursor-pointer text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
+                Technical details
+              </summary>
+              <KeyValueList
+                className="mt-3"
+                items={[
+                  { key: 'deployment', label: 'Deployment ID', value: d.id, mono: true },
+                  ...(d.buildId ? [{ key: 'build', label: 'Build ID', value: d.buildId, mono: true }] : []),
+                  ...(d.idempotentNoop ? [{ key: 'changes', label: 'Changes', value: 'No changes were needed.' }] : []),
+                ]}
+              />
+            </details>
 
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            {TERMINAL.has(d.status) ? 'Run complete.' : 'Updating automatically while this deploy runs.'}
-          </p>
-        </>
-      )}
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              {TERMINAL.has(d.status) ? 'Run complete.' : 'Updating automatically while this deploy runs.'}
+            </p>
+          </div>
+        )}
+      </SkeletonSwap>
     </PageShell>
   );
 }
