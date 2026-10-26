@@ -1,0 +1,223 @@
+{
+  "phase": "after",
+  "viewport": "1280x900",
+  "motion": "normal",
+  "samples": [
+    {
+      "kind": "row",
+      "hover": {
+        "background": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "opacity": "1",
+        "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+      },
+      "frames": [
+        {
+          "ms": 0.30000000074505806,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 8.800000000745058,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 25.100000001490116,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 42.5,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 58.20000000111759,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 75.5,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 92.10000000149012,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 109.10000000149012,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 125.80000000074506,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 142.5,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 159.10000000149012,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 175.80000000074506,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "none 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        }
+      ]
+    },
+    {
+      "kind": "policy",
+      "hover": {
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(10, 10, 10)",
+        "translate": "none",
+        "opacity": "1",
+        "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+      },
+      "frames": [
+        {
+          "ms": 0.5,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 11.5,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 27.799999998882413,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 44.79999999888241,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 61.399999998509884,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 78.19999999925494,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 94.79999999888241,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 111.39999999850988,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 127.5,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 144.7999999988824,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 161.39999999850988,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 178.19999999925494,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        }
+      ]
+    }
+  ]
+}

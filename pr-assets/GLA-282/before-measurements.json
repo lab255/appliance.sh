@@ -1,0 +1,223 @@
+{
+  "phase": "before",
+  "viewport": "1280x900",
+  "motion": "normal",
+  "samples": [
+    {
+      "kind": "row",
+      "hover": {
+        "background": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "opacity": "1",
+        "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+      },
+      "frames": [
+        {
+          "ms": 0.30000000074505806,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 7.5,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 24.40000000037253,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 41.69999999925494,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 58.40000000037253,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 75.09999999962747,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 90.09999999962747,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 106.90000000037253,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 125.09999999962747,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 141.69999999925494,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 158.40000000037253,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        {
+          "ms": 175.09999999962747,
+          "background": "rgb(36, 36, 36)",
+          "color": "rgb(237, 237, 237)",
+          "translate": "none",
+          "opacity": "1",
+          "transition": "background-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.12s cubic-bezier(0.25, 1, 0.5, 1), color 0.12s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s cubic-bezier(0.25, 1, 0.5, 1)"
+        }
+      ]
+    },
+    {
+      "kind": "policy",
+      "hover": {
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(10, 10, 10)",
+        "translate": "none",
+        "opacity": "1",
+        "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+      },
+      "frames": [
+        {
+          "ms": 0.40000000037252903,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 9.900000000372529,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 27,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 43.90000000037253,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 60.70000000111759,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 77.40000000037253,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 94,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 109.90000000037253,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 127.30000000074506,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 143.30000000074506,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 159.2000000011176,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        },
+        {
+          "ms": 176.60000000149012,
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(10, 10, 10)",
+          "translate": "0px 1px",
+          "opacity": "1",
+          "transition": "color 0.12s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)"
+        }
+      ]
+    }
+  ]
+}
