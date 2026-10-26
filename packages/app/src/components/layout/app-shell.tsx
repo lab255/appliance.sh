@@ -1,3 +1,4 @@
+import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { Wand, Server, Laptop, Cloud, Folder, Bot, Cog, Grid2X2, ShoppingBag } from 'lucide-react';
@@ -106,7 +107,7 @@ export function AppShell() {
           <span className="hidden text-sm font-semibold tracking-tight sm:block">Appliance</span>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3">
+        <HoverGlide as="nav" className="flex flex-1 flex-col gap-0.5 px-2 py-3">
           {nav.map((item) => {
             const Icon = navIcons[item.key];
             return (
@@ -128,11 +129,13 @@ export function AppShell() {
                   </span>
                 ) : (
                   <NavLink
+                    data-hover-glide-item=""
                     to={item.to}
                     title={item.label}
-                    // Hover only brightens the text; the filled background is
-                    // reserved for the active route so the two states never
-                    // read the same while the pointer rests on the sidebar.
+                    // 2026-10-26 supersedes sidebar stillness: deliberately glide
+                    // on --color-hover, never accent (the active-route fill).
+                    // Hover beside the active route must remain distinct;
+                    // reduced motion falls back to plain token hover.
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
@@ -151,7 +154,7 @@ export function AppShell() {
               </React.Fragment>
             );
           })}
-        </nav>
+        </HoverGlide>
         {mode === 'developer' ? (
           <div className="hidden border-t border-[var(--color-border)] p-3 sm:block">
             <StatusPill tone="info" dot={false} label="Developer mode" />
