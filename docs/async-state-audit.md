@@ -1,6 +1,6 @@
 # GLA-283 decisions
 
-Property: FORGIVENESS. Fixed means the stated defect is addressed, not that every possible dataset has a known initial height. Layout measurements are element bounding-box deltas, not the browser's normalized CLS score. A retry never navigates or resets the query cache. No new runtime dependencies or motion primitives.
+Property: FORGIVENESS. Fixed means the stated defect is addressed, not that every possible dataset has a known initial height. Layout measurements are element bounding-box deltas, not the browser's normalized CLS score. A retry never navigates or resets the query cache. No new runtime dependencies or motion primitives. Fast arrivals crossfade via SkeletonSwap (`AnimatePresence initial={false}`); no minimum display duration is deliberate.
 
 | Surface                                | Verdict                                     | Reason / property                                                                                                                                                                                                                                                       |
 | -------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

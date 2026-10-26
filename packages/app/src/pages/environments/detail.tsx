@@ -435,9 +435,11 @@ function HealthSection({
         }
       >
         {!health || health.status === EnvironmentHealthStatus.Unknown ? (
-          <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">
-            {health?.message ?? 'Health metrics are unavailable for this environment.'}
-          </div>
+          !error && (
+            <div className="px-4 py-3 text-xs text-[var(--color-muted-foreground)]">
+              {health?.message ?? 'Health metrics are unavailable for this environment.'}
+            </div>
+          )
         ) : (
           <div className="space-y-3 px-4 py-3">
             <div className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
