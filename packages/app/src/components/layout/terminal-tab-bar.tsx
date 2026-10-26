@@ -1,3 +1,4 @@
+import { WeightLabel } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Plus, X } from 'lucide-react';
 import {
@@ -198,7 +199,7 @@ function TerminalTab({
           aria-keyshortcuts="F2"
           title="Double-click or press F2 to rename"
         >
-          {session.title}
+          <WeightLabel active={active}>{session.title}</WeightLabel>
         </button>
       )}
       <span className="text-micro text-[var(--color-muted-foreground)]" aria-hidden>

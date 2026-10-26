@@ -1,3 +1,4 @@
+import { WeightLabel } from '@appliance.sh/ui';
 import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
@@ -150,8 +151,14 @@ export function AppShell() {
                       )
                     }
                   >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    <span className="hidden sm:inline">{item.label}</span>
+                    {({ isActive }) => (
+                      <>
+                        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                        <span className="hidden sm:inline">
+                          <WeightLabel active={isActive}>{item.label}</WeightLabel>
+                        </span>
+                      </>
+                    )}
                   </NavLink>
                 )}
               </React.Fragment>
