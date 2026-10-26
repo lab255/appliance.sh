@@ -1,0 +1,1134 @@
+[
+  {
+    "name": "shell",
+    "width": 1280,
+    "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+    "scrollWidth": 1280,
+    "innerWidth": 1280,
+    "labels": [
+      {
+        "text": "Installed Apps",
+        "width": 203,
+        "textWidth": 119.71875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Catalogue",
+        "width": 203,
+        "textWidth": 93.109375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Setup",
+        "width": 203,
+        "textWidth": 65.375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Projects",
+        "width": 203,
+        "textWidth": 80.296875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Agents",
+        "width": 203,
+        "textWidth": 72.421875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Machine",
+        "width": 203,
+        "textWidth": 81.90625,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Cloud",
+        "width": 203,
+        "textWidth": 64.359375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Settings",
+        "width": 203,
+        "textWidth": 80.671875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Lifecycle",
+        "width": 82.25,
+        "textWidth": 58.25,
+        "scrollWidth": 82,
+        "clientWidth": 82
+      },
+      {
+        "text": "Egress",
+        "width": 68.546875,
+        "textWidth": 44.546875,
+        "scrollWidth": 69,
+        "clientWidth": 69
+      },
+      {
+        "text": "Credentials",
+        "width": 98.90625,
+        "textWidth": 74.90625,
+        "scrollWidth": 99,
+        "clientWidth": 99
+      },
+      {
+        "text": "Facts",
+        "width": 60.359375,
+        "textWidth": 36.359375,
+        "scrollWidth": 60,
+        "clientWidth": 60
+      },
+      {
+        "text": "Workloads",
+        "width": 93.921875,
+        "textWidth": 69.921875,
+        "scrollWidth": 94,
+        "clientWidth": 94
+      }
+    ]
+  },
+  {
+    "name": "shell",
+    "width": 800,
+    "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+    "scrollWidth": 800,
+    "innerWidth": 800,
+    "labels": [
+      {
+        "text": "Installed Apps",
+        "width": 203,
+        "textWidth": 119.71875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Catalogue",
+        "width": 203,
+        "textWidth": 93.109375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Setup",
+        "width": 203,
+        "textWidth": 65.375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Projects",
+        "width": 203,
+        "textWidth": 80.296875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Agents",
+        "width": 203,
+        "textWidth": 72.421875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Machine",
+        "width": 203,
+        "textWidth": 81.90625,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Cloud",
+        "width": 203,
+        "textWidth": 64.359375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Settings",
+        "width": 203,
+        "textWidth": 80.671875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Lifecycle",
+        "width": 82.25,
+        "textWidth": 58.25,
+        "scrollWidth": 82,
+        "clientWidth": 82
+      },
+      {
+        "text": "Egress",
+        "width": 68.546875,
+        "textWidth": 44.546875,
+        "scrollWidth": 69,
+        "clientWidth": 69
+      },
+      {
+        "text": "Credentials",
+        "width": 98.90625,
+        "textWidth": 74.90625,
+        "scrollWidth": 99,
+        "clientWidth": 99
+      },
+      {
+        "text": "Facts",
+        "width": 60.359375,
+        "textWidth": 36.359375,
+        "scrollWidth": 60,
+        "clientWidth": 60
+      },
+      {
+        "text": "Workloads",
+        "width": 93.921875,
+        "textWidth": 69.921875,
+        "scrollWidth": 94,
+        "clientWidth": 94
+      }
+    ]
+  },
+  {
+    "name": "agents",
+    "width": 1280,
+    "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+    "scrollWidth": 1280,
+    "innerWidth": 1280,
+    "labels": [
+      {
+        "text": "Installed Apps",
+        "width": 203,
+        "textWidth": 119.71875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Catalogue",
+        "width": 203,
+        "textWidth": 93.109375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Setup",
+        "width": 203,
+        "textWidth": 65.375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Projects",
+        "width": 203,
+        "textWidth": 80.296875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Agents",
+        "width": 203,
+        "textWidth": 72.421875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Machine",
+        "width": 203,
+        "textWidth": 81.90625,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Cloud",
+        "width": 203,
+        "textWidth": 64.359375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Settings",
+        "width": 203,
+        "textWidth": 80.671875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": " Sign in with Claude",
+        "width": 145.890625,
+        "textWidth": 125.890625,
+        "scrollWidth": 146,
+        "clientWidth": 146
+      },
+      {
+        "text": " API key",
+        "width": 80.9375,
+        "textWidth": 60.9375,
+        "scrollWidth": 81,
+        "clientWidth": 81
+      },
+      {
+        "text": "Review deployment status and retry failed workloads",
+        "width": 303.515625,
+        "textWidth": 347.515625,
+        "scrollWidth": 348,
+        "clientWidth": 304
+      },
+      {
+        "text": "Claude Code",
+        "width": 77.890625,
+        "textWidth": 65.890625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Inspect credentials and workspace configuration",
+        "width": 295.65625,
+        "textWidth": 318.234375,
+        "scrollWidth": 318,
+        "clientWidth": 296
+      },
+      {
+        "text": "OpenAI Codex",
+        "width": 85.75,
+        "textWidth": 73.75,
+        "scrollWidth": 86,
+        "clientWidth": 86
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Check narrow navigation labels and status pills",
+        "width": 303.515625,
+        "textWidth": 308.171875,
+        "scrollWidth": 308,
+        "clientWidth": 304
+      },
+      {
+        "text": "Claude Code",
+        "width": 77.890625,
+        "textWidth": 65.890625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Audit terminal output and environment configuration",
+        "width": 295.65625,
+        "textWidth": 342.421875,
+        "scrollWidth": 342,
+        "clientWidth": 296
+      },
+      {
+        "text": "OpenAI Codex",
+        "width": 85.75,
+        "textWidth": 73.75,
+        "scrollWidth": 86,
+        "clientWidth": 86
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Verify production readiness",
+        "width": 179.078125,
+        "textWidth": 179.078125,
+        "scrollWidth": 179,
+        "clientWidth": 179
+      },
+      {
+        "text": "Claude Code",
+        "width": 77.890625,
+        "textWidth": 65.890625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Agent · Review deployment status and retry failed workloads",
+        "width": 83.546875,
+        "textWidth": 331.65625,
+        "scrollWidth": 332,
+        "clientWidth": 84
+      }
+    ]
+  },
+  {
+    "name": "agents",
+    "width": 800,
+    "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+    "scrollWidth": 800,
+    "innerWidth": 800,
+    "labels": [
+      {
+        "text": "Installed Apps",
+        "width": 203,
+        "textWidth": 119.71875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Catalogue",
+        "width": 203,
+        "textWidth": 93.109375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Setup",
+        "width": 203,
+        "textWidth": 65.375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Projects",
+        "width": 203,
+        "textWidth": 80.296875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Agents",
+        "width": 203,
+        "textWidth": 72.421875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Machine",
+        "width": 203,
+        "textWidth": 81.90625,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Cloud",
+        "width": 203,
+        "textWidth": 64.359375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Settings",
+        "width": 203,
+        "textWidth": 80.671875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": " Sign in with Claude",
+        "width": 145.890625,
+        "textWidth": 125.890625,
+        "scrollWidth": 146,
+        "clientWidth": 146
+      },
+      {
+        "text": " API key",
+        "width": 80.9375,
+        "textWidth": 60.9375,
+        "scrollWidth": 81,
+        "clientWidth": 81
+      },
+      {
+        "text": "Review deployment status and retry failed workloads",
+        "width": 67.515625,
+        "textWidth": 347.515625,
+        "scrollWidth": 348,
+        "clientWidth": 68
+      },
+      {
+        "text": "Claude Code",
+        "width": 77.890625,
+        "textWidth": 65.890625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Inspect credentials and workspace configuration",
+        "width": 59.65625,
+        "textWidth": 318.234375,
+        "scrollWidth": 318,
+        "clientWidth": 60
+      },
+      {
+        "text": "OpenAI Codex",
+        "width": 85.75,
+        "textWidth": 73.75,
+        "scrollWidth": 86,
+        "clientWidth": 86
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Check narrow navigation labels and status pills",
+        "width": 67.515625,
+        "textWidth": 308.171875,
+        "scrollWidth": 308,
+        "clientWidth": 68
+      },
+      {
+        "text": "Claude Code",
+        "width": 77.890625,
+        "textWidth": 65.890625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Audit terminal output and environment configuration",
+        "width": 59.65625,
+        "textWidth": 342.421875,
+        "scrollWidth": 342,
+        "clientWidth": 60
+      },
+      {
+        "text": "OpenAI Codex",
+        "width": 85.75,
+        "textWidth": 73.75,
+        "scrollWidth": 86,
+        "clientWidth": 86
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Verify production readiness",
+        "width": 67.515625,
+        "textWidth": 179.078125,
+        "scrollWidth": 179,
+        "clientWidth": 68
+      },
+      {
+        "text": "Claude Code",
+        "width": 77.890625,
+        "textWidth": 65.890625,
+        "scrollWidth": 78,
+        "clientWidth": 78
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 92.328125,
+        "scrollWidth": 92,
+        "clientWidth": 92
+      },
+      {
+        "text": "Attached",
+        "width": 92.328125,
+        "textWidth": 74.328125,
+        "scrollWidth": 90,
+        "clientWidth": 90
+      },
+      {
+        "text": "",
+        "width": 6,
+        "textWidth": 0,
+        "scrollWidth": 6,
+        "clientWidth": 6
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": "Attached",
+        "width": 62.328125,
+        "textWidth": 62.328125,
+        "scrollWidth": 62,
+        "clientWidth": 62
+      },
+      {
+        "text": " Open session",
+        "width": 123.71875,
+        "textWidth": 97.71875,
+        "scrollWidth": 122,
+        "clientWidth": 122
+      },
+      {
+        "text": "Stop",
+        "width": 72.546875,
+        "textWidth": 48.546875,
+        "scrollWidth": 73,
+        "clientWidth": 73
+      },
+      {
+        "text": "Agent · Review deployment status and retry failed workloads",
+        "width": 83.546875,
+        "textWidth": 331.65625,
+        "scrollWidth": 332,
+        "clientWidth": 84
+      }
+    ]
+  },
+  {
+    "name": "settings",
+    "width": 1280,
+    "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+    "scrollWidth": 1280,
+    "innerWidth": 1280,
+    "labels": [
+      {
+        "text": "Installed Apps",
+        "width": 203,
+        "textWidth": 119.71875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Catalogue",
+        "width": 203,
+        "textWidth": 93.109375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Setup",
+        "width": 203,
+        "textWidth": 65.375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Projects",
+        "width": 203,
+        "textWidth": 80.296875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Agents",
+        "width": 203,
+        "textWidth": 72.421875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Machine",
+        "width": 203,
+        "textWidth": 81.90625,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Cloud",
+        "width": 203,
+        "textWidth": 64.359375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Settings",
+        "width": 203,
+        "textWidth": 80.671875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      }
+    ]
+  },
+  {
+    "name": "settings",
+    "width": 800,
+    "font": "\"Geist Variable\", ui-sans-serif, system-ui, -apple-system, \"system-ui\", \"Segoe UI\", Roboto, sans-serif",
+    "scrollWidth": 800,
+    "innerWidth": 800,
+    "labels": [
+      {
+        "text": "Installed Apps",
+        "width": 203,
+        "textWidth": 119.71875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Catalogue",
+        "width": 203,
+        "textWidth": 93.109375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Setup",
+        "width": 203,
+        "textWidth": 65.375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Projects",
+        "width": 203,
+        "textWidth": 80.296875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Agents",
+        "width": 203,
+        "textWidth": 72.421875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Machine",
+        "width": 203,
+        "textWidth": 81.90625,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Cloud",
+        "width": 203,
+        "textWidth": 64.359375,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      },
+      {
+        "text": "Settings",
+        "width": 203,
+        "textWidth": 80.671875,
+        "scrollWidth": 203,
+        "clientWidth": 203
+      }
+    ]
+  }
+]
