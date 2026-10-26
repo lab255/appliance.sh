@@ -156,6 +156,15 @@ import { SkeletonSwap } from './skeleton-swap.js';
 import { Skeleton } from './skeleton.js';
 
 describe('Motion contract', () => {
+  it('keeps base transitions on the motion token scale', () => {
+    const base = readFileSync(new URL('../base.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const transitions = [...base.matchAll(/\btransition(?:-[\w-]+)?\s*:\s*([^;}]+)/g)];
+    expect(transitions.length).toBeGreaterThan(0);
+    for (const [, value] of transitions) {
+      expect(value).not.toMatch(/(?:\d*\.)?\d+ms\b/i);
+      expect(value.replace(/var\(--(?:duration|ease)-[\w-]+\)/g, '')).not.toMatch(/(?<![\w-])ease(?![\w-])/);
+    }
+  });
   it('generates seconds and bezier tuples from the theme', () => {
     const theme = readFileSync(new URL('../theme.css', import.meta.url), 'utf8');
     for (const speed of ['fast', 'base', 'slow'] as const) {
