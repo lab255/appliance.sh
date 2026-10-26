@@ -161,8 +161,10 @@ describe('Motion contract', () => {
     const transitions = [...base.matchAll(/\btransition(?:-[\w-]+)?\s*:\s*([^;}]+)/g)];
     expect(transitions.length).toBeGreaterThan(0);
     for (const [, value] of transitions) {
-      expect(value).not.toMatch(/(?:\d*\.)?\d+ms\b/i);
-      expect(value.replace(/var\(--(?:duration|ease)-[\w-]+\)/g, '')).not.toMatch(/(?<![\w-])ease(?![\w-])/);
+      expect(value).not.toMatch(/(?<![\w-])(?:\d*\.)?\d+m?s\b/i);
+      expect(value.replace(/var\(--(?:duration|ease)-[\w-]+\)/g, '')).not.toMatch(
+        /(?<![\w-])(ease(-in|-out|-in-out)?|linear|step-start|step-end|steps|cubic-bezier)\(?\b/
+      );
     }
   });
   it('generates seconds and bezier tuples from the theme', () => {
