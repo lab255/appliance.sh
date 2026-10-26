@@ -15,11 +15,14 @@ const subscribe = (notify: () => void) => {
 const snapshot = () => window.matchMedia?.(query).matches ?? true;
 const serverSnapshot = (): boolean | null => null;
 
-export function selectTransition(immediate: boolean, speed: 'fast' | 'base' | 'slow' = 'base', crossfade = false) {
-  return {
-    duration: immediate ? 0 : motionTokens[speed],
-    ease: [...(crossfade ? motionTokens.inOut : motionTokens.outQuart)] as [number, number, number, number],
-  };
+export function selectTransition(
+  immediate: boolean,
+  speed: 'fast' | 'base' | 'slow' = 'base',
+  phase: 'enter' | 'exit' = 'enter'
+) {
+  if (immediate) return { type: 'tween' as const, duration: 0 };
+  const { exit, ...enter } = motionTokens[speed];
+  return phase === 'exit' ? { ...exit } : enter;
 }
 
 export function useTransition() {
@@ -28,5 +31,9 @@ export function useTransition() {
   const preference = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const ready = useMotionReady();
   const immediate = !ready || (preference ?? reduced ?? true);
-  return { immediate, transition: selectTransition(immediate), exitTransition: selectTransition(immediate, 'fast') };
+  return {
+    immediate,
+    transition: selectTransition(immediate),
+    exitTransition: selectTransition(immediate, 'base', 'exit'),
+  };
 }
