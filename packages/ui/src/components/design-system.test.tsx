@@ -157,9 +157,9 @@ import { SkeletonSwap } from './skeleton-swap.js';
 import { Skeleton } from './skeleton.js';
 
 describe('Motion contract', () => {
-  it('keeps base transitions on the motion token scale', () => {
-    const base = readFileSync(new URL('../base.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-    const transitions = [...base.matchAll(/\btransition(?:-[\w-]+)?\s*:\s*([^;}]+)/g)];
+  it.each(['base.css', 'styles.css'])('keeps %s transitions on the motion token scale', (file) => {
+    const css = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const transitions = [...css.matchAll(/\btransition(?:-[\w-]+)?\s*:\s*([^;}]+)/g)];
     expect(transitions.length).toBeGreaterThan(0);
     for (const [, value] of transitions) {
       expect(value).not.toMatch(/(?<![\w-])(?:\d*\.)?\d+m?s\b/i);

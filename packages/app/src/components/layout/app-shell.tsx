@@ -142,7 +142,7 @@ export function AppShell() {
                     // reduced motion falls back to plain token hover.
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
+                        'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                         item.prominent
                           ? 'text-[var(--color-foreground)] ring-1 ring-inset ring-[var(--color-border-strong)]'

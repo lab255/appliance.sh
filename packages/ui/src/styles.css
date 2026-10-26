@@ -145,6 +145,7 @@
 .weight-label-ghost,
 .weight-label-text {
   grid-area: 1 / 1;
+  /* The ghost needs overflow: hidden to zero its grid auto-min-size and enable truncation. */
   overflow: hidden;
   white-space: nowrap;
 }
