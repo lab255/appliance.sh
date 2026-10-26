@@ -97,7 +97,7 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <aside className="row-span-3 flex flex-col border-r border-[var(--color-border)] bg-[var(--color-muted)]">
+      <aside className="row-span-3 flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Brand — height + divider align with the content header so the
             top-left corner reads as one clean grid, not two strips. */}
         <div className="flex h-[57px] shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
@@ -134,6 +134,9 @@ export function AppShell() {
                     title={item.label}
                     // 2026-10-26 supersedes sidebar stillness: deliberately glide
                     // on --color-hover, never accent (the active-route fill).
+                    // 2026-10-27: move the substrate from muted to surface so
+                    // the ladder is visible: surface 7% < hover 10% < active 14%.
+                    // Muted and hover are both 10%, making the glide invisible.
                     // Hover beside the active route must remain distinct;
                     // reduced motion falls back to plain token hover.
                     className={({ isActive }) =>
