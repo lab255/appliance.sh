@@ -110,6 +110,9 @@
   background: var(--color-hover);
 }
 @media (prefers-reduced-motion: reduce) {
+  [data-hover-glide-item] {
+    transition: none;
+  }
   .hover-glide-highlight {
     display: none;
   }
