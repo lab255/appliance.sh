@@ -406,7 +406,21 @@ export function EgressPanel({
               </Banner>
             ) : null}
             {trafficQuery.isError ? (
-              <Banner tone="error">Failed to load traffic: {errMessage(trafficQuery.error)}</Banner>
+              <Banner
+                tone="error"
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={trafficQuery.isFetching}
+                    onClick={() => void trafficQuery.refetch()}
+                  >
+                    Retry
+                  </Button>
+                }
+              >
+                Failed to load traffic: {errMessage(trafficQuery.error)}
+              </Banner>
             ) : (
               <TrafficView
                 events={events}
@@ -422,7 +436,16 @@ export function EgressPanel({
         </>
       ) : policyError ? (
         // Don't spin on "Loading policy…" forever when egress.get() rejects.
-        <FriendlyError error={policyError} headline="Couldn't load the egress policy" className="mt-2 text-xs" />
+        <FriendlyError
+          error={policyError}
+          headline="Couldn't load the egress policy"
+          className="mt-2 text-xs"
+          actions={
+            <Button size="sm" variant="outline" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          }
+        />
       ) : (
         <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">Loading policy…</p>
       )}
