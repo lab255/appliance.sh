@@ -271,7 +271,7 @@ export function LaunchAgentButton({
               'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50',
               active
                 ? 'border-[var(--color-border-strong)] bg-[var(--color-accent)] text-[var(--color-foreground)]'
-                : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
+                : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-hover)]'
             )}
           >
             <a.Icon className="h-3.5 w-3.5" aria-hidden /> {a.label}

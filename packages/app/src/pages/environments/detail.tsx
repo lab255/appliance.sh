@@ -287,7 +287,7 @@ export function EnvironmentDetailPage() {
                     <Link
                       to={`/deployments/${d.id}`}
                       aria-label={`${d.action}, ${resolveStatusDot(d.status).label}, ${relativeTime(d.startedAt)}`}
-                      className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2 hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                      className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                     >
                       <StatusPill {...resolveStatusDot(d.status)} />
                       <div className="min-w-0 text-sm">

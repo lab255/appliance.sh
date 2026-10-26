@@ -148,7 +148,7 @@ describe('LongOperation', () => {
 });
 
 // CSS parity and JS spring shapes are separate contracts; matching durations alone is insufficient.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { motionTokens } from '../motion/tokens.js';
 import { spring, exitFallbackMs } from '../lib/springs.js';
 import { selectTransition } from '../motion/use-transition.js';
@@ -236,5 +236,40 @@ describe('Motion contract', () => {
     expect(provider).toContain('reducedMotion="user"');
     expect(provider).toContain('<LazyMotion features={loadFeatures}>');
     expect(provider).toContain("import('./motion/features.js')");
+  });
+});
+
+describe('Interaction fill contract', () => {
+  it('defines opaque neutral fills once and preserves both existing hover strengths', () => {
+    const theme = readFileSync(new URL('../theme.css', import.meta.url), 'utf8');
+    for (const [token, legacy] of [
+      ['hover', 'muted'],
+      ['active', 'accent'],
+    ]) {
+      const definitions = [...theme.matchAll(new RegExp(`--color-${token}: (hsl\\(0 0% \\d+%\\));`, 'g'))];
+      expect(definitions).toHaveLength(1);
+      expect(definitions[0][1]).toBe(theme.match(new RegExp(`--color-${legacy}: ([^;]+);`))![1]);
+    }
+  });
+
+  it('requires named interaction fills and keeps only the existing designed hover exceptions', () => {
+    const packages = new URL('../../../', import.meta.url);
+    const exceptions: Record<string, string[]> = {
+      'ui/src/components/button.tsx': ['hover:bg-white', 'hover:bg-[var(--color-destructive-background)]'],
+      'app/src/components/layout/terminal-tab-bar.tsx': ['hover:bg-[var(--color-destructive-background)]'],
+      'app/src/components/layout/app-shell.tsx': ['hover:bg-[var(--color-warning-background)]'],
+    };
+    for (const root of ['app/src', 'ui/src']) {
+      for (const file of readdirSync(new URL(`${root}/`, packages), { recursive: true })) {
+        if (!/\.tsx?$/.test(file) || /\.(test|spec)\./.test(file)) continue;
+        const path = `${root}/${file}`;
+        const source = readFileSync(new URL(path, packages), 'utf8');
+        const hoverFills = source.match(/hover:bg-[^\s'"`]+/g) ?? [];
+        const designed = hoverFills.filter((fill) => !/^hover:bg-\[var\(--color-(?:hover|active)\)\]$/.test(fill));
+        expect(designed, path).toEqual(exceptions[path] ?? []);
+        expect(source, path).not.toMatch(/(?:hover|active):bg-[^\s'"`]*\/(?:\d+|\[[^\]]+\])/);
+        expect(source, path).not.toMatch(/(?:hover|active):bg-\[color-mix\(/);
+      }
+    }
   });
 });

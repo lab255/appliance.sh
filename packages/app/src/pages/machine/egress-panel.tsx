@@ -557,7 +557,7 @@ function DeniedAttempts({
                       disabled={busy}
                       aria-label={`Allow egress to ${d.host}:${d.port}`}
                       onClick={() => onAllow(d.host)}
-                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Allow
                     </button>
@@ -639,7 +639,7 @@ function TrafficView({
                     disabled={busy}
                     aria-label={`Block egress to ${e.host}:${e.port}`}
                     onClick={() => onBlock(e.host)}
-                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                   >
                     Block
                   </button>
@@ -649,7 +649,7 @@ function TrafficView({
                     disabled={busy}
                     aria-label={`Allow egress to ${e.host}:${e.port}`}
                     onClick={() => onAllow(e.host)}
-                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                   >
                     Allow
                   </button>
@@ -660,7 +660,7 @@ function TrafficView({
                       disabled={busy}
                       aria-label={`Allow egress to ${e.host}:${e.port}`}
                       onClick={() => onAllow(e.host)}
-                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Allow
                     </button>
@@ -669,7 +669,7 @@ function TrafficView({
                       disabled={busy}
                       aria-label={`Block egress to ${e.host}:${e.port}`}
                       onClick={() => onBlock(e.host)}
-                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Block
                     </button>

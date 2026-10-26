@@ -168,7 +168,7 @@ function AgentSignIn({
                 'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                 active
                   ? 'border-[var(--color-border-strong)] bg-[var(--color-accent)] text-[var(--color-foreground)]'
-                  : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
+                  : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-hover)]'
               )}
             >
               <a.Icon className="h-3.5 w-3.5" aria-hidden /> {a.label}
@@ -310,7 +310,7 @@ function RuntimePicker({
               'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
               active
                 ? 'border-[var(--color-sandbox-border)] bg-[var(--color-sandbox-background)] text-[var(--color-sandbox-foreground)]'
-                : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
+                : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-hover)]'
             )}
           >
             <Server className="h-3.5 w-3.5" /> {v.name}
