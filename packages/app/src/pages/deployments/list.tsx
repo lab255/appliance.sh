@@ -1,5 +1,6 @@
-import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
+import { HoverGlide, SkeletonSwap } from '@appliance.sh/ui';
+import { Button } from '@/components/ui/button';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { resolveStatusDot } from '@/components/ui/status-dot';
@@ -90,46 +91,65 @@ export function DeploymentsPage() {
       ) : null}
 
       {deploymentsQuery.error ? (
-        <FriendlyError error={deploymentsQuery.error} fallbackHeadline="Couldn't load deployments" />
-      ) : deploymentsQuery.isLoading && !deploymentsQuery.data ? (
-        <ListSkeleton />
-      ) : !deploymentsQuery.data || deploymentsQuery.data.length === 0 ? (
-        <EmptyState title="No deployments yet" description="Deploy an environment and its runs will show up here." />
-      ) : (
-        <HoverGlide
-          as="ul"
-          className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
-        >
-          {visible.map((d) => (
-            <li data-hover-glide-item="" key={d.id}>
-              <Link
-                to={`/deployments/${d.id}`}
-                aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${envs.get(d.environmentId)?.name ?? d.environmentId}, ${d.action}, ${resolveStatusDot(d.status).label}, ${durationOf(d) ?? 'in progress'}, ${relativeTime(d.startedAt)}`}
-                className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
-              >
-                <StatusPill {...resolveStatusDot(d.status)} className="transition-colors" />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">
-                    <EntityLabel id={d.projectId} name={projects.get(d.projectId)?.name} />
-                    <span className="text-[var(--color-muted-foreground)]">/</span>
-                    <EntityLabel id={d.environmentId} name={envs.get(d.environmentId)?.name} />
-                    <span className="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">{d.action}</span>
+        <FriendlyError
+          error={deploymentsQuery.error}
+          fallbackHeadline="Couldn't load deployments"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deploymentsQuery.isFetching}
+              onClick={() => void deploymentsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
+      <SkeletonSwap
+        className="min-h-[184px]"
+        loading={deploymentsQuery.isLoading && !deploymentsQuery.data}
+        fallback={<ListSkeleton />}
+      >
+        {!deploymentsQuery.data && deploymentsQuery.error ? null : !deploymentsQuery.data ||
+          deploymentsQuery.data.length === 0 ? (
+          <EmptyState title="No deployments yet" description="Deploy an environment and its runs will show up here." />
+        ) : (
+          <HoverGlide
+            as="ul"
+            className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+          >
+            {visible.map((d) => (
+              <li data-hover-glide-item="" key={d.id}>
+                <Link
+                  to={`/deployments/${d.id}`}
+                  aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${envs.get(d.environmentId)?.name ?? d.environmentId}, ${d.action}, ${resolveStatusDot(d.status).label}, ${durationOf(d) ?? 'in progress'}, ${relativeTime(d.startedAt)}`}
+                  className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                >
+                  <StatusPill {...resolveStatusDot(d.status)} className="transition-colors" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">
+                      <EntityLabel id={d.projectId} name={projects.get(d.projectId)?.name} />
+                      <span className="text-[var(--color-muted-foreground)]">/</span>
+                      <EntityLabel id={d.environmentId} name={envs.get(d.environmentId)?.name} />
+                      <span className="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">{d.action}</span>
+                    </div>
+                    {d.message ? (
+                      <div className="truncate text-xs text-[var(--color-muted-foreground)]">{d.message}</div>
+                    ) : null}
                   </div>
-                  {d.message ? (
-                    <div className="truncate text-xs text-[var(--color-muted-foreground)]">{d.message}</div>
-                  ) : null}
-                </div>
-                <div className="font-mono text-xs tabular-nums text-[var(--color-muted-foreground)]">
-                  {durationOf(d) ?? '—'}
-                </div>
-                <div className="w-16 text-right text-xs text-[var(--color-muted-foreground)]">
-                  {relativeTime(d.startedAt)}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </HoverGlide>
-      )}
+                  <div className="font-mono text-xs tabular-nums text-[var(--color-muted-foreground)]">
+                    {durationOf(d) ?? '—'}
+                  </div>
+                  <div className="w-16 text-right text-xs text-[var(--color-muted-foreground)]">
+                    {relativeTime(d.startedAt)}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </HoverGlide>
+        )}
+      </SkeletonSwap>
     </PageShell>
   );
 }

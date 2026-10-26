@@ -1,5 +1,5 @@
-import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
+import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Check, Circle, Server, Square, Terminal as TerminalIcon, Trash2, X } from 'lucide-react';
@@ -242,45 +242,61 @@ function LauncherSection({
       <h2 id="launch-agent-heading" className="text-sm font-semibold">
         Run an agent
       </h2>
-      {vmListQuery.isLoading && runningVms.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]">Checking the Sandbox…</p>
-      ) : vmListQuery.isError ? (
-        <EmptyState
-          icon={Server}
-          title="Couldn't reach the host"
-          description="The Sandbox status couldn't be read. Check that the desktop app is available, then retry."
-          action={
-            <Button variant="outline" onClick={() => vmListQuery.refetch()}>
-              Retry
-            </Button>
-          }
-        />
-      ) : runningVms.length === 0 ? (
-        <EmptyState
-          icon={Server}
-          title="Sandbox not running"
-          description="Start the Sandbox to run coding agents in its shared workspace."
-          action={
-            <Button asChild>
-              <Link to="/machine">
-                <Server className="h-4 w-4" /> Go to Machine
-              </Link>
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-          {runningVms.length > 1 ? <RuntimePicker vms={runningVms} selected={selected} onSelect={setSelected} /> : null}
-          {selected ? (
-            <RuntimeLauncher
-              name={selected}
-              agentType={agentType}
-              onAgentTypeChange={onAgentTypeChange}
-              onAuthenticated={onAuthenticated}
-            />
-          ) : null}
-        </div>
-      )}
+      <SkeletonSwap
+        className="min-h-40"
+        loading={vmListQuery.isLoading && runningVms.length === 0}
+        fallback={
+          <div
+            role="status"
+            aria-label="Checking the Sandbox…"
+            className="space-y-4 rounded-lg border border-[var(--color-border)] p-6"
+          >
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-64" />
+            <Skeleton className="h-8 w-32" />
+          </div>
+        }
+      >
+        {vmListQuery.isError ? (
+          <EmptyState
+            icon={Server}
+            title="Couldn't reach the host"
+            description="The Sandbox status couldn't be read. Check that the desktop app is available, then retry."
+            action={
+              <Button variant="outline" onClick={() => vmListQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          />
+        ) : runningVms.length === 0 ? (
+          <EmptyState
+            icon={Server}
+            title="Sandbox not running"
+            description="Start the Sandbox to run coding agents in its shared workspace."
+            action={
+              <Button asChild>
+                <Link to="/machine">
+                  <Server className="h-4 w-4" /> Go to Machine
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <div className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
+            {runningVms.length > 1 ? (
+              <RuntimePicker vms={runningVms} selected={selected} onSelect={setSelected} />
+            ) : null}
+            {selected ? (
+              <RuntimeLauncher
+                name={selected}
+                agentType={agentType}
+                onAgentTypeChange={onAgentTypeChange}
+                onAuthenticated={onAuthenticated}
+              />
+            ) : null}
+          </div>
+        )}
+      </SkeletonSwap>
     </section>
   );
 }
@@ -455,37 +471,51 @@ function RunsList() {
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold">Runs</h2>
-      {runsQuery.isLoading && runs.length === 0 ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]">Loading runs…</p>
-      ) : vmListQuery.isError || runsQuery.isError ? (
-        <EmptyState
-          icon={Bot}
-          title="Couldn't load agent runs"
-          description="The host didn't return the current agent sessions. Retry to check again."
-          action={
-            <Button
-              variant="outline"
-              onClick={() => {
-                void vmListQuery.refetch();
-                void runsQuery.refetch();
-              }}
-            >
-              Retry
-            </Button>
-          }
-        />
-      ) : runs.length === 0 ? (
-        <NoRunsState hasRuntime={runningVms.length > 0} />
-      ) : (
-        <HoverGlide
-          as="ul"
-          className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]"
-        >
-          {runs.map((run) => (
-            <RunRow key={`${run.vmName}:${run.sessionId}`} run={run} onObserve={() => observe(run)} />
-          ))}
-        </HoverGlide>
-      )}
+      <SkeletonSwap
+        className="min-h-64"
+        loading={(vmListQuery.isLoading || runsQuery.isLoading) && runs.length === 0}
+        fallback={
+          <div
+            role="status"
+            aria-label="Loading runs…"
+            className="space-y-4 rounded-lg border border-[var(--color-border)] p-6"
+          >
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-64" />
+            <Skeleton className="h-8 w-32" />
+          </div>
+        }
+      >
+        {vmListQuery.isError || runsQuery.isError ? (
+          <EmptyState
+            icon={Bot}
+            title="Couldn't load agent runs"
+            description="The host didn't return the current agent sessions. Retry to check again."
+            action={
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void vmListQuery.refetch();
+                  void runsQuery.refetch();
+                }}
+              >
+                Retry
+              </Button>
+            }
+          />
+        ) : runs.length === 0 ? (
+          <NoRunsState hasRuntime={runningVms.length > 0} />
+        ) : (
+          <HoverGlide
+            as="ul"
+            className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]"
+          >
+            {runs.map((run) => (
+              <RunRow key={`${run.vmName}:${run.sessionId}`} run={run} onObserve={() => observe(run)} />
+            ))}
+          </HoverGlide>
+        )}
+      </SkeletonSwap>
     </section>
   );
 }
