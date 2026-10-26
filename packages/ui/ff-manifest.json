@@ -1,0 +1,11 @@
+{
+  "files": [
+    {
+      "path": "src/lib/springs.ts",
+      "registryItem": "springs",
+      "registryUrl": "https://www.fluidfunctionalism.com/r/springs.json",
+      "registryDate": "2026-10-26",
+      "sha256": "b5d1c7c55ba4b865ac1156effc9ae41e95e4fdd08b42cefcda2854e93b817057"
+    }
+  ]
+}

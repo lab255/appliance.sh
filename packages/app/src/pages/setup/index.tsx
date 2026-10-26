@@ -77,11 +77,9 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
   };
   return (
     <PageShell rail="focused" className="flex min-h-[60vh] flex-col justify-center space-y-7 py-8 text-center">
-      <JourneyReveal>
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-          <img src={brandMark} className="h-8 w-8" alt="" />
-        </div>
-      </JourneyReveal>
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+        <img src={brandMark} className="h-8 w-8" alt="" />
+      </div>
       <JourneyReveal order={1}>
         <div className="space-y-2">
           <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold tracking-tight">
@@ -93,11 +91,10 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
           </p>
         </div>
       </JourneyReveal>
-      <div>
+      <JourneyReveal order={2}>
         <h2 className="mb-3 text-sm font-semibold">What do you want to do first?</h2>
         <div className="grid gap-3 text-left sm:grid-cols-2">
           <IntentCard
-            order={2}
             icon={Bot}
             title="Run a coding agent"
             body="Claude Code and friends work in an isolated Sandbox. Your files stay yours and their internet access is guarded."
@@ -106,7 +103,6 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
             onClick={() => getStarted('agent')}
           />
           <IntentCard
-            order={3}
             icon={Rocket}
             title="Host an app"
             body="Deploy an app to this computer and get a live local URL. Free, private, and available while this computer is on."
@@ -118,8 +114,8 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
         <p className="mt-3 text-xs leading-4 text-[var(--color-muted-foreground)]">
           Either way you get both — this just picks what we set up first.
         </p>
-      </div>
-      <div className="flex items-center justify-center gap-2">
+      </JourneyReveal>
+      <JourneyReveal order={3} className="flex items-center justify-center gap-2">
         <Button variant="ghost" onClick={onLater}>
           Set up later
         </Button>
@@ -129,13 +125,12 @@ function FirstRunWelcome({ onLater, onMore }: { onLater: () => void; onMore: () 
         <Button variant="ghost" onClick={onMore}>
           More options
         </Button>
-      </div>
+      </JourneyReveal>
     </PageShell>
   );
 }
 
 function IntentCard({
-  order,
   icon: Icon,
   title,
   body,
@@ -143,7 +138,6 @@ function IntentCard({
   action,
   onClick,
 }: {
-  order: number;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   title: string;
   body: string;
@@ -152,23 +146,21 @@ function IntentCard({
   onClick: () => void;
 }) {
   return (
-    <JourneyReveal order={order}>
-      <SectionCard
-        className="journey-card flex h-full flex-col"
-        title={
-          <span className="inline-flex items-center gap-2">
-            <Icon className="h-4 w-4" aria-hidden />
-            {title}
-          </span>
-        }
-      >
-        <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">{body}</p>
-        <p className="mt-3 text-xs font-medium leading-4">{duration}</p>
-        <Button className="mt-4 w-full" onClick={onClick}>
-          {action}
-        </Button>
-      </SectionCard>
-    </JourneyReveal>
+    <SectionCard
+      className="journey-card flex h-full flex-col"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Icon className="h-4 w-4" aria-hidden />
+          {title}
+        </span>
+      }
+    >
+      <p className="text-sm leading-5 text-[var(--color-muted-foreground)]">{body}</p>
+      <p className="mt-3 text-xs font-medium leading-4">{duration}</p>
+      <Button className="mt-4 w-full" onClick={onClick}>
+        {action}
+      </Button>
+    </SectionCard>
   );
 }
 

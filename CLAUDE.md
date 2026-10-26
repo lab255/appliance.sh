@@ -24,7 +24,8 @@ migrations below are owner rulings for follow-up implementation, not shipped her
   production components or exported as a new feature.
 - Never use `--overwrite`: every existing DS v2 component and test is locally
   authored. Inspect registry files and dependencies before each install.
-- Preserve upstream files for `upgrade.mjs` comparisons. Springs is excluded from
+- Preserve upstream files byte-pristine for upgrade comparisons against the live
+  registry (see the drift-manifest section below). Springs is excluded from
   Prettier. The CLI dropped its leading 11 comment lines: the upstream checker
   reported `DIFFERS (-0 +11)`. Restoring the registry's exact `files[0].content`
   mechanically (JSON parse + file write, no code edits) made it report
@@ -75,14 +76,25 @@ aliases, comments, and unrelated objects; scanner coverage is intentionally broa
 than a registry filename list. The existing design-system test still checks
 reduced motion, the provider location, and asynchronous feature loading.
 
-Red/green demonstration: temporarily create `src/lib/fluid-policy-probe.tsx` with
-`import { motion } from 'motion/react'; export const Probe = () => <motion.div />;`.
-With `<LazyMotion strict features={loadFeatures}>`, the scan failed and named
-`lib/fluid-policy-probe.tsx` (31 passed, 1 failed in the full UI suite). Removing
-strict with the same probe passed both guard tests. Remove the probe afterward.
+`motion.*` under the recorded non-strict provider is legal. Inline synthetic
+sources exercise this same checker with a strict provider and require reports for
+both direct and aliased Motion imports, independently of production policy.
+
+`packages/ui/ff-manifest.json` records each installed FF file's registry item,
+URL, registry date, and SHA-256 of its exact bytes. The drift test checks these
+committed hashes without network access; the on-demand live check is fetching the
+item's registry URL from the manifest and diffing `files[0].content` (no committed
+tooling for this yet). The initial registry date records the spike's upstream comparison.
+Sanctioned refresh: **legitimate upstream release → re-install the item via shadcn,
+regenerate the manifest hash, note the registry version/date**. Follow the install
+precautions above, including the CLI comment-loss check, and keep springs.ts
+registry-pristine. Compute the hash from local file bytes with
+`shasum -a 256 packages/ui/src/lib/springs.ts` and update that manifest entry;
+keep the assertion when upgrading.
+
 Run `pnpm --filter @appliance.sh/ui exec vitest run src/components/fluid-policy.test.ts`
-to repeat; temporarily restore strict to reproduce red. Final acceptance is
-`pnpm verify` in the foreground, including builds before consumer typechecks.
+for both checks. Final acceptance is `pnpm verify` in the foreground, including
+builds before consumer typechecks.
 
 ### DS v2 constraints and owner rulings (2026-10-26)
 

@@ -2,6 +2,10 @@ import { getPublicKeyAsync, signAsync } from '@noble/ed25519';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CATALOGUE_INDEX_MAX_BYTES,
+  CATALOGUE_RELEASE_MANIFEST,
+  PINNED_CATALOGUE_TRUST,
+  catalogueTrustPolicyFromManifest,
+  checkTrustGeneration,
   CatalogueTrustError,
   catalogueSigningInput,
   canonicaliseJson,
@@ -140,7 +144,7 @@ describe('catalogue trust', () => {
 });
 
 it('rejects a valid RFC0001 fixture-signed pair in production defaults', async () => {
-  const payload = index();
+  const payload = index({ generation: PINNED_CATALOGUE_TRUST.generationFloor });
   const options = await pair(payload);
   const fixturePrivate = Uint8Array.from({ length: 32 }, (_, i) => i);
   const fixturePublic = await getPublicKeyAsync(fixturePrivate);
@@ -265,4 +269,64 @@ it('rejects bundle URL credentials while retaining explicit HTTPS ports', async 
     catalogueEntrySchema.safeParse({ ...entry, bundle: { ...entry.bundle, url: 'https://example.test:8443/app.zip' } })
       .success
   ).toBe(true);
+});
+
+describe('production catalogue release manifest', () => {
+  const productionKeyId = 'ed25519:sha256:893bc44557cff6153897870749209d92873e381dc3388aa33643be2481da6a58';
+  const productionPublicKey = 'ed25519:CmosXsTg3GLHC--OakJwzMN9UqSJplNV5C2MqHCc-rE';
+
+  it('pins exactly the owner-provided public identity with its derived key ID', async () => {
+    const raw = Buffer.from(productionPublicKey.slice('ed25519:'.length), 'base64url');
+    expect(raw.byteLength).toBe(32);
+    expect(`ed25519:sha256:${await sha256(raw)}`).toBe(productionKeyId);
+    expect(CATALOGUE_RELEASE_MANIFEST.keys).toEqual({ [productionKeyId]: productionPublicKey });
+    expect(PINNED_CATALOGUE_TRUST.keys).toEqual(CATALOGUE_RELEASE_MANIFEST.keys);
+  });
+
+  it('accepts the production signer identity and still requires its valid signature', async () => {
+    // No production private key is needed: reaching bad-signature proves pin lookup
+    // and public-key/key-ID correspondence passed without mocking cryptography.
+    const options = await pair(index({ generation: 1800000001 }));
+    const envelope = JSON.parse(new TextDecoder().decode(options.envelopeBytes));
+    envelope.keyId = productionKeyId;
+    await expect(
+      verifyCatalogueIndexPair({
+        ...options,
+        policy: undefined,
+        envelopeBytes: encoder.encode(JSON.stringify(envelope)),
+      })
+    ).rejects.toMatchObject({ code: 'bad-signature' });
+  });
+
+  it('computes the reviewed cutover floor and preserves any higher persisted floor', async () => {
+    expect(CATALOGUE_RELEASE_MANIFEST.legacyMaximum).toBe(1800000000);
+    expect(PINNED_CATALOGUE_TRUST.generationFloor).toBe(1800000001);
+    expect(() => checkTrustGeneration(1800000001, PINNED_CATALOGUE_TRUST)).not.toThrow();
+    expect(() => checkTrustGeneration(1800000000, PINNED_CATALOGUE_TRUST)).toThrow(
+      expect.objectContaining({ code: 'generation-below-floor' })
+    );
+    expect(() =>
+      checkTrustGeneration(1800000001, { ...PINNED_CATALOGUE_TRUST, highestGeneration: 1800000002 })
+    ).toThrow(expect.objectContaining({ code: 'generation-below-floor' }));
+    // Exercise the release floor with an actual signed test pair, never a production secret.
+    const options = await pair(index({ generation: 1800000000 }));
+    const policy = { ...PINNED_CATALOGUE_TRUST, keys: options.policy.keys };
+    await expect(verifyCatalogueIndexPair({ ...options, policy })).rejects.toMatchObject({
+      code: 'generation-below-floor',
+    });
+    await expect(
+      verifyCatalogueIndexPair({ ...(await pair(index({ generation: 1800000001 }))), policy })
+    ).resolves.toMatchObject({ payload: { generation: 1800000001 } });
+  });
+
+  it('retains the unfilled-manifest sentinel and rejects signed pairs without a pin', async () => {
+    const policy = catalogueTrustPolicyFromManifest({ keys: Object.freeze({}), legacyMaximum: null });
+    expect(policy).toEqual({ keys: {}, generationFloor: Number.MAX_SAFE_INTEGER });
+    expect(() => checkTrustGeneration(1800000001, policy)).toThrow(
+      expect.objectContaining({ code: 'generation-below-floor' })
+    );
+    await expect(
+      verifyCatalogueIndexPair({ ...(await pair(index({ generation: Number.MAX_SAFE_INTEGER }))), policy })
+    ).rejects.toMatchObject({ code: 'unknown-key' });
+  });
 });
