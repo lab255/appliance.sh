@@ -1,5 +1,6 @@
 import { HostingStatus } from '@/components/journey-motion';
 import * as React from 'react';
+import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -292,429 +293,463 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <code className="font-mono text-sm font-semibold">{name}</code>
-          <Tag emphasis="sandbox">Sandbox</Tag>
-          {isDefault ? <Tag>default</Tag> : null}
+    <SkeletonSwap
+      loading={!status && statusQuery.isLoading}
+      fallback={
+        <div role="status" aria-label="Checking Sandbox" className="space-y-4">
+          <Skeleton className="h-[25px] w-full" />
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-[127px] w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-[175px] w-full" />
         </div>
-        <StatusPill
-          {...lifecycleStatus}
-          className={lifecycle === 'running' ? 'border-[var(--color-success-border)]' : undefined}
-        />
-      </div>
-
-      {status?.running && !status.clusterProvisioned && busy !== 'cluster' ? (
-        <div className="flex flex-wrap gap-2" aria-label="Start something">
-          <Button asChild size="sm">
-            <Link to={`/agents?runtime=${encodeURIComponent(name)}`}>
-              <Bot className="h-4 w-4" aria-hidden />
-              Run an agent
-            </Link>
-          </Button>
-          {host.terminal ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                terminals.openSession({
-                  target: name,
-                  engine: 'microvm',
-                  clusterName: name,
-                  mode: status.dev ? 'dev' : 'host',
-                })
-              }
-            >
-              <TerminalIcon className="h-4 w-4" aria-hidden />
-              Open a shell
-            </Button>
-          ) : null}
-          <Button variant="outline" size="sm" onClick={() => setHostingConfirm(true)}>
-            <Rocket className="h-4 w-4" aria-hidden />
-            Set up hosting
-          </Button>
-        </div>
-      ) : null}
-
-      <CapabilityLedger
-        running={Boolean(status?.running)}
-        exists={Boolean(status?.exists)}
-        starting={busy === 'up'}
-        hostingProvisioned={Boolean(status?.clusterProvisioned)}
-        hostingServing={clusterServing}
-        hostingBusy={busy === 'cluster'}
-        confirm={hostingConfirm}
-        onConfirm={() => void setUpHosting()}
-        onCancel={() => setHostingConfirm(false)}
-        onStart={() => setHostingConfirm(true)}
-      />
-
-      {busy === 'cluster' || (errorAction === 'cluster' && error) ? (
-        <SectionCard>
-          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-            {lifecycleAnnouncement}
-          </div>
-          <LongOperation
-            title="Setting up App hosting"
-            status={busy === 'cluster' ? 'running' : 'error'}
-            steps={HOSTING_STEPS}
-            activeStep={hostingStep(log)}
-            nowLine={log.at(-1) ?? 'Restarting the Sandbox with hosting…'}
-            timeClass="minutes"
-            estimate={durationEstimates.hostingSetup}
-            leaveSafety="resumable"
-            stallMessage="First-time setup downloads the app platform's images — a quiet couple of minutes is normal."
-            failure={error ?? undefined}
-            retry={
-              <Button size="sm" onClick={() => void setUpHosting()}>
-                Retry hosting setup
+      }
+    >
+      <div className="space-y-4">
+        {statusQuery.error ? (
+          <FriendlyError
+            error={statusQuery.error}
+            headline="Couldn't read the Sandbox"
+            actions={
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={statusQuery.isFetching}
+                onClick={() => void statusQuery.refetch()}
+              >
+                Retry
               </Button>
             }
-            log={log.map((line, index) => (
-              <div key={`${index}-${line}`}>{line}</div>
-            ))}
-            logProps={{ height: 'compact', live: 'off', copyText: log.join('\n') }}
           />
-        </SectionCard>
-      ) : null}
+        ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="font-mono text-sm font-semibold">{name}</code>
+            <Tag emphasis="sandbox">Sandbox</Tag>
+            {isDefault ? <Tag>default</Tag> : null}
+          </div>
+          <StatusPill
+            {...lifecycleStatus}
+            className={lifecycle === 'running' ? 'border-[var(--color-success-border)]' : undefined}
+          />
+        </div>
 
-      {/* Tab strip */}
-      <div
-        role="tablist"
-        aria-label="Dev Machine detail"
-        className="flex flex-wrap gap-1 border-b border-[var(--color-border)]"
-      >
-        {tabs.map((t) => {
-          const active = t.id === activeTab;
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              id={`machine-tab-${t.id}`}
-              aria-controls={`machine-panel-${t.id}`}
-              type="button"
-              aria-selected={active}
-              tabIndex={active ? 0 : -1}
-              disabled={!t.enabled}
-              onClick={() => setTab(t.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowRight') {
-                  event.preventDefault();
-                  moveTab(t.id, 1);
-                }
-                if (event.key === 'ArrowLeft') {
-                  event.preventDefault();
-                  moveTab(t.id, -1);
-                }
-                if (event.key === 'Home') {
-                  event.preventDefault();
-                  moveTab(t.id, 'home');
-                }
-                if (event.key === 'End') {
-                  event.preventDefault();
-                  moveTab(t.id, 'end');
-                }
-              }}
-              className={cn(
-                '-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-40',
-                active
-                  ? 'border-[var(--color-accent)] text-[var(--color-foreground)]'
-                  : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-              )}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-      {tabs.some((item) => !item.enabled) ? (
-        <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
-          Start the Sandbox to use Internet access, Credentials, and Facts. Set up hosting to use Workloads.
-        </p>
-      ) : null}
-
-      {/* Tab panels */}
-      {activeTab === 'lifecycle' ? (
-        <div id="machine-panel-lifecycle" role="tabpanel" aria-labelledby="machine-tab-lifecycle" className="space-y-3">
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            {status?.clusterProvisioned ? (
-              <>
-                App hosting is on. Technical target: <code className="font-mono">{clusterId}</code>.
-              </>
-            ) : (
-              'The Sandbox is ready for agents and shells. Set up App hosting when you want to deploy apps here.'
-            )}
-          </p>
-
-          {status && !status.available ? (
-            status.installable ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--color-border)] px-3 py-2">
-                <p className="text-xs text-[var(--color-muted-foreground)]">
-                  The engine binary (<code className="font-mono">appliance-vm</code>) isn&apos;t installed yet —
-                  Appliance installs it into <code className="font-mono">~/.appliance/bin</code>.
-                </p>
-                <Button onClick={() => run('install', () => host.vm!.install())} disabled={busy !== null}>
-                  <Download className="h-4 w-4" /> {busy === 'install' ? 'Installing…' : 'Install engine'}
-                </Button>
-              </div>
-            ) : (
-              <Banner tone="warning">
-                {status.message ?? 'The Sandbox engine is not installed on this computer.'}
-              </Banner>
-            )
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={() => {
-                  const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
-                  // Dev once dev: the engine flag is one-way, so a dev VM
-                  // always re-provisions through `dev up`.
-                  const wantDev = devMode || status?.dev === true;
-                  void run('up', () => (wantDev ? vm.devUp(onLog, { mount: mountPath ?? undefined }) : vm.up(onLog)));
-                }}
-                disabled={busy !== null || status?.running === true}
-              >
-                <Play className="h-4 w-4" />{' '}
-                {busy === 'up'
-                  ? 'Starting…'
-                  : status?.running
-                    ? 'Running'
-                    : devMode || status?.dev
-                      ? 'Start Sandbox workspace'
-                      : 'Start'}
-              </Button>
+        {status?.running && !status.clusterProvisioned && busy !== 'cluster' ? (
+          <div className="flex flex-wrap gap-2" aria-label="Start something">
+            <Button asChild size="sm">
+              <Link to={`/agents?runtime=${encodeURIComponent(name)}`}>
+                <Bot className="h-4 w-4" aria-hidden />
+                Run an agent
+              </Link>
+            </Button>
+            {host.terminal ? (
               <Button
                 variant="outline"
-                onClick={() => run('stop', () => vm.stop())}
-                disabled={busy !== null || !status?.running}
+                size="sm"
+                onClick={() =>
+                  terminals.openSession({
+                    target: name,
+                    engine: 'microvm',
+                    clusterName: name,
+                    mode: status.dev ? 'dev' : 'host',
+                  })
+                }
               >
-                <Square className="h-4 w-4" /> {busy === 'stop' ? 'Stopping…' : 'Stop'}
+                <TerminalIcon className="h-4 w-4" aria-hidden />
+                Open a shell
               </Button>
-              <Button variant="destructive" onClick={onDelete} disabled={busy !== null || !status?.exists}>
-                <Trash2 className="h-4 w-4" aria-hidden /> {busy === 'delete' ? 'Deleting…' : 'Delete Sandbox'}
-              </Button>
-              {status?.dev ? (
-                <Tag>
-                  <TerminalIcon className="mr-1 h-3.5 w-3.5" aria-hidden />
-                  shared workspace
-                </Tag>
-              ) : !status?.running ? (
-                <label
-                  className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]"
-                  title="Add a persistent shared workspace for shells and agents"
-                >
-                  <input
-                    type="checkbox"
-                    checked={devMode}
-                    onChange={(e) => setDevMode(e.target.checked)}
-                    disabled={busy !== null}
-                  />
-                  shared workspace
-                </label>
-              ) : null}
-              {(devMode || status?.dev) && !status?.running && host.local?.pickDirectory ? (
-                <div className="inline-flex items-center gap-1.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const picked = await host.local?.pickDirectory();
-                      if (picked) setMountPath(picked);
-                    }}
-                    disabled={busy !== null}
-                    className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" /> {mountPath ? 'Change folder' : 'Share a folder…'}
-                  </button>
-                  {mountPath ? (
-                    <span
-                      className="inline-flex items-center gap-1 text-[var(--color-muted-foreground)]"
-                      title={mountPath}
-                    >
-                      <span className="max-w-[14rem] truncate font-mono">{mountPath}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRemovedMount(mountPath);
-                          setMountPath(null);
-                        }}
-                        className="rounded hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                        aria-label={`Stop sharing ${mountPath}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          )}
+            ) : null}
+            <Button variant="outline" size="sm" onClick={() => setHostingConfirm(true)}>
+              <Rocket className="h-4 w-4" aria-hidden />
+              Set up hosting
+            </Button>
+          </div>
+        ) : null}
 
-          {removedMount ? (
-            <Banner
-              tone="neutral"
-              action={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setMountPath(removedMount);
-                    setRemovedMount(null);
-                  }}
-                >
-                  Undo
+        <CapabilityLedger
+          running={Boolean(status?.running)}
+          exists={Boolean(status?.exists)}
+          starting={busy === 'up'}
+          hostingProvisioned={Boolean(status?.clusterProvisioned)}
+          hostingServing={clusterServing}
+          hostingBusy={busy === 'cluster'}
+          confirm={hostingConfirm}
+          onConfirm={() => void setUpHosting()}
+          onCancel={() => setHostingConfirm(false)}
+          onStart={() => setHostingConfirm(true)}
+        />
+
+        {busy === 'cluster' || (errorAction === 'cluster' && error) ? (
+          <SectionCard>
+            <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {lifecycleAnnouncement}
+            </div>
+            <LongOperation
+              title="Setting up App hosting"
+              status={busy === 'cluster' ? 'running' : 'error'}
+              steps={HOSTING_STEPS}
+              activeStep={hostingStep(log)}
+              nowLine={log.at(-1) ?? 'Restarting the Sandbox with hosting…'}
+              timeClass="minutes"
+              estimate={durationEstimates.hostingSetup}
+              leaveSafety="resumable"
+              stallMessage="First-time setup downloads the app platform's images — a quiet couple of minutes is normal."
+              failure={error ?? undefined}
+              retry={
+                <Button size="sm" onClick={() => void setUpHosting()}>
+                  Retry hosting setup
                 </Button>
               }
-            >
-              Shared folder removed. This change applies the next time the Sandbox starts.
-            </Banner>
-          ) : null}
-
-          {error && errorAction !== 'cluster' && errorAction !== 'up' ? (
-            <FriendlyError
-              error={error}
-              fallbackHeadline={
-                errorAction === 'install'
-                  ? "The local runtime couldn't be installed"
-                  : errorAction === 'stop'
-                    ? "The machine couldn't be stopped"
-                    : errorAction === 'delete'
-                      ? "The machine couldn't be deleted"
-                      : "The local machine couldn't start"
-              }
+              log={log.map((line, index) => (
+                <div key={`${index}-${line}`}>{line}</div>
+              ))}
+              logProps={{ height: 'compact', live: 'off', copyText: log.join('\n') }}
             />
-          ) : null}
+          </SectionCard>
+        ) : null}
 
-          {busy === 'up' || (logAction === 'up' && log.length > 0) ? (
-            <>
-              <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-                {lifecycleAnnouncement}
-              </div>
-              <LongOperation
-                title="Starting the Sandbox"
-                status={busy === 'up' ? 'running' : errorAction === 'up' && error ? 'error' : 'success'}
-                timeClass="seconds"
-                estimate=""
-                leaveSafety="resumable"
-                nowLine={log.at(-1) ?? 'Starting the Sandbox…'}
-                failure={errorAction === 'up' ? (error ?? undefined) : undefined}
-                retry={
-                  errorAction === 'up' ? (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        const onLog = (event: { message: string }) =>
-                          setLog((previous) => [...previous.slice(-199), event.message]);
-                        const wantDev = devMode || status?.dev === true;
-                        void run('up', () =>
-                          wantDev ? vm.devUp(onLog, { mount: mountPath ?? undefined }) : vm.up(onLog)
-                        );
-                      }}
-                    >
-                      Retry
-                    </Button>
-                  ) : undefined
-                }
-                log={log.map((line, index) => (
-                  <div key={`${index}-${line}`}>{line}</div>
-                ))}
-                logProps={{ height: 'compact', live: 'off', copyText: log.join('\n') }}
-              />
-            </>
-          ) : null}
+        {/* Tab strip */}
+        <div
+          role="tablist"
+          aria-label="Dev Machine detail"
+          className="flex flex-wrap gap-1 border-b border-[var(--color-border)]"
+        >
+          {tabs.map((t) => {
+            const active = t.id === activeTab;
+            return (
+              <button
+                key={t.id}
+                role="tab"
+                id={`machine-tab-${t.id}`}
+                aria-controls={`machine-panel-${t.id}`}
+                type="button"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                disabled={!t.enabled}
+                onClick={() => setTab(t.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    moveTab(t.id, 1);
+                  }
+                  if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    moveTab(t.id, -1);
+                  }
+                  if (event.key === 'Home') {
+                    event.preventDefault();
+                    moveTab(t.id, 'home');
+                  }
+                  if (event.key === 'End') {
+                    event.preventDefault();
+                    moveTab(t.id, 'end');
+                  }
+                }}
+                className={cn(
+                  '-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-40',
+                  active
+                    ? 'border-[var(--color-accent)] text-[var(--color-foreground)]'
+                    : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+                )}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        {tabs.some((item) => !item.enabled) ? (
+          <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
+            Start the Sandbox to use Internet access, Credentials, and Facts. Set up hosting to use Workloads.
+          </p>
+        ) : null}
 
-          {status?.running ? (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {status.kubeconfigReady ? (
-                <p className="text-xs text-[var(--color-muted-foreground)]">
-                  Available as{' '}
-                  <span className="font-medium text-[var(--color-foreground)]">{devMachineLabel(name)}</span> in the
-                  target switcher
-                </p>
+        {/* Tab panels */}
+        {activeTab === 'lifecycle' ? (
+          <div
+            id="machine-panel-lifecycle"
+            role="tabpanel"
+            aria-labelledby="machine-tab-lifecycle"
+            className="space-y-3"
+          >
+            <p className="text-xs text-[var(--color-muted-foreground)]">
+              {status?.clusterProvisioned ? (
+                <>
+                  App hosting is on. Technical target: <code className="font-mono">{clusterId}</code>.
+                </>
               ) : (
-                <p className="text-xs text-[var(--color-muted-foreground)]">Sandbox ready</p>
+                'The Sandbox is ready for agents and shells. Set up App hosting when you want to deploy apps here.'
               )}
-              <div className="flex items-center gap-2">
-                {host.terminal ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      terminals.openSession({
-                        target: name,
-                        engine: 'microvm',
-                        clusterName: name,
-                        mode: status.dev ? 'dev' : 'host',
-                      })
-                    }
-                    disabled={busy !== null}
-                    title={
-                      status.dev
-                        ? 'Open a shell in the dev workspace (/persist/workspace)'
-                        : 'Open a root shell on the microVM host'
-                    }
-                  >
-                    <TerminalIcon className="h-4 w-4" /> {status.dev ? 'Open dev shell' : 'Open shell'}
+            </p>
+
+            {status && !status.available ? (
+              status.installable ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--color-border)] px-3 py-2">
+                  <p className="text-xs text-[var(--color-muted-foreground)]">
+                    The engine binary (<code className="font-mono">appliance-vm</code>) isn&apos;t installed yet —
+                    Appliance installs it into <code className="font-mono">~/.appliance/bin</code>.
+                  </p>
+                  <Button onClick={() => run('install', () => host.vm!.install())} disabled={busy !== null}>
+                    <Download className="h-4 w-4" /> {busy === 'install' ? 'Installing…' : 'Install engine'}
                   </Button>
+                </div>
+              ) : (
+                <Banner tone="warning">
+                  {status.message ?? 'The Sandbox engine is not installed on this computer.'}
+                </Banner>
+              )
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={() => {
+                    const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
+                    // Dev once dev: the engine flag is one-way, so a dev VM
+                    // always re-provisions through `dev up`.
+                    const wantDev = devMode || status?.dev === true;
+                    void run('up', () => (wantDev ? vm.devUp(onLog, { mount: mountPath ?? undefined }) : vm.up(onLog)));
+                  }}
+                  disabled={busy !== null || status?.running === true}
+                >
+                  <Play className="h-4 w-4" />{' '}
+                  {busy === 'up'
+                    ? 'Starting…'
+                    : status?.running
+                      ? 'Running'
+                      : devMode || status?.dev
+                        ? 'Start Sandbox workspace'
+                        : 'Start'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => run('stop', () => vm.stop())}
+                  disabled={busy !== null || !status?.running}
+                >
+                  <Square className="h-4 w-4" /> {busy === 'stop' ? 'Stopping…' : 'Stop'}
+                </Button>
+                <Button variant="destructive" onClick={onDelete} disabled={busy !== null || !status?.exists}>
+                  <Trash2 className="h-4 w-4" aria-hidden /> {busy === 'delete' ? 'Deleting…' : 'Delete Sandbox'}
+                </Button>
+                {status?.dev ? (
+                  <Tag>
+                    <TerminalIcon className="mr-1 h-3.5 w-3.5" aria-hidden />
+                    shared workspace
+                  </Tag>
+                ) : !status?.running ? (
+                  <label
+                    className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]"
+                    title="Add a persistent shared workspace for shells and agents"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={devMode}
+                      onChange={(e) => setDevMode(e.target.checked)}
+                      disabled={busy !== null}
+                    />
+                    shared workspace
+                  </label>
                 ) : null}
-                {/* The launcher itself lives in ④ Agents (I4). Keep a thin
+                {(devMode || status?.dev) && !status?.running && host.local?.pickDirectory ? (
+                  <div className="inline-flex items-center gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const picked = await host.local?.pickDirectory();
+                        if (picked) setMountPath(picked);
+                      }}
+                      disabled={busy !== null}
+                      className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                    >
+                      <FolderOpen className="h-3.5 w-3.5" /> {mountPath ? 'Change folder' : 'Share a folder…'}
+                    </button>
+                    {mountPath ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-[var(--color-muted-foreground)]"
+                        title={mountPath}
+                      >
+                        <span className="max-w-[14rem] truncate font-mono">{mountPath}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRemovedMount(mountPath);
+                            setMountPath(null);
+                          }}
+                          className="rounded hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                          aria-label={`Stop sharing ${mountPath}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {removedMount ? (
+              <Banner
+                tone="neutral"
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setMountPath(removedMount);
+                      setRemovedMount(null);
+                    }}
+                  >
+                    Undo
+                  </Button>
+                }
+              >
+                Shared folder removed. This change applies the next time the Sandbox starts.
+              </Banner>
+            ) : null}
+
+            {error && errorAction !== 'cluster' && errorAction !== 'up' ? (
+              <FriendlyError
+                error={error}
+                fallbackHeadline={
+                  errorAction === 'install'
+                    ? "The local runtime couldn't be installed"
+                    : errorAction === 'stop'
+                      ? "The machine couldn't be stopped"
+                      : errorAction === 'delete'
+                        ? "The machine couldn't be deleted"
+                        : "The local machine couldn't start"
+                }
+              />
+            ) : null}
+
+            {busy === 'up' || (logAction === 'up' && log.length > 0) ? (
+              <>
+                <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                  {lifecycleAnnouncement}
+                </div>
+                <LongOperation
+                  title="Starting the Sandbox"
+                  status={busy === 'up' ? 'running' : errorAction === 'up' && error ? 'error' : 'success'}
+                  timeClass="seconds"
+                  estimate=""
+                  leaveSafety="resumable"
+                  nowLine={log.at(-1) ?? 'Starting the Sandbox…'}
+                  failure={errorAction === 'up' ? (error ?? undefined) : undefined}
+                  retry={
+                    errorAction === 'up' ? (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const onLog = (event: { message: string }) =>
+                            setLog((previous) => [...previous.slice(-199), event.message]);
+                          const wantDev = devMode || status?.dev === true;
+                          void run('up', () =>
+                            wantDev ? vm.devUp(onLog, { mount: mountPath ?? undefined }) : vm.up(onLog)
+                          );
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    ) : undefined
+                  }
+                  log={log.map((line, index) => (
+                    <div key={`${index}-${line}`}>{line}</div>
+                  ))}
+                  logProps={{ height: 'compact', live: 'off', copyText: log.join('\n') }}
+                />
+              </>
+            ) : null}
+
+            {status?.running ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {status.kubeconfigReady ? (
+                  <p className="text-xs text-[var(--color-muted-foreground)]">
+                    Available as{' '}
+                    <span className="font-medium text-[var(--color-foreground)]">{devMachineLabel(name)}</span> in the
+                    target switcher
+                  </p>
+                ) : (
+                  <p className="text-xs text-[var(--color-muted-foreground)]">Sandbox ready</p>
+                )}
+                <div className="flex items-center gap-2">
+                  {host.terminal ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        terminals.openSession({
+                          target: name,
+                          engine: 'microvm',
+                          clusterName: name,
+                          mode: status.dev ? 'dev' : 'host',
+                        })
+                      }
+                      disabled={busy !== null}
+                      title={
+                        status.dev
+                          ? 'Open a shell in the dev workspace (/persist/workspace)'
+                          : 'Open a root shell on the microVM host'
+                      }
+                    >
+                      <TerminalIcon className="h-4 w-4" /> {status.dev ? 'Open dev shell' : 'Open shell'}
+                    </Button>
+                  ) : null}
+                  {/* The launcher itself lives in ④ Agents (I4). Keep a thin
                     deep-link here, preselecting this VM via `?runtime=`,
                     so "run an agent on this VM" stays one click from detail. */}
-                {host.terminal && host.vm ? (
-                  <Button asChild variant="outline" size="sm">
-                    <Link
-                      to={`/agents?runtime=${encodeURIComponent(name)}`}
-                      title="Launch a coding agent in the Agents area"
-                    >
-                      <Bot className="h-4 w-4" /> Run agent →
-                    </Link>
+                  {host.terminal && host.vm ? (
+                    <Button asChild variant="outline" size="sm">
+                      <Link
+                        to={`/agents?runtime=${encodeURIComponent(name)}`}
+                        title="Launch a coding agent in the Agents area"
+                      >
+                        <Bot className="h-4 w-4" /> Run agent →
+                      </Link>
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" size="sm" onClick={() => void deployHere()} disabled={busy !== null}>
+                    <Rocket className="h-4 w-4" /> Deploy app
                   </Button>
-                ) : null}
-                <Button variant="outline" size="sm" onClick={() => void deployHere()} disabled={busy !== null}>
-                  <Rocket className="h-4 w-4" /> Deploy app
-                </Button>
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {/* Q4 — Doctor re-run entry. Prominent when the runtime won't start;
+            {/* Q4 — Doctor re-run entry. Prominent when the runtime won't start;
               otherwise tucked behind a toggle. Reuses ① /setup/doctor's panel. */}
-          <RuntimeDiagnostics defaultOpen={wontStart} />
-        </div>
-      ) : null}
+            <RuntimeDiagnostics defaultOpen={wontStart} />
+          </div>
+        ) : null}
 
-      {activeTab === 'egress' ? (
-        <div id="machine-panel-egress" role="tabpanel" aria-labelledby="machine-tab-egress">
-          <EgressPanel
-            vm={vm}
-            name={name}
-            policy={policyQuery.data}
-            policyError={policyQuery.error}
-            platform={host.platform}
-          />
-        </div>
-      ) : null}
+        {activeTab === 'egress' ? (
+          <div id="machine-panel-egress" role="tabpanel" aria-labelledby="machine-tab-egress">
+            <EgressPanel
+              vm={vm}
+              name={name}
+              policy={policyQuery.data}
+              policyError={policyQuery.error}
+              platform={host.platform}
+            />
+          </div>
+        ) : null}
 
-      {activeTab === 'credentials' ? (
-        <div id="machine-panel-credentials" role="tabpanel" aria-labelledby="machine-tab-credentials">
-          <CredentialsPanel vm={vm} name={name} mitmOn={policyQuery.data?.mitm ?? false} platform={host.platform} />
-        </div>
-      ) : null}
+        {activeTab === 'credentials' ? (
+          <div id="machine-panel-credentials" role="tabpanel" aria-labelledby="machine-tab-credentials">
+            <CredentialsPanel vm={vm} name={name} mitmOn={policyQuery.data?.mitm ?? false} platform={host.platform} />
+          </div>
+        ) : null}
 
-      {activeTab === 'facts' && status ? (
-        <div id="machine-panel-facts" role="tabpanel" aria-labelledby="machine-tab-facts">
-          <MicroVmFacts apiServerUrl={status.apiServerUrl} clusterId={clusterId} summary={summary} />
-        </div>
-      ) : null}
+        {activeTab === 'facts' && status ? (
+          <div id="machine-panel-facts" role="tabpanel" aria-labelledby="machine-tab-facts">
+            <MicroVmFacts apiServerUrl={status.apiServerUrl} clusterId={clusterId} summary={summary} />
+          </div>
+        ) : null}
 
-      {/* Machine-scoped Workloads — the same panel ③ env-detail renders,
+        {/* Machine-scoped Workloads — the same panel ③ env-detail renders,
           here scoped to this VM (Parker continuity). */}
-      {activeTab === 'workloads' ? (
-        <div id="machine-panel-workloads" role="tabpanel" aria-labelledby="machine-tab-workloads">
-          <WorkloadsPanel clusterId={clusterId} vmName={name} />
-        </div>
-      ) : null}
-    </div>
+        {activeTab === 'workloads' ? (
+          <div id="machine-panel-workloads" role="tabpanel" aria-labelledby="machine-tab-workloads">
+            <WorkloadsPanel clusterId={clusterId} vmName={name} />
+          </div>
+        ) : null}
+      </div>
+    </SkeletonSwap>
   );
 }
 
