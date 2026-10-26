@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import manifest from '../../ff-manifest.json';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
@@ -56,13 +58,39 @@ function sources(dir: string): string[] {
   });
 }
 
+function incompatibleSources(provider: string, inputs: { path: string; source: string }[]) {
+  // Recorded policy permits motion.* under non-strict LazyMotion.
+  return usesStrict(provider) ? inputs.filter(({ source }) => usesFullMotion(source)).map(({ path }) => path) : [];
+}
+
+describe('Fluid Functionalism registry drift', () => {
+  // Sanctioned refresh: legitimate upstream release → re-install the item via shadcn,
+  // regenerate the manifest hash, note the registry version/date. Keep registry bytes pristine.
+  // CI uses the committed hash; comparing against the live registry (fetch the item's
+  // registry URL from ff-manifest.json and diff files[0].content) is on-demand, not committed.
+  it.each(manifest.files)('$path matches its committed registry SHA-256', ({ path, sha256 }) => {
+    const bytes = readFileSync(new URL(`../../${path}`, import.meta.url));
+    expect(createHash('sha256').update(bytes).digest('hex'), `${path}: registry drift`).toBe(sha256);
+  });
+});
+
 describe('Fluid Functionalism LazyMotion policy', () => {
-  it('rejects full motion/react usage under strict across all UI sources (including registry installs)', () => {
+  it('strict LazyMotion provider ⇒ no motion.* in UI sources', () => {
     const provider = readFileSync(join(root, 'motion-provider.tsx'), 'utf8');
-    const incompatible = sources(root)
-      .filter((path) => usesFullMotion(readFileSync(path, 'utf8')))
-      .map((path) => relative(root, path));
-    expect(usesStrict(provider) ? incompatible : [], 'motion.* requires a non-strict LazyMotion provider').toEqual([]);
+    const inputs = sources(root).map((path) => ({
+      path: relative(root, path),
+      source: readFileSync(path, 'utf8'),
+    }));
+    expect(incompatibleSources(provider, inputs), 'motion.* is legal only with a non-strict provider').toEqual([]);
+  });
+
+  it.each([
+    ['motion', 'import { motion } from "motion/react"; const C = () => <motion.div />'],
+    ['aliased motion', 'import { motion as animate } from "motion/react"; const C = () => <animate.div />'],
+  ])('reports synthetic %s usage with a synthetic strict provider', (_name, source) => {
+    const inputs = [{ path: 'inline-fixture.tsx', source }];
+    expect(incompatibleSources('<LazyMotion strict features={load} />', inputs)).toEqual(['inline-fixture.tsx']);
+    expect(incompatibleSources('<LazyMotion features={load} />', inputs)).toEqual([]);
   });
 
   it('recognizes strict variants and imported motion aliases without matching comments or unrelated objects', () => {
