@@ -27,6 +27,53 @@ function ConfirmExample() {
   );
 }
 describe('Overlay design system interactions', () => {
+  it('keeps controlled state authoritative and forwards dismissal requests', async () => {
+    const user = userEvent.setup();
+    const requests: boolean[] = [];
+    const { rerender } = render(
+      <Dialog open onOpenChange={(open) => requests.push(open)}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Controlled</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+    await user.keyboard('{Escape}');
+    expect(requests).toEqual([false]);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    rerender(
+      <Dialog open={false}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Controlled</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.body.style.pointerEvents).toBe('');
+  });
+  it('preserves caller-owned mounting, refs and asChild content', async () => {
+    const ref = React.createRef<HTMLDivElement>();
+    const { rerender } = render(
+      <Popover open={false}>
+        <PopoverTrigger>Details</PopoverTrigger>
+        <PopoverContent forceMount asChild ref={ref}>
+          <div data-testid="custom">Kept mounted</div>
+        </PopoverContent>
+      </Popover>
+    );
+    const content = screen.getByTestId('custom');
+    expect(ref.current).toBe(content);
+    expect(content.dataset.state).toBe('closed');
+    rerender(
+      <Popover open>
+        <PopoverTrigger>Details</PopoverTrigger>
+        <PopoverContent forceMount asChild ref={ref}>
+          <div data-testid="custom">Kept mounted</div>
+        </PopoverContent>
+      </Popover>
+    );
+    expect(screen.getByTestId('custom')).toBe(content);
+    expect(content.dataset.state).toBe('open');
+  });
   it('supports a non-modal dialog without hiding its content with the scrim', async () => {
     const user = userEvent.setup();
     render(

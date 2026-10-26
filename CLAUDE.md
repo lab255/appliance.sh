@@ -99,3 +99,20 @@ to repeat; temporarily restore strict to reproduce red. Final acceptance is
 
 Proposed review gate: **code (Quinn)**, because the provider compatibility change
 is non-trivial. Environment/configuration: none beyond repository registry wiring.
+
+### GLA-281 overlay continuity (2026-10-27)
+
+- Dialog/confirm content uses the **base** spring (160ms, bounce 0) and named
+  base exit (120ms); the scrim keeps fast (80ms / 60ms). Tooltip, dropdown and
+  popover use fast (80ms / 60ms). JS presence owns unmount, Radix owns interaction.
+  This replaces CSS state-keyed animations whose interrupted exits restart at
+  opacity 1. No hover motion is introduced; menu hover-glide remains deferred.
+- Base wraps moderate, already consumed by toast. Dialog-on-base deliberately
+  avoids introducing slow's bounce character. **Slow has no current consumer**;
+  its first consumer requires a design pass. Registry springs remain pristine.
+- Terminal and pod-log drawers deliberately remain still (0ms enter/exit).
+  Their view lifecycle immediately detaches/reattaches xterm or aborts log
+  streaming and restores focus. Deferring unmount for a decorative exit would
+  retain those live effects and custom keyboard handlers after dismissal.
+  A future animated drawer should separate presentation lifetime from session,
+  stream and focus lifetime first; this task preserves immediate dismissal.

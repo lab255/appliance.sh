@@ -8,5 +8,6 @@ const tier = <T extends { exit: { duration: number } }>(t: T) =>
 export const motionTokens = {
   fast: tier(spring.fast),
   base: tier(spring.moderate),
+  // No current consumer — first slow consumer needs a design pass.
   slow: tier(spring.slow),
 } as const;
