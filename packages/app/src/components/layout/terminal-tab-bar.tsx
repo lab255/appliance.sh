@@ -104,7 +104,7 @@ function TerminalTab({
         'group flex h-7 max-w-[220px] items-center gap-2 rounded-md border px-2.5 text-xs',
         active
           ? 'border-[var(--color-border-strong)] bg-[var(--color-accent)] text-[var(--color-foreground)]'
-          : 'border-[var(--color-border)] bg-transparent text-[var(--color-muted-foreground)] hover:bg-[var(--color-accent)]',
+          : 'border-[var(--color-border)] bg-transparent text-[var(--color-muted-foreground)] hover:bg-[var(--color-active)]',
         // Agent tabs carry a faint cyan ring so they stand apart from the
         // shells in the same strip, even before you read the glyph. A `ring`
         // (box-shadow) is used rather than a border colour so it can't lose
@@ -312,7 +312,7 @@ export function TerminalTabBar() {
         type="button"
         data-open-another-shell
         onClick={handleNew}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-accent)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-active)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
         title="Open another shell on the same target"
         aria-label="Open another shell"
       >

@@ -381,7 +381,7 @@ function AppCard({
           aria-label={`Delete ${project.name}`}
           disabled={deleting}
           onClick={() => onDelete(project)}
-          className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-60 transition-opacity hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:opacity-100 disabled:opacity-50"
+          className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-60 transition-opacity hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:opacity-100 disabled:opacity-50"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -530,7 +530,7 @@ function RecentActivity({
                 <Link
                   to={`/deployments/${d.id}`}
                   aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${env?.name ?? d.environmentId}, ${d.action}, ${statusPill(d.status).label}, ${relativeTime(d.startedAt)}`}
-                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
                 >
                   <StatusPill {...statusPill(d.status)} />
                   <div className="min-w-0 text-sm">

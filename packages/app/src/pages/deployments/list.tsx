@@ -101,7 +101,7 @@ export function DeploymentsPage() {
               <Link
                 to={`/deployments/${d.id}`}
                 aria-label={`${projects.get(d.projectId)?.name ?? d.projectId}, ${envs.get(d.environmentId)?.name ?? d.environmentId}, ${d.action}, ${resolveStatusDot(d.status).label}, ${durationOf(d) ?? 'in progress'}, ${relativeTime(d.startedAt)}`}
-                className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors hover:bg-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
+                className="grid grid-cols-[7rem_minmax(0,1fr)_5rem_4rem] items-center gap-4 px-4 py-3 transition-colors hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-ring)]"
               >
                 <StatusPill {...resolveStatusDot(d.status)} className="transition-colors" />
                 <div className="min-w-0">
