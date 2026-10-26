@@ -17,7 +17,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "paths": {},
+    "paths": { "@/*": ["./src/*"] },
     "rootDir": "src"
   },
   "include": ["src"],
