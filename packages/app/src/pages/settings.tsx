@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { RefreshCw, Download, ArrowUpCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FriendlyError } from '@/components/friendly-error';
@@ -66,6 +67,7 @@ function EntitlementsSection() {
   const host = useHost();
   const [suggestions, setSuggestions] = React.useState<EntitlementSuggestion[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loaded, setLoaded] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -75,6 +77,7 @@ function EntitlementsSection() {
     setLoading(true);
     try {
       setSuggestions(await host.entitlements.suggestions(30));
+      setLoaded(true);
       setError(null);
     } catch (cause) {
       console.error('[settings] entitlement suggestions failed', cause);
@@ -109,33 +112,43 @@ function EntitlementsSection() {
       {error ? (
         <p className="mb-3 text-xs text-[var(--color-destructive-foreground)]" role="alert">
           {error}
+          <Button size="sm" variant="outline" disabled={loading} onClick={() => void refresh()}>
+            Retry
+          </Button>
         </p>
       ) : null}
-      {loading ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]" role="status">
-          Checking grant usage…
-        </p>
-      ) : suggestions.length === 0 ? (
-        <EntitlementsEmptyState />
-      ) : (
-        <ul className="divide-y divide-[var(--color-border)]" aria-label="Suggested entitlement revocations">
-          {suggestions.map((suggestion) => {
-            const key = `${suggestion.appId}:${suggestion.grant.id}`;
-            return (
-              <EntitlementSuggestionRow
-                key={key}
-                suggestion={suggestion}
-                confirming={confirming === key}
-                busy={busy === key}
-                anotherBusy={busy !== null && busy !== key}
-                onReview={() => setConfirming(key)}
-                onRevoke={() => void revoke(suggestion)}
-                onKeep={() => setConfirming(null)}
-              />
-            );
-          })}
-        </ul>
-      )}
+      <SkeletonSwap
+        className="min-h-10"
+        loading={loading && !loaded && !error}
+        fallback={
+          <div role="status" aria-label="Checking grant usage" className="space-y-1">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+        }
+      >
+        {!loaded && error ? null : suggestions.length === 0 ? (
+          <EntitlementsEmptyState />
+        ) : (
+          <ul className="divide-y divide-[var(--color-border)]" aria-label="Suggested entitlement revocations">
+            {suggestions.map((suggestion) => {
+              const key = `${suggestion.appId}:${suggestion.grant.id}`;
+              return (
+                <EntitlementSuggestionRow
+                  key={key}
+                  suggestion={suggestion}
+                  confirming={confirming === key}
+                  busy={busy === key}
+                  anotherBusy={busy !== null && busy !== key}
+                  onReview={() => setConfirming(key)}
+                  onRevoke={() => void revoke(suggestion)}
+                  onKeep={() => setConfirming(null)}
+                />
+              );
+            })}
+          </ul>
+        )}
+      </SkeletonSwap>
     </SectionCard>
   );
 }
