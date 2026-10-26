@@ -14,6 +14,11 @@ import { NETSTACK_BAKED_ALLOWLIST } from '@/lib/host';
 import { relativeAge } from '@/lib/time';
 import type { EgressEvent, EgressPolicy, HostPlatform, MicroVmInstanceHost } from '@/lib/host';
 
+// Raw egress actions ease on hover, but press feedback must paint immediately.
+// Keep active:transition-none beside their active colors so the shared base
+// transition cannot interpolate the pressed state. Shared Buttons already
+// provide immediate press feedback through the CSS translate property.
+
 // Guest egress firewall surface (egress-firewall F4): show whether the
 // VM's egress is the host-enforced boundary (net_link=Netstack →
 // default-DENY + allowlist) or the cooperative NAT proxy, the effective
@@ -557,7 +562,7 @@ function DeniedAttempts({
                       disabled={busy}
                       aria-label={`Allow egress to ${d.host}:${d.port}`}
                       onClick={() => onAllow(d.host)}
-                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Allow
                     </button>
@@ -608,7 +613,7 @@ function TrafficView({
           <button
             type="button"
             onClick={onClear}
-            className="rounded text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+            className="rounded text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
           >
             Clear
           </button>
@@ -639,7 +644,7 @@ function TrafficView({
                     disabled={busy}
                     aria-label={`Block egress to ${e.host}:${e.port}`}
                     onClick={() => onBlock(e.host)}
-                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                   >
                     Block
                   </button>
@@ -649,7 +654,7 @@ function TrafficView({
                     disabled={busy}
                     aria-label={`Allow egress to ${e.host}:${e.port}`}
                     onClick={() => onAllow(e.host)}
-                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                   >
                     Allow
                   </button>
@@ -660,7 +665,7 @@ function TrafficView({
                       disabled={busy}
                       aria-label={`Allow egress to ${e.host}:${e.port}`}
                       onClick={() => onAllow(e.host)}
-                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Allow
                     </button>
@@ -669,7 +674,7 @@ function TrafficView({
                       disabled={busy}
                       aria-label={`Block egress to ${e.host}:${e.port}`}
                       onClick={() => onBlock(e.host)}
-                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Block
                     </button>
@@ -742,7 +747,7 @@ function RuleList({
                   aria-label={`Remove ${tone === 'allow' ? 'allow' : 'block'} rule ${h}`}
                   title="Remove this rule"
                   onClick={() => onRemove(h)}
-                  className="rounded text-micro leading-none text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                  className="rounded text-micro leading-none text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                 >
                   ×
                 </button>
