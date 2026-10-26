@@ -66,7 +66,8 @@ function incompatibleSources(provider: string, inputs: { path: string; source: s
 describe('Fluid Functionalism registry drift', () => {
   // Sanctioned refresh: legitimate upstream release → re-install the item via shadcn,
   // regenerate the manifest hash, note the registry version/date. Keep registry bytes pristine.
-  // CI uses the committed hash; upgrade.mjs remains the on-demand live registry check.
+  // CI uses the committed hash; comparing against the live registry (fetch the item's
+  // registry URL from ff-manifest.json and diff files[0].content) is on-demand, not committed.
   it.each(manifest.files)('$path matches its committed registry SHA-256', ({ path, sha256 }) => {
     const bytes = readFileSync(new URL(`../../${path}`, import.meta.url));
     expect(createHash('sha256').update(bytes).digest('hex'), `${path}: registry drift`).toBe(sha256);
