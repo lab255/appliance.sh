@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { SectionCard } from '@/components/ui/section-card';
@@ -11,16 +12,21 @@ export function AccountSection() {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [readError, setReadError] = React.useState<string | null>(null);
+  const [readAttempt, setReadAttempt] = React.useState(0);
   React.useEffect(() => {
     let active = true;
     const read = () =>
       account
         ?.status()
         .then((next) => {
-          if (active) setStatus(next);
+          if (active) {
+            setStatus(next);
+            setReadError(null);
+          }
         })
         .catch(() => {
-          if (active) setError('Could not read your account. Please retry.');
+          if (active) setReadError('Could not read your account. Please retry.');
         });
     void read();
     // Reflect CLI sign-out without persisting identity or tokens in webview storage.
@@ -29,7 +35,7 @@ export function AccountSection() {
       active = false;
       clearInterval(timer);
     };
-  }, [account]);
+  }, [account, readAttempt]);
   async function run(action: 'signIn' | 'signOut') {
     if (!account) return;
     setBusy(true);
@@ -52,7 +58,22 @@ export function AccountSection() {
         <p className="text-sm text-muted-foreground">
           Apps work without an account. Signing in does not activate grants or restore history.
         </p>
-        <p className="text-sm">{status?.signedIn ? `Signed in with able as ${status.email}.` : 'Signed out'}</p>
+        <SkeletonSwap
+          loading={!status && !readError}
+          fallback={
+            <div role="status" aria-label="Loading account">
+              <Skeleton className="h-5 w-48" />
+            </div>
+          }
+        >
+          <p className="min-h-5 text-sm">
+            {status
+              ? status.signedIn
+                ? `Signed in with able as ${status.email}.`
+                : 'Signed out'
+              : 'Account status unavailable'}
+          </p>
+        </SkeletonSwap>
         {busy ? (
           <p role="status" className="text-sm text-muted-foreground">
             Finish sign-in in your browser. This expires after five minutes.
@@ -71,6 +92,18 @@ export function AccountSection() {
           ) : null}
         </div>
         {error ? <Banner tone="error">{error}</Banner> : null}
+        {readError ? (
+          <Banner
+            tone="error"
+            action={
+              <Button size="sm" variant="outline" onClick={() => setReadAttempt((n) => n + 1)}>
+                Retry account status
+              </Button>
+            }
+          >
+            {readError}
+          </Banner>
+        ) : null}
         {notice ? (
           <p role="status" className="text-sm text-muted-foreground">
             {notice}
