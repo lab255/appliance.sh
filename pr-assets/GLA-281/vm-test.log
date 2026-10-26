@@ -1,0 +1,412 @@
+   Compiling appliance-vm v0.1.0 (/private/tmp/appliance-gla-281/packages/vm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.04s
+     Running unittests src/main.rs (target/debug/deps/appliance_vm-891c3f75abfeb5bc)
+
+running 330 tests
+test backend::runtime_guest::tests::drvfs_share_reconciliation_never_requires_a_pool_restart ... ok
+test backend::runtime_guest::tests::wsl_rules_fail_closed_after_the_broker_allows ... ok
+test backend::runtime_guest::tests::control_plane_receiver_is_busybox_pinned_and_clears_the_first_slot ... ok
+test backend::runtime_guest::tests::drvfs_helper_targets_only_the_granted_read_only_share ... ok
+test backend::runtime_guest::tests::virtiofs_helper_keeps_the_existing_read_only_mount_contract ... ok
+test backend::runtime_guest::tests::artifact_receive_plan_rejects_unsafe_targets_and_digests ... ok
+test backend::runtime_guest::tests::wsl_host_path_validation_rejects_unc_and_non_translatable_paths ... ok
+test backend::tests::clock_sync_never_invokes_after_stop_is_set ... ok
+test backend::tests::foreground_exit_wait_is_bounded_by_deadline ... ok
+test backend::runtime_guest::tests::mount_containment_rejects_the_state_dir_and_its_parents ... ok
+test backend::tests::foreground_exit_wait_stops_when_pidfile_clears_early ... ok
+test backend::vz::shell::tests::wake_jump_detection_has_slack_for_oversleep_but_catches_naps ... ok
+test backend::runtime_guest::tests::wsl_runtime_apk_fragment_is_pinned_and_guest_local ... ok
+test backend::vz::shell::tests::clock_sync_runs_as_root ... ok
+test backend::vz::shell::tests::wake_watcher_ticks_are_much_finer_than_the_resync_interval ... ok
+test bringup::tests::budgeted_wait_caps_by_remaining_with_a_floor ... ok
+test bringup::tests::elapsed_prefix_is_stable ... ok
+test bringup::tests::every_phase_has_a_nonempty_label ... ok
+test bringup::tests::budget_parse_defaults_on_absent_garbage_or_zero ... ok
+test bringup::tests::timings_render_is_empty_for_no_history ... ok
+test bringup::tests::phase_serializes_kebab_case_for_the_ui ... ok
+test backend::vz::runtime::tests::runtime_control_socket_is_inside_the_vm_directory ... ok
+test bringup::tests::timings_render_per_phase_deltas_and_a_total ... ok
+test control_plane::tests::sender_refuses_a_changed_open_handle_identity ... ok
+test bringup::tests::round_trips_through_the_state_file ... ok
+test control_plane::tests::raw_sender_preserves_header_and_bytes_with_a_fake_receiver ... ok
+test creds::tests::header_value_is_case_insensitive ... ok
+test creds::tests::helper_json_round_trips_argv_and_legacy_forms ... ok
+test creds::tests::broker_files_keep_the_legacy_vm_directory_name ... ok
+test creds::tests::broker_files_keep_a_leading_dot_legacy_vm_directory_name ... ok
+test bringup::tests::history_appends_every_transition ... ok
+test creds::tests::set_header_adds_when_absent ... ok
+test creds::tests::set_header_replaces_existing ... ok
+test creds::tests::legacy_shell_helper_still_works_on_unix ... ok
+test creds::tests::inject_rule_present_but_helper_fails_yields_no_value ... ok
+test creds::tests::unix_config_integrity_accepts_private_and_refuses_world_writable_file ... ok
+test creds::tests::unix_config_integrity_refuses_world_writable_parent ... ok
+test doctor::tests::console_only_seed_marker_warns_while_api_remains_available ... ok
+test doctor::tests::leaves_ordinary_log_lines_alone ... ok
+test doctor::tests::findings_serialize_in_the_cli_schema ... ok
+test creds::tests::capture_false_never_stores_the_placeholder ... ok
+test creds::tests::helper_overrides_stored_secret ... ok
+test doctor::tests::legacy_launcher_release_finding_requires_restage_and_reboot ... ok
+test doctor::tests::mv1_release_finding_reports_current_console_and_key ... ok
+test doctor::tests::parses_wsl_mount_output_and_rejects_drvfs_outside_managed_targets ... ok
+test doctor::tests::refused_seed_marker_is_a_hard_doctor_finding ... ok
+test doctor::tests::rejects_plain_windows_mounts_and_drive_root_appliance_shares ... ok
+test doctor::tests::scrubs_jwt_shaped_tokens ... ok
+test doctor::tests::scrubs_long_hex_tokens ... ok
+test doctor::tests::scrubs_sk_prefixed_minted_secrets ... ok
+test doctor::tests::short_hex_and_uuids_survive ... ok
+test doctor::tests::skew_between_tolerance_bounds_warns ... ok
+test creds::tests::verified_reader_refuses_unsafe_secret_file_before_parsing ... ok
+test doctor::tests::skew_beyond_signature_tolerance_fails ... ok
+test doctor::tests::skew_within_ten_seconds_is_healthy ... ok
+test doctor::tests::unsigned_pre_mv0_seed_marker_warns ... ok
+test doctor::tests::unsupported_validating_admission_policy_is_visible ... ok
+test doctor::tests::wsl_proxy_failure_names_the_defender_firewall_boundary ... ok
+test egress::tests::absent_runtime_principal_fails_closed_without_baked_allowlist ... ok
+test egress::tests::configmap_embeds_policy_and_quotes_values ... ok
+test egress::tests::authority_of_extracts_host ... ok
+test egress::tests::authenticated_runtime_selection_never_unions_apps_or_ports ... ok
+test egress::tests::configmap_omits_ca_when_mitm_off ... ok
+test egress::tests::credentialless_wsl_runtime_requests_are_unauthorized_in_every_mode ... ok
+test egress::tests::default_allow_passes_everything ... ok
+test egress::tests::default_deny_blocks_unless_allowlisted ... ok
+test egress::tests::deny_wins_over_allow ... ok
+test creds::tests::capture_and_inject_round_trip ... ok
+test egress::tests::host_without_port_is_handled ... ok
+test egress::tests::peer_guard_allows_loopback_and_guest_subnet ... ok
+test egress::tests::peer_guard_refuses_lan_and_ipv6 ... ok
+test egress::tests::peer_guard_pins_exact_guest_ip_when_known ... FAILED
+test egress::tests::netstack_policy_forces_deny_and_bakes_allowlist ... FAILED
+test egress::tests::peer_guard_rejects_corrupt_overbroad_prefixes ... ok
+test egress::tests::policy_output_labels_both_boundary_kinds ... ok
+test egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease ... FAILED
+test egress::tests::proxy_auth_parses_connect_and_absolute_form_http ... ok
+test egress::tests::proxy_credentials_compare_constant_time_and_never_enter_logs ... ok
+test egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist ... FAILED
+test egress::tests::render_effective_distinguishes_baked_operator_and_deny_for_netstack ... ok
+test egress::tests::proxy_url_prefers_the_recorded_gateway ... FAILED
+test egress::tests::render_effective_keeps_nat_persisted_default ... ok
+test egress::tests::runtime_inspection_decision_matrix_is_policy_and_allowed_only ... ok
+test egress::tests::render_effective_marks_baked_host_overridden_by_deny ... ok
+test egress::tests::brokered_injection_requires_exact_lease_peer ... FAILED
+test egress::tests::runtime_policy_is_default_deny_and_hostname_only ... ok
+test egress::tests::split_host_port_defaults_to_443 ... ok
+test egress::tests::suffix_does_not_match_substring ... ok
+test egress::tests::unknown_revoked_and_strict_credentials_fail_closed_without_union_fallback ... ok
+test egress::tests::wsl_rendering_uses_truthful_mode_headers_and_never_host_enforced ... ok
+test fs_acl::tests::restricts_files_to_0600_and_directories_to_0700 ... ok
+test egress::tests::app_credential_is_never_issued_to_or_selected_from_a_compound_service_principal ... ok
+test guest::compound_supervisor_is_valid_shell_and_scopes_lifecycle_per_leaf ... ok
+test guest::tests::agent_only_mounts_the_prebuilt_squashfs_and_puts_its_bin_first_on_path ... ok
+test guest::tests::agent_only_docker_stub_gated_on_the_docker_flag ... ok
+test guest::tests::airgap_volume_label_fits_fat_and_matches_the_probe ... ok
+test guest::tests::apiserver_heredocs_terminate ... ok
+test guest::tests::apiserver_launcher_never_traces_its_tokens ... ok
+test guest::tests::apiserver_manifest_heredoc_has_no_command_substitution ... ok
+test egress::tests::issued_proxy_credential_rotates_and_revokes_with_effective_state ... ok
+test guest::tests::agent_only_substitution_leaks_no_literal_port_markers ... ok
+test egress::tests::pruning_a_vm_removes_all_of_its_runtime_principals_only ... ok
+test guest::tests::apiserver_ships_the_legacy_quarantine_watchdog ... ok
+test guest::tests::apiserver_provisioned_on_k3s_vms_with_staged_assets_only ... ok
+test guest::tests::apkovl_ca_pem_round_trips ... ok
+test guest::tests::apkovl_embeds_egress_ca_when_provided ... ok
+test guest::tests::apkovl_omits_egress_ca_when_absent ... ok
+test egress::tests::runtime_policy_dispatch_round_trip_duplicates_and_port_gate ... ok
+test guest::tests::buildkit_heredoc_terminates ... ok
+test guest::tests::bootstrap_token_persists_and_round_trips ... ok
+test egress::tests::save_runtime_policy_refuses_corrupt_existing_file ... ok
+test guest::tests::appliance_user_provisioned_on_every_vm ... ok
+test guest::tests::core_agent_and_k3s_host_service_plans_preserve_network_invariants ... ok
+test guest::tests::core_overlay_omits_lazy_platform_without_reordering_shared_bootstrap ... ok
+test guest::tests::appliance_user_uid_gid_pinned_per_mount ... ok
+test guest::tests::buildkit_provisioned_on_k3s_vms_but_not_agent_only ... ok
+test guest::tests::docker_provision_embeds_the_vm_egress_port ... ok
+test guest::tests::incomplete_or_malformed_release_evidence_is_poisoned ... ok
+test guest::tests::dev_provisioning_present_only_for_dev_vms ... ok
+test guest::tests::docker_provisioning_present_only_for_docker_vms ... ok
+test guest::tests::k3s_bringup_serves_grippable_progress_markers ... ok
+test guest::tests::k3s_airgap_preload_probes_by_label_and_marks_progress ... ok
+test guest::tests::k3s_provisioned_only_for_non_agent_only_vms ... ok
+test guest::tests::resolve_app_ids_falls_back_when_host_is_root ... ok
+test guest::tests::mv1_overlay_composes_isolated_volume_raw_listener_psa_and_supervisor ... ok
+test guest::tests::npm_global_wipes_on_a_project_switch_only_with_a_project_identity ... ok
+test guest::tests::runtime_overlay_selects_only_local_signed_repositories ... ok
+test guest::tests::runtime_supervisor_creates_plan_files_owner_only_and_keeps_proxy_credentials_out_of_argv ... ok
+test guest::tests::runtime_supervisor_enforces_principal_isolation_and_bounded_logs ... ok
+test guest::tests::runtime_supervisor_passes_multiline_non_proxy_environment_as_one_argv_entry ... ok
+test guest::tests::runtime_supervisor_stages_binary_without_following_symlinks_and_reuses_hardening ... ok
+test guest::tests::shell_agent_routes_session_verbs_to_tmux ... ok
+test guest::tests::tmux_is_in_the_base_world_set ... ok
+test guest::tests::transparent_tmux_conf_is_baked_in ... ok
+test backend::runtime_guest::tests::artifact_receive_plan_executes_size_and_stubbed_digest_checks ... ok
+test guest::tests::vsock_shell_agent_is_baked_into_every_vm ... ok
+test guest::tests::vz_media_nodes_match_the_storage_attachment_contract ... ok
+test guest_exec::tests::extracts_payload_between_expanded_markers ... ok
+test guest_exec::tests::missing_markers_yield_none ... ok
+test guest_exec::tests::runtime_json_is_shell_quoted_as_data ... ok
+test guest_exec::tests::wrapped_command_binds_payload_to_exit_status ... ok
+test images::tests::airgap_digests_are_committed_not_sentinels ... ok
+test images::tests::airgap_pin_matches_the_k3s_version ... ok
+test images::tests::content_sha256_is_lowercase_hex_of_the_digest ... ok
+test images::tests::download_and_verify_accepts_a_correct_cached_file_without_network ... ok
+test images::tests::download_and_verify_rejects_a_wrong_hash_cached_file ... ok
+test images::tests::passes_raw_kernels_through ... ok
+test images::tests::runtime_apk_resolver_closes_named_and_virtual_dependencies ... ok
+test images::tests::runtime_apk_validation_rejects_pin_skew_and_incomplete_critical_closure ... ok
+test images::tests::runtime_apkindex_rejects_path_components ... ok
+test images::tests::runtime_world_exactly_pins_one_openssl_abi_and_keys_the_cache ... ok
+test images::tests::unwraps_plain_gzip_kernels ... ok
+test images::tests::unwraps_zboot_kernels ... ok
+test images::tests::verify_sha256_accepts_matching_and_rejects_wrong ... ok
+test mint::tests::key_names_match_cli_labels_and_stay_json_safe ... ok
+test mint::tests::leaves_a_healthy_pairing_alone ... ok
+test mint::tests::mints_when_host_lost_its_profile ... ok
+test mint::tests::mints_when_store_is_uninitialized ... ok
+test mitm::tests::copy_chunked_forwards_body_verbatim ... ok
+test mitm::tests::copy_request_body_honors_content_length ... ok
+test mitm::tests::copy_request_body_none_when_no_length ... ok
+test mitm::tests::cred_unconfigured_is_actionable_and_keyless ... ok
+test mitm::tests::dial_first_iterates_public_candidates_until_one_connects ... ok
+test mitm::tests::dial_upstream_refuses_forbidden_host_without_connecting ... ok
+test mitm::tests::force_close_replaces_existing_connection_header ... ok
+test mitm::tests::force_close_strips_proxy_connection_and_adds_when_absent ... ok
+test guest::tests::virtiofs_mount_present_only_with_a_share ... ok
+test mitm::tests::header_value_is_case_insensitive_and_trims ... ok
+test mitm::tests::observation_body_copies_are_byte_exact_and_counted ... ok
+test mitm::tests::h2_only_client_is_refused_by_http11_inspection_server ... ok
+test mitm::tests::observation_head_keeps_non_utf8_bytes_for_forwarding ... ok
+test mitm::tests::observed_mitm_request_strips_proxy_authorization_only ... ok
+test mitm::tests::pick_upstream_legacy_refuses_private_resolution ... ok
+test mitm::tests::pick_upstream_allows_legit_public_hosts ... ok
+test mitm::tests::pick_upstream_multi_a_never_dials_private ... ok
+test mitm::tests::pick_upstream_refuses_validated_private_addr ... ok
+test mitm::tests::public_upstreams_filters_private_and_preserves_order ... ok
+test net::tests::finds_lease_with_zero_stripped_octets ... ok
+test net::tests::misses_unknown_mac ... ok
+test net::tests::rejects_invalid_mac ... ok
+test netstack::dhcp::tests::discover_yields_offer_request_yields_ack ... ok
+test netstack::dhcp::tests::option_walk_is_bounded_on_hostile_lengths ... ok
+test netstack::dhcp::tests::parses_discover_and_request ... ok
+test netstack::dhcp::tests::rejects_non_dhcp_and_truncated ... ok
+test netstack::dns::tests::answer_filter_drops_private_resolving_answer ... ok
+test netstack::dns::tests::answer_filter_records_public_answers ... ok
+test netstack::dns::tests::answer_ips_parses_a_and_aaaa ... ok
+test netstack::dns::tests::extracts_query_name ... ok
+test netstack::dns::tests::forward_relays_to_a_mock_upstream ... ok
+test netstack::dhcp::tests::fuzz_parse_never_panics ... ok
+test netstack::dns::tests::fuzz_answer_ips_never_panics ... ok
+test netstack::dns::tests::fuzz_query_name_never_panics ... ok
+test netstack::dns::tests::name_allowed_honors_default_deny ... ok
+test netstack::dns::tests::query_name_bounded_on_garbage ... ok
+test netstack::engine::tests::admit_syn_caps_concurrent_flows_and_dedups_retransmits ... ok
+test netstack::engine::tests::engine_answers_dhcp_over_the_link ... ok
+test netstack::engine::tests::guest_to_ext_backpressure_stops_draining_at_high_water ... ok
+test netstack::engine::tests::parse_positive_takes_override_else_default_and_rejects_invalid ... ok
+test netstack::engine::tests::principal_inbound_waits_for_request_and_preserves_half_close_response ... ok
+test netstack::engine::tests::runtime_inbound_nonblocking_forward_survives_two_hop_relay ... ok
+test netstack::frame::tests::arp_is_passthrough ... ok
+test netstack::frame::tests::built_udp_frame_has_valid_checksums ... ok
+test netstack::frame::tests::built_udp_frame_zero_length_payload_is_valid ... ok
+test netstack::frame::tests::dhcp_discover_is_recognised ... ok
+test netstack::frame::tests::dns_to_gateway_is_recognised_but_not_elsewhere ... ok
+test netstack::frame::tests::empty_and_runt_frames_drop_without_panic ... ok
+test netstack::dns::tests::forward_times_out_when_no_upstream_answers ... ok
+test netstack::frame::tests::ipv4_header_claims_more_than_present_drops ... ok
+test netstack::frame::tests::ipv6_and_unknown_ethertypes_drop ... ok
+test netstack::frame::tests::non_dns_udp_drops ... ok
+test netstack::frame::tests::tcp_syn_and_midflow_classified ... ok
+test netstack::frame::tests::truncated_tcp_and_udp_headers_drop ... ok
+test netstack::guard::tests::cluster_cidr_names_resolve_through_default_deny ... ok
+test netstack::guard::tests::denied_flow_is_dropped_and_logged ... FAILED
+test netstack::guard::tests::excluded_names_and_ips ... ok
+test netstack::guard::tests::fuzz_parse_sni_never_panics ... ok
+test netstack::guard::tests::http_host_allow_and_deny ... ok
+test netstack::guard::tests::parse_sni_extracts_host ... ok
+test netstack::guard::tests::parse_sni_fails_closed_on_garbage ... ok
+test netstack::guard::tests::private_range_filter_rejects_internal ... ok
+test netstack::guard::tests::raw_ip_backref_allows_public_recently_resolved ... ok
+test netstack::guard::tests::raw_ip_backrefs_are_isolated_by_principal ... ok
+test netstack::guard::tests::raw_ip_cidr_allow_rule_public_only ... ok
+test netstack::guard::tests::raw_ip_to_private_range_denied ... ok
+test netstack::guard::tests::resolve_public_rejects_internal_names ... ok
+test netstack::guard::tests::resolver_pool_is_bounded_and_reaped ... ok
+test netstack::guard::tests::sni_denied_host_is_dropped ... ok
+test netstack::guard::tests::sni_forged_ip_connects_to_name_not_dst ... ok
+test netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed ... FAILED
+test netstack::guard::tests::unparseable_clienthello_denied ... ok
+test netstack::tests::bridge_pump_forwards_a_flow_to_a_mock_upstream ... ok
+test netstack::tests::bridge_stream_carries_bytes_and_eof_both_ways ... ok
+test netstack::tests::bridge_stream_read_errors_once_aborted ... ok
+test netstack::tests::gateway_mac_is_locally_administered_unicast ... ok
+test netstack::tests::legacy_connect_still_targets_the_guest_lease ... ok
+test netstack::tests::link_config_lease_is_deterministic ... ok
+test netstack::tests::parse_mac_round_trips_and_rejects_garbage ... ok
+test netstack::tests::run_isolated_contains_a_panic_and_the_caller_survives ... ok
+test network_lease::tests::parses_wsl_prefix_length_from_ip_addr ... ok
+test network_lease::tests::wsl_slash_20_admission_range_uses_the_recorded_prefix ... ok
+test profiles::tests::default_vm_owns_local_and_legacy_microvm_profiles ... ok
+test profiles::tests::epoch_converts_to_civil_utc ... ok
+test profiles::tests::removing_a_missing_profile_is_a_no_op ... ok
+test profiles::tests::removing_an_inactive_profile_keeps_the_active_slot ... ok
+test profiles::tests::removing_the_active_profile_falls_back_to_a_remaining_one ... ok
+test profiles::tests::removing_the_last_profile_clears_active_and_the_mirror ... ok
+test runtime_forward::tests::client_and_server_control_helpers_round_trip ... ok
+test runtime_forward::tests::collision_is_rejected ... ok
+test runtime_forward::tests::control_stream_emits_golden_frames ... ok
+test runtime_forward::tests::failed_listener_start_leaves_no_table_entry ... ok
+test runtime_forward::tests::host_port_range_is_enforced ... ok
+test runtime_forward::tests::identical_bind_is_idempotent_and_wsl_ignores_advisory_target ... ok
+test runtime_forward::tests::non_tcp_published_rows_do_not_authorize_a_forward ... ok
+test runtime_forward::tests::unbind_stops_and_removes_listener ... ok
+test runtime_forward::tests::unbind_survives_removed_spec_row_and_changed_wsl_lease ... ok
+test runtime_forward::tests::wsl_bind_derives_current_guest_ip_and_relay ... ok
+test runtime_forward::tests::wsl_bind_fails_when_the_lease_moves_or_is_absent ... ok
+test shell::tests::command_tries_epoch_then_formatted_fallback ... ok
+test shell::tests::epoch_parse_fails_closed_without_a_digit_line ... ok
+test shell::tests::formats_known_epochs_as_utc ... ok
+test shell::tests::ignores_echoed_literal_marker ... ok
+test shell::tests::parses_epoch_from_echoed_pty_output ... ok
+test shell::tests::parses_expanded_exit_code ... ok
+test shell::tests::parses_session_list_stripping_prefix_and_cr ... ok
+test shell::tests::pump_eof_without_sentinel_is_failure ... ok
+test shell::tests::pump_returns_code_and_withholds_sentinel ... ok
+test shell::tests::session_info_serializes_compactly ... ok
+test shell::tests::session_list_drops_noise_and_tolerates_missing_activity ... ok
+test shell::tests::validates_session_ids ... ok
+test spec::tests::agent_only_flag_defaults_off_and_round_trips ... ok
+test spec::tests::agent_ready_marker_is_a_sibling_of_kubeconfig ... ok
+test spec::tests::allocate_published_port_never_returns_a_reserved_or_nodeport ... ok
+test spec::tests::allocate_published_port_skips_used_and_errors_when_exhausted ... ok
+test spec::tests::allocation_fails_closed_for_an_unsafe_mode_vm_json ... ok
+test spec::tests::buildkit_port_round_trips_as_camel_case ... ok
+test spec::tests::core_ready_marker_is_a_sibling_of_other_readiness_markers ... ok
+test spec::tests::docker_flag_round_trips_through_json ... ok
+test spec::tests::fresh_and_fieldless_specs_default_to_core_only ... ok
+test spec::tests::generated_macs_are_locally_administered_unicast ... ok
+test spec::tests::net_link_defaults_to_nat_for_legacy_and_fresh_specs ... ok
+test spec::tests::netstack_env_override_only_forces_on ... ok
+test spec::tests::published_ports_round_trip_and_default_empty_for_legacy_specs ... ok
+test spec::tests::resource_overrides_apply_validate_and_preserve ... ok
+test spec::tests::runtime_mount_tags_are_stable_bounded_and_write_is_intersection ... ok
+test spec::tests::runtime_profile_is_core_only_and_netstack_enforced ... ok
+test spec::tests::runtime_published_port_carries_principal_target ... ok
+test spec::tests::spec_round_trips_through_json_with_defaults ... ok
+test spec::tests::wsl_mode_round_trips_and_global_config_defaults_fail_closed ... ok
+test spec::tests::wsl_specs_create_and_load_as_nat_while_vz_is_unchanged ... ok
+test store::tests::canonicalize_preserves_a_missing_state_tail ... ok
+test store::tests::control_plane_disk_keeps_three_signed_releases_and_headroom ... ok
+test store::tests::loading_a_persisted_wsl_netstack_spec_normalises_to_nat ... ok
+test store::tests::spec_load_verifies_the_open_handle_before_reading ... ok
+test tests::bare_windows_drive_root_is_rejected_before_canonicalize ... ok
+test tests::compound_plan_orders_dependencies_lexically_and_rejects_cycles_and_vm_isolation ... ok
+test tests::compound_plan_rejects_depth_and_health_ranges_at_the_engine_boundary ... ok
+test tests::compound_plan_reserves_service_discovery_environment_names ... ok
+test tests::compound_restart_backoff_is_deterministic_and_capped ... ok
+test tests::cooperative_runtime_proxy_environment_overrides_every_transport_value ... ok
+test tests::detached_host_process_uses_its_own_process_group ... ok
+test tests::mount_of_home_is_rejected_when_it_contains_vm_root ... ok
+test tests::runtime_binary_plan_round_trips_the_tagged_wire_variant ... ok
+test tests::runtime_binary_plan_validates_target_entrypoint_env_and_cwd ... ok
+test tests::runtime_container_plan_round_trips_camelcase_image_path ... ok
+test tests::runtime_plan_validation_binds_uid_target_tag_and_relay_slice ... ok
+test tests::runtime_start_forwards_only_valid_persisted_wsl_paths ... ok
+test tests::up_readiness_needs_marker_and_terminal_ready_phase ... ok
+test tests::windows_refuses_explicit_per_vm_sizing_flags ... ok
+test traffic::tests::aggregate_denied_counts_groups_and_orders_by_recency ... ok
+test traffic::tests::legacy_halves_only_when_oversized_and_runtime_compacts_after_append ... ok
+test traffic::tests::persisted_paths_strip_query_fragment_and_absolute_authority ... ok
+test traffic::tests::proxy_auth_failures_are_attributed_and_deduped_per_principal_minute ... ok
+test traffic::tests::records_path_for_intercepted ... FAILED
+test traffic::tests::render_denied_report_empty_is_reassuring ... ok
+test traffic::tests::render_denied_report_names_non_default_vm_in_hint ... ok
+test traffic::tests::render_denied_report_shows_counts_and_remediation_hint ... ok
+test traffic::tests::tail_limits_and_parses ... FAILED
+test wsl_config::tests::classifies_shared_wsl_output_fixtures_and_signatures ... ok
+test wsl_config::tests::decodes_every_shared_wsl_output_fixture ... ok
+test wsl_config::tests::detects_mirrored_mode_from_fixture ... ok
+test wsl_config::tests::ignores_comments_other_sections_and_overridden_values ... ok
+test netstack::frame::tests::fuzz_random_frames_never_panic ... ok
+test guest::tests::runtime_compound_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv ... ok
+test guest::tests::runtime_single_app_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv ... ok
+test backend::runtime_guest::tests::drvfs_helper_executes_with_host_path_edge_cases_confined ... ok
+test creds::tests::argv_helper_resolves_kind_value_envelope ... ok
+test creds::tests::helper_rejects_multiline_output ... ok
+test guest::tests::control_plane_update_binds_evidence_and_generation_to_content ... ok
+test guest::tests::control_plane_supervisor_executable_path_promotes_or_rolls_back ... ok
+test guest::tests::apiserver_seed_gate_runs_with_restricted_posix_userland_and_rejects_tampering ... ok
+
+failures:
+
+---- egress::tests::peer_guard_pins_exact_guest_ip_when_known stdout ----
+
+thread 'egress::tests::peer_guard_pins_exact_guest_ip_when_known' (1389867) panicked at src/egress.rs:2123:78:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- egress::tests::netstack_policy_forces_deny_and_bakes_allowlist stdout ----
+
+thread 'egress::tests::netstack_policy_forces_deny_and_bakes_allowlist' (1389865) panicked at src/egress.rs:2319:10:
+called `Result::unwrap()` on an `Err` value: Operation not permitted (os error 1)
+
+---- egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease stdout ----
+
+thread 'egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease' (1389870) panicked at src/egress.rs:2095:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist stdout ----
+
+thread 'egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist' (1389874) panicked at src/egress.rs:2878:40:
+called `Result::unwrap()` on an `Err` value: create /Users/eliot/.appliance/vm/egress-vz-proxy-selection-16409
+
+Caused by:
+    Operation not permitted (os error 1)
+
+---- egress::tests::proxy_url_prefers_the_recorded_gateway stdout ----
+
+thread 'egress::tests::proxy_url_prefers_the_recorded_gateway' (1389875) panicked at src/egress.rs:2140:78:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- egress::tests::brokered_injection_requires_exact_lease_peer stdout ----
+
+thread 'egress::tests::brokered_injection_requires_exact_lease_peer' (1389856) panicked at src/egress.rs:2199:78:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- netstack::guard::tests::denied_flow_is_dropped_and_logged stdout ----
+
+thread 'netstack::guard::tests::denied_flow_is_dropped_and_logged' (1390492) panicked at src/netstack/guard.rs:1374:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed stdout ----
+
+thread 'netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed' (1390660) panicked at src/netstack/guard.rs:1405:57:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- traffic::tests::records_path_for_intercepted stdout ----
+
+thread 'traffic::tests::records_path_for_intercepted' (1390838) panicked at src/traffic.rs:545:9:
+assertion `left == right` failed
+  left: 0
+ right: 1
+
+---- traffic::tests::tail_limits_and_parses stdout ----
+
+thread 'traffic::tests::tail_limits_and_parses' (1390845) panicked at src/traffic.rs:524:9:
+assertion `left == right` failed
+  left: 0
+ right: 3
+
+
+failures:
+    egress::tests::brokered_injection_requires_exact_lease_peer
+    egress::tests::netstack_policy_forces_deny_and_bakes_allowlist
+    egress::tests::peer_guard_pins_exact_guest_ip_when_known
+    egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease
+    egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist
+    egress::tests::proxy_url_prefers_the_recorded_gateway
+    netstack::guard::tests::denied_flow_is_dropped_and_logged
+    netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed
+    traffic::tests::records_path_for_intercepted
+    traffic::tests::tail_limits_and_parses
+
+test result: FAILED. 320 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.39s
+
+error: test failed, to rerun pass `--bin appliance-vm`
