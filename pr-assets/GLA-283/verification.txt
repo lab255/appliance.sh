@@ -1,0 +1,20 @@
+Final uncached foreground verification at b8b3bb4 (captured source 8923134; audit-only follow-up):
+NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify: exit 1, CLI Docker ELF fixture environmental failure.
+Build: 11 passed. Typecheck: 6 passed. Lint/token/format: passed.
+TypeScript: 1403 passed, 1 failed, 1 skipped; 144 files passed, 1 failed; 10 packages.
+1 environmental failure: CLI docker ELF fixture — fails identically on base; /tmp worktree not Docker-shared (same class as PR #154's proven-environmental failure).
+Unchanged merge base 42e77d1: src/appliance-runtime-binary.spec.ts > generates a tiny static Linux ELF at test time: Docker exit 125, failed to create /tmp/containerd-mount…: input/output error. Feature run has identical failure. Worktree restored clean at 8923134 after base proof. The shared-path cause is the parent team's diagnosis; the identical base failure is directly reproduced here.
+Rust: 352 passed (credential-store 6, credhelper 26, VM 320), 1 ignored, 10 known environmental VM failures. All three cargo builds and all three clippy gates passed. Rust verification was run explicitly in foreground after the TS failure stopped the verify script. See rust-verification.log and verification.log for exact results.
+Commands: NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify; credential-store cargo build/test/clippy --all-features; credhelper cargo build/test/clippy; VM cargo build/test/clippy. Clippy uses the flags from scripts/verify.sh.
+
+failures:
+    egress::tests::brokered_injection_requires_exact_lease_peer
+    egress::tests::netstack_policy_forces_deny_and_bakes_allowlist
+    egress::tests::peer_guard_pins_exact_guest_ip_when_known
+    egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease
+    egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist
+    egress::tests::proxy_url_prefers_the_recorded_gateway
+    netstack::guard::tests::denied_flow_is_dropped_and_logged
+    netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed
+    traffic::tests::records_path_for_intercepted
+    traffic::tests::tail_limits_and_parses

@@ -1,0 +1,43 @@
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_r5fg3rge9y-1/appliance.sh/packages/cli
+
+ ❯ src/appliance-runtime-binary.spec.ts (1 test | 1 failed) 123ms
+   × binary Runtime ELF fixture > generates a tiny static Linux ELF at test time 122ms
+     → docker: Error response from daemon: failed to create temp dir: mkdir /tmp/containerd-mount394027123: input/output error
+
+Run 'docker run --help' for more information
+: expected 125 to be +0 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/appliance-runtime-binary.spec.ts > binary Runtime ELF fixture > generates a tiny static Linux ELF at test time
+AssertionError: docker: Error response from daemon: failed to create temp dir: mkdir /tmp/containerd-mount394027123: input/output error
+
+Run 'docker run --help' for more information
+: expected 125 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 125
+
+ ❯ src/appliance-runtime-binary.spec.ts:44:61
+     42|         { encoding: null, maxBuffer: 10 * 1024 * 1024 }
+     43|       );
+     44|       expect(result.status, result.stderr.toString('utf8')).toBe(0);
+       |                                                             ^
+     45|       fs.writeFileSync(path.join(dir, 'tiny'), result.stdout);
+     46|       expect(result.stdout.subarray(0, 4)).toEqual(Buffer.from([0x7f, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  06:41:11
+   Duration  973ms (transform 50ms, setup 0ms, collect 482ms, tests 123ms, environment 0ms, prepare 61ms)
+
+undefined
+/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_r5fg3rge9y-1/appliance.sh/packages/cli:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/appliance-runtime-binary.spec.ts
