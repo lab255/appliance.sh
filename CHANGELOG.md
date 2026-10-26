@@ -1,3 +1,30 @@
+## 1.62.0 (2026-10-26)
+
+### Features
+
+- **catalogue:** pin the production signer and reviewed cutover floor ([#143](https://github.com/lab255/appliance.sh/pull/143))
+- **ui:** named interaction tokens + migrate per-row hover sites ([#146](https://github.com/lab255/appliance.sh/pull/146))
+- **ui:** retime motion tokens to FF spring tiers ([#148](https://github.com/lab255/appliance.sh/pull/148))
+- **ui:** inter variable (opsz) replaces geist as the sans face ([#147](https://github.com/lab255/appliance.sh/pull/147))
+- **ui:** glide shared hover across sidebar and lists ([#151](https://github.com/lab255/appliance.sh/pull/151))
+- **ui:** weight without reflow on active labels (GLA-277) ([#153](https://github.com/lab255/appliance.sh/pull/153))
+
+### Bug Fixes
+
+- **app:** make egress action press feedback immediate ([#150](https://github.com/lab255/appliance.sh/pull/150))
+- **app:** compose onboarding settles and preserve interrupted navigation ([#152](https://github.com/lab255/appliance.sh/pull/152))
+- **app:** stabilize async detail loading and recovery (GLA-283) ([#155](https://github.com/lab255/appliance.sh/pull/155))
+- **ui:** retire blanket 150ms transition onto the duration tokens ([#145](https://github.com/lab255/appliance.sh/pull/145))
+- **ui:** reverse interrupted overlay motion on named tiers (GLA-281) ([#154](https://github.com/lab255/appliance.sh/pull/154))
+
+### Chores
+
+- **ui:** fluid functionalism registry wiring + lazymotion policy spike ([#144](https://github.com/lab255/appliance.sh/pull/144))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.61.0 (2026-10-05)
 
 ### Features
