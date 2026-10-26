@@ -262,6 +262,22 @@ export function CredentialsPanel({
         </form>
       ) : null}
 
+      {credsQuery.error ? (
+        <FriendlyError
+          error={credsQuery.error}
+          headline="Couldn't read credential rules"
+          actions={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={credsQuery.isFetching}
+              onClick={() => void credsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
       <div className="mt-3 space-y-3">
         {/* Rules */}
         {data && data.rules.length > 0 ? (
