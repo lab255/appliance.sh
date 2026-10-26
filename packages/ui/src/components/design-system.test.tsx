@@ -147,38 +147,72 @@ describe('LongOperation', () => {
   });
 });
 
-// The generated constants are checked against the CSS source, not a second JS recipe.
+// CSS parity and JS spring shapes are separate contracts; matching durations alone is insufficient.
 import { readFileSync } from 'node:fs';
 import { motionTokens } from '../motion/tokens.js';
+import { spring, exitFallbackMs } from '../lib/springs.js';
 import { selectTransition } from '../motion/use-transition.js';
 import { MotionProvider } from '../motion-provider.js';
 import { SkeletonSwap } from './skeleton-swap.js';
 import { Skeleton } from './skeleton.js';
 
 describe('Motion contract', () => {
-  it('generates seconds and bezier tuples from the theme', () => {
+  it('keeps the CSS lane and exported CSS mirror in milliseconds', () => {
     const theme = readFileSync(new URL('../theme.css', import.meta.url), 'utf8');
-    for (const speed of ['fast', 'base', 'slow'] as const) {
-      expect(motionTokens[speed]).toBe(Number(theme.match(new RegExp(`--duration-${speed}: (\\d+)ms`))![1]) / 1000);
-    }
-    for (const [token, key] of [
-      ['out-quart', 'outQuart'],
-      ['in-out', 'inOut'],
+    const exported = readFileSync(new URL('../../dist/tokens.css', import.meta.url), 'utf8');
+    for (const [tier, enterMs, exitMs] of [
+      ['fast', 80, 60],
+      ['base', 160, 120],
+      ['slow', 240, 160],
     ] as const) {
-      expect(motionTokens[key]).toEqual(
-        theme
-          .match(new RegExp(`--ease-${token}: cubic-bezier\\(([^)]+)\\)`))![1]
-          .split(',')
-          .map(Number)
-      );
+      for (const [suffix, ms] of [
+        ['', enterMs],
+        ['-exit', exitMs],
+      ] as const) {
+        const token = `--duration-${tier}${suffix}: ${ms}ms;`;
+        expect(theme).toContain(token);
+        expect(exported).toContain(token);
+      }
+      // Assert the conversion explicitly; equal-looking numbers in different units are not parity.
+      expect(motionTokens[tier].duration).toBe(enterMs / 1000);
+      expect(motionTokens[tier].exit.duration).toBe(exitMs / 1000);
+      expect(motionTokens[tier].duration * 1000).toBe(enterMs);
+      expect(motionTokens[tier].exit.duration * 1000).toBe(exitMs);
+    }
+    for (const css of [theme, exported]) {
+      expect(css).toContain('--ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1)');
+      expect(css).toContain('--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1)');
     }
   });
-  it('selects immediate entry, replacement and exit for reduced motion', () => {
-    expect(selectTransition(true).duration).toBe(0);
-    expect(selectTransition(true, 'fast').duration).toBe(0);
-    expect(selectTransition(true, 'base', true).duration).toBe(0);
-    expect(selectTransition(false).duration).toBe(0.2);
-    expect(selectTransition(false, 'fast').duration).toBe(0.12);
+  it('keeps JS tiers as FF springs with explicit exit tweens', () => {
+    for (const [tier, ffTier, duration, exitDuration, bounce] of [
+      ['fast', 'fast', 0.08, 0.06, 0],
+      ['base', 'moderate', 0.16, 0.12, 0],
+      ['slow', 'slow', 0.24, 0.16, 0.12],
+    ] as const) {
+      expect(spring[ffTier]).toEqual({
+        type: 'spring',
+        duration,
+        bounce,
+        exit: { type: 'tween', duration: exitDuration },
+      });
+      expect(motionTokens[tier]).toBe(spring[ffTier]);
+      expect(exitFallbackMs(spring[ffTier])).toBe(Math.round(exitDuration * 1000) + 100);
+    }
+    expect(selectTransition(false).type).toBe('spring');
+    expect(selectTransition(false, 'base', 'exit').type).toBe('tween');
+    expect(selectTransition(false, 'base', 'exit').duration).toBe(0.12);
+  });
+  it('selects real enter springs and named exit tweens, with immediate reduced motion', () => {
+    for (const speed of ['fast', 'base', 'slow'] as const) {
+      const { exit, ...enter } = motionTokens[speed];
+      expect(selectTransition(false, speed)).toEqual(enter);
+      expect(selectTransition(false, speed, 'exit')).toEqual(exit);
+      for (const phase of ['enter', 'exit'] as const) {
+        expect(selectTransition(true, speed, phase)).toEqual({ type: 'tween', duration: 0 });
+      }
+    }
+    expect(selectTransition(false)).toEqual({ type: 'spring', duration: 0.16, bounce: 0 });
   });
   it('keeps initial content readable before lazy features, including SSR', () => {
     const html = renderToStaticMarkup(
