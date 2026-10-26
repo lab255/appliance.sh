@@ -73,3 +73,41 @@
 .hover-glide .hover-glide-card-raised::before {
   background: var(--color-surface-raised);
 }
+
+/* GLA-277: only the ghost contributes inline size, including in truncated tabs. */
+.weight-label {
+  display: inline-grid;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: bottom;
+  font-optical-sizing: auto;
+}
+.weight-label-ghost,
+.weight-label-text {
+  grid-area: 1 / 1;
+  /* The ghost needs overflow: hidden to zero its grid auto-min-size and enable truncation. */
+  overflow: hidden;
+  white-space: nowrap;
+}
+.weight-label-ghost {
+  visibility: hidden;
+  user-select: none;
+  height: 0;
+  font-variation-settings: 'wght' 600;
+}
+.weight-label-text {
+  width: 100%;
+  min-width: 0;
+  contain: inline-size;
+  text-overflow: ellipsis;
+  font-variation-settings: 'wght' 400;
+  transition: font-variation-settings var(--duration-fast) var(--ease-out-quart);
+}
+.weight-label[data-active='true'] > .weight-label-text {
+  font-variation-settings: 'wght' 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .weight-label-text {
+    transition: none;
+  }
+}

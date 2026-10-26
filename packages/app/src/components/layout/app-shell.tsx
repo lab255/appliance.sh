@@ -1,3 +1,4 @@
+import { WeightLabel } from '@appliance.sh/ui';
 import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
@@ -141,7 +142,7 @@ export function AppShell() {
                     // reduced motion falls back to plain token hover.
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium',
+                        'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                         item.prominent
                           ? 'text-[var(--color-foreground)] ring-1 ring-inset ring-[var(--color-border-strong)]'
@@ -150,8 +151,14 @@ export function AppShell() {
                       )
                     }
                   >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    <span className="hidden sm:inline">{item.label}</span>
+                    {({ isActive }) => (
+                      <>
+                        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                        <span className="hidden sm:inline">
+                          <WeightLabel active={isActive}>{item.label}</WeightLabel>
+                        </span>
+                      </>
+                    )}
                   </NavLink>
                 )}
               </React.Fragment>

@@ -128,3 +128,15 @@ is non-trivial. Environment/configuration: none beyond repository registry wirin
   retain those live effects and custom keyboard handlers after dismissal.
   A future animated drawer should separate presentation lifetime from session,
   stream and focus lifetime first; this task preserves immediate dismissal.
+
+### GLA-277: selection weight without reflow (2026-10-27)
+
+Registry checked: `/r/registry.json` and `/r/font-weight.json`. There is no
+standalone ghost-width label item. The nearest helper, `font-weight`, deliberately
+pins `opsz` to compensate width, selects at 550, and documents residual shifts
+of ±0.4px (semibold) / ±0.7px (bold). Option A: install that helper pristine and
+wrap it; this cannot satisfy automatic optical sizing or exact zero reflow.
+Option B (recommended and implemented): local `WeightLabel`, ghost reserving 600,
+visible `wght` 400 → 600, `opsz` automatic, CSS fast token (80ms), instant reduced
+motion. No registry file or manifest change. Sidebar route labels and terminal
+titles adopt it; settings has no separate navigation. Button variants stay intact.
