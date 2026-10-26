@@ -39,3 +39,24 @@ Property: FORGIVENESS. Fixed means the stated defect is addressed, not that ever
 | Confirm dialog / New Sandbox           | already-clean (source)                      | Local forms; no independent async read.                                                                                                                                                                                                                                 |
 
 Recorded options above are deliberately not implemented where they would change the compact/authorization/streaming interaction model. No registry-pinned files changed. Existing reduced-motion behavior remains owned by SkeletonSwap.
+
+## Measured arrival fixtures
+
+1280×900, identical fixture objects, 1600ms read delays; outer page block bounding boxes sampled before each screenshot. These are pixel geometry measurements, not normalized CLS. Longer/empty lists and different runtime/provider variants are not represented by a single-row desktop fixture.
+
+| Surface     | Net height delta before → after | Peak sampled height range before → after | Shifting arrivals before → after |
+| ----------- | ------------------------------- | ---------------------------------------- | -------------------------------- |
+| project     | 498px → 0px                     | 498px → 0px                              | 1 → 0                            |
+| deployment  | 470px → 0px                     | 470px → 0px                              | 2 → 0                            |
+| environment | 600px → 0px                     | 600px → 0px                              | 2 → 0                            |
+| deployments | -122px → 0px                    | 122px → 0px                              | 1 → 0                            |
+| apps        | 18px → 18px                     | 28px → 28px                              | 2 → 2                            |
+| agents      | 300px → 84px                    | 300px → 84px                             | 1 → 1                            |
+| machine     | 127px → 0px                     | 127px → 0px                              | 1 → 0                            |
+| settings    | 18px → 0px                      | 18px → 0px                               | 1 → 0                            |
+
+Measured successful-arrival surfaces shifting: **8/8 → 2/8**; sampled arrivals with >1px adjacent height change: **11 → 3**. Remaining entries above are source audits, not assumed zero measurements.
+
+Six additional error/retry captures cover account, entitlement suggestions, Team lists, apps, credentials, and egress. Successful recovery can change error-to-content height; cached deployment-row identity is separately verified by the regression test. Large universal error reservations remain a recorded design option.
+
+[Raw measurements and comparison](https://github.com/lab255/appliance.sh/blob/chore/artifacts/pr-assets/GLA-283/comparison.json?raw=true) · [Capture procedure](https://github.com/lab255/appliance.sh/blob/chore/artifacts/pr-assets/GLA-283/README.txt?raw=true) · [Verification counts and named failures](https://github.com/lab255/appliance.sh/blob/chore/artifacts/pr-assets/GLA-283/verification.txt?raw=true).
