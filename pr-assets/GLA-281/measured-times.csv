@@ -1,0 +1,11 @@
+stage,surface,observed_enter_to_opacity_0.999_ms,observed_exit_to_unmount_ms
+before,dialog,136.2,121.7
+before,confirm,136.1,122.9
+before,tooltip,67.8,61.7
+before,popover,67.7,61.4
+before,menu,67.9,63.3
+after,dialog,138.9,152.1
+after,confirm,146.8,148.1
+after,tooltip,64.8,66.9
+after,popover,62.1,85.1
+after,menu,46.7,83.1

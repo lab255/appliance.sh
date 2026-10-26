@@ -1,0 +1,1 @@
+PASS: native dialog open-close-open retains DOM identity; Escape/outside pointer unmount and release body lock; focus returns to trigger; toast dismisses during enter; reduced motion immediate; no browser errors.
