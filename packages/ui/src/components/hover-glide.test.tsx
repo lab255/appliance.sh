@@ -52,6 +52,8 @@ it('moves one highlight across rows, ignores portals, and exits on pointer leave
   fireEvent.pointerMove(view.getByTestId('first'));
   const highlight = view.container.querySelector('[data-hover-glide-highlight]');
   expect(highlight).not.toBeNull();
+  // Entry is feedback, not a fade: the first committed layer is already visible.
+  expect((highlight as HTMLElement).style.opacity).toBe('1');
   fireEvent.pointerMove(view.getByTestId('second'));
   expect(view.container.querySelectorAll('[data-hover-glide-highlight]')).toHaveLength(1);
   expect(view.container.querySelector('[data-hover-glide-highlight]')).toBe(highlight);

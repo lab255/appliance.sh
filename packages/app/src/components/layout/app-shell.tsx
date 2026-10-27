@@ -143,7 +143,7 @@ export function AppShell() {
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
+                        'active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                         item.prominent
                           ? 'text-[var(--color-foreground)] ring-1 ring-inset ring-[var(--color-border-strong)]'
                           : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',

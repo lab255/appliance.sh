@@ -43,8 +43,13 @@
   border-radius: var(--radius-md);
   background: var(--color-hover);
 }
-[data-hover-glide='immediate'] [data-hover-glide-item]:not([aria-current='page']):not([aria-disabled='true']):hover {
+/* Native hover covers the event-to-React-commit frame; mounted glide owns travel. */
+.hover-glide:not(:has(> [data-hover-glide-highlight]))
+  [data-hover-glide-item]:not([aria-current='page']):not([aria-disabled='true']):not(:active):hover,
+[data-hover-glide='immediate']
+  [data-hover-glide-item]:not([aria-current='page']):not([aria-disabled='true']):not(:active):hover {
   background: var(--color-hover);
+  transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
   [data-hover-glide-item] {
@@ -53,7 +58,7 @@
   .hover-glide-highlight {
     display: none;
   }
-  [data-hover-glide-item]:not([aria-current='page']):not([aria-disabled='true']):hover {
+  [data-hover-glide-item]:not([aria-current='page']):not([aria-disabled='true']):not(:active):hover {
     background: var(--color-hover);
   }
 }
