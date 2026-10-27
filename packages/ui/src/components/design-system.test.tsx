@@ -266,8 +266,13 @@ describe('Interaction fill contract', () => {
   it('requires named interaction fills and keeps only the existing designed hover exceptions', () => {
     const packages = new URL('../../../', import.meta.url);
     const exceptions: Record<string, string[]> = {
+      // GLA-284: ghost/outline use the normal hover token; only primary/destructive are exceptions.
       'ui/src/components/button.tsx': ['hover:bg-white', 'hover:bg-[var(--color-destructive-background)]'],
-      'app/src/components/layout/terminal-tab-bar.tsx': ['hover:bg-[var(--color-destructive-background)]'],
+      'app/src/components/layout/terminal-tab-bar.tsx': [
+        'hover:bg-[var(--color-active)]',
+        'hover:bg-[var(--color-destructive-background)]',
+        'hover:bg-[var(--color-active)]',
+      ],
       'app/src/components/layout/app-shell.tsx': ['hover:bg-[var(--color-warning-background)]'],
     };
     for (const root of ['app/src', 'ui/src']) {
@@ -276,7 +281,7 @@ describe('Interaction fill contract', () => {
         const path = `${root}/${file}`;
         const source = readFileSync(new URL(path, packages), 'utf8');
         const hoverFills = source.match(/hover:bg-[^\s'"`]+/g) ?? [];
-        const designed = hoverFills.filter((fill) => !/^hover:bg-\[var\(--color-(?:hover|active)\)\]$/.test(fill));
+        const designed = hoverFills.filter((fill) => !/^hover:bg-\[var\(--color-hover\)\]$/.test(fill));
         expect(designed, path).toEqual(exceptions[path] ?? []);
         expect(source, path).not.toMatch(/(?:hover|active):bg-[^\s'"`]*\/(?:\d+|\[[^\]]+\])/);
         expect(source, path).not.toMatch(/(?:hover|active):bg-\[color-mix\(/);

@@ -140,3 +140,21 @@ Option B (recommended and implemented): local `WeightLabel`, ghost reserving 600
 visible `wght` 400 → 600, `opsz` automatic, CSS fast token (80ms), instant reduced
 motion. No registry file or manifest change. Sidebar route labels and terminal
 titles adopt it; settings has no separate navigation. Button variants stay intact.
+
+### Owner live-pass rulings (2026-10-28, GLA-284)
+
+- **Glide travels across gaps.** Supersedes GLA-280's “2px gaps inert” design:
+  while inside a HoverGlide container, keep the last eligible row highlighted
+  through gaps, padding, and active/disabled-row crossings, then glide to the
+  next eligible row. Active/disabled rows remain excluded as destinations;
+  crossing them now holds the last row instead of exiting and re-entering.
+  Container leave, scroll, resize/mutation hygiene, and reduced-motion immediate
+  behavior retain their existing clearing/suppression semantics.
+- **Button Option B accepted.** Resolves PR #156's open A/B decision and
+  supersedes ghost/outline active-token hover: use the named hover fill and
+  explicitly use the active fill on press. Ghost hover text uses the ordinary
+  foreground, replacing accent-foreground; outline already uses that foreground.
+  Terminal pressed-preview remains deliberate and unchanged.
+- **Weight-as-hierarchy confirmed 2026-10-28, both sidebar and terminal.**
+  Settles PR #156's “hierarchy or heaviness?” live-pass question in favor of the
+  existing GLA-277 400→600 WeightLabel treatment. No weight code change.
