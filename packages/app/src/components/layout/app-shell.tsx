@@ -131,6 +131,7 @@ export function AppShell() {
                 ) : (
                   <NavLink
                     data-hover-glide-item=""
+                    data-hover-glide-press-fill=""
                     to={item.to}
                     title={item.label}
                     // 2026-10-26 supersedes sidebar stillness: deliberately glide
