@@ -1,0 +1,23 @@
+{
+  "rest": {
+    "bg": "rgba(0, 0, 0, 0)",
+    "color": "rgb(161, 161, 161)",
+    "translate": "none",
+    "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+    "className": "appliance-ui inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-(--duration-fast) active:translate-y-px active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:pointer-events-none disabled:opacity-50 text-[var(--color-muted-foreground)] hover:bg-[var(--color-active)] hover:text-[var(--color-accent-foreground)] h-8 px-3 text-xs"
+  },
+  "hover": {
+    "bg": "rgb(36, 36, 36)",
+    "color": "rgb(250, 250, 250)",
+    "translate": "none",
+    "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+    "className": "appliance-ui inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-(--duration-fast) active:translate-y-px active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:pointer-events-none disabled:opacity-50 text-[var(--color-muted-foreground)] hover:bg-[var(--color-active)] hover:text-[var(--color-accent-foreground)] h-8 px-3 text-xs"
+  },
+  "pressed": {
+    "bg": "rgb(36, 36, 36)",
+    "color": "rgb(250, 250, 250)",
+    "translate": "0px 1px",
+    "transitionProperty": "none",
+    "className": "appliance-ui inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-(--duration-fast) active:translate-y-px active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:pointer-events-none disabled:opacity-50 text-[var(--color-muted-foreground)] hover:bg-[var(--color-active)] hover:text-[var(--color-accent-foreground)] h-8 px-3 text-xs"
+  }
+}

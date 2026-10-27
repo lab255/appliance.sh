@@ -1,0 +1,60 @@
+GLA-280 verification — code 8730c90, baseline 638744c
+pnpm install FIRST: passed (Pulumi CLI absent; optional plugin installers warned).
+UI + SDK built before app tests; app dependency builds run via Nx.
+Foreground pnpm verify: NOT GREEN; stops at CLI Docker environment fixture.
+ NX   Successfully ran target build for 11 projects
+ NX   Successfully ran target typecheck for 6 projects
+Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.
+All matched files use Prettier code style!
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+ Test Files  5 passed (5)
+      Tests  44 passed (44)
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+ Test Files  7 passed (7)
+      Tests  57 passed (57)
+ Test Files  4 passed (4)
+      Tests  68 passed (68)
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+ Test Files  19 passed (19)
+      Tests  98 passed (98)
+ Test Files  37 passed (37)
+      Tests  346 passed (346)
+ Test Files  5 passed (5)
+      Tests  48 passed (48)
+ FAIL  src/appliance-runtime-binary.spec.ts > binary Runtime ELF fixture > generates a tiny static Linux ELF at test time
+AssertionError: docker: Error response from daemon: failed to create temp dir: mkdir /tmp/containerd-mount826658629: input/output error
+ Test Files  1 failed | 56 passed (57)
+      Tests  1 failed | 579 passed | 1 skipped (581)
+TS total: 1421 passed, 1 failed, 1 skipped; 146 files passed, 1 failed.
+Focused hover/design-system/registry guards: 36/36 passed.
+Rust stages run separately after fail-fast verify stopped:
+credential: test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+credential: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+credential: build and clippy passed
+credhelper: test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.42s
+credhelper: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+credhelper: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+credhelper: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+credhelper: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+credhelper: build and clippy passed
+vm: test result: FAILED. 320 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.35s
+vm: build and clippy passed
+VM failures (sandbox filesystem/network environment):
+
+failures:
+    egress::tests::brokered_injection_requires_exact_lease_peer
+    egress::tests::netstack_policy_forces_deny_and_bakes_allowlist
+    egress::tests::peer_guard_pins_exact_guest_ip_when_known
+    egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease
+    egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist
+    egress::tests::proxy_url_prefers_the_recorded_gateway
+    netstack::guard::tests::denied_flow_is_dropped_and_logged
+    netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed
+    traffic::tests::records_path_for_intercepted
+    traffic::tests::tail_limits_and_parses
+
+Known environment failures explicitly retained: ~10 VM egress/netstack/traffic failures; CLI Docker Linux ELF fixture using /tmp containerd mounts (input/output error on this host). No unrelated fixture changes.
+No new dependencies, environment variables, or configuration. Springs and ff-manifest unchanged.

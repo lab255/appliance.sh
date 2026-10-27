@@ -1,0 +1,458 @@
+{
+  "phase": "before",
+  "viewport": [
+    1100,
+    780
+  ],
+  "deviceScaleFactor": 1,
+  "zoom": 1,
+  "traces": {
+    "hover": [
+      {
+        "dt": 0.30000000447034836,
+        "raf": 3879.066,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(161, 161, 161)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 16.400000005960464,
+        "raf": 3895.6,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(207, 207, 207)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "0"
+      },
+      {
+        "dt": 33.100000001490116,
+        "raf": 3912.3,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(228, 228, 228)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "0.842286"
+      },
+      {
+        "dt": 49.70000000298023,
+        "raf": 3929,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(235, 235, 235)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "0.968158"
+      },
+      {
+        "dt": 66.40000000596046,
+        "raf": 3945.6,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "0.993368"
+      },
+      {
+        "dt": 81.5,
+        "raf": 3962.4,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "0.998948"
+      },
+      {
+        "dt": 99.70000000298023,
+        "raf": 3979,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 115.70000000298023,
+        "raf": 3995.7,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 133,
+        "raf": 4012.4,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 149.60000000149012,
+        "raf": 4029,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 166.5,
+        "raf": 4045.6,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      }
+    ],
+    "navPress": [
+      {
+        "dt": 11.899999998509884,
+        "raf": 4129,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 28.600000001490116,
+        "raf": 4145.7,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 45.19999999552965,
+        "raf": 4162.4,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 61.79999999701977,
+        "raf": 4179,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 78.5,
+        "raf": 4195.6,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 95.29999999701977,
+        "raf": 4212.3,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 111.79999999701977,
+        "raf": 4229,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 128.5,
+        "raf": 4245.7,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 145.19999999552965,
+        "raf": 4262.3,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      },
+      {
+        "dt": 161.89999999850988,
+        "raf": 4279,
+        "bg": "rgba(0, 0, 0, 0)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": "1"
+      }
+    ],
+    "switcherPress": [
+      {
+        "dt": 18.899999998509884,
+        "raf": 4595.7,
+        "bg": "rgba(26, 26, 26, 0.616)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 30.099999994039536,
+        "raf": 4612.3,
+        "bg": "rgba(26, 26, 26, 0.882)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 45,
+        "raf": 4628.9,
+        "bg": "rgba(26, 26, 26, 0.976)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 63.5,
+        "raf": 4645.7,
+        "bg": "rgba(26, 26, 26, 1)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 80.19999999552965,
+        "raf": 4662.3,
+        "bg": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 96.79999999701977,
+        "raf": 4679,
+        "bg": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 113.5,
+        "raf": 4695.7,
+        "bg": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 130.19999999552965,
+        "raf": 4712.3,
+        "bg": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 145.89999999850988,
+        "raf": 4729,
+        "bg": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 162.69999999552965,
+        "raf": 4745.7,
+        "bg": "rgb(26, 26, 26)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "none",
+        "transition": "0.08s, 0.08s, 0.08s, 0.08s, 0.08s",
+        "transitionProperty": "background-color, border-color, color, box-shadow, opacity",
+        "highlightOpacity": null
+      }
+    ],
+    "buttonPress": [
+      {
+        "dt": 0.5,
+        "raf": 5195.6,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 9.800000004470348,
+        "raf": 5212.3,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 26.600000001490116,
+        "raf": 5229,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 43.20000000298023,
+        "raf": 5245.6,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 59.899999998509884,
+        "raf": 5262.3,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 76.60000000149012,
+        "raf": 5278.9,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 93.30000000447035,
+        "raf": 5295.7,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 110,
+        "raf": 5312.3,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 126.60000000149012,
+        "raf": 5328.9,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 143.20000000298023,
+        "raf": 5345.7,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 159.80000000447035,
+        "raf": 5362.3,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      },
+      {
+        "dt": 176.5,
+        "raf": 5378.9,
+        "bg": "rgb(36, 36, 36)",
+        "color": "rgb(237, 237, 237)",
+        "translate": "0px 1px",
+        "transition": "0.08s",
+        "transitionProperty": "color, background-color, border-color, box-shadow, transform",
+        "highlightOpacity": null
+      }
+    ]
+  },
+  "focus": {
+    "shadow": "none",
+    "outline": "rgb(153, 200, 255) auto 1px"
+  },
+  "reduced": {
+    "bg": "rgb(26, 26, 26)",
+    "transition": "0s",
+    "layers": 0
+  }
+}
