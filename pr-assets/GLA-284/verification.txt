@@ -1,0 +1,127 @@
+GLA-284 verification, d44d525, foreground pnpm verify (exit 1).
+Build 11/11; typecheck 6/6; lint, named-token check, prettier PASS.
+TS total: 1425 passed / 1 failed / 1 skipped, 146 files passed / 1 failed.
+UI 61/61; app 98/98. Focused hover/design-system/fluid-policy guards 40/40.
+Registry files byte-identical to dfa456c. No weight code change.
+Known CLI failure: src/appliance-runtime-binary.spec.ts, Docker Linux ELF fixture:
+failed to create temp dir: mkdir /tmp/containerd-mount3322278247: input/output error.
+This is the known /tmp Docker fixture failure; current checkout is a BB worktree.
+Rust stages were then run explicitly because verify stops at the CLI failure.
+All 3 cargo builds and clippy checks PASS. Tests: 352 passed / 10 failed / 1 ignored.
+Credential store: 6 passed / 1 ignored; credhelper: 26 passed; VM: 320 passed / 10 failed.
+Foreground verify is NOT GREEN; failures are reported, not suppressed.
+
+Commands:
+pnpm install
+pnpm --filter @appliance.sh/ui run build
+pnpm --filter @appliance.sh/sdk run build
+pnpm exec nx run @appliance.sh/app:build --skip-nx-cache
+pnpm --filter @appliance.sh/ui exec vitest run
+pnpm --filter @appliance.sh/app exec vitest run
+pnpm verify
+(cd packages/credential-store && cargo build --all-features && cargo test --all-features && cargo clippy --all-features --all-targets -- -D warnings)
+(cd packages/credhelper && cargo build && cargo test && cargo clippy --all-targets -- -D warnings)
+(cd packages/vm && cargo build && cargo test)
+(cd packages/vm && cargo clippy -- -D warnings)
+
+TS summary lines:
+ NX   Successfully ran target build for 11 projects
+ NX   Successfully ran target typecheck for 6 projects
+All matched files use Prettier code style!
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+ Test Files  4 passed (4)
+      Tests  68 passed (68)
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+ Test Files  7 passed (7)
+      Tests  61 passed (61)
+ Test Files  5 passed (5)
+      Tests  44 passed (44)
+ Test Files  19 passed (19)
+      Tests  98 passed (98)
+ Test Files  5 passed (5)
+      Tests  48 passed (48)
+ Test Files  37 passed (37)
+      Tests  346 passed (346)
+ Test Files  1 failed | 56 passed (57)
+      Tests  1 failed | 579 passed | 1 skipped (581)
+
+VM environment failure details:
+failures:
+
+---- egress::tests::peer_guard_pins_exact_guest_ip_when_known stdout ----
+
+thread 'egress::tests::peer_guard_pins_exact_guest_ip_when_known' (2133082) panicked at src/egress.rs:2123:78:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- egress::tests::netstack_policy_forces_deny_and_bakes_allowlist stdout ----
+
+thread 'egress::tests::netstack_policy_forces_deny_and_bakes_allowlist' (2133080) panicked at src/egress.rs:2319:10:
+called `Result::unwrap()` on an `Err` value: Operation not permitted (os error 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease stdout ----
+
+thread 'egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease' (2133085) panicked at src/egress.rs:2095:45:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- egress::tests::brokered_injection_requires_exact_lease_peer stdout ----
+
+thread 'egress::tests::brokered_injection_requires_exact_lease_peer' (2133071) panicked at src/egress.rs:2199:78:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist stdout ----
+
+thread 'egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist' (2133092) panicked at src/egress.rs:2878:40:
+called `Result::unwrap()` on an `Err` value: create /Users/eliot/.appliance/vm/egress-vz-proxy-selection-88856
+
+Caused by:
+    Operation not permitted (os error 1)
+
+---- egress::tests::proxy_url_prefers_the_recorded_gateway stdout ----
+
+thread 'egress::tests::proxy_url_prefers_the_recorded_gateway' (2133093) panicked at src/egress.rs:2140:78:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- netstack::guard::tests::denied_flow_is_dropped_and_logged stdout ----
+
+thread 'netstack::guard::tests::denied_flow_is_dropped_and_logged' (2133684) panicked at src/netstack/guard.rs:1374:39:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed stdout ----
+
+thread 'netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed' (2133707) panicked at src/netstack/guard.rs:1405:57:
+called `Result::unwrap()` on an `Err` value: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- traffic::tests::records_path_for_intercepted stdout ----
+
+thread 'traffic::tests::records_path_for_intercepted' (2133803) panicked at src/traffic.rs:545:9:
+assertion `left == right` failed
+  left: 0
+ right: 1
+
+---- traffic::tests::tail_limits_and_parses stdout ----
+
+thread 'traffic::tests::tail_limits_and_parses' (2133807) panicked at src/traffic.rs:524:9:
+assertion `left == right` failed
+  left: 0
+ right: 3
+
+
+failures:
+    egress::tests::brokered_injection_requires_exact_lease_peer
+    egress::tests::netstack_policy_forces_deny_and_bakes_allowlist
+    egress::tests::peer_guard_pins_exact_guest_ip_when_known
+    egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease
+    egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist
+    egress::tests::proxy_url_prefers_the_recorded_gateway
+    netstack::guard::tests::denied_flow_is_dropped_and_logged
+    netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed
+    traffic::tests::records_path_for_intercepted
+    traffic::tests::tail_limits_and_parses
+
+test result: FAILED. 320 passed; 10 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.58s
+
