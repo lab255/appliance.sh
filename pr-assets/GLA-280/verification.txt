@@ -58,3 +58,5 @@ failures:
 
 Known environment failures explicitly retained: ~10 VM egress/netstack/traffic failures; CLI Docker Linux ELF fixture using /tmp containerd mounts (input/output error on this host). No unrelated fixture changes.
 No new dependencies, environment variables, or configuration. Springs and ff-manifest unchanged.
+
+Devon revision checks: UI build + app build passed. UI suite 57/57 (7 files), including design-system/registry/hover guards; app suite 98/98 (19 files). lint:check passed (design tokens, ESLint, Prettier). Browser regression: old ordinary reduced-motion press transparent; corrected ordinary press RGB26, explicit press RGB36. No full verify rerun requested for this revision; earlier environment-failure accounting above remains historical.

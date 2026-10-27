@@ -1,0 +1,33 @@
+{
+  "method": "Chromium, actual source CSS from 8730c90 and revision; synthetic ordinary/explicit-fill rows; reduced-motion media; real pointer down. Tokens and explicit fill declared in fixture.",
+  "results": [
+    {
+      "version": "8730c90",
+      "row": "ordinary",
+      "reducedMotion": true,
+      "pressed": true,
+      "color": "rgba(0, 0, 0, 0)"
+    },
+    {
+      "version": "8730c90",
+      "row": "explicit press fill",
+      "reducedMotion": true,
+      "pressed": true,
+      "color": "rgb(36, 36, 36)"
+    },
+    {
+      "version": "revision",
+      "row": "ordinary",
+      "reducedMotion": true,
+      "pressed": true,
+      "color": "rgb(26, 26, 26)"
+    },
+    {
+      "version": "revision",
+      "row": "explicit press fill",
+      "reducedMotion": true,
+      "pressed": true,
+      "color": "rgb(36, 36, 36)"
+    }
+  ]
+}
