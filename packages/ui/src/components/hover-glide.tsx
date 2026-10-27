@@ -9,7 +9,9 @@ import { cn } from '../lib/utils.js';
 type Rect = { x: number; y: number; width: number; height: number };
 
 /** One measured highlight per list. Mark rows with data-hover-glide-item.
- * Gaps remain inert, and nested controls keep their own click/focus behavior.
+ * "Gaps remain inert" superseded by owner ruling 2026-10-28: hold the last
+ * eligible row across gaps, padding, and active/disabled rows until another resolves.
+ * Nested controls keep their own click/focus behavior.
  * The glide is pointer-only; keyboard users rely on the existing focus-visible rings — deliberate.
  * Transforms need only domAnimation; no shared-layout feature bundle is loaded.
  */
@@ -55,7 +57,7 @@ export function HoverGlide({
       row.closest('[data-hover-glide]') !== event.currentTarget ||
       row.matches('[aria-disabled="true"], :disabled, [aria-current="page"]')
     ) {
-      clear();
+      // Keep the last rect during transit inside this container.
       return;
     }
     if (row === active.current) return;

@@ -82,3 +82,51 @@ it('removes the layer immediately when reduced motion changes, including a pendi
   fireEvent.pointerMove(view.getByTestId('second'));
   expect(view.container.querySelector('[data-hover-glide-highlight]')).toBeNull();
 });
+
+it('holds the last rect across gaps, padding, active and disabled rows, then glides onward', async () => {
+  const view = render(<List />);
+  const first = view.getByTestId('first');
+  const second = view.getByTestId('second');
+  vi.spyOn(first, 'getBoundingClientRect').mockReturnValue({
+    left: 0,
+    top: 10,
+    width: 100,
+    height: 20,
+  } as DOMRect);
+  vi.spyOn(second, 'getBoundingClientRect').mockReturnValue({
+    left: 0,
+    top: 40,
+    width: 100,
+    height: 20,
+  } as DOMRect);
+  fireEvent.pointerMove(first);
+  const highlight = view.container.querySelector<HTMLElement>('[data-hover-glide-highlight]')!;
+  const firstTransform = highlight.style.transform;
+  for (const target of [
+    view.container.querySelector('ul')!,
+    view.getByTestId('active'),
+    view.getByTestId('disabled'),
+  ]) {
+    fireEvent.pointerMove(target);
+    // Longer than the exit tier: the layer must remain opaque, not merely be exiting.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(view.container.querySelector('[data-hover-glide-highlight]')).toBe(highlight);
+    expect(highlight.style.opacity).toBe('1');
+    expect(highlight.style.transform).toBe(firstTransform);
+  }
+  fireEvent.pointerMove(second);
+  await waitFor(() => expect(highlight.style.transform).not.toBe(firstTransform));
+  expect(view.container.querySelector('[data-hover-glide-highlight]')).toBe(highlight);
+  fireEvent.pointerLeave(view.container.querySelector('ul')!);
+  await waitFor(() => expect(view.container.querySelector('[data-hover-glide-highlight]')).toBeNull());
+});
+
+it.each(['scroll', 'resize', 'mutation'])('clears the held layer on %s hygiene', async (event) => {
+  const view = render(<List />);
+  fireEvent.pointerMove(view.getByTestId('first'));
+  fireEvent.pointerMove(view.container.querySelector('ul')!);
+  if (event === 'scroll') fireEvent.scroll(view.container.querySelector('ul')!);
+  else if (event === 'resize') fireEvent(window, new Event('resize'));
+  else view.getByTestId('second').remove();
+  await waitFor(() => expect(view.container.querySelector('[data-hover-glide-highlight]')).toBeNull());
+});
