@@ -121,7 +121,7 @@ export function HoverGlide({
               aria-hidden="true"
               data-hover-glide-highlight=""
               className="hover-glide-highlight"
-              initial={{ ...rect, opacity: 0 }}
+              initial={{ ...rect, opacity: 1 }}
               animate={{ ...rect, opacity: 1 }}
               transition={selectTransition(false, 'fast')}
               exit={{ opacity: 0, transition: selectTransition(false, 'fast', 'exit') }}

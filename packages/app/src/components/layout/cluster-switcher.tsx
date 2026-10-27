@@ -143,7 +143,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
             type="button"
             aria-label={workspacePresentation ? `Workspace: ${currentName}` : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)]',
+              'flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
               open && 'bg-[var(--color-muted)]'
             )}
           >
