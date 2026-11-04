@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { localMachineLabel, type ConsoleHost, type InstalledRuntimeApp } from '@/lib/host';
+import { ToastProvider } from '@/components/ui/toast';
 import { HostProvider } from '@/providers/host-provider';
 import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState, InstalledAppsPage } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
@@ -59,7 +60,9 @@ async function installedAppsInstallMessage(rejection: unknown): Promise<string> 
       root.render(
         <MemoryRouter>
           <HostProvider host={host}>
-            <InstalledAppsPage />
+            <ToastProvider>
+              <InstalledAppsPage />
+            </ToastProvider>
           </HostProvider>
         </MemoryRouter>
       );
@@ -82,6 +85,97 @@ async function installedAppsInstallMessage(rejection: unknown): Promise<string> 
 }
 
 describe('Installed Apps mock scenarios', () => {
+  it.each(['Stop', 'Open'] as const)(
+    'keeps cards mounted during the %s refetch and shows success feedback',
+    async (action) => {
+      let resolveList!: (apps: InstalledRuntimeApp[]) => void;
+      const initial = fixture({ state: action === 'Stop' ? 'running' : 'stopped' });
+      const updated = fixture({ state: action === 'Stop' ? 'stopped' : 'running' });
+      const installedApps = {
+        list: vi
+          .fn()
+          .mockResolvedValueOnce([initial])
+          .mockImplementation(
+            () =>
+              new Promise((resolve) => {
+                resolveList = resolve;
+              })
+          ),
+        stop: vi.fn().mockResolvedValue(undefined),
+        run: vi.fn().mockResolvedValue({ urls: ['http://localhost'] }),
+        openWindow: vi.fn().mockResolvedValue(undefined),
+      };
+      const container = document.createElement('div');
+      const root = createRoot(container);
+      try {
+        await act(async () =>
+          root.render(
+            <MemoryRouter>
+              <HostProvider host={{ platform: 'macos', installedApps } as unknown as ConsoleHost}>
+                <ToastProvider>
+                  <InstalledAppsPage />
+                </ToastProvider>
+              </HostProvider>
+            </MemoryRouter>
+          )
+        );
+        const card = container.querySelector('article');
+        await act(async () => {
+          container.querySelector<HTMLButtonElement>(`button[aria-label="${action} Notes+Sync"]`)!.click();
+        });
+        expect(installedApps.list).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('article')).toBe(card);
+        expect(container.textContent).not.toContain('Loading installed apps');
+        expect(container.querySelector('button[aria-busy="true"]')).not.toBeNull();
+        const message = `Notes+Sync is ${action === 'Stop' ? 'stopped' : 'running'}.`;
+        expect(container.querySelector('.sr-only[role="status"]')?.textContent).toBe(message);
+        expect(container.querySelector('.fixed [role="status"]')?.textContent).toBe(message);
+        await act(async () => resolveList([updated]));
+        expect(container.querySelector('article')).toBe(card);
+        expect(card?.textContent).toContain(action === 'Stop' ? 'Stopped' : 'Running');
+        expect(container.querySelector('button[aria-busy="true"]')).toBeNull();
+      } finally {
+        await act(async () => root.unmount());
+      }
+    }
+  );
+
+  it.each(['Stop', 'Open'] as const)('shows a visible error and live announcement when %s fails', async (action) => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const installedApps = {
+      list: vi.fn().mockResolvedValue([fixture()]),
+      stop: vi.fn().mockRejectedValue(new Error('Action failed')),
+      run: vi.fn().mockRejectedValue(new Error('Action failed')),
+    };
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          <MemoryRouter>
+            <HostProvider host={{ platform: 'macos', installedApps } as unknown as ConsoleHost}>
+              <ToastProvider>
+                <InstalledAppsPage />
+              </ToastProvider>
+            </HostProvider>
+          </MemoryRouter>
+        )
+      );
+      const card = container.querySelector('article');
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>(`button[aria-label="${action} Notes+Sync"]`)!.click();
+      });
+      expect(container.querySelector('.fixed [role="alert"]')?.textContent).toBe('Action failed');
+      expect(container.querySelector('.sr-only[role="status"]')?.textContent).toBe('Action failed');
+      expect(container.querySelector('article')).toBe(card);
+      expect(installedApps.list).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('button[aria-busy="true"]')).toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+      consoleError.mockRestore();
+    }
+  });
+
   it('uses the Windows workspace label', () => {
     expect(localMachineLabel('windows')).toBe('This PC');
   });

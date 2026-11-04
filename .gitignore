@@ -204,3 +204,6 @@ packages/credential-store/target/
 packages/credhelper/target/
 packages/vm/target/
 cdk.out/
+
+# Local visual acceptance artifacts (not committed).
+_captures/
