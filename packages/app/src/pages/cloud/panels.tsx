@@ -1,3 +1,4 @@
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -439,20 +440,20 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
       <label className="block space-y-1 text-xs">
         <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
         {canEnumerateProfiles ? (
-          <select
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
-          >
-            <option value="">— shell environment —</option>
-            {profiles.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-                {p.isSso ? '  (SSO)' : ''}
-              </option>
-            ))}
-          </select>
+          <Select value={awsProfile} onValueChange={setAwsProfile} disabled={status === 'running'}>
+            <SelectTrigger aria-label="AWS profile">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— shell environment —</SelectItem>
+              {profiles.map((p) => (
+                <SelectItem key={p.name} value={p.name}>
+                  {p.name}
+                  {p.isSso ? '  (SSO)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : (
           <Input
             type="text"
@@ -750,20 +751,20 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
         <label className="block space-y-1 text-xs">
           <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
           {canEnumerateProfiles ? (
-            <select
-              value={awsProfile}
-              onChange={(e) => setAwsProfile(e.target.value)}
-              disabled={status === 'running'}
-              className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
-            >
-              <option value="">— shell environment —</option>
-              {profiles.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.name}
-                  {p.isSso ? '  (SSO)' : ''}
-                </option>
-              ))}
-            </select>
+            <Select value={awsProfile} onValueChange={setAwsProfile} disabled={status === 'running'}>
+              <SelectTrigger aria-label="AWS profile">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— shell environment —</SelectItem>
+                {profiles.map((p) => (
+                  <SelectItem key={p.name} value={p.name}>
+                    {p.name}
+                    {p.isSso ? '  (SSO)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <Input
               type="text"
@@ -1034,20 +1035,20 @@ function StateMigrationPanel({ cluster, direction }: { cluster: Cluster; directi
       <label className="block space-y-1 text-xs">
         <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
         {canEnumerateProfiles ? (
-          <select
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
-          >
-            <option value="">— shell environment —</option>
-            {profiles.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-                {p.isSso ? '  (SSO)' : ''}
-              </option>
-            ))}
-          </select>
+          <Select value={awsProfile} onValueChange={setAwsProfile} disabled={status === 'running'}>
+            <SelectTrigger aria-label="AWS profile">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— shell environment —</SelectItem>
+              {profiles.map((p) => (
+                <SelectItem key={p.name} value={p.name}>
+                  {p.name}
+                  {p.isSso ? '  (SSO)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : (
           <Input
             type="text"
@@ -1181,20 +1182,20 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
       <label className="block space-y-1 text-xs">
         <span className="text-[var(--color-muted-foreground)]">AWS profile</span>
         {canEnumerateProfiles ? (
-          <select
-            value={awsProfile}
-            onChange={(e) => setAwsProfile(e.target.value)}
-            disabled={status === 'running'}
-            className="w-full rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm disabled:opacity-50"
-          >
-            <option value="">— shell environment —</option>
-            {profiles.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name}
-                {p.isSso ? '  (SSO)' : ''}
-              </option>
-            ))}
-          </select>
+          <Select value={awsProfile} onValueChange={setAwsProfile} disabled={status === 'running'}>
+            <SelectTrigger aria-label="AWS profile">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">— shell environment —</SelectItem>
+              {profiles.map((p) => (
+                <SelectItem key={p.name} value={p.name}>
+                  {p.name}
+                  {p.isSso ? '  (SSO)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : (
           <Input
             type="text"

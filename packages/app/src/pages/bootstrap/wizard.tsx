@@ -1,3 +1,4 @@
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import { useJourneyNavigate, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
 import { useSearchParams } from 'react-router';
@@ -413,20 +414,20 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
           hint={canEnumerateProfiles ? '~/.aws/config + credentials' : 'shell env will be used'}
         >
           {canEnumerateProfiles ? (
-            <select
-              id="aws-profile"
-              value={awsProfile}
-              onChange={(e) => setAwsProfile(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">— shell environment —</option>
-              {profiles.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.name}
-                  {p.isSso ? '  (SSO)' : ''}
-                </option>
-              ))}
-            </select>
+            <Select value={awsProfile} onValueChange={setAwsProfile}>
+              <SelectTrigger id="aws-profile">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— shell environment —</SelectItem>
+                {profiles.map((p) => (
+                  <SelectItem key={p.name} value={p.name}>
+                    {p.name}
+                    {p.isSso ? '  (SSO)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <Input
               id="aws-profile"
@@ -462,13 +463,18 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
         </Field>
 
         <Field label="AWS region" htmlFor="aws-region">
-          <select id="aws-region" value={region} onChange={(e) => setRegion(e.target.value)} className={inputCls}>
-            {REGIONS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+          <Select value={region} onValueChange={setRegion}>
+            <SelectTrigger id="aws-region">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REGIONS.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
 
         <Field
@@ -553,6 +559,3 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
     </PageShell>
   );
 }
-
-const inputCls =
-  'h-9 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]';

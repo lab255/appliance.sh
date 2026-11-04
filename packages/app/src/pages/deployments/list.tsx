@@ -1,3 +1,4 @@
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import * as React from 'react';
 import { HoverGlide, SkeletonSwap } from '@appliance.sh/ui';
 import { Button } from '@/components/ui/button';
@@ -59,33 +60,35 @@ export function DeploymentsPage() {
         <div className="flex flex-wrap gap-2" aria-label="Deployment filters">
           <label className="text-xs font-medium">
             Status{' '}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="ml-1 h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-            >
-              <option value="all">All</option>
-              {[...new Set(deployments.map((d) => d.status))].map((s) => (
-                <option key={s} value={s}>
-                  {resolveStatusDot(s).label}
-                </option>
-              ))}
-            </select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger aria-label="Status" className="ml-1 h-8 w-auto text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {[...new Set(deployments.map((d) => d.status))].map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {resolveStatusDot(s).label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="text-xs font-medium">
             App{' '}
-            <select
-              value={appFilter}
-              onChange={(e) => setAppFilter(e.target.value)}
-              className="ml-1 h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-            >
-              <option value="all">All</option>
-              {appIds.map((appId) => (
-                <option key={appId} value={appId}>
-                  {projects.get(appId)?.name ?? appId}
-                </option>
-              ))}
-            </select>
+            <Select value={appFilter} onValueChange={setAppFilter}>
+              <SelectTrigger aria-label="App" className="ml-1 h-8 w-auto text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {appIds.map((appId) => (
+                  <SelectItem key={appId} value={appId}>
+                    {projects.get(appId)?.name ?? appId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
       ) : null}
