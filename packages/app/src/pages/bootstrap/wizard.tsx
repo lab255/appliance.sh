@@ -1,11 +1,4 @@
-import {
-  Checkbox,
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@appliance.sh/ui';
+import { Checkbox, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import { useJourneyNavigate, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
 import { useSearchParams } from 'react-router';
