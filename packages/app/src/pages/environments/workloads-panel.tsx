@@ -1,3 +1,4 @@
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@appliance.sh/ui/table';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -90,46 +91,51 @@ export function WorkloadsPanel({
           </IconTooltip>
         </div>
 
-        {!isActive ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-[var(--color-muted-foreground)]">
-              Switch to this Dev Machine to load its workloads.
+        {/* Keep wide tables from contributing to an ancestor grid's min-content width. */}
+        <div className="h-[32rem] overflow-auto [contain:inline-size]" aria-busy={workloadsQuery.isFetching}>
+          {!isActive ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-[var(--color-muted-foreground)]">
+                Switch to this Dev Machine to load its workloads.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  await host.selectCluster(clusterId);
+                  queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
+                }}
+              >
+                Switch
+              </Button>
+            </div>
+          ) : workloadsQuery.isLoading ? (
+            <p role="status" className="text-xs text-[var(--color-muted-foreground)]">
+              Loading workloads…
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                await host.selectCluster(clusterId);
-                queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
-              }}
-            >
-              Switch
-            </Button>
-          </div>
-        ) : workloadsQuery.isLoading ? (
-          <p className="text-xs text-[var(--color-muted-foreground)]">Loading…</p>
-        ) : workloadsQuery.isError ? (
-          <Banner tone="error">{(workloadsQuery.error as Error).message}</Banner>
-        ) : empty ? (
-          <EmptyState
-            title="No workloads yet"
-            description="Deploy an app (Apps → Deploy your first app) to see it here."
-          />
-        ) : data ? (
-          <div className="space-y-5">
-            <DeploymentsTable deployments={data.deployments} />
-            <PodsTable
-              pods={data.pods}
-              onLogs={setActivePod}
-              onShell={
-                host.terminal
-                  ? (pod) => terminals.openSession({ target: pod.name, engine: 'microvm', clusterName: vmName })
-                  : undefined
-              }
+          ) : workloadsQuery.isError ? (
+            <Banner tone="error">{(workloadsQuery.error as Error).message}</Banner>
+          ) : empty ? (
+            <EmptyState
+              title="No workloads yet"
+              description="Deploy an app (Apps → Deploy your first app) to see it here."
             />
-            <ServicesTable services={data.services} />
-          </div>
-        ) : null}
+          ) : data ? (
+            <div className="space-y-5">
+              <DeploymentsTable deployments={data.deployments} />
+              <PodsTable
+                pods={data.pods}
+                onLogs={setActivePod}
+                onShell={
+                  host.terminal
+                    ? (pod) => terminals.openSession({ target: pod.name, engine: 'microvm', clusterName: vmName })
+                    : undefined
+                }
+              />
+              <ServicesTable services={data.services} />
+            </div>
+          ) : null}
+        </div>
       </section>
 
       {activePod && client ? (
@@ -144,40 +150,40 @@ function DeploymentsTable({ deployments }: { deployments: LocalDeploymentInfo[] 
   return (
     <div className="overflow-x-auto">
       <div className="mb-1 text-xs font-medium text-[var(--color-muted-foreground)]">Deployments</div>
-      <table className="w-full text-sm">
-        <caption className="sr-only">Deployments hosted on this Dev Machine</caption>
-        <thead className="text-left text-xs text-[var(--color-muted-foreground)]">
-          <tr>
-            <th scope="col" className="sticky left-0 bg-[var(--color-background)] py-1 pr-3">
+      <Table className="min-w-[44rem]">
+        <TableCaption>Deployments hosted on this Dev Machine</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col" style={{ width: '28%' }} className="sticky left-0 bg-[var(--color-background)]">
               Name
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '38%' }}>
               Image
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '22%' }}>
               Replicas
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '12%' }}>
               Age
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {deployments.map((d) => (
-            <tr key={d.name} className="border-t border-[var(--color-border)]">
-              <td className="sticky left-0 bg-[var(--color-background)] py-1.5 pr-3 font-medium">{d.name}</td>
-              <td className="py-1.5 pr-3 font-mono text-xs">{d.image ?? <em>—</em>}</td>
-              <td className="py-1.5 pr-3">
+            <TableRow key={d.name}>
+              <TableCell className="sticky left-0 bg-[var(--color-background)] font-medium">{d.name}</TableCell>
+              <TableCell className="font-mono text-xs">{d.image ?? <em>—</em>}</TableCell>
+              <TableCell>
                 <StatusPill
                   tone={d.ready === d.desired ? 'success' : 'warning'}
                   label={`${d.ready} of ${d.desired} ready`}
                 />
-              </td>
-              <td className="py-1.5 pr-3 text-xs text-[var(--color-muted-foreground)]">{relativeAge(d.createdAt)}</td>
-            </tr>
+              </TableCell>
+              <TableCell className="text-xs text-[var(--color-muted-foreground)]">{relativeAge(d.createdAt)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -195,45 +201,45 @@ function PodsTable({
   return (
     <div className="overflow-x-auto">
       <div className="mb-1 text-xs font-medium text-[var(--color-muted-foreground)]">Pods</div>
-      <table className="w-full text-sm">
-        <caption className="sr-only">Pods hosted on this Dev Machine</caption>
-        <thead className="text-left text-xs text-[var(--color-muted-foreground)]">
-          <tr>
-            <th scope="col" className="sticky left-0 bg-[var(--color-background)] py-1 pr-3">
+      <Table className="min-w-[44rem]">
+        <TableCaption>Pods hosted on this Dev Machine</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col" style={{ width: '28%' }} className="sticky left-0 bg-[var(--color-background)]">
               Name
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '16%' }}>
               Phase
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '13%' }}>
               Ready
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '11%' }}>
               Restarts
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '10%' }}>
               Age
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '22%' }}>
               <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {pods.map((p) => (
-            <tr key={p.name} className="border-t border-[var(--color-border)]">
-              <td className="sticky left-0 bg-[var(--color-background)] py-1.5 pr-3 font-medium">{p.name}</td>
-              <td className="py-1.5 pr-3">
+            <TableRow key={p.name}>
+              <TableCell className="sticky left-0 bg-[var(--color-background)] font-medium">{p.name}</TableCell>
+              <TableCell>
                 <StatusPill
                   tone={p.phase === 'Running' ? 'info' : 'warning'}
                   label={p.phase}
                   activity={p.phase === 'Running' ? 'pulse' : 'static'}
                 />
-              </td>
-              <td className="py-1.5 pr-3">{p.ready ? 'Ready' : 'Not ready'}</td>
-              <td className="py-1.5 pr-3">{p.restartCount}</td>
-              <td className="py-1.5 pr-3 text-xs text-[var(--color-muted-foreground)]">{relativeAge(p.createdAt)}</td>
-              <td className="py-1.5 pr-3 text-right">
+              </TableCell>
+              <TableCell>{p.ready ? 'Ready' : 'Not ready'}</TableCell>
+              <TableCell>{p.restartCount}</TableCell>
+              <TableCell className="text-xs text-[var(--color-muted-foreground)]">{relativeAge(p.createdAt)}</TableCell>
+              <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
                   {onShell && p.phase === 'Running' ? (
                     <Button variant="ghost" size="sm" onClick={() => onShell(p)}>
@@ -244,11 +250,11 @@ function PodsTable({
                     <FileText className="h-3.5 w-3.5" /> Logs
                   </Button>
                 </div>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -258,32 +264,32 @@ function ServicesTable({ services }: { services: LocalServiceInfo[] }) {
   return (
     <div className="overflow-x-auto">
       <div className="mb-1 text-xs font-medium text-[var(--color-muted-foreground)]">Services</div>
-      <table className="w-full text-sm">
-        <caption className="sr-only">Services hosted on this Dev Machine</caption>
-        <thead className="text-left text-xs text-[var(--color-muted-foreground)]">
-          <tr>
-            <th scope="col" className="sticky left-0 bg-[var(--color-background)] py-1 pr-3">
+      <Table className="min-w-[44rem]">
+        <TableCaption>Services hosted on this Dev Machine</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col" style={{ width: '28%' }} className="sticky left-0 bg-[var(--color-background)]">
               Name
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '16%' }}>
               Local port
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '28%' }}>
               URL
-            </th>
-            <th scope="col" className="py-1 pr-3">
+            </TableHead>
+            <TableHead scope="col" style={{ width: '28%' }}>
               <span className="sr-only">Technical details</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {services.map((s) => {
             const url = s.nodePort ? `http://localhost:${s.nodePort}` : null;
             return (
-              <tr key={s.name} className="border-t border-[var(--color-border)]">
-                <td className="sticky left-0 bg-[var(--color-background)] py-1.5 pr-3 font-medium">{s.name}</td>
-                <td className="py-1.5 pr-3 font-mono text-xs tabular-nums">{s.nodePort ?? '—'}</td>
-                <td className="py-1.5 pr-3 font-mono text-xs">
+              <TableRow key={s.name}>
+                <TableCell className="sticky left-0 bg-[var(--color-background)] font-medium">{s.name}</TableCell>
+                <TableCell className="font-mono text-xs tabular-nums">{s.nodePort ?? '—'}</TableCell>
+                <TableCell className="font-mono text-xs">
                   {url ? (
                     <a
                       className="underline hover:text-[var(--color-accent)]"
@@ -296,8 +302,8 @@ function ServicesTable({ services }: { services: LocalServiceInfo[] }) {
                   ) : (
                     '—'
                   )}
-                </td>
-                <td className="py-1.5 pr-3 text-xs">
+                </TableCell>
+                <TableCell className="text-xs">
                   <details>
                     <summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
                       Technical details
@@ -311,12 +317,12 @@ function ServicesTable({ services }: { services: LocalServiceInfo[] }) {
                       <dd className="font-mono">{s.nodePort ?? '—'}</dd>
                     </dl>
                   </details>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

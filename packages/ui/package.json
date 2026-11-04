@@ -199,6 +199,10 @@
     "./switch": {
       "types": "./dist/components/switch.d.ts",
       "import": "./dist/components/switch.js"
+    },
+    "./table": {
+      "types": "./dist/components/table.d.ts",
+      "import": "./dist/components/table.js"
     }
   }
 }
