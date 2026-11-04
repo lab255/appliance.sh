@@ -38,7 +38,7 @@ if (process.argv.includes('--audit-only')) {
 function auditPackage(installed) {
   const pkg = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8'));
   const client = new Set(
-    'banner button command-snippet confirm-dialog input live-url log-pane long-operation toast use-tail-autoscroll motion-provider skeleton-swap dialog dropdown-menu tooltip popover'.split(
+    'banner button checkbox command-snippet confirm-dialog input live-url log-pane long-operation switch toast use-tail-autoscroll motion-provider skeleton-swap dialog dropdown-menu tooltip popover'.split(
       ' '
     )
   );
