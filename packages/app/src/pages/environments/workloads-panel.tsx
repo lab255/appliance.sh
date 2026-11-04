@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, RefreshCw, Terminal as TerminalIcon } from 'lucide-react';
@@ -77,15 +78,16 @@ export function WorkloadsPanel({
               <p className="mt-0.5 text-xs leading-4 text-[var(--color-muted-foreground)]">{scopeNote}</p>
             ) : null}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Refresh workloads"
-            onClick={() => workloadsQuery.refetch()}
-            disabled={workloadsQuery.isFetching || !isActive}
-          >
-            <RefreshCw className={cn('h-4 w-4', workloadsQuery.isFetching && 'animate-spin')} />
-          </Button>
+          <IconTooltip label="Refresh workloads">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => workloadsQuery.refetch()}
+              disabled={workloadsQuery.isFetching || !isActive}
+            >
+              <RefreshCw className={cn('h-4 w-4', workloadsQuery.isFetching && 'animate-spin')} />
+            </Button>
+          </IconTooltip>
         </div>
 
         {!isActive ? (

@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -180,21 +181,17 @@ function CloudRow({ cluster, isSelected }: { cluster: Cluster; isSelected: boole
             )}
           </Button>
         ) : null}
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={
-            removeMutation.isPending ? `Removing ${cluster.name}…` : `Remove ${cluster.name} from this computer`
-          }
-          onClick={() => void remove()}
-          disabled={removeMutation.isPending}
+        <IconTooltip
+          label={removeMutation.isPending ? `Removing ${cluster.name}…` : `Remove ${cluster.name} from this computer`}
         >
-          {removeMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <X className="h-4 w-4" aria-hidden />
-          )}
-        </Button>
+          <Button variant="ghost" size="icon" onClick={() => void remove()} disabled={removeMutation.isPending}>
+            {removeMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <X className="h-4 w-4" aria-hidden />
+            )}
+          </Button>
+        </IconTooltip>
       </div>
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {selectionMessage}

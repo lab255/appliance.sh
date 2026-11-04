@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -1288,27 +1289,27 @@ function PickStep({
                   >
                     {entry.projectName ?? basename(entry.path)}
                   </button>
-                  <button
-                    type="button"
-                    aria-label={`Forget ${entry.path}`}
-                    onClick={(event) => {
-                      onForgetRecent(entry.path);
-                      setForgotten(entry);
-                      const item = event.currentTarget.closest('li');
-                      window.setTimeout(
-                        () =>
-                          (
-                            item?.nextElementSibling?.querySelector('button') ??
-                            item?.previousElementSibling?.querySelector('button')
-                          )?.focus(),
-                        0
-                      );
-                    }}
-                    title="Forget recent folder"
-                    className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  <IconTooltip label={`Forget ${entry.path}`}>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        onForgetRecent(entry.path);
+                        setForgotten(entry);
+                        const item = event.currentTarget.closest('li');
+                        window.setTimeout(
+                          () =>
+                            (
+                              item?.nextElementSibling?.querySelector('button') ??
+                              item?.previousElementSibling?.querySelector('button')
+                            )?.focus(),
+                          0
+                        );
+                      }}
+                      className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </IconTooltip>
                 </span>
               </li>
             ))}
@@ -1475,14 +1476,11 @@ function ConfigureStep({
                   placeholder="value"
                   mono
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove ${entry.key || 'env var'}`}
-                  onClick={() => removeEnv(idx)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <IconTooltip label={`Remove ${entry.key || 'env var'}`}>
+                  <Button variant="ghost" size="icon" onClick={() => removeEnv(idx)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </IconTooltip>
               </li>
             ))}
           </ul>

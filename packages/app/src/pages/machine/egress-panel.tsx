@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -764,16 +765,16 @@ function RuleList({
             <Tag className="font-mono">
               {h}
               {onRemove ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  aria-label={`Remove ${tone === 'allow' ? 'allow' : 'block'} rule ${h}`}
-                  title="Remove this rule"
-                  onClick={() => onRemove(h)}
-                  className="rounded text-micro leading-none text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                >
-                  ×
-                </button>
+                <IconTooltip label={`Remove ${tone === 'allow' ? 'allow' : 'block'} rule ${h}`}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onRemove(h)}
+                    className="rounded text-micro leading-none text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+                </IconTooltip>
               ) : null}
             </Tag>
           </li>

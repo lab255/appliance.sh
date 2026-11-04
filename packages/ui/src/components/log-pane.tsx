@@ -1,5 +1,7 @@
 'use client';
 
+import { IconTooltip } from './tooltip.js';
+
 import * as React from 'react';
 import { Check, ChevronRight, Copy } from 'lucide-react';
 import { cn } from '../lib/utils.js';
@@ -89,19 +91,20 @@ export function LogPane({
           />
         </button>
         {copyText !== undefined ? (
-          <button
-            type="button"
-            onClick={() => void onCopy()}
-            disabled={!copyText}
-            aria-label={copied ? 'Copied' : 'Copy log'}
-            className="mr-2 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-          >
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-[var(--color-success-foreground)]" aria-hidden />
-            ) : (
-              <Copy className="h-3.5 w-3.5" aria-hidden />
-            )}
-          </button>
+          <IconTooltip label={copied ? 'Copied' : 'Copy log'}>
+            <button
+              type="button"
+              onClick={() => void onCopy()}
+              disabled={!copyText}
+              className="mr-2 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+            >
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-[var(--color-success-foreground)]" aria-hidden />
+              ) : (
+                <Copy className="h-3.5 w-3.5" aria-hidden />
+              )}
+            </button>
+          </IconTooltip>
         ) : null}
       </div>
       {open ? (

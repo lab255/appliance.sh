@@ -1,5 +1,7 @@
 'use client';
 
+import { IconTooltip } from './tooltip.js';
+
 import * as React from 'react';
 import { Check, Copy, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils.js';
@@ -40,14 +42,15 @@ export function LiveUrl({ url, className }: { url: string; className?: string })
         <span className="truncate">{label}</span>
         <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/url:opacity-100" />
       </a>
-      <button
-        type="button"
-        onClick={onCopy}
-        aria-label={copied ? 'Copied' : `Copy ${url}`}
-        className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-foreground)] focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] group-hover/url:opacity-100"
-      >
-        {copied ? <Check className="h-3 w-3 text-[var(--color-success-foreground)]" /> : <Copy className="h-3 w-3" />}
-      </button>
+      <IconTooltip label={copied ? 'Copied' : `Copy ${url}`}>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] opacity-0 transition-opacity hover:text-[var(--color-foreground)] focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] group-hover/url:opacity-100"
+        >
+          {copied ? <Check className="h-3 w-3 text-[var(--color-success-foreground)]" /> : <Copy className="h-3 w-3" />}
+        </button>
+      </IconTooltip>
     </span>
   );
 }

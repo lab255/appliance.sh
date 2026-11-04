@@ -1,5 +1,7 @@
 'use client';
 
+import { IconTooltip } from './tooltip.js';
+
 import * as React from 'react';
 import * as m from 'motion/react-m';
 import { AnimatePresence } from 'motion/react';
@@ -80,14 +82,15 @@ export function Banner({
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {action}
           {onDismiss ? (
-            <button
-              type="button"
-              aria-label="Dismiss"
-              onClick={onDismiss}
-              className="rounded p-1 opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-            >
-              <X className="h-3.5 w-3.5" aria-hidden />
-            </button>
+            <IconTooltip label="Dismiss">
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="rounded p-1 opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </IconTooltip>
           ) : null}
         </div>
       ) : null}

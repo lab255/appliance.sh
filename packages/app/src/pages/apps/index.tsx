@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
@@ -194,14 +195,15 @@ function Overview({
                 className="w-56 pl-8 pr-8"
               />
               {filter ? (
-                <button
-                  type="button"
-                  aria-label="Clear app search"
-                  onClick={() => setFilter('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                </button>
+                <IconTooltip label="Clear app search">
+                  <button
+                    type="button"
+                    onClick={() => setFilter('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </IconTooltip>
               ) : null}
             </div>
             {/* Deploy is the primary action — the wizard find-or-creates the
@@ -401,15 +403,16 @@ function AppCard({
           navigation Link, not nested inside it, so the markup stays valid.
           Revealed on hover / keyboard focus. */}
       {onDelete ? (
-        <button
-          type="button"
-          aria-label={`Delete ${project.name}`}
-          disabled={deleting}
-          onClick={() => onDelete(project)}
-          className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-60 transition-opacity hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:opacity-100 disabled:opacity-50"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <IconTooltip label={`Delete ${project.name}`}>
+          <button
+            type="button"
+            disabled={deleting}
+            onClick={() => onDelete(project)}
+            className="absolute right-2 top-2 z-10 rounded p-1 text-[var(--color-muted-foreground)] opacity-60 transition-opacity hover:bg-[var(--color-hover)] hover:text-[var(--color-foreground)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:opacity-100 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </IconTooltip>
       ) : null}
       <Link to={`/projects/${project.id}`} className="flex flex-1 flex-col gap-3 p-5">
         <div className="flex items-center justify-between gap-2 pr-6">
