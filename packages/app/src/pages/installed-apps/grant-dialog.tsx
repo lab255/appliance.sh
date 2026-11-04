@@ -1,10 +1,33 @@
 import * as React from 'react';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@appliance.sh/ui/dialog';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Banner } from '@/components/ui/banner';
 import type { EntitlementGrantPrompt } from '@/lib/host';
 
-export function GrantDialog({
+type GrantDialogProps = Omit<React.ComponentProps<typeof GrantDialogContent>, 'open' | 'prompt'> & {
+  prompt: EntitlementGrantPrompt | null;
+};
+
+/** Retain the last prompt while DS presence owns the exit animation. */
+export function GrantDialog(props: GrantDialogProps) {
+  const last = React.useRef<(Omit<GrantDialogProps, 'prompt'> & { prompt: EntitlementGrantPrompt }) | null>(null);
+  if (props.prompt) last.current = { ...props, prompt: props.prompt };
+  // The exiting content is rendered from a pre-exit presence snapshot, so
+  // closed-state props never reach it. Route the grant through a stable
+  // handler that re-checks the live prompt, keeping the retained content
+  // inert during the exit animation.
+  const liveRef = React.useRef(props);
+  liveRef.current = props;
+  const onGrant = React.useCallback((grantIds: string[]) => {
+    if (liveRef.current.prompt) liveRef.current.onGrant(grantIds);
+  }, []);
+  if (!last.current) return null;
+  return <GrantDialogContent {...last.current} onGrant={onGrant} open={!!props.prompt} />;
+}
+
+function GrantDialogContent({
+  open,
   prompt,
   busy = false,
   platform,
@@ -12,6 +35,7 @@ export function GrantDialog({
   onCancel,
   onGrant,
 }: {
+  open: boolean;
   prompt: EntitlementGrantPrompt;
   busy?: boolean;
   platform?: 'macos' | 'windows' | 'linux';
@@ -27,39 +51,11 @@ export function GrantDialog({
     wslMode === 'cooperative' &&
     prompt.grants.some((grant) => grant.control === 'egress-host');
   const [selected, setSelected] = React.useState(() => new Set(prompt.grants.map((grant) => grant.id)));
-  const cancelRef = React.useRef<HTMLButtonElement>(null);
-  const dialogRef = React.useRef<HTMLDivElement>(null);
-  const invokingElementRef = React.useRef<HTMLElement | null>(null);
-
   React.useEffect(() => {
-    invokingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    cancelRef.current?.focus();
-    return () => invokingElementRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape' && !busy) {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = [
-      ...(dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      ) ?? []),
-    ];
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+    if (open) setSelected(new Set(prompt.grants.map((grant) => grant.id)));
+  }, [open, prompt]);
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const invokingElementRef = React.useRef<HTMLElement | null>(null);
 
   const toggle = (id: string) => {
     if (required.has(id)) return;
@@ -72,28 +68,47 @@ export function GrantDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div
-        ref={dialogRef}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !busy) onCancel();
+      }}
+    >
+      <DialogContent
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="grant-dialog-title"
         aria-describedby={`grant-dialog-description${wslEgressWarning ? ' grant-wsl-egress-warning' : ''}`}
-        className="w-full max-w-xl rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-overlay)] p-5 shadow-xl"
-        onKeyDown={handleKeyDown}
+        className="max-w-xl"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          invokingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          cancelRef.current?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          invokingElementRef.current?.focus();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (busy) event.preventDefault();
+        }}
+        onInteractOutside={(event) => event.preventDefault()}
       >
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--color-success-border)] bg-[var(--color-success-background)] text-[var(--color-success-foreground)]">
             <ShieldCheck className="h-5 w-5" aria-hidden />
           </span>
           <div>
-            <h2 id="grant-dialog-title" className="text-sm font-semibold">
+            <DialogTitle id="grant-dialog-title" className="text-sm font-semibold">
               {prompt.upgrade ? 'Approve new controls' : 'Grant app controls'}
-            </h2>
-            <p id="grant-dialog-description" className="mt-1 text-sm text-[var(--color-muted-foreground)]">
+            </DialogTitle>
+            <DialogDescription
+              id="grant-dialog-description"
+              className="mt-1 text-sm text-[var(--color-muted-foreground)]"
+            >
               {prompt.appId} {prompt.version} ({prompt.license}) asks for the controls below. Required controls are
               needed to install; mounts can be declined.
-            </p>
+            </DialogDescription>
           </div>
         </div>
 
@@ -167,8 +182,8 @@ export function GrantDialog({
             {busy ? 'Granting…' : prompt.upgrade ? 'Grant and upgrade' : 'Grant and install'}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -42,7 +42,7 @@ export const DialogOverlay = React.forwardRef<
           primitiveProps={{
             ...props,
             forceMount: true,
-            className: cn('appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-black/60', className),
+            className: cn('appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]', className),
           }}
         />
       )}

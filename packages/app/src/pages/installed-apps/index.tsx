@@ -486,28 +486,31 @@ export function InstalledAppsPage() {
         </HoverGlide>
       )}
 
-      {pending?.kind === 'publisher' ? (
-        <UnknownPublisherDialog
-          prompt={pending.prompt}
-          action={pending.action}
-          busy={busy !== null}
-          onCancel={() => setPending(null)}
-          onAccept={() =>
-            void (pending.action === 'install' ? installSource(pending.source, true) : openApp(pending.app, true))
-          }
-          onRemember={pending.action === 'open' ? () => void openApp(pending.app, true, true) : undefined}
-        />
-      ) : null}
-      {pending?.kind === 'grant' ? (
-        <GrantDialog
-          prompt={pending.prompt}
-          busy={busy !== null}
-          platform={host.platform}
-          wslMode={runtimeWslMode}
-          onCancel={() => setPending(null)}
-          onGrant={(grantIds) => void installSource(pending.source, pending.acceptedUnknownPublisher, grantIds)}
-        />
-      ) : null}
+      <UnknownPublisherDialog
+        prompt={pending?.kind === 'publisher' ? pending.prompt : null}
+        action={pending?.kind === 'publisher' ? pending.action : 'install'}
+        busy={busy !== null}
+        onCancel={() => setPending(null)}
+        onAccept={() =>
+          pending?.kind === 'publisher' &&
+          void (pending.action === 'install' ? installSource(pending.source, true) : openApp(pending.app, true))
+        }
+        onRemember={
+          pending?.kind === 'publisher' && pending.action === 'open'
+            ? () => void openApp(pending.app, true, true)
+            : undefined
+        }
+      />
+      <GrantDialog
+        prompt={pending?.kind === 'grant' ? pending.prompt : null}
+        busy={busy !== null}
+        platform={host.platform}
+        wslMode={runtimeWslMode}
+        onCancel={() => setPending(null)}
+        onGrant={(grantIds) =>
+          pending?.kind === 'grant' && void installSource(pending.source, pending.acceptedUnknownPublisher, grantIds)
+        }
+      />
     </PageShell>
   );
 }
