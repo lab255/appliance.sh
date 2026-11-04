@@ -163,3 +163,56 @@ describe('CatalogueContent', () => {
     }
   });
 });
+
+it('filters catalogue cards and selects by keyboard without installing', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const install = vi.fn();
+  try {
+    await act(async () =>
+      root.render(
+        <CatalogueContent
+          data={{
+            entries: [entry, { ...entry, appId: 'tasks', name: 'Tasks', description: 'Plan work.' }],
+            stale: false,
+            verifiedAt: '2026-08-27T00:00:00Z',
+            generation: 1,
+          }}
+          error={null}
+          platform="macos"
+          onInstall={install}
+        />
+      )
+    );
+    const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!;
+    const type = async (value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    const key = async (value: string) =>
+      act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
+      });
+    await act(async () => input.focus());
+    await type('notes');
+    expect(container.querySelectorAll('article')).toHaveLength(1);
+    expect(container.querySelector('article')?.textContent).toContain('Journal');
+    await key('ArrowDown');
+    expect(document.getElementById(input.getAttribute('aria-activedescendant')!)?.textContent).toContain('Journal');
+    await key('Enter');
+    expect(input.value).toBe('Journal');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(install).not.toHaveBeenCalled();
+    await type('');
+    expect(container.querySelectorAll('article')).toHaveLength(2);
+    await type('no match');
+    expect(container.textContent).toContain('No free apps match.');
+    await key('Escape');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

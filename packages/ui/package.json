@@ -192,6 +192,10 @@
       "types": "./dist/components/checkbox.d.ts",
       "import": "./dist/components/checkbox.js"
     },
+    "./combobox": {
+      "types": "./dist/components/combobox.d.ts",
+      "import": "./dist/components/combobox.js"
+    },
     "./switch": {
       "types": "./dist/components/switch.d.ts",
       "import": "./dist/components/switch.js"

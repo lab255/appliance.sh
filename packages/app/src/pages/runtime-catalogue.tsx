@@ -3,7 +3,7 @@ import type { CatalogueEntry } from '@appliance.sh/sdk';
 import { Search, ShieldAlert } from 'lucide-react';
 import { Banner, BannerPresence } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Combobox } from '@/components/ui/combobox';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -250,19 +250,26 @@ export function CatalogueContent({
       ) : (
         <>
           <div className="mb-5 flex flex-wrap items-center gap-2">
-            <label className="relative min-w-56 flex-1">
-              <span className="sr-only">Search catalogue apps</span>
+            <div className="relative min-w-56 flex-1">
               <Search
                 className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[var(--color-muted-foreground)]"
                 aria-hidden
               />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+              <Combobox
+                label="Search catalogue apps"
+                query={query}
+                onQueryChange={setQuery}
+                options={entries.map((entry) => ({
+                  value: entry.appId,
+                  label: entry.name,
+                  keywords: [entry.description, entry.license, entry.publisher.name].join('\n'),
+                  description: entry.description,
+                }))}
+                onSelect={(option) => setQuery(option.label)}
                 placeholder={`Search ${data.entries.length} apps…`}
-                className="pl-9"
+                inputClassName="pl-9"
               />
-            </label>
+            </div>
             <div
               className="inline-flex flex-wrap rounded-md border border-[var(--color-border)] p-0.5"
               role="radiogroup"
