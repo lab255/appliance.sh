@@ -330,7 +330,7 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).toContain('egress:sync.example.com');
     expect(html).toContain('mount:data');
     expect(html).toContain('1 CPU · 512 MiB memory · 2 GiB disk');
-    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html.match(/role="checkbox"/g)).toHaveLength(1);
     expect(html).toContain('id="grant-mount:data"');
     expect(html).not.toContain('disabled=""');
     expect(html).toContain('Grant and install');
@@ -375,16 +375,16 @@ describe('security dialog interactions', () => {
     try {
       render(false);
       const dialog = document.querySelector('[role="alertdialog"]')!;
-      const buttons = dialog.querySelectorAll('button');
+      const buttons = dialog.querySelectorAll<HTMLButtonElement>('button:not([role="checkbox"])');
       expect(document.activeElement).toBe(buttons[0]);
-      act(() => (dialog.querySelector('input') as HTMLInputElement).click());
+      act(() => (dialog.querySelector('[role="checkbox"]') as HTMLButtonElement).click());
       act(() => buttons[1].click());
       expect(onGrant).toHaveBeenCalledWith(['network']);
       act(() => {
         buttons[1].focus();
         buttons[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
       });
-      expect(document.activeElement).toBe(dialog.querySelector('input'));
+      expect(document.activeElement).toBe(dialog.querySelector('[role="checkbox"]'));
       render(true);
       act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
       expect(onCancel).not.toHaveBeenCalled();
@@ -399,7 +399,7 @@ describe('security dialog interactions', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(document.activeElement).toBe(invoker);
       render(false);
-      expect((document.querySelector('input') as HTMLInputElement).checked).toBe(true);
+      expect(document.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('true');
     } finally {
       act(() => root.unmount());
       container.remove();

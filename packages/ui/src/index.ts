@@ -49,3 +49,6 @@ export { HoverGlide } from './components/hover-glide.js';
 export { WeightLabel } from './components/weight-label.js';
 
 export * from './components/select.js';
+
+export { Checkbox, type CheckboxProps } from './components/checkbox.js';
+export { Switch, type SwitchProps } from './components/switch.js';

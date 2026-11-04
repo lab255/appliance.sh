@@ -125,3 +125,50 @@
     transition: none;
   }
 }
+
+/* Selection changes paint immediately; ornament follows the shared fast tier. */
+.ds-checkbox[data-state='checked'],
+.ds-checkbox[data-state='indeterminate'],
+.ds-switch[data-state='checked'] {
+  background-color: var(--color-primary);
+}
+.ds-checkbox:disabled,
+.ds-switch:disabled {
+  background-color: var(--color-muted);
+}
+.ds-checkbox:active,
+.ds-switch:active {
+  background-color: var(--color-active);
+  color: var(--color-foreground);
+}
+.ds-checkbox-check {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset var(--selection-exit) var(--ease-out-quart);
+}
+.ds-checkbox[data-state='checked'] .ds-checkbox-check {
+  stroke-dashoffset: 0;
+  transition-duration: var(--selection-enter);
+}
+.ds-checkbox-mixed {
+  visibility: hidden;
+}
+.ds-checkbox[data-state='indeterminate'] .ds-checkbox-mixed {
+  visibility: visible;
+}
+.ds-switch-thumb {
+  background-color: var(--color-muted-foreground);
+  transform: translateX(-8px);
+  transition: transform var(--selection-exit) var(--ease-out-quart);
+}
+.ds-switch[data-state='checked'] .ds-switch-thumb {
+  background-color: var(--color-primary-foreground);
+  transform: translateX(8px);
+  transition-duration: var(--selection-enter);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-checkbox-check,
+  .ds-switch-thumb {
+    transition: none;
+  }
+}
