@@ -61,7 +61,7 @@ export function DeploymentsPage() {
           <label className="text-xs font-medium">
             Status{' '}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger aria-label="Status" className="ml-1 h-8 w-auto text-xs">
+              <SelectTrigger aria-label="Status" className="ml-1 inline-flex h-8 w-auto align-middle text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -77,7 +77,7 @@ export function DeploymentsPage() {
           <label className="text-xs font-medium">
             App{' '}
             <Select value={appFilter} onValueChange={setAppFilter}>
-              <SelectTrigger aria-label="App" className="ml-1 h-8 w-auto text-xs">
+              <SelectTrigger aria-label="App" className="ml-1 inline-flex h-8 w-auto align-middle text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
