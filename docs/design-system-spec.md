@@ -439,3 +439,23 @@ Delete these patterns after all call sites migrate:
 10. Hand-built input classes and local `Field`, `TextInput`, and `Row` helpers once shared Field/Input/KeyValueList are adopted.
 
 Add a CI lint script (implementation follow-up, not part of this document change) that fails on raw status hue utilities under `packages/app/src/pages` and `packages/app/src/components`, except an explicit allowlist for temporary migration files. Remove the allowlist at completion. Required visual/accessibility checks: keyboard focus on every dismiss/disclosure/copy control; status has visible text or accessible label; Banner error uses `role=alert`; no nested interactive control; all semantic text/background pairs retain at least 4.5:1; and both controlled and uncontrolled LogPane disclosure modes are tested.
+
+### Tabs (Wave 2, GLA-297)
+
+`Tabs`, `TabsList`, `TabsTrigger`, and `TabsContent` are locally authored Radix
+wrappers exported from `@appliance.sh/ui` and `@appliance.sh/ui/tabs`. Use a named
+list label and matching trigger/content values; Radix supplies unique ARIA IDs,
+roving focus, arrow/Home/End navigation and disabled-trigger skipping. The list
+supports a line indicator (default) or `variant="segment"`. Only the indicator
+moves, using the shared fast enter/exit tier (80/60 ms), immediate with reduced
+motion or before motion features load. Colours use named dark-theme tokens.
+
+Agent sign-in and Machine detail use these primitives. Machine detail retains
+its selected-tab state while falling back to Lifecycle when the selected tab
+becomes unavailable: Egress, Credentials and Facts require a running Sandbox;
+Workloads requires the serving cluster. Returning availability restores the
+stored selection unless the user chooses another tab.
+
+**Deliberate exemption:** `packages/app/src/components/layout/terminal-tab-bar.tsx`
+retains its specialized tab strip, WeightLabel, hover glide and terminal session
+semantics. It is not migrated to DS Tabs.

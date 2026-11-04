@@ -39,7 +39,7 @@ describe('Sandbox helper', () => {
       );
       expect(html.includes(helper)).toBe(!running);
       // Hosting remains unavailable in the running core-only regression case.
-      expect(html).toMatch(/id="machine-tab-workloads"[^>]*disabled/);
+      expect(html).toMatch(/<button[^>]*disabled[^>]*>Workloads<\/button>/);
     } finally {
       client.clear();
     }

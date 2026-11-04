@@ -61,3 +61,5 @@ export * from './components/table.js';
 
 export { ScrollArea } from './components/scroll-area.js';
 export type { ScrollAreaProps } from './components/scroll-area.js';
+
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './components/tabs.js';
