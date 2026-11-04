@@ -107,15 +107,13 @@ export function CataloguePage() {
         onInstall={installEntry}
         platform={host.platform}
       />
-      {pending ? (
-        <UnknownPublisherDialog
-          prompt={pending.prompt}
-          action="install"
-          busy={installing}
-          onCancel={() => setPending(null)}
-          onAccept={() => void acceptUnknown()}
-        />
-      ) : null}
+      <UnknownPublisherDialog
+        prompt={pending?.prompt ?? null}
+        action="install"
+        busy={installing}
+        onCancel={() => setPending(null)}
+        onAccept={() => void acceptUnknown()}
+      />
     </>
   );
 }

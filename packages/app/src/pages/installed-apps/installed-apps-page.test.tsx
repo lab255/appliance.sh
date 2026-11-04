@@ -14,6 +14,18 @@ vi.mock('@/components/layout/workspace-switcher', () => ({
   useCurrentWorkspace: () => ({ cluster: null, kind: 'local', isLoading: false }),
 }));
 
+// Dialog content is portalled by Radix and is only rendered in the browser.
+function renderDialog(element: React.ReactNode) {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  act(() => root.render(element));
+  const html = document.querySelector('[role="alertdialog"]')?.outerHTML ?? '';
+  act(() => root.unmount());
+  container.remove();
+  return html;
+}
+
 function fixture(overrides: Partial<InstalledRuntimeApp> = {}): InstalledRuntimeApp {
   return {
     app: {
@@ -148,7 +160,7 @@ describe('Installed Apps mock scenarios', () => {
 
   it('renders unknown-publisher with separate requested controls', () => {
     const item = fixture();
-    const html = renderToStaticMarkup(
+    const html = renderDialog(
       <UnknownPublisherDialog
         action="open"
         prompt={{
@@ -177,7 +189,7 @@ describe('Installed Apps mock scenarios', () => {
   });
 
   it('renders an accessible grant dialog with grouped required controls and selectable mounts', () => {
-    const html = renderToStaticMarkup(
+    const html = renderDialog(
       <GrantDialog
         platform="windows"
         wslMode="cooperative"
@@ -228,5 +240,75 @@ describe('Installed Apps mock scenarios', () => {
     expect(html).not.toContain('disabled=""');
     expect(html).toContain('Grant and install');
     expect(html).toContain('WSL cooperative mode is bypassable');
+  });
+});
+
+describe('security dialog interactions', () => {
+  it('keeps optional mounts functional and delegates focus and busy Escape handling to Radix', async () => {
+    const container = document.createElement('div');
+    const invoker = document.createElement('button');
+    document.body.append(invoker, container);
+    invoker.focus();
+    const root = createRoot(container);
+    const onCancel = vi.fn();
+    const onGrant = vi.fn();
+    const prompt = {
+      appId: 'test',
+      version: '1',
+      license: 'MIT',
+      upgrade: false,
+      requiredGrantIds: ['network'],
+      grants: [
+        {
+          id: 'network',
+          control: 'egress-host' as const,
+          value: { host: 'example.com', ports: [443] },
+          approvedAt: '',
+        },
+        {
+          id: 'mount:data',
+          control: 'mount' as const,
+          value: { name: 'data', source: 'volume' as const, guest: '/data', access: 'read-write' as const },
+          approvedAt: '',
+        },
+      ],
+    };
+    const render = (busy: boolean, visible = true) =>
+      act(() =>
+        root.render(<GrantDialog prompt={visible ? prompt : null} busy={busy} onCancel={onCancel} onGrant={onGrant} />)
+      );
+    try {
+      render(false);
+      const dialog = document.querySelector('[role="alertdialog"]')!;
+      const buttons = dialog.querySelectorAll('button');
+      expect(document.activeElement).toBe(buttons[0]);
+      act(() => (dialog.querySelector('input') as HTMLInputElement).click());
+      act(() => buttons[1].click());
+      expect(onGrant).toHaveBeenCalledWith(['network']);
+      act(() => {
+        buttons[1].focus();
+        buttons[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      });
+      expect(document.activeElement).toBe(dialog.querySelector('input'));
+      render(true);
+      act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      expect(onCancel).not.toHaveBeenCalled();
+      render(false);
+      act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      expect(onCancel).toHaveBeenCalledOnce();
+      await act(async () => {
+        render(false, false);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(document.activeElement).toBe(invoker);
+      render(false);
+      expect((document.querySelector('input') as HTMLInputElement).checked).toBe(true);
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+      invoker.remove();
+    }
   });
 });

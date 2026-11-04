@@ -1,9 +1,27 @@
 import * as React from 'react';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@appliance.sh/ui/dialog';
 import { ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UnknownPublisherPrompt } from '@/lib/installed-apps';
 
-export function UnknownPublisherDialog({
+type UnknownPublisherDialogProps = Omit<
+  React.ComponentProps<typeof UnknownPublisherDialogContent>,
+  'open' | 'prompt'
+> & {
+  prompt: UnknownPublisherPrompt | null;
+};
+
+/** Retain the last prompt while DS presence owns the exit animation. */
+export function UnknownPublisherDialog(props: UnknownPublisherDialogProps) {
+  const last = React.useRef<(Omit<UnknownPublisherDialogProps, 'prompt'> & { prompt: UnknownPublisherPrompt }) | null>(
+    null
+  );
+  if (props.prompt) last.current = { ...props, prompt: props.prompt };
+  return last.current ? <UnknownPublisherDialogContent {...last.current} open={!!props.prompt} /> : null;
+}
+
+function UnknownPublisherDialogContent({
+  open,
   prompt,
   action,
   busy = false,
@@ -11,6 +29,7 @@ export function UnknownPublisherDialog({
   onAccept,
   onRemember,
 }: {
+  open: boolean;
   prompt: UnknownPublisherPrompt;
   action: 'install' | 'open';
   busy?: boolean;
@@ -19,64 +38,49 @@ export function UnknownPublisherDialog({
   onRemember?: () => void;
 }) {
   const cancelRef = React.useRef<HTMLButtonElement>(null);
-  const dialogRef = React.useRef<HTMLDivElement>(null);
   const invokingElementRef = React.useRef<HTMLElement | null>(null);
 
-  React.useEffect(() => {
-    invokingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    cancelRef.current?.focus();
-    return () => invokingElementRef.current?.focus();
-  }, []);
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape' && !busy) {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = [
-      ...(dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      ) ?? []),
-    ];
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (!first || !last) {
-      event.preventDefault();
-      return;
-    }
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div
-        ref={dialogRef}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !busy) onCancel();
+      }}
+    >
+      <DialogContent
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="unknown-publisher-title"
         aria-describedby="unknown-publisher-description"
-        className="w-full max-w-lg rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-surface-overlay)] p-5 shadow-xl"
-        onKeyDown={handleKeyDown}
+        className="max-w-lg border-[var(--color-warning-border)]"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          invokingElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          cancelRef.current?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          invokingElementRef.current?.focus();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (busy) event.preventDefault();
+        }}
+        onInteractOutside={(event) => event.preventDefault()}
       >
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--color-warning-border)] bg-[var(--color-warning-background)] text-[var(--color-warning-foreground)]">
             <ShieldAlert className="h-5 w-5" aria-hidden />
           </span>
           <div>
-            <h2 id="unknown-publisher-title" className="text-sm font-semibold">
+            <DialogTitle id="unknown-publisher-title" className="text-sm font-semibold">
               Unknown Publisher
-            </h2>
-            <p id="unknown-publisher-description" className="mt-1 text-sm text-[var(--color-muted-foreground)]">
+            </DialogTitle>
+            <DialogDescription
+              id="unknown-publisher-description"
+              className="mt-1 text-sm text-[var(--color-muted-foreground)]"
+            >
               Publisher identity and code origin could not be verified. This does not mean the app is malicious.
-            </p>
+            </DialogDescription>
           </div>
         </div>
 
@@ -129,7 +133,7 @@ export function UnknownPublisherDialog({
             </Button>
           ) : null}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
