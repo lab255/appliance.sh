@@ -47,3 +47,5 @@ export * from './components/popover.js';
 
 export { HoverGlide } from './components/hover-glide.js';
 export { WeightLabel } from './components/weight-label.js';
+
+export * from './components/select.js';

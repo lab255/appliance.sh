@@ -1,3 +1,4 @@
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import * as React from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -85,21 +86,22 @@ export function MachinePage() {
       {names.length > 1 ? (
         <label className="flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
           Sandbox
-          <select
-            value={selected}
-            onChange={(e) => selectVm(e.target.value)}
-            className="rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 font-mono text-xs"
-          >
-            {names.map((n) => (
-              <option key={n} value={n}>
-                {n}
-                {n === DEFAULT_MICROVM_NAME ? ' (default)' : ''}
-                {vms.find((vm) => vm.name === n)?.running && !vms.find((vm) => vm.name === n)?.clusterProvisioned
-                  ? ' — Sandbox ready'
-                  : ''}
-              </option>
-            ))}
-          </select>
+          <Select value={selected} onValueChange={selectVm}>
+            <SelectTrigger aria-label="Sandbox" className="h-8 w-auto font-mono text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {names.map((n) => (
+                <SelectItem key={n} value={n}>
+                  {n}
+                  {n === DEFAULT_MICROVM_NAME ? ' (default)' : ''}
+                  {vms.find((vm) => vm.name === n)?.running && !vms.find((vm) => vm.name === n)?.clusterProvisioned
+                    ? ' — Sandbox ready'
+                    : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       ) : null}
 
