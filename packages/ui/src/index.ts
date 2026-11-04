@@ -54,3 +54,5 @@ export { Checkbox, type CheckboxProps } from './components/checkbox.js';
 export { Switch, type SwitchProps } from './components/switch.js';
 
 export * from './components/accordion.js';
+
+export { Combobox, type ComboboxProps, type ComboboxOption } from './components/combobox.js';
