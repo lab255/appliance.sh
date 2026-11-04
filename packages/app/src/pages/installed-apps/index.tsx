@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatusPill } from '@/components/ui/status-pill';
+import { useToast } from '@/components/ui/toast';
 import { Tag } from '@/components/ui/tag';
 import { useCurrentWorkspace } from '@/components/layout/workspace-switcher';
 import {
@@ -222,6 +223,7 @@ interface Notice {
 export function InstalledAppsPage() {
   const host = useHost();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { cluster, kind, isLoading: workspaceLoading } = useCurrentWorkspace();
   const target = cluster?.id ?? 'local';
   const workspaceName = kind === 'cloud' ? (cluster?.name ?? target) : localMachineLabel(host.platform);
@@ -349,17 +351,18 @@ export function InstalledAppsPage() {
       setPending(null);
       if (result.urls[0]) {
         await host.installedApps.openWindow(item.app.appId, target, openMetric);
-        setAnnouncement(`${item.app.name} is running.`);
-      } else {
-        setNotice({
-          title: 'App started',
-          message: `${item.app.name} started, but it does not publish a browser URL.`,
-        });
       }
-      await refresh();
+      const message = result.urls[0]
+        ? `${item.app.name} is running.`
+        : `${item.app.name} started, but it does not publish a browser URL.`;
+      setAnnouncement(message);
+      toast(message);
+      await refresh(true);
     } catch (cause) {
       console.error('[installed-apps] open failed', cause);
-      setError(errorMessage(cause, `Could not open ${item.app.name}.`));
+      const message = errorMessage(cause, `Could not open ${item.app.name}.`);
+      setAnnouncement(message);
+      toast(message, { variant: 'error' });
     } finally {
       setBusy(null);
       setBusyAction(null);
@@ -373,12 +376,16 @@ export function InstalledAppsPage() {
     recordAppStopStart(item.app.appId);
     try {
       await host.installedApps.stop(item.app.appId);
-      setAnnouncement(`${item.app.name} is stopped.`);
-      await refresh();
+      const message = `${item.app.name} is stopped.`;
+      setAnnouncement(message);
+      toast(message);
+      await refresh(true);
     } catch (cause) {
       clearAppStopStart(item.app.appId);
       console.error('[installed-apps] stop failed', cause);
-      setError(errorMessage(cause, `Could not stop ${item.app.name}.`));
+      const message = errorMessage(cause, `Could not stop ${item.app.name}.`);
+      setAnnouncement(message);
+      toast(message, { variant: 'error' });
     } finally {
       setBusy(null);
       setBusyAction(null);
