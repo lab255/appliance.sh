@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import { MotionProvider } from '@appliance.sh/ui/motion-provider';
 import { localMachineLabel, type ConsoleHost, type InstalledRuntimeApp } from '@/lib/host';
 import { HostProvider } from '@/providers/host-provider';
 import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState, InstalledAppsPage } from './index';
@@ -309,6 +310,129 @@ describe('security dialog interactions', () => {
       act(() => root.unmount());
       container.remove();
       invoker.remove();
+    }
+  });
+
+  // The animated (non-reduced-motion) lane: the retained dialog stays mounted
+  // and pointer-interactive for the ~120ms base exit after the prompt is nulled.
+  const stubAnimatedMatchMedia = () =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    }));
+
+  async function waitForAnimatedDialog() {
+    for (let i = 0; i < 400; i += 1) {
+      const dialog = document.querySelector('[role="alertdialog"]');
+      if (dialog && !dialog.hasAttribute('data-immediate')) return;
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+    }
+    throw new Error('Timed out waiting for the animated dialog');
+  }
+
+  it('does not grant when the retained grant dialog is clicked during the exit window', async () => {
+    stubAnimatedMatchMedia();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const onGrant = vi.fn();
+    const prompt = {
+      appId: 'test',
+      version: '1',
+      license: 'MIT',
+      upgrade: false,
+      requiredGrantIds: ['network'],
+      grants: [
+        {
+          id: 'network',
+          control: 'egress-host' as const,
+          value: { host: 'example.com', ports: [443] },
+          approvedAt: '',
+        },
+      ],
+    };
+    const render = (visible: boolean) =>
+      act(() =>
+        root.render(
+          <MotionProvider>
+            <GrantDialog prompt={visible ? prompt : null} onCancel={() => {}} onGrant={onGrant} />
+          </MotionProvider>
+        )
+      );
+    try {
+      render(true);
+      await waitForAnimatedDialog();
+      // Cancel/Escape sets the prompt to null; the retained content stays mounted for the exit.
+      render(false);
+      const dialog = document.querySelector('[role="alertdialog"]');
+      expect(dialog).not.toBeNull();
+      const grantButton = Array.from(dialog!.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('Grant and install')
+      )!;
+      act(() => grantButton.click());
+      expect(onGrant).not.toHaveBeenCalled();
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not accept when the retained unknown-publisher dialog is clicked during the exit window', async () => {
+    stubAnimatedMatchMedia();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const onAccept = vi.fn();
+    const onRemember = vi.fn();
+    const item = fixture();
+    const prompt = {
+      appId: item.app.appId,
+      name: item.app.name,
+      version: item.app.version,
+      license: item.app.license,
+      source: item.app.source,
+      digest: item.app.digest,
+      signature: 'unsigned' as const,
+      publisher: 'Local developer',
+      controlsSummary: item.app.controlsSummary,
+    };
+    const render = (visible: boolean) =>
+      act(() =>
+        root.render(
+          <MotionProvider>
+            <UnknownPublisherDialog
+              action="open"
+              prompt={visible ? prompt : null}
+              onCancel={() => {}}
+              onAccept={onAccept}
+              onRemember={onRemember}
+            />
+          </MotionProvider>
+        )
+      );
+    try {
+      render(true);
+      await waitForAnimatedDialog();
+      // Cancel/Escape sets the prompt to null; the retained content stays mounted for the exit.
+      render(false);
+      const dialog = document.querySelector('[role="alertdialog"]');
+      expect(dialog).not.toBeNull();
+      const buttons = Array.from(dialog!.querySelectorAll('button'));
+      act(() => buttons.find((button) => button.textContent?.includes('Open once'))!.click());
+      act(() => buttons.find((button) => button.textContent?.includes('Open and remember'))!.click());
+      expect(onAccept).not.toHaveBeenCalled();
+      expect(onRemember).not.toHaveBeenCalled();
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+      vi.unstubAllGlobals();
     }
   });
 });

@@ -13,7 +13,17 @@ type GrantDialogProps = Omit<React.ComponentProps<typeof GrantDialogContent>, 'o
 export function GrantDialog(props: GrantDialogProps) {
   const last = React.useRef<(Omit<GrantDialogProps, 'prompt'> & { prompt: EntitlementGrantPrompt }) | null>(null);
   if (props.prompt) last.current = { ...props, prompt: props.prompt };
-  return last.current ? <GrantDialogContent {...last.current} open={!!props.prompt} /> : null;
+  // The exiting content is rendered from a pre-exit presence snapshot, so
+  // closed-state props never reach it. Route the grant through a stable
+  // handler that re-checks the live prompt, keeping the retained content
+  // inert during the exit animation.
+  const liveRef = React.useRef(props);
+  liveRef.current = props;
+  const onGrant = React.useCallback((grantIds: string[]) => {
+    if (liveRef.current.prompt) liveRef.current.onGrant(grantIds);
+  }, []);
+  if (!last.current) return null;
+  return <GrantDialogContent {...last.current} onGrant={onGrant} open={!!props.prompt} />;
 }
 
 function GrantDialogContent({

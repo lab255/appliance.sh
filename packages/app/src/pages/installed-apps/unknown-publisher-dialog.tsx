@@ -17,7 +17,27 @@ export function UnknownPublisherDialog(props: UnknownPublisherDialogProps) {
     null
   );
   if (props.prompt) last.current = { ...props, prompt: props.prompt };
-  return last.current ? <UnknownPublisherDialogContent {...last.current} open={!!props.prompt} /> : null;
+  // The exiting content is rendered from a pre-exit presence snapshot, so
+  // closed-state props never reach it. Route accept/remember through stable
+  // handlers that re-check the live prompt, keeping the retained content
+  // inert during the exit animation.
+  const liveRef = React.useRef(props);
+  liveRef.current = props;
+  const onAccept = React.useCallback(() => {
+    if (liveRef.current.prompt) liveRef.current.onAccept();
+  }, []);
+  const onRemember = React.useCallback(() => {
+    if (liveRef.current.prompt) liveRef.current.onRemember?.();
+  }, []);
+  if (!last.current) return null;
+  return (
+    <UnknownPublisherDialogContent
+      {...last.current}
+      onAccept={onAccept}
+      onRemember={last.current.onRemember ? onRemember : undefined}
+      open={!!props.prompt}
+    />
+  );
 }
 
 function UnknownPublisherDialogContent({
