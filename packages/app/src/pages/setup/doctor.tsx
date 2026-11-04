@@ -1,3 +1,4 @@
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@appliance.sh/ui/accordion';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -336,12 +337,14 @@ function PreflightRow({
               ) : check.error ? (
                 <p className="font-mono text-xs text-[var(--color-warning-foreground)]">{check.error}</p>
               ) : null}
-              <details>
-                <summary className="cursor-pointer text-xs font-medium text-[var(--color-muted-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]">
-                  Technical details
-                </summary>
-                <p className="mt-1 font-mono text-xs">Tool: {check.tool}</p>
-              </details>
+              <Accordion type="single" collapsible>
+                <AccordionItem value="technical-details">
+                  <AccordionTrigger>Technical details</AccordionTrigger>
+                  <AccordionContent>
+                    <p className="pt-1 pb-2 font-mono text-xs">Tool: {check.tool}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
           ) : null}
         </div>
