@@ -1,4 +1,5 @@
 import { IconTooltip } from '@/components/ui/tooltip';
+import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -1043,24 +1044,23 @@ function TargetStep({
                 </span>
               </label>
               {aws.knownEnvs.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
+                <HoverGlide className="flex flex-wrap gap-1.5">
                   {aws.knownEnvs.map((e) => (
                     <button
                       key={e}
                       type="button"
                       aria-pressed={aws.env.trim() === e}
+                      data-hover-glide-item={aws.env.trim() === e ? undefined : ''}
                       onClick={() => aws.setEnv(e)}
                       className={cn(
                         'rounded-md border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-micro',
-                        aws.env.trim() === e
-                          ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
-                          : 'hover:text-[var(--color-accent)]'
+                        aws.env.trim() === e && 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
                       )}
                     >
                       {e}
                     </button>
                   ))}
-                </div>
+                </HoverGlide>
               ) : null}
               <div className="flex items-center gap-2">
                 {/* Empty env resolves to `production` (label above +
@@ -1276,15 +1276,17 @@ function PickStep({
           <div className="flex items-center gap-1.5 text-micro font-medium uppercase tracking-[0.08em] text-[var(--color-muted-foreground)]">
             <History className="h-3 w-3" /> Recent
           </div>
-          <ul className="flex flex-wrap gap-1.5">
+          <HoverGlide as="ul" className="flex flex-wrap gap-1.5">
             {recent.map((entry) => (
               <li key={entry.path}>
-                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)]/30 pl-2 pr-0.5 py-0.5 text-xs">
+                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] hover-glide-card pl-2 pr-0.5 py-0.5 text-xs">
                   <button
                     type="button"
                     onClick={() => onPickRecent(entry)}
                     disabled={pickBusy}
-                    className="rounded font-mono text-xs hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    aria-disabled={pickBusy}
+                    data-hover-glide-item
+                    className="rounded font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     title={entry.path}
                   >
                     {entry.projectName ?? basename(entry.path)}
@@ -1313,7 +1315,7 @@ function PickStep({
                 </span>
               </li>
             ))}
-          </ul>
+          </HoverGlide>
         </div>
       ) : null}
 
