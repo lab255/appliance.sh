@@ -1,4 +1,4 @@
-import { Checkbox, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
+import { Checkbox, HoverGlide, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import { useJourneyNavigate, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
 import { useSearchParams } from 'react-router';
@@ -166,7 +166,7 @@ function ModePicker({
         description="Choose App hosting on this computer or create a cloud installation in AWS."
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <HoverGlide className="grid gap-3 sm:grid-cols-2">
         <ModeCard
           icon={Laptop}
           title="Dev Machine"
@@ -188,7 +188,7 @@ function ModePicker({
           disabledReason="Bootstrap to AWS needs the desktop app or the CLI."
           onClick={() => onPick('aws')}
         />
-      </div>
+      </HoverGlide>
 
       <Button variant="ghost" onClick={onCancel}>
         <ChevronLeft className="h-4 w-4" /> Cancel
@@ -217,8 +217,10 @@ function ModeCard({
       type="button"
       onClick={available ? onClick : undefined}
       disabled={!available}
+      aria-disabled={!available}
+      data-hover-glide-item
       aria-describedby={!available ? `${title.toLowerCase().replaceAll(' ', '-')}-disabled` : undefined}
-      className="flex flex-col items-start gap-2 rounded-md border border-[var(--color-border)] p-4 text-left transition-colors hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex flex-col items-start gap-2 rounded-md border border-[var(--color-border)] p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Icon className="h-6 w-6 text-[var(--color-muted-foreground)]" aria-hidden />
       <div className="text-sm font-semibold">{title}</div>
