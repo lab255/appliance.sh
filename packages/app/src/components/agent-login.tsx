@@ -1,3 +1,4 @@
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Check, ExternalLink, Github, KeyRound, Loader2, Sparkles, TerminalSquare } from 'lucide-react';
 import { useHost } from '@/providers/host-provider';
@@ -362,32 +363,20 @@ function ClaudeLogin({
   const apiKeyShapeWarn = apiKeyTrimmed.length > 0 && !apiKeyTrimmed.startsWith('sk-ant-');
 
   return (
-    <>
+    <Tabs value={mode} onValueChange={(value) => setMode(value as typeof mode)} className="space-y-3">
       {/* Mode toggle: lead with the subscription path, API key as the
           alternative. */}
-      <div
-        role="tablist"
-        aria-label="Authentication method"
-        className="inline-flex rounded-md border border-[var(--color-border)] p-0.5"
-        onKeyDown={(event) => {
-          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-          const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
-          event.preventDefault();
-          tabs[(current + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length]?.click();
-          tabs[(current + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length]?.focus();
-        }}
-      >
-        <ModeTab active={mode === 'oauth'} onClick={() => setMode('oauth')}>
+      <TabsList variant="segment" aria-label="Authentication method">
+        <TabsTrigger value="oauth" className="px-2.5 py-1 text-xs">
           <Sparkles className="h-3.5 w-3.5" /> Sign in with Claude
-        </ModeTab>
-        <ModeTab active={mode === 'api-key'} onClick={() => setMode('api-key')}>
+        </TabsTrigger>
+        <TabsTrigger value="api-key" className="px-2.5 py-1 text-xs">
           <KeyRound className="h-3.5 w-3.5" /> API key
-        </ModeTab>
-      </div>
+        </TabsTrigger>
+      </TabsList>
 
-      {mode === 'oauth' ? (
-        hasClaude === false ? (
+      <TabsContent value="oauth">
+        {hasClaude === false ? (
           // Claude Code missing on the host. A one-click install here needs a
           // host-side install/exec capability the bridge doesn't expose yet
           // (agentAuth only offers status/login/logout/hasHostClaude/
@@ -489,8 +478,9 @@ function ClaudeLogin({
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save token
             </Button>
           </div>
-        )
-      ) : (
+        )}
+      </TabsContent>
+      <TabsContent value="api-key">
         <div className="space-y-2">
           <p className="text-[var(--color-muted-foreground)]">
             Paste an Anthropic API key (<code className="font-mono">sk-ant-…</code>). Get one from the Anthropic
@@ -524,8 +514,8 @@ function ClaudeLogin({
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save key
           </Button>
         </div>
-      )}
-    </>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -704,25 +694,5 @@ function OpenAiKeyLogin({
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save key
       </Button>
     </div>
-  );
-}
-
-function ModeTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      role="tab"
-      aria-selected={active}
-      tabIndex={active ? 0 : -1}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
-        active
-          ? 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
-          : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-      )}
-    >
-      {children}
-    </button>
   );
 }
