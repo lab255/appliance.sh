@@ -52,3 +52,5 @@ export * from './components/select.js';
 
 export { Checkbox, type CheckboxProps } from './components/checkbox.js';
 export { Switch, type SwitchProps } from './components/switch.js';
+
+export * from './components/accordion.js';
