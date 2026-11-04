@@ -1,3 +1,4 @@
+import { Checkbox } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@appliance.sh/ui/dialog';
 import { ShieldCheck } from 'lucide-react';
@@ -149,14 +150,13 @@ function GrantDialogContent({
                     htmlFor={`grant-${grant.id}`}
                     className="flex items-start gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
                   >
-                    <input
+                    <Checkbox
                       id={`grant-${grant.id}`}
-                      type="checkbox"
                       className="mt-0.5"
                       checked={selected.has(grant.id)}
                       disabled={busy}
                       aria-describedby={`grant-${grant.id}-detail`}
-                      onChange={() => toggle(grant.id)}
+                      onCheckedChange={() => toggle(grant.id)}
                     />
                     <span className="min-w-0">
                       <span className="block text-xs font-medium">{grant.id}</span>

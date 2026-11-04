@@ -1,4 +1,5 @@
 import { IconTooltip } from '@/components/ui/tooltip';
+import { Switch } from '@appliance.sh/ui';
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -304,11 +305,10 @@ export function EgressPanel({
                 )}
               </div>
               <label className="inline-flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
+                <Switch
                   checked={policy.mitm}
                   disabled={busy}
-                  onChange={(e) => void act(() => egress.setMitm(e.target.checked))}
+                  onCheckedChange={(checked) => void act(() => egress.setMitm(checked))}
                 />
                 Inspect secure traffic for credential rules
               </label>

@@ -1,4 +1,4 @@
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
+import { Checkbox, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import { useJourneyNavigate, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
 import { useSearchParams } from 'react-router';
@@ -498,7 +498,7 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
         </Field>
 
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={createZone} onChange={(e) => setCreateZone(e.target.checked)} />
+          <Checkbox checked={createZone} onCheckedChange={(checked) => setCreateZone(checked === true)} />
           <span>Create a new Route53 zone for this domain</span>
         </label>
 
@@ -508,7 +508,7 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
           </summary>
           <div className="mt-3 space-y-3">
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={deployApiServer} onChange={(e) => setDeployApiServer(e.target.checked)} />
+              <Checkbox checked={deployApiServer} onCheckedChange={(checked) => setDeployApiServer(checked === true)} />
               <span>Also install the Appliance service</span>
             </label>
             {deployApiServer ? (
@@ -529,10 +529,9 @@ function AwsForm({ onBack, onSubmit }: { onBack: (() => void) | null; onSubmit: 
                   />
                 </Field>
                 <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={promoteState}
-                    onChange={(e) => setPromoteState(e.target.checked)}
+                    onCheckedChange={(checked) => setPromoteState(checked === true)}
                     className="mt-0.5"
                   />
                   <span>Make installer state available from other devices (recommended)</span>

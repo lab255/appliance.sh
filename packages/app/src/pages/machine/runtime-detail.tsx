@@ -1,4 +1,5 @@
 import { IconTooltip } from '@/components/ui/tooltip';
+import { Checkbox } from '@appliance.sh/ui';
 import { HostingStatus } from '@/components/journey-motion';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
@@ -539,10 +540,9 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
                     className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]"
                     title="Add a persistent shared workspace for shells and agents"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={devMode}
-                      onChange={(e) => setDevMode(e.target.checked)}
+                      onCheckedChange={(checked) => setDevMode(checked === true)}
                       disabled={busy !== null}
                     />
                     shared workspace

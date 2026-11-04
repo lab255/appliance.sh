@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CredentialRule, MicroVmInstanceHost } from '@/lib/host';
 import { CredentialsPanel } from './credentials-panel';
 import { splitLegacyHelper, validateHelperArgv } from './credential-helper-editor';
@@ -12,12 +12,25 @@ import { splitLegacyHelper, validateHelperArgv } from './credential-helper-edito
 
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
 
+beforeEach(() => {
+  // Radix sizes its hidden form control with this browser API (absent in jsdom).
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
 afterEach(async () => {
   while (mounted.length) {
     const item = mounted.pop()!;
     await act(async () => item.root.unmount());
     item.container.remove();
   }
+  vi.unstubAllGlobals();
 });
 
 function inputValue(input: HTMLInputElement, value: string) {

@@ -1,4 +1,5 @@
 import { IconTooltip } from '@/components/ui/tooltip';
+import { Checkbox } from '@appliance.sh/ui';
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
@@ -237,11 +238,11 @@ export function CredentialsPanel({
               />
               <div className="flex flex-wrap gap-4">
                 <label className="inline-flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={capture} onChange={(e) => setCapture(e.target.checked)} />
+                  <Checkbox checked={capture} onCheckedChange={(checked) => setCapture(checked === true)} />
                   Save a credential seen in this header
                 </label>
                 <label className="inline-flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={inject} onChange={(e) => setInject(e.target.checked)} />
+                  <Checkbox checked={inject} onCheckedChange={(checked) => setInject(checked === true)} />
                   Add the saved credential to requests
                 </label>
               </div>
