@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Copy, Link2, Loader2, Trash2, UserPlus } from 'lucide-react';
@@ -261,21 +262,24 @@ function PendingInvites() {
           <span className="text-xs text-[var(--color-muted-foreground)]">
             expires {relativeUntil(invite.expiresAt)}
           </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => revoke(invite.id, invite.name)}
-            aria-label={
+          <IconTooltip
+            label={
               revokingId === invite.id ? `Cancelling invite for ${invite.name}…` : `Cancel invite for ${invite.name}`
             }
-            disabled={revokingId === invite.id}
           >
-            {revokingId === invite.id ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" aria-hidden />
-            )}
-          </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => revoke(invite.id, invite.name)}
+              disabled={revokingId === invite.id}
+            >
+              {revokingId === invite.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              )}
+            </Button>
+          </IconTooltip>
         </div>
       ))}
       {revokeError ? (
@@ -372,19 +376,20 @@ function MembersList() {
             {key.lastUsedAt ? ` · active ${relativeTime(key.lastUsedAt)}` : ''}
           </span>
           {self?.id !== key.id ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => revoke(key.id, key.name)}
-              aria-label={revokingId === key.id ? `Removing ${key.name}…` : `Remove ${key.name}’s access`}
-              disabled={revokingId === key.id}
-            >
-              {revokingId === key.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-              )}
-            </Button>
+            <IconTooltip label={revokingId === key.id ? `Removing ${key.name}…` : `Remove ${key.name}’s access`}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => revoke(key.id, key.name)}
+                disabled={revokingId === key.id}
+              >
+                {revokingId === key.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                )}
+              </Button>
+            </IconTooltip>
           ) : null}
         </div>
       ))}

@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Copy, Download, Play, RefreshCw, X } from 'lucide-react';
@@ -146,9 +147,11 @@ function PreflightPanel({
           <Check className="h-3.5 w-3.5" aria-hidden />
           {loading ? 'Re-checking this computer…' : `${checks.length} checks complete. This computer is ready.`}
         </span>
-        <Button variant="ghost" size="icon" aria-label="Re-check this computer" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-        </Button>
+        <IconTooltip label="Re-check this computer">
+          <Button variant="ghost" size="icon" onClick={onRefresh} disabled={loading}>
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+          </Button>
+        </IconTooltip>
       </SectionCard>
     );
   }

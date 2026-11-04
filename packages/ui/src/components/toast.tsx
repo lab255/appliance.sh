@@ -1,5 +1,7 @@
 'use client';
 
+import { IconTooltip } from './tooltip.js';
+
 import * as React from 'react';
 import * as m from 'motion/react-m';
 import { AnimatePresence } from 'motion/react';
@@ -87,14 +89,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <div className="min-w-0 flex-1 break-words text-[var(--color-foreground)]">{t.message}</div>
-                <button
-                  type="button"
-                  onClick={() => dismiss(t.id)}
-                  aria-label="Dismiss notification"
-                  className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <IconTooltip label="Dismiss notification">
+                  <button
+                    type="button"
+                    onClick={() => dismiss(t.id)}
+                    className="rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </IconTooltip>
               </m.div>
             );
           })}

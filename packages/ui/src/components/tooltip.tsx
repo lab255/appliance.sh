@@ -54,3 +54,22 @@ export const TooltipContent = React.forwardRef<React.ElementRef<typeof Primitive
     );
   }
 );
+
+/** A single label for an icon control's accessible name and hover/focus hint. */
+export function IconTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactElement<{ 'aria-label'?: string; disabled?: boolean }>;
+}) {
+  const control = React.cloneElement(children, { 'aria-label': label });
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{control}</TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}

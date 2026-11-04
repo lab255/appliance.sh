@@ -1,5 +1,7 @@
 'use client';
 
+import { IconTooltip } from './tooltip.js';
+
 import * as React from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '../lib/utils.js';
@@ -49,18 +51,19 @@ export function CommandSnippet({
       )}
     >
       <code className="min-w-0 flex-1 truncate font-mono text-xs">{command}</code>
-      <button
-        type="button"
-        onClick={onCopy}
-        aria-label={copied ? 'Copied' : copyButtonAriaLabel}
-        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-      >
-        {copied ? (
-          <Check className="h-3.5 w-3.5 text-[var(--color-success-foreground)]" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" />
-        )}
-      </button>
+      <IconTooltip label={copied ? 'Copied' : copyButtonAriaLabel}>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-[var(--color-success-foreground)]" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </IconTooltip>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import { FolderOpen, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
@@ -185,14 +186,15 @@ export function CredentialHelperEditor({
                       aria-invalid={showErrors && Boolean(validation.args[index])}
                       aria-describedby={showErrors && validation.args[index] ? errorId : undefined}
                     />
-                    <button
-                      type="button"
-                      aria-label={`Remove helper argument ${index + 1}`}
-                      onClick={() => removeArg(index)}
-                      className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden />
-                    </button>
+                    <IconTooltip label={`Remove helper argument ${index + 1}`}>
+                      <button
+                        type="button"
+                        onClick={() => removeArg(index)}
+                        className="shrink-0 rounded p-1 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    </IconTooltip>
                   </div>
                   {showErrors && validation.args[index] ? (
                     <p

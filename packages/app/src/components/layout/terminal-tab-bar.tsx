@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import { WeightLabel } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Plus, X } from 'lucide-react';
@@ -205,21 +206,21 @@ function TerminalTab({
       <span className="text-micro text-[var(--color-muted-foreground)]" aria-hidden>
         {statusLabel(session.status)}
       </span>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        className={cn(
-          'shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-destructive-background)] hover:text-[var(--color-destructive-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] group-hover:opacity-100 group-focus-within:opacity-100',
-          active ? 'opacity-100' : 'opacity-60'
-        )}
-        aria-label={dead ? `Remove ${session.title}` : `End ${session.title}`}
-        title={dead ? 'Remove ended tab' : agent ? 'End agent' : 'End shell'}
-      >
-        <X className="h-3 w-3" aria-hidden />
-      </button>
+      <IconTooltip label={dead ? `Remove ${session.title}` : `End ${session.title}`}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className={cn(
+            'shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:bg-[var(--color-destructive-background)] hover:text-[var(--color-destructive-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] group-hover:opacity-100 group-focus-within:opacity-100',
+            active ? 'opacity-100' : 'opacity-60'
+          )}
+        >
+          <X className="h-3 w-3" aria-hidden />
+        </button>
+      </IconTooltip>
     </div>
   );
 }
@@ -309,16 +310,16 @@ export function TerminalTabBar() {
           />
         ))}
       </div>
-      <button
-        type="button"
-        data-open-another-shell
-        onClick={handleNew}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-active)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-        title="Open another shell on the same target"
-        aria-label="Open another shell"
-      >
-        <Plus className="h-3.5 w-3.5" aria-hidden />
-      </button>
+      <IconTooltip label="Open another shell">
+        <button
+          type="button"
+          data-open-another-shell
+          onClick={handleNew}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-active)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </IconTooltip>
     </div>
   );
 }

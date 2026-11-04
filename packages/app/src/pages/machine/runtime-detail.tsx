@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import { HostingStatus } from '@/components/journey-motion';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
@@ -566,17 +567,18 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
                         title={mountPath}
                       >
                         <span className="max-w-[14rem] truncate font-mono">{mountPath}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRemovedMount(mountPath);
-                            setMountPath(null);
-                          }}
-                          className="rounded hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
-                          aria-label={`Stop sharing ${mountPath}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                        <IconTooltip label={`Stop sharing ${mountPath}`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRemovedMount(mountPath);
+                              setMountPath(null);
+                            }}
+                            className="rounded hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </IconTooltip>
                       </span>
                     ) : null}
                   </div>

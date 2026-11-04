@@ -1,3 +1,4 @@
+import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
@@ -295,15 +296,16 @@ export function CredentialsPanel({
                     {r.inject ? <Tag>add to requests</Tag> : null}
                     {Array.isArray(r.helper) ? <Tag>argv helper</Tag> : null}
                     {typeof r.helper === 'string' ? <Tag>legacy helper</Tag> : null}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${r.host}`}
-                      disabled={busy}
-                      onClick={() => scheduleRemoval(r.host)}
-                      className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                    >
-                      <X className="h-3 w-3" aria-hidden />
-                    </button>
+                    <IconTooltip label={`Remove ${r.host}`}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => scheduleRemoval(r.host)}
+                        className="shrink-0 rounded p-0.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      >
+                        <X className="h-3 w-3" aria-hidden />
+                      </button>
+                    </IconTooltip>
                   </div>
                   {typeof r.helper === 'string' ? (
                     <Banner
