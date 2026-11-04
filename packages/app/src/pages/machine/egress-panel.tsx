@@ -1,3 +1,4 @@
+import { ScrollArea } from '@appliance.sh/ui/scroll-area';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { Switch } from '@appliance.sh/ui';
 import * as React from 'react';
@@ -550,52 +551,57 @@ function DeniedAttempts({
           Nothing blocked yet. Traffic the boundary denies will show up here — allow a host in one click.
         </p>
       ) : (
-        <ul className="max-h-44 space-y-0.5 overflow-auto rounded-md border border-[var(--color-border)] p-1">
-          {denied.map((d) => {
-            // Deny-first (ruledStatus): a broader suffix deny keeps a host
-            // denied even when an allow rule matches, so only a TRUE
-            // 'allowed' shows the green badge — otherwise keep the Allow
-            // affordance (a still-denied row must not read as allowed).
-            const status = ruledStatus(policy, d.host);
-            return (
-              <li key={`${d.host}:${d.port}`} className="flex items-center gap-2 px-1 py-0.5 text-micro">
-                <span className="w-8 shrink-0 text-right font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
-                  {relativeAge(new Date(d.lastSeen).toISOString())}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-mono">
-                  {d.host}
-                  <span className="text-[var(--color-muted-foreground)]">:{d.port}</span>
-                </span>
-                <span className="shrink-0 font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
-                  ×{d.count}
-                </span>
-                {status === 'allowed' ? (
-                  <StatusPill tone="neutral" label="Allowed" />
-                ) : (
-                  <>
-                    {status === 'denied' ? (
-                      <span
-                        className="shrink-0 text-micro text-[var(--color-destructive-foreground)]"
-                        title="A deny rule still blocks this host — remove it below to allow"
+        <ScrollArea
+          className="max-h-44 rounded-md border border-[var(--color-border)]"
+          viewportProps={{ 'aria-label': 'Denied attempts' }}
+        >
+          <ul className="space-y-0.5 p-1 pr-3">
+            {denied.map((d) => {
+              // Deny-first (ruledStatus): a broader suffix deny keeps a host
+              // denied even when an allow rule matches, so only a TRUE
+              // 'allowed' shows the green badge — otherwise keep the Allow
+              // affordance (a still-denied row must not read as allowed).
+              const status = ruledStatus(policy, d.host);
+              return (
+                <li key={`${d.host}:${d.port}`} className="flex items-center gap-2 px-1 py-0.5 text-micro">
+                  <span className="w-8 shrink-0 text-right font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
+                    {relativeAge(new Date(d.lastSeen).toISOString())}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono">
+                    {d.host}
+                    <span className="text-[var(--color-muted-foreground)]">:{d.port}</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
+                    ×{d.count}
+                  </span>
+                  {status === 'allowed' ? (
+                    <StatusPill tone="neutral" label="Allowed" />
+                  ) : (
+                    <>
+                      {status === 'denied' ? (
+                        <span
+                          className="shrink-0 text-micro text-[var(--color-destructive-foreground)]"
+                          title="A deny rule still blocks this host — remove it below to allow"
+                        >
+                          deny rule
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`Allow egress to ${d.host}:${d.port}`}
+                        onClick={() => onAllow(d.host)}
+                        className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                       >
-                        deny rule
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`Allow egress to ${d.host}:${d.port}`}
-                      onClick={() => onAllow(d.host)}
-                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                    >
-                      Allow
-                    </button>
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                        Allow
+                      </button>
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </ScrollArea>
       )}
     </div>
   );
@@ -648,66 +654,71 @@ function TrafficView({
           No traffic yet. Requests appear here as workloads make them.
         </p>
       ) : (
-        <ul className="max-h-56 space-y-0.5 overflow-auto rounded-md border border-[var(--color-border)] p-1">
-          {rows.map((e, i) => {
-            const status = ruled(e.host);
-            return (
-              <li key={`${e.ts}-${i}`} className="flex items-center gap-2 px-1 py-0.5 text-micro">
-                <span className="w-8 shrink-0 text-right font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
-                  {relativeAge(new Date(e.ts).toISOString())}
-                </span>
-                <span className="w-14 shrink-0">{decisionLabel(e.decision)}</span>
-                <span className="min-w-0 flex-1 truncate font-mono">
-                  <span className="text-[var(--color-muted-foreground)]">{e.method} </span>
-                  {e.host}
-                  {e.path ? <span className="text-[var(--color-muted-foreground)]">{e.path}</span> : null}
-                </span>
-                {status === 'allowed' ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    aria-label={`Block egress to ${e.host}:${e.port}`}
-                    onClick={() => onBlock(e.host)}
-                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                  >
-                    Block
-                  </button>
-                ) : status === 'denied' ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    aria-label={`Allow egress to ${e.host}:${e.port}`}
-                    onClick={() => onAllow(e.host)}
-                    className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                  >
-                    Allow
-                  </button>
-                ) : (
-                  <span className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`Allow egress to ${e.host}:${e.port}`}
-                      onClick={() => onAllow(e.host)}
-                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
-                    >
-                      Allow
-                    </button>
+        <ScrollArea
+          className="max-h-56 rounded-md border border-[var(--color-border)]"
+          viewportProps={{ 'aria-label': 'Traffic requests' }}
+        >
+          <ul className="space-y-0.5 p-1 pr-3">
+            {rows.map((e, i) => {
+              const status = ruled(e.host);
+              return (
+                <li key={`${e.ts}-${i}`} className="flex items-center gap-2 px-1 py-0.5 text-micro">
+                  <span className="w-8 shrink-0 text-right font-mono text-micro tabular-nums text-[var(--color-muted-foreground)]">
+                    {relativeAge(new Date(e.ts).toISOString())}
+                  </span>
+                  <span className="w-14 shrink-0">{decisionLabel(e.decision)}</span>
+                  <span className="min-w-0 flex-1 truncate font-mono">
+                    <span className="text-[var(--color-muted-foreground)]">{e.method} </span>
+                    {e.host}
+                    {e.path ? <span className="text-[var(--color-muted-foreground)]">{e.path}</span> : null}
+                  </span>
+                  {status === 'allowed' ? (
                     <button
                       type="button"
                       disabled={busy}
                       aria-label={`Block egress to ${e.host}:${e.port}`}
                       onClick={() => onBlock(e.host)}
-                      className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
                     >
                       Block
                     </button>
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  ) : status === 'denied' ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`Allow egress to ${e.host}:${e.port}`}
+                      onClick={() => onAllow(e.host)}
+                      className="shrink-0 rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                    >
+                      Allow
+                    </button>
+                  ) : (
+                    <span className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`Allow egress to ${e.host}:${e.port}`}
+                        onClick={() => onAllow(e.host)}
+                        className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      >
+                        Allow
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`Block egress to ${e.host}:${e.port}`}
+                        onClick={() => onBlock(e.host)}
+                        className="rounded border border-[var(--color-border)] px-1.5 text-micro hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:opacity-50"
+                      >
+                        Block
+                      </button>
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </ScrollArea>
       )}
     </div>
   );

@@ -58,3 +58,6 @@ export * from './components/accordion.js';
 export { Combobox, type ComboboxProps, type ComboboxOption } from './components/combobox.js';
 
 export * from './components/table.js';
+
+export { ScrollArea } from './components/scroll-area.js';
+export type { ScrollAreaProps } from './components/scroll-area.js';

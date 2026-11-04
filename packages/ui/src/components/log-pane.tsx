@@ -1,5 +1,6 @@
 'use client';
 
+import { ScrollArea } from './scroll-area.js';
 import { IconTooltip } from './tooltip.js';
 
 import * as React from 'react';
@@ -108,29 +109,32 @@ export function LogPane({
         ) : null}
       </div>
       {open ? (
-        <div
-          ref={(node) => {
-            tail.ref.current = node;
-            assignRef(viewportRef, node);
-          }}
-          role="log"
-          aria-label={label}
-          aria-live={live === 'polite' ? 'polite' : undefined}
-          aria-relevant={live === 'polite' ? 'additions' : undefined}
-          onScroll={(event) => {
-            tail.onScroll(event);
-            onViewportScroll?.(event);
-          }}
+        <ScrollArea
           className={cn(
-            'appliance-ui',
-            'overflow-auto whitespace-pre-wrap border-t border-[var(--color-border)] px-3 py-2 font-mono text-xs leading-relaxed tabular-nums text-[var(--color-foreground)]',
+            'border-t border-[var(--color-border)]',
             height === 'compact' && 'max-h-40',
             height === 'default' && 'h-72',
             height === 'fill' && 'min-h-0 flex-1'
           )}
+          viewportRef={(node) => {
+            tail.ref.current = node;
+            assignRef(viewportRef, node);
+          }}
+          viewportProps={{
+            role: 'log',
+            'aria-label': label,
+            'aria-live': live === 'polite' ? 'polite' : undefined,
+            'aria-relevant': live === 'polite' ? 'additions' : undefined,
+            onScroll: (event) => {
+              tail.onScroll(event);
+              onViewportScroll?.(event);
+            },
+            className:
+              'whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed tabular-nums text-[var(--color-foreground)]',
+          }}
         >
           {hasContent ? children : <span className="text-[var(--color-muted-foreground)]">{empty}</span>}
-        </div>
+        </ScrollArea>
       ) : null}
       <span className="sr-only" role="status" aria-live="polite">
         {copied ? 'Log copied' : ''}
