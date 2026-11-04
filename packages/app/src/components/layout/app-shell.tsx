@@ -146,7 +146,7 @@ export function AppShell() {
                         'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm',
                         'active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]',
                         item.prominent
-                          ? 'text-[var(--color-foreground)] ring-1 ring-inset ring-[var(--color-border-strong)]'
+                          ? 'text-[var(--color-foreground)]'
                           : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
                         isActive && 'bg-[var(--color-accent)] text-[var(--color-foreground)]'
                       )

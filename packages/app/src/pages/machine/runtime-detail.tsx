@@ -458,7 +458,7 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
             );
           })}
         </div>
-        {tabs.some((item) => !item.enabled) ? (
+        {!vmRunning ? (
           <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
             Start the Sandbox to use Internet access, Credentials, and Facts. Set up hosting to use Workloads.
           </p>
