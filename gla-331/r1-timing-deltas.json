@@ -1,0 +1,62 @@
+[
+  {
+    "surface": "S5",
+    "name": "Package acknowledgment",
+    "config": "no-preference",
+    "beforeMs": 30.25,
+    "afterMs": 30.949999928474426,
+    "deltaMs": 0.6999999284744263,
+    "beforeRevision": "7a6df986d8e39a10f9fa9232236df1d615a66354",
+    "afterRevision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
+  },
+  {
+    "surface": "S7",
+    "name": "Deploy acknowledgment",
+    "config": "no-preference",
+    "beforeMs": 30.450000047683716,
+    "afterMs": 30.899999976158142,
+    "deltaMs": 0.44999992847442627,
+    "beforeRevision": "7a6df986d8e39a10f9fa9232236df1d615a66354",
+    "afterRevision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
+  },
+  {
+    "surface": "S7",
+    "name": "Retry acknowledgment",
+    "config": "no-preference",
+    "beforeMs": 31.25000011920929,
+    "afterMs": 31.40000009536743,
+    "deltaMs": 0.1499999761581421,
+    "beforeRevision": "7a6df986d8e39a10f9fa9232236df1d615a66354",
+    "afterRevision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
+  },
+  {
+    "surface": "S5",
+    "name": "Package acknowledgment",
+    "config": "reduce",
+    "beforeMs": 31.649999976158142,
+    "afterMs": 31.950000047683716,
+    "deltaMs": 0.30000007152557373,
+    "beforeRevision": "7a6df986d8e39a10f9fa9232236df1d615a66354",
+    "afterRevision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
+  },
+  {
+    "surface": "S7",
+    "name": "Deploy acknowledgment",
+    "config": "reduce",
+    "beforeMs": 31.700000166893005,
+    "afterMs": 31.350000023841858,
+    "deltaMs": -0.35000014305114746,
+    "beforeRevision": "7a6df986d8e39a10f9fa9232236df1d615a66354",
+    "afterRevision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
+  },
+  {
+    "surface": "S7",
+    "name": "Retry acknowledgment",
+    "config": "reduce",
+    "beforeMs": 31.59999990463257,
+    "afterMs": 31.199999928474426,
+    "deltaMs": -0.3999999761581421,
+    "beforeRevision": "7a6df986d8e39a10f9fa9232236df1d615a66354",
+    "afterRevision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
+  }
+]

@@ -15,7 +15,6 @@
     "data": "fixture except real pre-run journal artifact",
     "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) \u2192 scoped DOM acknowledgment \u2192 requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
   },
-  "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
   "measurements": [
     {
       "surface": "S1",
@@ -28,7 +27,8 @@
       ],
       "median": 32.450000047683716,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S1",
@@ -41,7 +41,8 @@
       ],
       "median": 30.350000023841858,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S1",
@@ -54,7 +55,8 @@
       ],
       "median": 48.799999952316284,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S2",
@@ -67,7 +69,8 @@
       ],
       "median": 25.100000023841858,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -80,7 +83,8 @@
       ],
       "median": 31.450000047683716,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -93,7 +97,8 @@
       ],
       "median": 31.25,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -106,7 +111,8 @@
       ],
       "median": 31.40000009536743,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -119,7 +125,8 @@
       ],
       "median": 31.550000071525574,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S4",
@@ -132,7 +139,8 @@
       ],
       "median": 31.299999952316284,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S4",
@@ -145,7 +153,8 @@
       ],
       "median": 31.75,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S5",
@@ -158,20 +167,22 @@
       ],
       "median": 31.399999976158142,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
       "surface": "S5",
       "name": "Package acknowledgment",
       "config": "no-preference",
       "count": 10,
       "samples": [
-        30.40000009536743, 30.59999990463257, 30.600000143051147, 30.299999952316284, 30.40000009536743,
-        29.799999952316284, 30, 30.200000047683716, 29.700000047683716, 29.300000190734863
+        33.700000047683716, 30.299999952316284, 31.200000047683716, 30.899999856948853, 31, 29.40000009536743,
+        31.90000009536743, 30.5, 30.40000009536743, 31.800000190734863
       ],
-      "median": 30.25,
-      "minimumMet": true,
-      "discardedAttempts": []
+      "median": 30.949999928474426,
+      "discardedAttempts": [],
+      "minimumMet": true
     },
     {
       "surface": "S7",
@@ -184,33 +195,36 @@
       ],
       "median": 30.65000009536743,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
       "surface": "S7",
       "name": "Deploy acknowledgment",
       "config": "no-preference",
       "count": 10,
       "samples": [
-        28.90000009536743, 30.40000009536743, 30.5, 30.100000143051147, 30.90000009536743, 29, 30.600000143051147, 31.5,
-        31.299999952316284, 29.600000143051147
+        30.799999952316284, 30.5, 31.799999952316284, 32, 31, 31.700000047683716, 30.299999952316284,
+        30.399999856948853, 28.799999952316284, 32.09999990463257
       ],
-      "median": 30.450000047683716,
-      "minimumMet": true,
-      "discardedAttempts": []
+      "median": 30.899999976158142,
+      "discardedAttempts": [],
+      "minimumMet": true
     },
     {
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
       "surface": "S7",
       "name": "Retry acknowledgment",
       "config": "no-preference",
       "count": 10,
       "samples": [
-        31.700000047683716, 32.299999952316284, 30.59999990463257, 32.69999980926514, 30.700000047683716,
-        31.300000190734863, 31.399999856948853, 30.5, 31.09999990463257, 31.200000047683716
+        31.40000009536743, 31.300000190734863, 32.10000014305115, 31.299999952316284, 33.200000047683716,
+        31.40000009536743, 32.10000014305115, 31.299999952316284, 31.299999952316284, 32
       ],
-      "median": 31.25000011920929,
-      "minimumMet": true,
-      "discardedAttempts": []
+      "median": 31.40000009536743,
+      "discardedAttempts": [],
+      "minimumMet": true
     },
     {
       "surface": "S1",
@@ -223,7 +237,8 @@
       ],
       "median": 30.450000047683716,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S1",
@@ -236,7 +251,8 @@
       ],
       "median": 23.899999976158142,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S1",
@@ -249,7 +265,8 @@
       ],
       "median": 48.200000047683716,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S2",
@@ -262,7 +279,8 @@
       ],
       "median": 25.09999990463257,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -275,7 +293,8 @@
       ],
       "median": 31.800000071525574,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -288,7 +307,8 @@
       ],
       "median": 32.25000011920929,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -301,7 +321,8 @@
       ],
       "median": 27.699999928474426,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S3",
@@ -314,7 +335,8 @@
       ],
       "median": 23.200000047683716,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S4",
@@ -327,7 +349,8 @@
       ],
       "median": 31.5,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S4",
@@ -340,7 +363,8 @@
       ],
       "median": 31.299999952316284,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S5",
@@ -353,20 +377,22 @@
       ],
       "median": 31.899999976158142,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
       "surface": "S5",
       "name": "Package acknowledgment",
       "config": "reduce",
       "count": 10,
       "samples": [
-        31.700000047683716, 31.90000009536743, 31.600000143051147, 22.59999990463257, 31.699999809265137,
-        31.300000190734863, 32.10000014305115, 31.5, 31.899999856948853, 31.59999990463257
+        33.200000047683716, 32.59999990463257, 32, 29.899999856948853, 29.90000009536743, 32.200000047683716,
+        29.799999952316284, 31.59999990463257, 32, 31.90000009536743
       ],
-      "median": 31.649999976158142,
-      "minimumMet": true,
-      "discardedAttempts": []
+      "median": 31.950000047683716,
+      "discardedAttempts": [],
+      "minimumMet": true
     },
     {
       "surface": "S7",
@@ -379,33 +405,36 @@
       ],
       "median": 31.74999988079071,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
       "surface": "S7",
       "name": "Deploy acknowledgment",
       "config": "reduce",
       "count": 10,
       "samples": [
-        30.799999952316284, 32.5, 32.09999990463257, 33, 32.89999985694885, 31.600000143051147, 30, 31.299999952316284,
-        31.59999990463257, 31.800000190734863
+        29.799999952316284, 32.200000047683716, 32.200000047683716, 30.800000190734863, 32.80000019073486,
+        30.700000047683716, 31, 31.59999990463257, 32.200000047683716, 31.100000143051147
       ],
-      "median": 31.700000166893005,
-      "minimumMet": true,
-      "discardedAttempts": []
+      "median": 31.350000023841858,
+      "discardedAttempts": [],
+      "minimumMet": true
     },
     {
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
       "surface": "S7",
       "name": "Retry acknowledgment",
       "config": "reduce",
       "count": 10,
       "samples": [
-        31.800000190734863, 31.700000047683716, 31.5, 29.799999952316284, 31.600000143051147, 31.59999990463257, 23,
-        31.59999990463257, 31.59999990463257, 32.700000047683716
+        31.59999990463257, 33.10000014305115, 31.399999856948853, 30.799999952316284, 30.5, 31.399999856948853, 31,
+        31.700000047683716, 30.200000047683716, 23.90000009536743
       ],
-      "median": 31.59999990463257,
-      "minimumMet": true,
-      "discardedAttempts": []
+      "median": 31.199999928474426,
+      "discardedAttempts": [],
+      "minimumMet": true
     },
     {
       "surface": "S6",
@@ -418,7 +447,8 @@
       ],
       "median": 45.10000002384186,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S6",
@@ -431,7 +461,8 @@
       ],
       "median": 30.049999952316284,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S6",
@@ -444,7 +475,8 @@
       ],
       "median": 43.799999952316284,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S6",
@@ -457,7 +489,8 @@
       ],
       "median": 29.949999928474426,
       "minimumMet": true,
-      "discardedAttempts": []
+      "discardedAttempts": [],
+      "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
     },
     {
       "surface": "S6",
@@ -470,7 +503,8 @@
       ],
       "median": 147.80000007152557,
       "discardedAttempts": [],
-      "minimumMet": true
+      "minimumMet": true,
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
     },
     {
       "surface": "S6",
@@ -483,7 +517,8 @@
       ],
       "median": 147.79999995231628,
       "discardedAttempts": [],
-      "minimumMet": true
+      "minimumMet": true,
+      "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e"
     }
   ],
   "checks": [
@@ -510,5 +545,6 @@
     "Narrow and 200%-equivalent layouts are legibility configurations, not timing claims.",
     "Measurements use an after-paint upper-bound proxy; traces and recordings are retained. No native picker performance claim: picker is mock-host."
   ],
-  "note": "Historical set remains corrected to 359 finite samples. This current 360-sample set replaces both Install series with fresh 10-finite-sample runs; other timings are retained from unchanged acknowledgment paths."
+  "note": "Historical set remains corrected to 359 finite samples. This current 360-sample set replaces both Install series with fresh 10-finite-sample runs; other timings are retained from unchanged acknowledgment paths.",
+  "revisionScope": "Mixed measurement revisions; consult each series revision. Six operation acknowledgment and two Install series at 52b3849, remaining 28 at 7a6df98."
 }

@@ -6,7 +6,7 @@
 
 Owner ruling 2026-11-11 is applied: File — ruled v1 headline; Catalogue — roadmapped (later); Deploy — separate verb (see Deploy action). Rows remain equal-weight review artifacts. Unsigned result says **Unsigned — publisher prompts will warn**. No signing-key provisioning was added.
 
-Branch: `feat/gla-331-workbench-prototype`. Revision: `52b384959a4bc174e34190ac34924dd0d2f8a83e`. Base at branch creation: `00a0bdd`; origin/main advanced independently with docs-only changes during the spike. The branch exists on origin; this follow-up commit is local and has not been pushed. No merge / no PR; this prototype never merges.
+Branch: `feat/gla-331-workbench-prototype`. Revision: `52b384959a4bc174e34190ac34924dd0d2f8a83e`. Base at branch creation: `00a0bdd`; origin/main advanced independently with docs-only changes during the spike. The branch and code follow-up `52b3849` are on origin; this documentation follow-up remains local until Manager publication. No merge / no PR; this prototype never merges.
 
 ## Revision — polish review deltas
 
@@ -22,9 +22,28 @@ This revision preserves the three previously declared failures: cold-shell Conti
 | F6      | “Every scenario” **0.11638** → scenario **9 = 0.01015608**, **11 = 0.11723245**, others as individually listed below                                        | Historical per-scenario values restored. Scenario 9 is **PRODUCT DEFECT**, supported by production-shell IPC-boundary reproduction below; it remains over gate.                                                                                               |
 | N1      | Clipped/black S5 capture → full-panel matched before/after **1440×2000**                                                                                    | Capture viewport enlarged for both sides only; measurement viewport stays 1440×1000.                                                                                                                                                                          |
 | N2      | Ambiguous artifact digest → canonical bundle digest and ZIP-byte hash separately named in header                                                            | Different hash inputs, plus separate second-run artifact identity; no artifact/digest substitution.                                                                                                                                                           |
-| N3      | “No push or merge” → **branch on origin; local follow-up unpushed; no merge / no PR**                                                                       | Status correction after Manager publication.                                                                                                                                                                                                                  |
+| N3      | “No push or merge” → **branch and code follow-up 52b3849 on origin; no merge / no PR**                                                                      | Status correction after Manager publication.                                                                                                                                                                                                                  |
 
 Foreground verification after `52b3849`: **GREEN → GREEN**; **1472 TypeScript / 362 Rust passed**, unchanged counts. Evidence remains untracked.
+
+### Final documentation re-check — R1–R3 deltas
+
+**R1:** one pack-level `52b3849` stamp → actual per-series revisions on all 36 series. Six Package/Deploy/Retry acknowledgment series were re-run at `52b3849`, ten finite samples each, both motion configurations. The two Install reruns also belong to `52b3849`; the other 28 series retain `7a6df98`. No single revision is claimed for the mixed pack. Raw samples, discarded attempts, configuration, videos and traces are in `recheck-operation-measurements.json` and `recheck-operation-*`; numerical deltas are in `r1-timing-deltas.json`.
+
+| Series                    | Motion        | Before → after median ms | Delta ms |
+| ------------------------- | ------------- | -----------------------: | -------: |
+| S5 Package acknowledgment | no-preference |            30.25 → 30.95 |    +0.70 |
+| S7 Deploy acknowledgment  | no-preference |            30.45 → 30.90 |    +0.45 |
+| S7 Retry acknowledgment   | no-preference |            31.25 → 31.40 |    +0.15 |
+| S5 Package acknowledgment | reduce        |            31.65 → 31.95 |    +0.30 |
+| S7 Deploy acknowledgment  | reduce        |            31.70 → 31.35 |    -0.35 |
+| S7 Retry acknowledgment   | reduce        |            31.60 → 31.20 |    -0.40 |
+
+Cause of the comparison: new measurements include the changed operation region and expanded running logs at `52b3849`, using the same after-paint proxy and 2.6s completion wait. Small timing differences include run/frame scheduling variation; this experiment does not isolate the code change as the sole cause. All six remain below the unchanged 100ms gate. All previously declared failures remain failures.
+
+**R2:** generic local follow-up descriptions → explicit board card **GLA-336, “Measured shell/installer defects exposed by GLA-331”**, owner **Morgan**, opens build epic. Both `followups.md#shell-cls` and `#s3-delayed-acceptance` name the card and measured findings; this file must be copied with the curated artifact pack.
+
+**R3:** `52b3849` described as unpushed → **branch and code follow-up on origin; no merge / no PR**. This documentation commit remains local for Manager publication.
 
 ## Measurement protocol and configuration
 
@@ -44,7 +63,7 @@ Worst median across that surface's named interactions/configurations; S2 also sh
 | S2      |      20 |           48.80 |     0.00000000 |            0.00000000 |
 | S3      |      80 |           32.25 |     0.02164225 |            0.02164225 |
 | S4      |      40 |           31.75 |     0.00000000 |            0.00006181 |
-| S5      |      40 |           31.90 |     0.00001741 |            0.00002464 |
+| S5      |      40 |           31.95 |     0.00001741 |            0.00002464 |
 | S6      |      60 |          147.80 |     0.00254584 |            0.00254584 |
 | S7      |      60 |           31.75 |     0.00001741 |            0.00002464 |
 
@@ -116,4 +135,4 @@ Architecture acceptance: user-mode navigation remains the existing three items; 
 
 Follow-up foreground `pnpm verify` at `52b3849`: **GREEN**. Counts unchanged from the previous green baseline: 11 project builds; 6 typechecks; lint/design-token/format gates passed; 1472 TypeScript tests passed in 158 files (1 skipped), across 10 test projects; 362 Rust tests passed, 1 ignored, 0 failed; all three Rust crates built and passed clippy. Follow-up full log: [verify-review.log](verify-review.log); machine-readable counts: [verify-review-counts.json](verify-review-counts.json). Original baseline log/counts remain alongside them. The first attempt stopped on formatting in two untracked evidence scripts; those were formatted, then the full foreground command was rerun successfully.
 
-[route-guards.json](route-guards.json): operator/developer allowed; direct Workbench URLs excluded for user mode and member role. Evidence remains untracked; `git ls-files _evidence-gla331` is empty. No binaries are on the feature branch. The branch exists on origin; this follow-up commit is local and has not been pushed. No merge / no PR; this prototype never merges.
+[route-guards.json](route-guards.json): operator/developer allowed; direct Workbench URLs excluded for user mode and member role. Evidence remains untracked; `git ls-files _evidence-gla331` is empty. No binaries are on the feature branch. The branch and code follow-up `52b3849` are on origin; this documentation follow-up remains local until Manager publication. No merge / no PR; this prototype never merges.
