@@ -158,3 +158,35 @@
 .wb-readiness {
   min-height: 100px;
 }
+
+.wb-create-dialog {
+  z-index: 51;
+}
+.wb-row > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.wb-panel .wb-row > button {
+  white-space: normal;
+}
+
+.wb-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wb-stack > * {
+  min-width: 0;
+}
+.wb-muted {
+  overflow-wrap: anywhere;
+}
+.wb-destinations {
+  grid-auto-rows: 1fr;
+}
+.workbench [role='radio'] {
+  transition-duration: var(--duration-fast);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workbench [role='radio'] {
+    transition: none;
+  }
+}

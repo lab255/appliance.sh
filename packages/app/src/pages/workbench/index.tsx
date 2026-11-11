@@ -77,6 +77,11 @@ export function WorkbenchPage() {
   const [message, setMessage] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const adding = React.useRef(false);
+  const createOpener = React.useRef<HTMLElement | null>(null);
+  function showCreate() {
+    createOpener.current = document.activeElement as HTMLElement;
+    setOpen(true);
+  }
   const preview = kind === 'blank' ? `${parent.replace(/\/$/, '')}/${name}` : parent;
   const active = workspaces.find((w) => w.id === workspaceId);
   async function add() {
@@ -147,7 +152,7 @@ export function WorkbenchPage() {
             action={
               <Button
                 onClick={() => {
-                  setOpen(true);
+                  showCreate();
                   setMessage('');
                 }}
               >
@@ -187,7 +192,7 @@ export function WorkbenchPage() {
                     variant="outline"
                     onClick={() => {
                       setKind('existing');
-                      setOpen(true);
+                      showCreate();
                     }}
                   >
                     Open existing project
@@ -196,7 +201,7 @@ export function WorkbenchPage() {
                     variant="outline"
                     onClick={() => {
                       setKind('blank');
-                      setOpen(true);
+                      showCreate();
                     }}
                   >
                     Create blank workspace
@@ -209,7 +214,13 @@ export function WorkbenchPage() {
             {message}
           </p>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent>
+            <DialogContent
+              className="wb-create-dialog"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                createOpener.current?.focus();
+              }}
+            >
               <DialogTitle>Create workspace</DialogTitle>
               <DialogDescription>fixture · directory selection and creation. Cancel creates nothing.</DialogDescription>
               <div className="wb-stack mt-4">
