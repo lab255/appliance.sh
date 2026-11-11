@@ -847,7 +847,7 @@ function PackagePanel({ workspace }: { workspace: Workspace }) {
     setOutcome('running');
     setAttempts((n) => n + 1);
     // Playback of a real pre-run artifact, not a live packaging service or fabricated build.
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await new Promise((resolve) => setTimeout(resolve, 2600));
     setOutcome(fail ? 'error' : 'success');
     latch.current = false;
   }
@@ -910,6 +910,13 @@ function PackagePanel({ workspace }: { workspace: Workspace }) {
         </Banner>
       )}
       <div className="wb-operation">
+        <div className="wb-failure">
+          {outcome === 'error' && (
+            <Banner tone="error">
+              Fixture signing error: signing key file unavailable. Inspect inputs, then click Package again.
+            </Banner>
+          )}
+        </div>
         {outcome === 'idle' ? (
           <p className="wb-muted">
             No package requested. Human clicks: {attempts}. Ready proposals do not start operations.
@@ -928,13 +935,13 @@ function PackagePanel({ workspace }: { workspace: Workspace }) {
             estimate=""
             leaveSafety="keep-page"
             nowLine={`Attempt ${attempts} · ${workspace.directory} · fixture playback`}
-            failure="Fixture signing error: signing key file unavailable. Inspect inputs, then click Package again."
+            className="wb-long-operation"
             log={
               outcome === 'error'
                 ? 'fixture: signing key file unavailable; no artifact emitted for this attempt.'
                 : packageEvidence.output
             }
-            logProps={{ label: 'Package log', copyText: packageEvidence.output }}
+            logProps={{ label: 'Package log', copyText: packageEvidence.output, open: true }}
           />
         )}
         {outcome === 'success' && (
@@ -1049,7 +1056,7 @@ function DeployPanel({ target, directory }: { target: string; directory: string 
     if (latch.current) return;
     latch.current = true;
     setOutcome('running');
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 2600));
     setOutcome(failure ? 'error' : 'success');
     latch.current = false;
     setReconciled(false);
@@ -1091,11 +1098,20 @@ function DeployPanel({ target, directory }: { target: string; directory: string 
             >
               {outcome === 'error' ? 'Retry deploy' : 'Deploy'}
             </Button>
-            {outcome === 'error' && (
-              <Button variant="outline" onClick={() => setReconciled(true)}>
-                Reconcile deployment fixture
-              </Button>
-            )}
+            <div className="wb-reconcile">
+              {outcome === 'error' && (
+                <Button variant="outline" onClick={() => setReconciled(true)}>
+                  Reconcile deployment fixture
+                </Button>
+              )}
+            </div>
+            <div className="wb-failure">
+              {outcome === 'error' && (
+                <Banner tone="error">
+                  Transport timeout. Inspect deployment wb-deploy-1 before retry. No rollback is implied.
+                </Banner>
+              )}
+            </div>
             {outcome !== 'idle' && (
               <LongOperation
                 title={
@@ -1110,9 +1126,9 @@ function DeployPanel({ target, directory }: { target: string; directory: string 
                 estimate=""
                 leaveSafety="keep-page"
                 nowLine={`fixture · ${target} · journal / preview · deployment wb-deploy-1`}
-                failure="Transport timeout. Inspect deployment wb-deploy-1 before retry. No rollback is implied."
+                className="wb-long-operation"
                 log="fixture: build wb-build-1; deployment wb-deploy-1; outcome retained. No URL was returned."
-                logProps={{ label: 'Deploy log' }}
+                logProps={{ label: 'Deploy log', open: true }}
               />
             )}
           </div>

@@ -115,7 +115,9 @@
   border-radius: var(--radius);
 }
 .wb-operation {
-  min-height: 420px;
+  height: 620px;
+  overflow: auto;
+  overflow-anchor: none;
 }
 .wb-posture {
   border-left: 2px solid var(--color-sandbox-border);
@@ -189,4 +191,17 @@
   .workbench [role='radio'] {
     transition: none;
   }
+}
+
+/* Reserve the failure-only action before async completion. */
+.wb-reconcile {
+  min-height: 36px;
+}
+
+/* Failure text and expanded logs occupy the same slots in every result state. */
+.wb-failure {
+  min-height: 96px;
+}
+.wb-long-operation > :first-child {
+  min-height: 42px;
 }
