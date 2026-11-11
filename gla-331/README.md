@@ -6,7 +6,7 @@
 
 Owner ruling 2026-11-11 is applied: File — ruled v1 headline; Catalogue — roadmapped (later); Deploy — separate verb (see Deploy action). Rows remain equal-weight review artifacts. Unsigned result says **Unsigned — publisher prompts will warn**. No signing-key provisioning was added.
 
-Branch: `feat/gla-331-workbench-prototype`. Revision: `52b384959a4bc174e34190ac34924dd0d2f8a83e`. Base at branch creation: `00a0bdd`; origin/main advanced independently with docs-only changes during the spike. The branch and code follow-up `52b3849` are on origin; this documentation follow-up remains local until Manager publication. No merge / no PR; this prototype never merges.
+Branch: `feat/gla-331-workbench-prototype`. Revision: `52b384959a4bc174e34190ac34924dd0d2f8a83e`. Base at branch creation: `00a0bdd`; origin/main advanced independently with docs-only changes during the spike. The branch and code follow-up `52b3849` are on origin; this documentation follow-up is on origin (0c41304) until Manager publication. No merge / no PR; this prototype never merges.
 
 ## Revision — polish review deltas
 
@@ -43,7 +43,7 @@ Cause of the comparison: new measurements include the changed operation region a
 
 **R2:** generic local follow-up descriptions → explicit board card **GLA-336, “Measured shell/installer defects exposed by GLA-331”**, owner **Morgan**, opens build epic. Both `followups.md#shell-cls` and `#s3-delayed-acceptance` name the card and measured findings; this file must be copied with the curated artifact pack.
 
-**R3:** `52b3849` described as unpushed → **branch and code follow-up on origin; no merge / no PR**. This documentation commit remains local for Manager publication.
+**R3:** `52b3849` described as unpushed → **branch and code follow-up on origin; no merge / no PR**. This documentation commit is on origin (0c41304) for Manager publication.
 
 ## Measurement protocol and configuration
 
@@ -135,4 +135,4 @@ Architecture acceptance: user-mode navigation remains the existing three items; 
 
 Follow-up foreground `pnpm verify` at `52b3849`: **GREEN**. Counts unchanged from the previous green baseline: 11 project builds; 6 typechecks; lint/design-token/format gates passed; 1472 TypeScript tests passed in 158 files (1 skipped), across 10 test projects; 362 Rust tests passed, 1 ignored, 0 failed; all three Rust crates built and passed clippy. Follow-up full log: [verify-review.log](verify-review.log); machine-readable counts: [verify-review-counts.json](verify-review-counts.json). Original baseline log/counts remain alongside them. The first attempt stopped on formatting in two untracked evidence scripts; those were formatted, then the full foreground command was rerun successfully.
 
-[route-guards.json](route-guards.json): operator/developer allowed; direct Workbench URLs excluded for user mode and member role. Evidence remains untracked; `git ls-files _evidence-gla331` is empty. No binaries are on the feature branch. The branch and code follow-up `52b3849` are on origin; this documentation follow-up remains local until Manager publication. No merge / no PR; this prototype never merges.
+[route-guards.json](route-guards.json): operator/developer allowed; direct Workbench URLs excluded for user mode and member role. Evidence remains untracked; `git ls-files _evidence-gla331` is empty. No binaries are on the feature branch. The branch and code follow-up `52b3849` are on origin; this documentation follow-up is on origin (0c41304) until Manager publication. No merge / no PR; this prototype never merges.
