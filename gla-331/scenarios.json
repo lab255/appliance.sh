@@ -1,0 +1,459 @@
+[
+  {
+    "scenario": 1,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "host snapshot survives workspace metadata changes",
+        "pass": true
+      },
+      {
+        "name": "unavailable baseline never says no changes",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.12405172037760415,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 449.90000009536743,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.007671373155381945,
+        "startTime": 1398,
+        "hadRecentInput": true
+      }
+    ]
+  },
+  {
+    "scenario": 2,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "resolved sign-in gate",
+        "pass": true
+      },
+      {
+        "name": "Copilot consequence appears twice",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.11638034722222221,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 431,
+        "hadRecentInput": false
+      }
+    ]
+  },
+  {
+    "scenario": 3,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "0s starting acknowledged",
+        "pass": true
+      },
+      {
+        "name": "10s remains starting",
+        "pass": true
+      },
+      {
+        "name": "1min pending and draft retained",
+        "pass": true
+      },
+      {
+        "name": "acceptance after 65s only",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.19036792815031828,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 478.60000014305115,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.010021770833333332,
+        "startTime": 1361.7000000476837,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.03564095825195312,
+        "startTime": 1441.3000001907349,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.006682606472439236,
+        "startTime": 1518.9000000953674,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.02164224537037037,
+        "startTime": 66526.80000019073,
+        "hadRecentInput": false
+      }
+    ]
+  },
+  {
+    "scenario": 4,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "failed denial retained",
+        "pass": true
+      },
+      {
+        "name": "cancel Stop keeps registry running",
+        "pass": true
+      },
+      {
+        "name": "unconfirmed stop retains running",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.12766932870370368,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 408.09999990463257,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.011288981481481481,
+        "startTime": 1345.2000000476837,
+        "hadRecentInput": true
+      }
+    ]
+  },
+  {
+    "scenario": 5,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "N=0",
+        "pass": true
+      },
+      {
+        "name": "N=1",
+        "pass": true
+      },
+      {
+        "name": "N=3",
+        "pass": true
+      },
+      {
+        "name": "N=20",
+        "pass": true
+      },
+      {
+        "name": "static observation input/paste no content mutation",
+        "pass": true
+      },
+      {
+        "name": "hide does not stop",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.11638034722222221,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 423.39999985694885,
+        "hadRecentInput": false
+      }
+    ]
+  },
+  {
+    "scenario": 6,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "failed result plus partial changes",
+        "pass": true
+      },
+      {
+        "name": "result text",
+        "pass": true
+      },
+      {
+        "name": "result missing",
+        "pass": true
+      },
+      {
+        "name": "result malformed",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.11765972222222221,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 420.40000009536743,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.0012793750000000001,
+        "startTime": 1293.6000001430511,
+        "hadRecentInput": true
+      }
+    ]
+  },
+  {
+    "scenario": 7,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "missing Package disabled",
+        "pass": true
+      },
+      {
+        "name": "v1 Package disabled",
+        "pass": true
+      },
+      {
+        "name": "proposal has zero package calls",
+        "pass": true
+      },
+      {
+        "name": "double click one failed attempt without result digest",
+        "pass": true
+      },
+      {
+        "name": "real artifact replay and unsigned warning",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.1687964779926818,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 418.7000000476837,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.02620445216049383,
+        "startTime": 1873.1000001430511,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.02620445216049383,
+        "startTime": 2096.2000000476837,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.00000722644947193287,
+        "startTime": 2556.5,
+        "hadRecentInput": true
+      }
+    ]
+  },
+  {
+    "scenario": 8,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "three equal geometry / weight owner-ruling rows",
+        "pass": true,
+        "rows": [
+          {
+            "width": 368.65625,
+            "height": 175,
+            "weight": "600",
+            "text": "File — ruled v1 headlineA — hand-off filev2 runtime bundle; a separate install decision.fixture · equal-weight design-review artifact"
+          },
+          {
+            "width": 368.671875,
+            "height": 175,
+            "weight": "600",
+            "text": "Catalogue — roadmapped (later)B — catalogue publishBundle hosting and signed index publication remain unresolved.fixture · equal-weight design-review artifact"
+          },
+          {
+            "width": 368.65625,
+            "height": 175,
+            "weight": "600",
+            "text": "Deploy — separate verb (see Deploy action)C — direct deployExisting v1 source chain from the same folder; does not consume this bundle.fixture · equal-weight design-review artifact"
+          }
+        ]
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.11638034722222221,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 414.5,
+        "hadRecentInput": false
+      }
+    ]
+  },
+  {
+    "scenario": 9,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "existing user-mode receipt link",
+        "pass": true
+      },
+      {
+        "name": "publisher cancel leaves installed count",
+        "pass": true
+      },
+      {
+        "name": "grant cancel closes without install",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.01015607638888889,
+    "rawShiftSum": 0.01015607638888889,
+    "shifts": [
+      {
+        "value": 0.01015607638888889,
+        "startTime": 124.79999995231628,
+        "hadRecentInput": false
+      }
+    ]
+  },
+  {
+    "scenario": 10,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "timeout requires reconcile",
+        "pass": true
+      },
+      {
+        "name": "success without invented URL",
+        "pass": true
+      },
+      {
+        "name": "ordinary deploy reachable without workbench metadata",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.18335101502971882,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 419.10000014305115,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.033317314814814813,
+        "startTime": 1821.4000000953674,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.033317314814814813,
+        "startTime": 2059.7999999523163,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.00000722644947193287,
+        "startTime": 2471.4000000953674,
+        "hadRecentInput": true
+      },
+      {
+        "value": 0.00032881172839506175,
+        "startTime": 2737.9000000953674,
+        "hadRecentInput": true
+      }
+    ]
+  },
+  {
+    "scenario": 11,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "VM lost launch disabled cached edits",
+        "pass": true
+      },
+      {
+        "name": "VM recovery deliberate",
+        "pass": true
+      },
+      {
+        "name": "stale catalogue fixture",
+        "pass": true
+      },
+      {
+        "name": "verification failure fail closed",
+        "pass": true,
+        "text": "Skip to content\nAppliance\nInstalled Apps\nCatalogue\nDEVELOP\nProjects\nSettings\nDeveloper mode\nDev Machine\nthis computer\nDeveloper mode\nCatalogue\n\nFree and open-source apps that run on this Mac.\nUnverified\n\nCatalogue could not be verified\n\nNo catalogue apps are shown because the signed index could not be verified.\n\nReason: Catalogue signature could not be verified."
+      }
+    ],
+    "errors": [],
+    "cls": 0.11723244598765431,
+    "rawShiftSum": 0.11723244598765431,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 124.70000004768372,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.0008520987654320987,
+        "startTime": 139.40000009536743,
+        "hadRecentInput": false
+      }
+    ]
+  },
+  {
+    "scenario": 12,
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "WSL launch disabled exact reason",
+        "pass": true
+      },
+      {
+        "name": "stderr fallback not visible guidance",
+        "pass": true
+      },
+      {
+        "name": "stderr only expanded log",
+        "pass": true
+      },
+      {
+        "name": "cooperative warning",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.14649201388888888,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 419.90000009536743,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.030111666666666665,
+        "startTime": 1310.7999999523163,
+        "hadRecentInput": true
+      }
+    ]
+  }
+]

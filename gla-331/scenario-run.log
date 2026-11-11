@@ -1,0 +1,12 @@
+1 host snapshot survives workspace metadata changes: true; unavailable baseline never says no changes: true
+2 resolved sign-in gate: true; Copilot consequence appears twice: true
+3 0s starting acknowledged: true; 10s remains starting: true; 1min pending and draft retained: true; acceptance after 65s only: true
+4 failed denial retained: true; cancel Stop keeps registry running: true; unconfirmed stop retains running: true
+5 N=0: true; N=1: true; N=3: true; N=20: true; static observation input/paste no content mutation: true; hide does not stop: true
+6 failed result plus partial changes: true; result text: true; result missing: true; result malformed: true
+7 missing Package disabled: true; v1 Package disabled: true; proposal has zero package calls: true; double click one failed attempt without result digest: true; real artifact replay and unsigned warning: true
+8 three equal geometry / weight owner-ruling rows: true
+9 existing user-mode receipt link: true; publisher cancel leaves installed count: true; grant cancel closes without install: true
+10 timeout requires reconcile: true; success without invented URL: true; ordinary deploy reachable without workbench metadata: true
+11 VM lost launch disabled cached edits: true; VM recovery deliberate: true; stale catalogue fixture: true; verification failure fail closed: true
+12 WSL launch disabled exact reason: true; stderr fallback not visible guidance: true; stderr only expanded log: true; cooperative warning: true

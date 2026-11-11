@@ -1,0 +1,102 @@
+[
+  {
+    "config": {
+      "name": "narrow",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "deviceScaleFactor": 1
+    },
+    "surfaces": [
+      {
+        "id": "S2",
+        "clientWidth": 286,
+        "scrollWidth": 286,
+        "overflow": false
+      },
+      {
+        "id": "S3",
+        "clientWidth": 284,
+        "scrollWidth": 284,
+        "overflow": false
+      },
+      {
+        "id": "S4",
+        "clientWidth": 284,
+        "scrollWidth": 284,
+        "overflow": false
+      },
+      {
+        "id": "S5",
+        "clientWidth": 284,
+        "scrollWidth": 284,
+        "overflow": false
+      },
+      {
+        "id": "S6",
+        "clientWidth": 284,
+        "scrollWidth": 284,
+        "overflow": false
+      },
+      {
+        "id": "S7",
+        "clientWidth": 284,
+        "scrollWidth": 284,
+        "overflow": false
+      }
+    ],
+    "dialogCancelFocus": "Create workspace",
+    "focusRestored": true
+  },
+  {
+    "config": {
+      "name": "zoom200-equivalent",
+      "viewport": {
+        "width": 720,
+        "height": 500
+      },
+      "deviceScaleFactor": 2
+    },
+    "surfaces": [
+      {
+        "id": "S2",
+        "clientWidth": 452,
+        "scrollWidth": 452,
+        "overflow": false
+      },
+      {
+        "id": "S3",
+        "clientWidth": 450,
+        "scrollWidth": 450,
+        "overflow": false
+      },
+      {
+        "id": "S4",
+        "clientWidth": 450,
+        "scrollWidth": 450,
+        "overflow": false
+      },
+      {
+        "id": "S5",
+        "clientWidth": 450,
+        "scrollWidth": 450,
+        "overflow": false
+      },
+      {
+        "id": "S6",
+        "clientWidth": 450,
+        "scrollWidth": 450,
+        "overflow": false
+      },
+      {
+        "id": "S7",
+        "clientWidth": 450,
+        "scrollWidth": 450,
+        "overflow": false
+      }
+    ],
+    "dialogCancelFocus": "Create workspace",
+    "focusRestored": true
+  }
+]

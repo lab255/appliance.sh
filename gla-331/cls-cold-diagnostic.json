@@ -1,0 +1,55 @@
+[
+  {
+    "t": 232,
+    "value": 0.11638034722222221,
+    "input": false,
+    "sources": [
+      {
+        "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl workbench wb-stack\"><div class=\"wb-row wb-between\"><span class=\"wb-m",
+        "before": {
+          "x": 220,
+          "y": 41,
+          "width": 1220,
+          "height": 959,
+          "top": 41,
+          "right": 1440,
+          "bottom": 1000,
+          "left": 220
+        },
+        "after": {
+          "x": 220,
+          "y": 59,
+          "width": 1220,
+          "height": 941,
+          "top": 59,
+          "right": 1440,
+          "bottom": 1000,
+          "left": 220
+        }
+      },
+      {
+        "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active:transition-none foc",
+        "before": {
+          "x": 8,
+          "y": 137,
+          "width": 203,
+          "height": 32,
+          "top": 137,
+          "right": 211,
+          "bottom": 169,
+          "left": 8
+        },
+        "after": {
+          "x": 8,
+          "y": 341,
+          "width": 203,
+          "height": 32,
+          "top": 341,
+          "right": 211,
+          "bottom": 373,
+          "left": 8
+        }
+      }
+    ]
+  }
+]

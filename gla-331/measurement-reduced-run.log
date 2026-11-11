@@ -1,0 +1,15 @@
+S1 Create reduce 30.5
+S1 Validation reduce 23.9
+S1 Open row reduce 48.2
+S2 Target change reduce 25.1
+S3 Observe reduce 31.8
+S3 Interact reduce 32.3
+S3 Stop confirmation reduce 27.7
+S3 Stop acknowledgment reduce 23.2
+S4 Tab selection reduce 31.5
+S4 File / diff selection reduce 31.3
+S5 Readiness presentation reduce 31.9
+S5 Package acknowledgment reduce 31.6
+S7 Review reduce 31.7
+S7 Deploy acknowledgment reduce 31.7
+S7 Retry acknowledgment reduce 31.6

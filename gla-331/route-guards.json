@@ -1,0 +1,14 @@
+[
+  {
+    "name": "operator developer allowed",
+    "pass": true
+  },
+  {
+    "name": "user direct URL excluded",
+    "pass": true
+  },
+  {
+    "name": "member direct URL excluded",
+    "pass": true
+  }
+]

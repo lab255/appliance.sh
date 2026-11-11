@@ -1,0 +1,27 @@
+[
+  {
+    "name": "WeightLabel sibling displacement",
+    "px": 0,
+    "pass": true
+  },
+  {
+    "name": "diff selection survives deliberate refresh",
+    "pass": true
+  },
+  {
+    "name": "result selection retained across refresh",
+    "pass": true
+  },
+  {
+    "name": "validation retains draft",
+    "pass": true
+  },
+  {
+    "name": "Create cancel restores opener",
+    "pass": true
+  },
+  {
+    "name": "interrupted/reversed create transition",
+    "pass": true
+  }
+]

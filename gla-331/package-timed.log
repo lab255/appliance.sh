@@ -1,0 +1,36 @@
+Building linux/amd64 as an OCI image tar with the local Docker/buildkit engine.
+#0 building with "colima" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 562B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/busybox:1.37
+#2 DONE 1.4s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/3] FROM docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+#4 resolve docker.io/library/busybox:1.37@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 35B done
+#5 DONE 0.0s
+
+#6 [2/3] COPY entrypoint.sh /entrypoint.sh
+#6 CACHED
+
+#7 [3/3] RUN mkdir /www && printf '%s\n'   '<!doctype html>'   '<html><head><title>Journal</title></head>'   '<body><main><h1>Journal</h1><p>journal runtime proof — your private page is running inside Appliance.</p></main></body></html>'   > /www/index.html && chmod -R a+rX /www
+#7 CACHED
+
+#8 exporting to oci image format
+#8 exporting layers done
+#8 exporting manifest sha256:e82114c71d1c3103d2b9ac9e1173c3bd9bf16ac614ad06eebd49f274c9f14055 done
+#8 exporting config sha256:544703cf33397ec393fb33bdf06dc7a6ef3b48f1411ade479dab5082c7d5d307 done
+#8 sending tarball 0.0s done
+#8 DONE 0.0s
+Packaged: /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/journal-timed.appliance.zip (2.1 MB)
+Digest: sha256:a10d242002f2cd4b0b024f769c7d6801e437d8c10b252d76f1af036bbed34aa8

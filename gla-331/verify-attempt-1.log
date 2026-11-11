@@ -1,0 +1,429 @@
+
+> appliance.sh@1.62.0 verify /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> bash scripts/verify.sh
+
+
+[1;34m==> 1/5 build (nx run-many --target=build --all)[0m
+
+> appliance.sh@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> nx run-many --target=build --all
+
+
+ NX   Running target build for 11 projects:
+
+- @appliance.sh/install-aws
+- @appliance.sh/api-server
+- @appliance.sh/bootstrap
+- @appliance.sh/console
+- @appliance.sh/desktop
+- @appliance.sh/helper
+- @appliance.sh/infra
+- @appliance.sh/app
+- @appliance.sh/cli
+- @appliance.sh/sdk
+- @appliance.sh/ui
+
+
+
+> nx run @appliance.sh/sdk:build  [existing outputs match the cache, left as is]
+
+(node:14751) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14755) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> tsc --module commonjs --outDir dist/cjs && tsc --module esnext --moduleResolution bundler --outDir dist/esm && pnpm run postbuild
+
+(node:14811) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 postbuild /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> pnpm exec ts-node scripts/postbuild.ts
+
+(node:14826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Version updated to v1.62.0 in files: [
+  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk/dist/cjs/version.js'[39m,
+  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk/dist/esm/version.js'[39m
+]
+(node:14828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/helper:build  [existing outputs match the cache, left as is]
+
+(node:27191) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27194) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/helper@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/helper
+> tsc
+
+
+> nx run @appliance.sh/ui:build  [existing outputs match the cache, left as is]
+
+(node:14752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/ui@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+> node scripts/generate-motion.mjs && vite build && tsc --emitDeclarationOnly
+
+(node:14786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14787) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 45 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/5aaf17e01d441991.woff2      5.80 kB
+dist/assets/bd1b9caace920419.woff2      6.18 kB
+dist/assets/be2d997590216caf.woff2      7.72 kB
+dist/assets/856e341d01723920.woff2     12.88 kB
+dist/assets/63e27dba1a5baa70.woff2     14.78 kB
+dist/assets/935ab355938e6cd9.woff2     15.27 kB
+dist/assets/e0f32d9ee75a83f4.woff2     17.38 kB
+dist/assets/e1dea13a93c69f52.woff2     29.64 kB
+dist/assets/af61b969e7f99996.woff2     29.90 kB
+dist/assets/93c5ac80e25cda1c.woff2     30.20 kB
+dist/assets/e3a8d2d7497a325b.woff2     41.52 kB
+dist/assets/2c295d99e26dcf35.woff2     72.92 kB
+dist/assets/5e6d4fe9d9f4bff8.woff2    133.34 kB
+dist/tokens.css                         2.59 kB │ gzip: 0.91 kB
+dist/theme.css                          2.60 kB │ gzip: 0.91 kB
+dist/styles.css                        35.20 kB │ gzip: 7.60 kB
+dist/motion/features.js                 0.11 kB │ gzip: 0.10 kB
+dist/lib/utils.js                       0.25 kB │ gzip: 0.19 kB
+dist/motion/tokens.js                   0.29 kB │ gzip: 0.22 kB
+dist/components/entity-label.js         0.41 kB │ gzip: 0.28 kB
+dist/hooks/use-tail-autoscroll.js       0.43 kB │ gzip: 0.27 kB
+dist/components/weight-label.js         0.49 kB │ gzip: 0.27 kB
+dist/lib/springs.js                     0.58 kB │ gzip: 0.30 kB
+dist/components/tag.js                  0.67 kB │ gzip: 0.37 kB
+dist/motion/overlay.js                  0.69 kB │ gzip: 0.38 kB
+dist/components/switch.js               0.72 kB │ gzip: 0.39 kB
+dist/motion-provider.js                 0.72 kB │ gzip: 0.38 kB
+dist/components/key-value-list.js       0.84 kB │ gzip: 0.46 kB
+dist/components/field.js                0.86 kB │ gzip: 0.40 kB
+dist/components/selection-control.js    0.89 kB │ gzip: 0.43 kB
+dist/components/input.js                0.89 kB │ gzip: 0.48 kB
+dist/components/empty-state.js          0.93 kB │ gzip: 0.40 kB
+dist/components/skeleton.js             0.98 kB │ gzip: 0.46 kB
+dist/motion/use-transition.js           0.98 kB │ gzip: 0.49 kB
+dist/components/skeleton-swap.js        1.08 kB │ gzip: 0.53 kB
+dist/components/page-shell.js           1.13 kB │ gzip: 0.54 kB
+dist/components/table.js                1.23 kB │ gzip: 0.45 kB
+dist/components/checkbox.js             1.28 kB │ gzip: 0.59 kB
+dist/components/scroll-area.js          1.38 kB │ gzip: 0.62 kB
+dist/components/section-card.js         1.40 kB │ gzip: 0.56 kB
+dist/components/command-snippet.js      1.66 kB │ gzip: 0.76 kB
+dist/components/popover.js              1.72 kB │ gzip: 0.78 kB
+dist/components/status-pill.js          1.87 kB │ gzip: 0.71 kB
+dist/components/button.js               2.07 kB │ gzip: 0.85 kB
+dist/components/tooltip.js              2.11 kB │ gzip: 0.90 kB
+dist/components/live-url.js             2.14 kB │ gzip: 0.87 kB
+dist/components/dialog.js               2.63 kB │ gzip: 1.03 kB
+dist/components/status-dot.js           2.68 kB │ gzip: 1.03 kB
+dist/components/confirm-dialog.js       2.79 kB │ gzip: 1.04 kB
+dist/components/hover-glide.js          3.04 kB │ gzip: 1.19 kB
+dist/components/accordion.js            3.18 kB │ gzip: 1.30 kB
+dist/components/toast.js                3.29 kB │ gzip: 1.32 kB
+dist/components/tabs.js                 3.31 kB │ gzip: 1.37 kB
+dist/components/banner.js               3.32 kB │ gzip: 1.20 kB
+dist/components/dropdown-menu.js        3.67 kB │ gzip: 1.06 kB
+dist/components/combobox.js             3.94 kB │ gzip: 1.52 kB
+dist/components/log-pane.js             4.39 kB │ gzip: 1.55 kB
+dist/components/select.js               4.73 kB │ gzip: 1.73 kB
+dist/components/long-operation.js       5.38 kB │ gzip: 1.98 kB
+dist/index.js                           5.42 kB │ gzip: 1.56 kB
+✓ built in 229ms
+
+> nx run @appliance.sh/infra:build  [existing outputs match the cache, left as is]
+
+(node:14881) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14882) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/infra@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/infra
+> tsc
+
+
+> nx run @appliance.sh/install-aws:build  [existing outputs match the cache, left as is]
+
+(node:27192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27195) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+> tsc
+
+
+> nx run @appliance.sh/bootstrap:build  [existing outputs match the cache, left as is]
+
+(node:14913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+> tsc
+
+
+> nx run @appliance.sh/api-server:build  [existing outputs match the cache, left as is]
+
+(node:27265) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27279) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/api-server@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server
+> tsc -p tsconfig.build.json
+
+
+> nx run @appliance.sh/cli:build  [existing outputs match the cache, left as is]
+
+(node:27315) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27316) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> tsc && pnpm run compile
+
+(node:27342) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 compile /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> bun build src/appliance.ts --compile --outfile=dist/appliance
+
+[0m[2m[[1m1.716s[0m[2m][0m  [32mbundle[0m  9226 modules
+ [0m[2m[[1m377ms[0m[2m][0m [32mcompile[0m  [1m[34mdist/appliance[0m
+
+> nx run @appliance.sh/app:build
+
+(node:36346) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36352) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/app@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> vite build && tsc --emitDeclarationOnly
+
+(node:36367) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 2426 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/app.css                 616.97 kB │ gzip: 434.05 kB
+dist/index.js                  0.54 kB │ gzip:   0.32 kB │ map:     0.09 kB
+dist/index-C9Ahea4C.js        12.52 kB │ gzip:   5.10 kB │ map:    58.24 kB
+dist/features-6krrNUDo.js     58.36 kB │ gzip:  18.74 kB │ map:   251.79 kB
+dist/index-B3HsSmNm.js     1,980.08 kB │ gzip: 473.34 kB │ map: 5,227.51 kB
+✓ built in 2.19s
+
+> nx run @appliance.sh/console:build
+
+(node:36501) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/console@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/console
+> vite build
+
+(node:36532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 35 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.54 kB │ gzip:   0.32 kB
+dist/assets/index-Dyj0ZmHG.css               616.97 kB │ gzip: 434.05 kB
+dist/assets/index-C9Ahea4C-4Aj90gcE.js         7.17 kB │ gzip:   3.66 kB │ map:    25.82 kB
+dist/assets/features-6krrNUDo-lmzCM3Yn.js     40.56 kB │ gzip:  15.43 kB │ map:   116.85 kB
+dist/assets/index-Mpe7kX8w.js              1,563.33 kB │ gzip: 446.96 kB │ map: 4,479.38 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.79s
+
+> nx run @appliance.sh/desktop:build
+
+(node:36500) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36502) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> pnpm run sidecar:build && pnpm run cli:bundle && pnpm run vm:build && pnpm run vm:bundle && vite build
+
+(node:36533) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 sidecar:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> tsc -p sidecar/tsconfig.json --noEmit && bun build sidecar/src/main.ts --target=node --outfile=sidecar/dist/main.mjs
+
+[32mBundled 8114 modules in 1637ms[0m
+
+  [34mmain.mjs[33m  39.13 MB  [2m(entry point)[0m
+
+(node:36581) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 cli:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/copy-cli.mjs
+
+    Finished `release` profile [optimized] target(s) in 0.39s
+copy-cli: packages/cli/dist/appliance → packages/desktop/src-tauri/binaries/appliance-aarch64-apple-darwin
+copy-cli: packages/credhelper/target/aarch64-apple-darwin/release/appliance-credhelper → packages/desktop/src-tauri/binaries/appliance-credhelper-aarch64-apple-darwin
+(node:36647) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 vm:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/build-vm.mjs
+
+    Finished `release` profile [optimized] target(s) in 0.17s
+target/release/appliance-vm: replacing existing signature
+signed target/release/appliance-vm with com.apple.security.virtualization
+(node:36690) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 vm:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/copy-vm.mjs
+
+copy-vm: packages/vm/target/release/appliance-vm → packages/desktop/src-tauri/vm-bin/appliance-vm
+(node:36707) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 192 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.58 kB │ gzip:   0.34 kB
+dist/assets/index-ktPVgGBi.css               616.90 kB │ gzip: 434.03 kB
+dist/assets/index-C9Ahea4C-CrMUND3h.js         7.13 kB │ gzip:   3.66 kB │ map:    25.80 kB
+dist/assets/index-B-_7gt5X.js                  8.16 kB │ gzip:   4.03 kB │ map:    57.36 kB
+dist/assets/features-6krrNUDo-DHizlkL-.js     40.40 kB │ gzip:  15.40 kB │ map:   116.68 kB
+dist/assets/index-ASvKc_Vk.js              1,711.72 kB │ gzip: 491.77 kB │ map: 5,185.15 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.99s
+
+
+
+ NX   Successfully ran target build for 11 projects
+
+Nx read the output from the cache instead of running the command for 8 out of 11 tasks.
+
+
+[1;34m==> 2/5 typecheck (nx run-many --target=typecheck --all)[0m
+
+ NX   Running target typecheck for 6 projects:
+
+- @appliance.sh/install-aws
+- @appliance.sh/bootstrap
+- @appliance.sh/console
+- @appliance.sh/desktop
+- @appliance.sh/app
+- @appliance.sh/ui
+
+
+
+> nx run @appliance.sh/ui:typecheck
+
+(node:36737) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36741) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/ui@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+> tsc --noEmit
+
+
+> nx run @appliance.sh/install-aws:typecheck
+
+(node:36738) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+> tsc --noEmit
+
+
+> nx run @appliance.sh/desktop:typecheck
+
+(node:36800) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36802) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> tsc --noEmit
+
+
+> nx run @appliance.sh/bootstrap:typecheck
+
+(node:36736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36739) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+> tsc --noEmit
+
+
+> nx run @appliance.sh/console:typecheck
+
+(node:36841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36842) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/console@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/console
+> tsc --noEmit
+
+
+> nx run @appliance.sh/app:typecheck
+
+(node:36799) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36801) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/app@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> tsc --noEmit
+
+
+
+
+ NX   Successfully ran target typecheck for 6 projects
+
+
+
+[1;34m==> 3/5 lint:check (eslint + prettier --check)[0m
+
+> appliance.sh@1.62.0 lint:check /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> node scripts/check-design-tokens.mjs && pnpm exec eslint . && prettier . --check
+
+Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.
+Checking formatting...
+[warn] _evidence-gla331/cls-inspect.mjs
+[warn] _evidence-gla331/scenarios.mjs
+[warn] Code style issues found in 2 files. Run Prettier with --write to fix.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.

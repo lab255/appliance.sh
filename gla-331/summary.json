@@ -1,0 +1,58 @@
+[
+  {
+    "surface": "S1",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0,
+    "worstInteractionMedianMs": 48.799999952316284,
+    "n": 60
+  },
+  {
+    "surface": "S2",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0,
+    "worstInteractionMedianMs": 48.799999952316284,
+    "n": 20
+  },
+  {
+    "surface": "S3",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.001427193287037037,
+    "worstInteractionMedianMs": 32.25000011920929,
+    "n": 80
+  },
+  {
+    "surface": "S4",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 6.180555555555556e-5,
+    "worstInteractionMedianMs": 31.75,
+    "n": 40
+  },
+  {
+    "surface": "S5",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.09857901308412904,
+    "worstInteractionMedianMs": 31.899999976158142,
+    "n": 40
+  },
+  {
+    "surface": "S6",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0.002545835262345679,
+    "rawShiftSum": 0.002545835262345679,
+    "worstInteractionMedianMs": 147.30000007152557,
+    "n": 60
+  },
+  {
+    "surface": "S7",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.03633139734338831,
+    "worstInteractionMedianMs": 31.74999988079071,
+    "n": 60
+  }
+]

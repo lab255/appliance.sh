@@ -1,0 +1,28 @@
+S1 Create no-preference 32.5
+S1 Validation no-preference 30.4
+S1 Open row no-preference 48.8
+S2 Target change no-preference 25.1
+S3 Observe no-preference 31.5
+S3 Interact no-preference 31.3
+S3 Stop confirmation no-preference 31.4
+S3 Stop acknowledgment no-preference 31.6
+S4 Tab selection no-preference 31.3
+S4 File / diff selection no-preference 31.8
+S5 Readiness presentation no-preference 31.4
+S5 Package acknowledgment no-preference 30.3
+S7 Review no-preference 30.7
+S7 Deploy acknowledgment no-preference 30.5
+S7 Retry acknowledgment no-preference 31.3
+S1 Create reduce 28.1
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForFunction: Timeout 5000ms exceeded.
+    at metric (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/measure.mjs:26:14)
+    at async file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/measure.mjs:43:2 {
+  log: [],
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.1

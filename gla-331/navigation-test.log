@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+
+ ✓ src/lib/app-navigation.test.ts (3 tests) 1ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  20:50:38
+   Duration  212ms (transform 18ms, setup 0ms, collect 16ms, tests 1ms, environment 0ms, prepare 39ms)
+

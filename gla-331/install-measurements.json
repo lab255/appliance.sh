@@ -1,0 +1,97 @@
+{
+  "config": {
+    "os": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "browser": "156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "build": "Vite development + built app library",
+    "adapter": "Claude unless specified",
+    "vm": "mock-host appliance",
+    "data": "fixture except real pre-run journal artifact",
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) → scoped DOM acknowledgment → requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+  },
+  "measurements": [
+    {
+      "surface": "S6",
+      "name": "Hand-off navigation",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        67.20000004768372, 42.60000014305115, 38.90000009536743, 45.5, 48.299999952316284, 45.89999985694885,
+        44.90000009536743, 42.799999952316284, 36, 45.299999952316284
+      ],
+      "median": 45.10000002384186
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        146.79999995231628,
+        null,
+        157.29999995231628,
+        145.59999990463257,
+        147.70000004768372,
+        146.70000004768372,
+        147.89999985694885,
+        147.20000004768372,
+        146.09999990463257,
+        147.40000009536743
+      ],
+      "median": 147.30000007152557
+    },
+    {
+      "surface": "S6",
+      "name": "Open acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        45.40000009536743, 29.40000009536743, 29.59999990463257, 30.100000143051147, 30, 36.39999985694885,
+        29.600000143051147, 30.09999990463257, 30.40000009536743, 28.100000143051147
+      ],
+      "median": 30.049999952316284
+    },
+    {
+      "surface": "S6",
+      "name": "Hand-off navigation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        59.59999990463257, 46, 40.5, 45.60000014305115, 43.39999985694885, 44, 32.299999952316284, 43.700000047683716,
+        43.89999985694885, 40.60000014305115
+      ],
+      "median": 43.799999952316284
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        148.09999990463257, 145.90000009536743, 146.79999995231628, 146.89999985694885, 143.60000014305115,
+        147.19999980926514, 147.79999995231628, 146.20000004768372, 146.79999995231628, 144.20000004768372
+      ],
+      "median": 146.79999995231628
+    },
+    {
+      "surface": "S6",
+      "name": "Open acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        36, 29.100000143051147, 31.899999856948853, 29.799999952316284, 29, 30.09999990463257, 30.90000009536743,
+        29.299999952316284, 29.5, 32
+      ],
+      "median": 29.949999928474426
+    }
+  ],
+  "scenarios": [],
+  "checks": [],
+  "errors": []
+}

@@ -1,0 +1,656 @@
+
+> appliance.sh@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> nx run-many --target=build --all
+
+
+ NX   Running target build for 11 projects:
+
+- @appliance.sh/install-aws
+- @appliance.sh/api-server
+- @appliance.sh/bootstrap
+- @appliance.sh/console
+- @appliance.sh/desktop
+- @appliance.sh/helper
+- @appliance.sh/infra
+- @appliance.sh/app
+- @appliance.sh/cli
+- @appliance.sh/sdk
+- @appliance.sh/ui
+
+
+
+> nx run @appliance.sh/sdk:build  [existing outputs match the cache, left as is]
+
+(node:14751) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14755) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> tsc --module commonjs --outDir dist/cjs && tsc --module esnext --moduleResolution bundler --outDir dist/esm && pnpm run postbuild
+
+(node:14811) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 postbuild /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> pnpm exec ts-node scripts/postbuild.ts
+
+(node:14826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Version updated to v1.62.0 in files: [
+  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk/dist/cjs/version.js'[39m,
+  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk/dist/esm/version.js'[39m
+]
+(node:14828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/ui:build  [existing outputs match the cache, left as is]
+
+(node:14752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/ui@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+> node scripts/generate-motion.mjs && vite build && tsc --emitDeclarationOnly
+
+(node:14786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14787) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 45 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/5aaf17e01d441991.woff2      5.80 kB
+dist/assets/bd1b9caace920419.woff2      6.18 kB
+dist/assets/be2d997590216caf.woff2      7.72 kB
+dist/assets/856e341d01723920.woff2     12.88 kB
+dist/assets/63e27dba1a5baa70.woff2     14.78 kB
+dist/assets/935ab355938e6cd9.woff2     15.27 kB
+dist/assets/e0f32d9ee75a83f4.woff2     17.38 kB
+dist/assets/e1dea13a93c69f52.woff2     29.64 kB
+dist/assets/af61b969e7f99996.woff2     29.90 kB
+dist/assets/93c5ac80e25cda1c.woff2     30.20 kB
+dist/assets/e3a8d2d7497a325b.woff2     41.52 kB
+dist/assets/2c295d99e26dcf35.woff2     72.92 kB
+dist/assets/5e6d4fe9d9f4bff8.woff2    133.34 kB
+dist/tokens.css                         2.59 kB │ gzip: 0.91 kB
+dist/theme.css                          2.60 kB │ gzip: 0.91 kB
+dist/styles.css                        35.20 kB │ gzip: 7.60 kB
+dist/motion/features.js                 0.11 kB │ gzip: 0.10 kB
+dist/lib/utils.js                       0.25 kB │ gzip: 0.19 kB
+dist/motion/tokens.js                   0.29 kB │ gzip: 0.22 kB
+dist/components/entity-label.js         0.41 kB │ gzip: 0.28 kB
+dist/hooks/use-tail-autoscroll.js       0.43 kB │ gzip: 0.27 kB
+dist/components/weight-label.js         0.49 kB │ gzip: 0.27 kB
+dist/lib/springs.js                     0.58 kB │ gzip: 0.30 kB
+dist/components/tag.js                  0.67 kB │ gzip: 0.37 kB
+dist/motion/overlay.js                  0.69 kB │ gzip: 0.38 kB
+dist/components/switch.js               0.72 kB │ gzip: 0.39 kB
+dist/motion-provider.js                 0.72 kB │ gzip: 0.38 kB
+dist/components/key-value-list.js       0.84 kB │ gzip: 0.46 kB
+dist/components/field.js                0.86 kB │ gzip: 0.40 kB
+dist/components/selection-control.js    0.89 kB │ gzip: 0.43 kB
+dist/components/input.js                0.89 kB │ gzip: 0.48 kB
+dist/components/empty-state.js          0.93 kB │ gzip: 0.40 kB
+dist/components/skeleton.js             0.98 kB │ gzip: 0.46 kB
+dist/motion/use-transition.js           0.98 kB │ gzip: 0.49 kB
+dist/components/skeleton-swap.js        1.08 kB │ gzip: 0.53 kB
+dist/components/page-shell.js           1.13 kB │ gzip: 0.54 kB
+dist/components/table.js                1.23 kB │ gzip: 0.45 kB
+dist/components/checkbox.js             1.28 kB │ gzip: 0.59 kB
+dist/components/scroll-area.js          1.38 kB │ gzip: 0.62 kB
+dist/components/section-card.js         1.40 kB │ gzip: 0.56 kB
+dist/components/command-snippet.js      1.66 kB │ gzip: 0.76 kB
+dist/components/popover.js              1.72 kB │ gzip: 0.78 kB
+dist/components/status-pill.js          1.87 kB │ gzip: 0.71 kB
+dist/components/button.js               2.07 kB │ gzip: 0.85 kB
+dist/components/tooltip.js              2.11 kB │ gzip: 0.90 kB
+dist/components/live-url.js             2.14 kB │ gzip: 0.87 kB
+dist/components/dialog.js               2.63 kB │ gzip: 1.03 kB
+dist/components/status-dot.js           2.68 kB │ gzip: 1.03 kB
+dist/components/confirm-dialog.js       2.79 kB │ gzip: 1.04 kB
+dist/components/hover-glide.js          3.04 kB │ gzip: 1.19 kB
+dist/components/accordion.js            3.18 kB │ gzip: 1.30 kB
+dist/components/toast.js                3.29 kB │ gzip: 1.32 kB
+dist/components/tabs.js                 3.31 kB │ gzip: 1.37 kB
+dist/components/banner.js               3.32 kB │ gzip: 1.20 kB
+dist/components/dropdown-menu.js        3.67 kB │ gzip: 1.06 kB
+dist/components/combobox.js             3.94 kB │ gzip: 1.52 kB
+dist/components/log-pane.js             4.39 kB │ gzip: 1.55 kB
+dist/components/select.js               4.73 kB │ gzip: 1.73 kB
+dist/components/long-operation.js       5.38 kB │ gzip: 1.98 kB
+dist/index.js                           5.42 kB │ gzip: 1.56 kB
+✓ built in 229ms
+
+> nx run @appliance.sh/infra:build  [existing outputs match the cache, left as is]
+
+(node:14881) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14882) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/infra@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/infra
+> tsc
+
+
+> nx run @appliance.sh/bootstrap:build  [existing outputs match the cache, left as is]
+
+(node:14913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+> tsc
+
+
+> nx run @appliance.sh/helper:build
+
+(node:27191) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27194) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/helper@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/helper
+> tsc
+
+
+> nx run @appliance.sh/install-aws:build
+
+(node:27192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27195) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+> tsc
+
+
+> nx run @appliance.sh/cli:build
+
+(node:27315) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27316) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> tsc && pnpm run compile
+
+(node:27342) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 compile /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> bun build src/appliance.ts --compile --outfile=dist/appliance
+
+[0m[2m[[1m1.716s[0m[2m][0m  [32mbundle[0m  9226 modules
+ [0m[2m[[1m377ms[0m[2m][0m [32mcompile[0m  [1m[34mdist/appliance[0m
+
+> nx run @appliance.sh/api-server:build
+
+(node:27265) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27279) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/api-server@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server
+> tsc -p tsconfig.build.json
+
+
+> nx run @appliance.sh/app:build
+
+(node:27193) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/app@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> vite build && tsc --emitDeclarationOnly
+
+(node:27237) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 2426 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/app.css                 616.58 kB │ gzip: 433.96 kB
+dist/index.js                  0.54 kB │ gzip:   0.32 kB │ map:     0.09 kB
+dist/index-C9Ahea4C.js        12.52 kB │ gzip:   5.10 kB │ map:    58.24 kB
+dist/features-5EpWEgrn.js     58.36 kB │ gzip:  18.74 kB │ map:   251.79 kB
+dist/index-Bhj0eJUt.js     1,979.60 kB │ gzip: 473.19 kB │ map: 5,226.89 kB
+✓ built in 7.96s
+
+> nx run @appliance.sh/console:build
+
+(node:27417) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27422) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/console@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/console
+> vite build
+
+(node:27450) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 35 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.54 kB │ gzip:   0.32 kB
+dist/assets/index-BETYiEOh.css               616.58 kB │ gzip: 433.96 kB
+dist/assets/index-C9Ahea4C-4Aj90gcE.js         7.17 kB │ gzip:   3.66 kB │ map:    25.82 kB
+dist/assets/features-5EpWEgrn-B8tdazzX.js     40.56 kB │ gzip:  15.43 kB │ map:   116.85 kB
+dist/assets/index-DR45O42Q.js              1,563.15 kB │ gzip: 446.92 kB │ map: 4,478.86 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.12s
+
+> nx run @appliance.sh/desktop:build
+
+(node:27416) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27421) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> pnpm run sidecar:build && pnpm run cli:bundle && pnpm run vm:build && pnpm run vm:bundle && vite build
+
+(node:27437) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 sidecar:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> tsc -p sidecar/tsconfig.json --noEmit && bun build sidecar/src/main.ts --target=node --outfile=sidecar/dist/main.mjs
+
+[32mBundled 8114 modules in 1259ms[0m
+
+  [34mmain.mjs[33m  39.13 MB  [2m(entry point)[0m
+
+(node:27480) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 cli:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/copy-cli.mjs
+
+   Compiling libc v0.2.189
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling zeroize v1.9.0
+   Compiling cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling const-oid v0.9.6
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling bitflags v2.13.1
+   Compiling serde_core v1.0.229
+   Compiling base64ct v1.8.3
+   Compiling smallvec v1.16.0
+   Compiling generic-array v0.14.7
+   Compiling itoa v1.0.18
+   Compiling bytes v1.12.1
+   Compiling pem-rfc7468 v0.7.0
+   Compiling core-foundation-sys v0.8.7
+   Compiling der v0.7.10
+   Compiling pin-project-lite v0.2.17
+   Compiling serde v1.0.229
+   Compiling autocfg v1.5.1
+   Compiling futures-core v0.3.34
+   Compiling litemap v0.8.3
+   Compiling libm v0.2.16
+   Compiling writeable v0.6.4
+   Compiling num-traits v0.2.19
+   Compiling icu_properties_data v2.3.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling utf8_iter v1.0.4
+   Compiling syn v3.0.4
+   Compiling syn v2.0.119
+   Compiling getrandom v0.2.17
+   Compiling socket2 v0.6.5
+   Compiling rand_core v0.6.4
+   Compiling mio v1.2.3
+   Compiling once_cell v1.21.4
+   Compiling percent-encoding v2.3.2
+   Compiling futures-sink v0.3.34
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling security-framework-sys v2.17.0
+   Compiling core-foundation v0.10.1
+   Compiling http v1.5.0
+   Compiling getrandom v0.4.3
+   Compiling tokio v1.53.1
+   Compiling rustix v1.1.4
+   Compiling memchr v2.8.3
+   Compiling spki v0.7.3
+   Compiling zerocopy v0.8.56
+   Compiling pkcs8 v0.10.2
+   Compiling http-body v1.1.0
+   Compiling security-framework v3.7.0
+   Compiling hmac v0.12.1
+   Compiling errno v0.3.14
+   Compiling futures-task v0.3.34
+   Compiling httparse v1.10.1
+   Compiling futures-io v0.3.34
+   Compiling slab v0.4.12
+   Compiling futures-util v0.3.34
+   Compiling synstructure v0.13.2
+   Compiling signature v2.2.0
+   Compiling form_urlencoded v1.2.2
+   Compiling ff v0.13.1
+   Compiling cpufeatures v0.2.17
+   Compiling native-tls v0.2.18
+   Compiling base16ct v0.2.0
+   Compiling tower-service v0.3.3
+   Compiling fastrand v2.5.0
+   Compiling try-lock v0.2.5
+   Compiling want v0.3.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling sec1 v0.7.3
+   Compiling sha2 v0.10.9
+   Compiling zerofrom v0.1.8
+   Compiling group v0.13.0
+   Compiling tempfile v3.27.0
+   Compiling yoke v0.8.3
+   Compiling hkdf v0.12.4
+   Compiling futures-channel v0.3.34
+   Compiling crypto-bigint v0.5.5
+   Compiling tracing-core v0.1.36
+   Compiling log v0.4.34
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling serde_derive v1.0.229
+   Compiling base64 v0.22.1
+   Compiling zerotrie v0.2.5
+   Compiling atomic-waker v1.1.2
+   Compiling ident_case v1.0.1
+   Compiling semver v1.0.28
+   Compiling objc2 v0.6.4
+   Compiling zerovec v0.11.8
+   Compiling strsim v0.11.1
+   Compiling hyper v1.11.1
+   Compiling elliptic-curve v0.13.8
+   Compiling darling_core v0.24.1
+   Compiling rustc_version v0.4.1
+   Compiling tracing v0.1.44
+   Compiling sync_wrapper v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling zmij v1.0.23
+   Compiling ipnet v2.12.2
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling icu_locale_core v2.3.0
+   Compiling icu_collections v2.3.0
+   Compiling objc2-encode v4.1.0
+   Compiling hyper-util v0.1.20
+   Compiling ppv-lite86 v0.2.21
+   Compiling tower v0.5.3
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.8
+   Compiling icu_provider v2.3.1
+   Compiling tokio-native-tls v0.3.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling icu_properties v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling darling_macro v0.24.1
+   Compiling rfc6979 v0.4.0
+   Compiling num-integer v0.1.47
+   Compiling http-body-util v0.1.5
+   Compiling thiserror v1.0.69
+   Compiling serde_json v1.0.151
+   Compiling num-bigint-dig v0.8.6
+   Compiling utf8parse v0.2.2
+   Compiling ryu v1.0.23
+   Compiling spin v0.9.9
+   Compiling serde_urlencoded v0.7.1
+   Compiling lazy_static v1.5.0
+   Compiling anstyle-parse v1.0.0
+   Compiling hyper-tls v0.6.0
+   Compiling num-iter v0.1.46
+   Compiling darling v0.24.1
+   Compiling ecdsa v0.16.9
+   Compiling objc2-core-foundation v0.3.2
+   Compiling primeorder v0.13.6
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling thiserror-impl v1.0.69
+   Compiling iana-time-zone v0.1.65
+   Compiling rustls-pki-types v1.15.1
+   Compiling colorchoice v1.0.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle v1.0.14
+   Compiling thiserror v2.0.20
+   Compiling anstyle-query v1.1.5
+   Compiling chrono v0.4.45
+   Compiling anstream v1.0.0
+   Compiling url v2.5.8
+   Compiling serde_with_macros v3.23.0
+   Compiling objc2-foundation v0.3.2
+   Compiling tower-http v0.6.11
+   Compiling thiserror-impl v2.0.20
+   Compiling reqwest v0.12.28
+   Compiling ed25519 v2.2.3
+   Compiling serde_path_to_error v0.1.20
+   Compiling ordered-float v2.10.1
+   Compiling pkcs1 v0.7.5
+   Compiling option-ext v0.2.0
+   Compiling getrandom v0.3.4
+   Compiling either v1.18.0
+   Compiling clap_lex v1.1.0
+   Compiling heck v0.5.0
+   Compiling clap_derive v4.6.4
+   Compiling clap_builder v4.6.6
+   Compiling itertools v0.10.5
+   Compiling rsa v0.9.10
+   Compiling objc2-app-kit v0.3.2
+   Compiling oauth2 v5.0.0
+   Compiling dirs-sys v0.4.1
+   Compiling serde-value v0.7.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling serde_with v3.23.0
+   Compiling p256 v0.13.2
+   Compiling p384 v0.13.1
+   Compiling serde_plain v1.0.2
+   Compiling keyring v3.6.3
+   Compiling base64 v0.21.7
+   Compiling dyn-clone v1.0.20
+   Compiling appliance-credential-store v0.1.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/credential-store)
+   Compiling dirs v5.0.1
+   Compiling webbrowser v1.2.4
+   Compiling fs2 v0.4.3
+   Compiling clap v4.6.6
+   Compiling openidconnect v4.0.1
+   Compiling appliance-credhelper v0.1.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/credhelper)
+    Finished `release` profile [optimized] target(s) in 36.67s
+copy-cli: packages/cli/dist/appliance → packages/desktop/src-tauri/binaries/appliance-aarch64-apple-darwin
+copy-cli: packages/credhelper/target/aarch64-apple-darwin/release/appliance-credhelper → packages/desktop/src-tauri/binaries/appliance-credhelper-aarch64-apple-darwin
+(node:29095) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 vm:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/build-vm.mjs
+
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.186
+   Compiling stable_deref_trait v1.2.1
+   Compiling cfg-if v1.0.4
+   Compiling autocfg v1.5.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling objc2 v0.6.4
+   Compiling memchr v2.8.1
+   Compiling num-conv v0.2.2
+   Compiling writeable v0.6.3
+   Compiling bitflags v2.13.0
+   Compiling cc v1.2.63
+   Compiling itoa v1.0.18
+   Compiling litemap v0.8.2
+   Compiling version_check v0.9.5
+   Compiling powerfmt v0.2.0
+   Compiling time-core v0.1.8
+   Compiling num-traits v0.2.19
+   Compiling deranged v0.5.8
+   Compiling time-macros v0.2.27
+   Compiling minimal-lexical v0.2.1
+   Compiling generic-array v0.14.7
+   Compiling utf8_iter v1.0.4
+   Compiling thiserror v1.0.69
+   Compiling icu_properties_data v2.2.0
+   Compiling objc2-encode v4.1.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling zeroize v1.8.2
+   Compiling syn v2.0.117
+   Compiling rustls-pki-types v1.14.1
+   Compiling getrandom v0.2.17
+   Compiling nom v7.1.3
+   Compiling typenum v1.20.1
+   Compiling untrusted v0.9.0
+   Compiling ring v0.17.14
+   Compiling smallvec v1.15.1
+   Compiling utf8parse v0.2.2
+   Compiling oid-registry v0.7.1
+   Compiling serde_core v1.0.228
+   Compiling crc32fast v1.5.0
+   Compiling log v0.4.32
+   Compiling byteorder v1.5.0
+   Compiling rustix v1.1.4
+   Compiling num-integer v0.1.46
+   Compiling time v0.3.47
+   Compiling num-bigint v0.4.6
+   Compiling anstyle-parse v1.0.0
+   Compiling errno v0.3.14
+   Compiling rustls v0.23.40
+   Compiling block2 v0.6.2
+   Compiling objc2-core-foundation v0.3.2
+   Compiling anstyle-query v1.1.5
+   Compiling thiserror v2.0.18
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle v1.0.14
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling simd-adler32 v0.3.9
+   Compiling colorchoice v1.0.5
+   Compiling core-foundation-sys v0.8.7
+   Compiling adler2 v2.0.1
+   Compiling base64 v0.22.1
+   Compiling percent-encoding v2.3.2
+   Compiling heapless v0.9.3
+   Compiling zmij v1.0.21
+   Compiling form_urlencoded v1.2.2
+   Compiling iana-time-zone v0.1.65
+   Compiling miniz_oxide v0.8.9
+   Compiling anstream v1.0.0
+   Compiling digest v0.10.7
+   Compiling rusticata-macros v4.1.0
+   Compiling objc2-foundation v0.3.2
+   Compiling hash32 v0.3.1
+   Compiling webpki-roots v1.0.7
+   Compiling cpufeatures v0.2.17
+   Compiling strsim v0.11.1
+   Compiling smoltcp v0.13.1
+   Compiling heck v0.5.0
+   Compiling bitflags v1.3.2
+   Compiling subtle v2.6.1
+   Compiling clap_lex v1.1.0
+   Compiling serde v1.0.228
+   Compiling lazy_static v1.5.0
+   Compiling serde_json v1.0.150
+   Compiling once_cell v1.21.4
+   Compiling data-encoding v2.11.0
+   Compiling anyhow v1.0.102
+   Compiling xattr v1.6.1
+   Compiling synstructure v0.13.2
+   Compiling yasna v0.5.2
+   Compiling clap_builder v4.6.0
+   Compiling sha2 v0.10.9
+   Compiling webpki-roots v0.26.11
+   Compiling flate2 v1.1.9
+   Compiling displaydoc v0.2.6
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling thiserror-impl v1.0.69
+   Compiling asn1-rs-derive v0.5.1
+   Compiling zerofrom v0.1.8
+   Compiling asn1-rs-impl v0.2.0
+   Compiling rustls-webpki v0.103.13
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling yoke v0.8.3
+   Compiling serde_derive v1.0.228
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling asn1-rs v0.6.2
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling chrono v0.4.45
+   Compiling pem v3.0.6
+   Compiling dispatch2 v0.3.1
+   Compiling filetime v0.2.29
+   Compiling managed v0.8.0
+   Compiling tar v0.4.46
+   Compiling icu_provider v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling der-parser v9.0.0
+   Compiling fatfs v0.3.6
+   Compiling url v2.5.8
+   Compiling clap v4.6.1
+   Compiling x509-parser v0.16.0
+   Compiling appliance-credential-store v0.1.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/credential-store)
+   Compiling fscommon v0.1.1
+   Compiling ureq v2.12.1
+   Compiling rcgen v0.13.2
+   Compiling objc2-app-kit v0.3.2
+   Compiling objc2-virtualization v0.3.2
+   Compiling appliance-vm v0.1.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/vm)
+    Finished `release` profile [optimized] target(s) in 35.07s
+target/release/appliance-vm: replacing existing signature
+signed target/release/appliance-vm with com.apple.security.virtualization
+(node:30640) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 vm:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/copy-vm.mjs
+
+copy-vm: packages/vm/target/release/appliance-vm → packages/desktop/src-tauri/vm-bin/appliance-vm
+(node:30656) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 192 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.58 kB │ gzip:   0.33 kB
+dist/assets/index-CwdqfUc8.css               616.51 kB │ gzip: 433.95 kB
+dist/assets/index-C9Ahea4C-CrMUND3h.js         7.13 kB │ gzip:   3.66 kB │ map:    25.80 kB
+dist/assets/index-B-_7gt5X.js                  8.16 kB │ gzip:   4.03 kB │ map:    57.36 kB
+dist/assets/features-5EpWEgrn-BC2lplUw.js     40.40 kB │ gzip:  15.40 kB │ map:   116.68 kB
+dist/assets/index-CekjnCIh.js              1,711.54 kB │ gzip: 491.73 kB │ map: 5,185.02 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.04s
+
+
+
+ NX   Successfully ran target build for 11 projects
+
+Nx read the output from the cache instead of running the command for 4 out of 11 tasks.
+

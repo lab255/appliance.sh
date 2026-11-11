@@ -1,0 +1,407 @@
+[
+  {
+    "file": "install-no-preference-trace.zip",
+    "bytes": 30231180,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "reducedMotion": "no-preference",
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/install-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401641269,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "install-reduce-trace.zip",
+    "bytes": 22148627,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "reducedMotion": "reduce",
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/install-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401694242,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "interaction-audit-trace.zip",
+    "bytes": 2358632,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794402121566,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-1-trace.zip",
+    "bytes": 1184061,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401763623,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-10-trace.zip",
+    "bytes": 10770878,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401853049,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-11-trace.zip",
+    "bytes": 3319373,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401856700,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-12-trace.zip",
+    "bytes": 872405,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401860229,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-2-trace.zip",
+    "bytes": 1048416,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401765459,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-3-trace.zip",
+    "bytes": 4143934,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401767233,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-4-trace.zip",
+    "bytes": 4228660,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401838514,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-5-trace.zip",
+    "bytes": 1629831,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401841397,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-6-trace.zip",
+    "bytes": 1677697,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401843148,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-7-trace.zip",
+    "bytes": 7683348,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401844854,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-8-trace.zip",
+    "bytes": 948789,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401847954,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "scenario-9-trace.zip",
+    "bytes": 3627758,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/scenario-recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794401849652,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "trace-no-preference.zip",
+    "bytes": 196865843,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "reducedMotion": "no-preference",
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794402096970,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  },
+  {
+    "file": "trace-reduce.zip",
+    "bytes": 60035179,
+    "options": {
+      "noDefaultViewport": false,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "reducedMotion": "reduce",
+      "recordVideo": {
+        "dir": "/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/recordings",
+        "size": {
+          "width": 1440,
+          "height": 1000
+        }
+      },
+      "selectorEngines": [],
+      "acceptDownloads": "accept"
+    },
+    "wallTime": 1794402173633,
+    "browserName": "chromium",
+    "playwrightVersion": "1.64.1",
+    "containsFilmstrip": true
+  }
+]

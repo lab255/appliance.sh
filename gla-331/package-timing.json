@@ -1,0 +1,6 @@
+{
+  "command": "pnpm --filter @appliance.sh/cli exec bun src/appliance.ts builder package --directory ../../examples/runtime/journal --out ../../_evidence-gla331/journal-timed.appliance.zip",
+  "elapsedSeconds": 2.5882705829571933,
+  "exitCode": 0,
+  "scope": "second real run for backend-completion timing; first artifact remains the UI fixture source"
+}

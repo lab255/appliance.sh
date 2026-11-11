@@ -1,0 +1,150 @@
+[
+  {
+    "surface": "S1",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0,
+    "cold": [
+      {
+        "time": 245,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": []
+  },
+  {
+    "surface": "S2",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0,
+    "cold": [
+      {
+        "time": 269.7000000476837,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": []
+  },
+  {
+    "surface": "S3",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.001427193287037037,
+    "cold": [
+      {
+        "time": 232,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": [
+      {
+        "time": 2649,
+        "value": 0.001427193287037037,
+        "input": true
+      }
+    ]
+  },
+  {
+    "surface": "S4",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.00006180555555555556,
+    "cold": [
+      {
+        "time": 243.40000009536743,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": [
+      {
+        "time": 1464.3000001907349,
+        "value": 0.00006180555555555556,
+        "input": true
+      }
+    ]
+  },
+  {
+    "surface": "S5",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.09857901308412904,
+    "cold": [
+      {
+        "time": 231.19999980926514,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": [
+      {
+        "time": 1905.1999998092651,
+        "value": 0.00000722644947193287,
+        "input": true
+      },
+      {
+        "time": 2410.5999999046326,
+        "value": 0.00000722644947193287,
+        "input": true
+      },
+      {
+        "time": 2872.5,
+        "value": 0.09856456018518518,
+        "input": true
+      }
+    ]
+  },
+  {
+    "surface": "S6",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0.002545835262345679,
+    "rawShiftSum": 0.002545835262345679,
+    "cold": [
+      {
+        "time": 227.60000014305115,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": [
+      {
+        "time": 2000.2000000476837,
+        "value": 0.002545835262345679,
+        "input": false
+      }
+    ]
+  },
+  {
+    "surface": "S7",
+    "coldCls": 0.11638034722222221,
+    "interactionCls": 0,
+    "rawShiftSum": 0.03633139734338831,
+    "cold": [
+      {
+        "time": 245.80000019073486,
+        "value": 0.11638034722222221,
+        "input": false
+      }
+    ],
+    "shifts": [
+      {
+        "time": 1872.7000000476837,
+        "value": 0.00000722644947193287,
+        "input": true
+      },
+      {
+        "time": 2408.7000000476837,
+        "value": 0.00000722644947193287,
+        "input": true
+      },
+      {
+        "time": 2822.5,
+        "value": 0.03631694444444444,
+        "input": true
+      }
+    ]
+  }
+]

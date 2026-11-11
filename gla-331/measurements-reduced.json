@@ -1,0 +1,2542 @@
+{
+  "config": {
+    "os": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "browser": "156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "build": "Vite development + built app library",
+    "adapter": "Claude unless specified",
+    "vm": "mock-host appliance",
+    "data": "fixture except real pre-run journal artifact",
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) → scoped DOM acknowledgment → requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+  },
+  "measurements": [
+    {
+      "surface": "S1",
+      "name": "Create",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        46.09999990463257, 22.90000009536743, 22.600000143051147, 30.200000047683716, 23.799999952316284, 30.5,
+        30.40000009536743, 33, 32.5, 30.59999990463257
+      ],
+      "median": 30.450000047683716
+    },
+    {
+      "surface": "S1",
+      "name": "Validation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        34.40000009536743, 22.200000047683716, 25, 24, 34.700000047683716, 22.600000143051147, 18, 24.100000143051147,
+        23.799999952316284, 20.200000047683716
+      ],
+      "median": 23.899999976158142
+    },
+    {
+      "surface": "S1",
+      "name": "Open row",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        48.10000014305115, 48, 46.40000009536743, 48.200000047683716, 48.200000047683716, 49.40000009536743, 48.5,
+        50.40000009536743, 47.59999990463257, 50.10000014305115
+      ],
+      "median": 48.200000047683716
+    },
+    {
+      "surface": "S2",
+      "name": "Target change",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        18.59999990463257, 25.40000009536743, 21.09999990463257, 26, 24.799999952316284, 25.90000009536743,
+        24.299999952316284, 25.399999856948853, 25.40000009536743, 24.799999952316284
+      ],
+      "median": 25.09999990463257
+    },
+    {
+      "surface": "S3",
+      "name": "Observe",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        32.200000047683716, 32.40000009536743, 31.200000047683716, 31.90000009536743, 30.5, 31.699999809265137,
+        33.39999985694885, 31.800000190734863, 31.799999952316284, 31.700000047683716
+      ],
+      "median": 31.800000071525574
+    },
+    {
+      "surface": "S3",
+      "name": "Interact",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        33.30000019073486, 29.799999952316284, 32.90000009536743, 33.40000009536743, 32.60000014305115,
+        31.700000047683716, 31.799999952316284, 31.90000009536743, 31.200000047683716, 33
+      ],
+      "median": 32.25000011920929
+    },
+    {
+      "surface": "S3",
+      "name": "Stop confirmation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        30.59999990463257, 28.299999952316284, 24.899999856948853, 32.299999952316284, 32.09999990463257,
+        24.799999952316284, 25.100000143051147, 26.40000009536743, 27.09999990463257, 32.799999952316284
+      ],
+      "median": 27.699999928474426
+    },
+    {
+      "surface": "S3",
+      "name": "Stop acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        23.59999990463257, 23.899999856948853, 23.200000047683716, 23.200000047683716, 23.59999990463257,
+        22.799999952316284, 23.699999809265137, 22.5, 21.699999809265137, 20.600000143051147
+      ],
+      "median": 23.200000047683716
+    },
+    {
+      "surface": "S4",
+      "name": "Tab selection",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        32.09999990463257, 31.299999952316284, 31, 31.700000047683716, 31.399999856948853, 31.600000143051147,
+        30.09999990463257, 31.200000047683716, 31.700000047683716, 31.700000047683716
+      ],
+      "median": 31.5
+    },
+    {
+      "surface": "S4",
+      "name": "File / diff selection",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.399999856948853, 30.600000143051147, 31.399999856948853, 30.699999809265137, 31.200000047683716,
+        31.200000047683716, 31.59999990463257, 31.600000143051147, 31.09999990463257, 32.59999990463257
+      ],
+      "median": 31.299999952316284
+    },
+    {
+      "surface": "S5",
+      "name": "Readiness presentation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31, 31.399999856948853, 32, 31.5, 33.09999990463257, 33.700000047683716, 32.40000009536743, 31.799999952316284,
+        31.799999952316284, 33.30000019073486
+      ],
+      "median": 31.899999976158142
+    },
+    {
+      "surface": "S5",
+      "name": "Package acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.700000047683716, 31.90000009536743, 31.600000143051147, 22.59999990463257, 31.699999809265137,
+        31.300000190734863, 32.10000014305115, 31.5, 31.899999856948853, 31.59999990463257
+      ],
+      "median": 31.649999976158142
+    },
+    {
+      "surface": "S7",
+      "name": "Review",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.899999856948853, 30.799999952316284, 31.90000009536743, 30.09999990463257, 31.699999809265137,
+        30.699999809265137, 31.5, 31.799999952316284, 32.799999952316284, 33
+      ],
+      "median": 31.74999988079071
+    },
+    {
+      "surface": "S7",
+      "name": "Deploy acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        30.799999952316284, 32.5, 32.09999990463257, 33, 32.89999985694885, 31.600000143051147, 30, 31.299999952316284,
+        31.59999990463257, 31.800000190734863
+      ],
+      "median": 31.700000166893005
+    },
+    {
+      "surface": "S7",
+      "name": "Retry acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.800000190734863, 31.700000047683716, 31.5, 29.799999952316284, 31.600000143051147, 31.59999990463257, 23,
+        31.59999990463257, 31.59999990463257, 32.700000047683716
+      ],
+      "median": 31.59999990463257
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "all measured interactions",
+      "motion": "reduce",
+      "cls": 0.11638034722222221,
+      "rawShiftSum": 0.8163257898627386,
+      "shifts": [
+        {
+          "value": 0.11638034722222221,
+          "startTime": 134.59999990463257,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "MAIN",
+              "previousRect": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "currentRect": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "node": "A",
+              "previousRect": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "currentRect": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 4085.5999999046326,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 4314.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 4774.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 4998.099999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 5455.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 5710.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 6171.599999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 6381.400000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 6840.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 7063.299999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 7522.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 7748.200000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 8207.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 8431.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 8891.200000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 9114.700000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 9574.700000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 9798.200000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 10279.400000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 782.75,
+                "width": 79.1875,
+                "height": 22,
+                "top": 782.75,
+                "right": 1395,
+                "bottom": 804.75,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 785.75,
+                "width": 80.609375,
+                "height": 22,
+                "top": 785.75,
+                "right": 1395,
+                "bottom": 807.75,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 12082.700000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 12312.200000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 12719.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 12945.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 13352.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 13578.599999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 13984.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 14212.099999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 14619.200000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 14845.299999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 15275.299999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 15480.099999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 15886.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 16129.599999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 16537.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 16763.299999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 17167,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 17396.700000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 17804,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              },
+              "currentRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.00000722644947193287,
+          "startTime": 18046.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "SPAN",
+              "previousRect": {
+                "x": 1314.390625,
+                "y": 693.3125,
+                "width": 80.609375,
+                "height": 22,
+                "top": 693.3125,
+                "right": 1395,
+                "bottom": 715.3125,
+                "left": 1314.390625
+              },
+              "currentRect": {
+                "x": 1315.8125,
+                "y": 690.3125,
+                "width": 79.1875,
+                "height": 22,
+                "top": 690.3125,
+                "right": 1395,
+                "bottom": 712.3125,
+                "left": 1315.8125
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 18463,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 18646.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 19054.099999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 19294.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 19698.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 19946.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 20351.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 20597.599999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 21010.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 21246.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 21660,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 21896.5,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 22310.400000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 22553.599999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 22966.900000095367,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 23196.700000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 23610.700000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 23846.799999952316,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 24260.200000047684,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 24495.599999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              }
+            }
+          ]
+        },
+        {
+          "value": 0.033317314814814813,
+          "startTime": 24910.099999904633,
+          "hadRecentInput": true,
+          "sources": [
+            {
+              "node": "DIV",
+              "previousRect": {
+                "x": 861,
+                "y": 689.3125,
+                "width": 534,
+                "height": 130,
+                "top": 689.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 861,
+                "y": 741.3125,
+                "width": 534,
+                "height": 258.6875,
+                "top": 741.3125,
+                "right": 1395,
+                "bottom": 1000,
+                "left": 861
+              }
+            },
+            {
+              "node": "P",
+              "previousRect": {
+                "x": 861,
+                "y": 803.3125,
+                "width": 534,
+                "height": 16,
+                "top": 803.3125,
+                "right": 1395,
+                "bottom": 819.3125,
+                "left": 861
+              },
+              "currentRect": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "readiness invokes zero packages",
+      "pass": true
+    },
+    {
+      "name": "10 human Package clicks = 10 attempts; no install",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

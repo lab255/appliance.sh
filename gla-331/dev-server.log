@@ -1,0 +1,94 @@
+
+> @appliance.sh/desktop@1.62.0 dev /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> vite
+
+
+  VITE v6.4.2  ready in 101 ms
+
+  ➜  Local:   http://localhost:1420/
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-aF1hkSqp.js as it exceeds the max of 500KB.
+8:42:15 PM [vite] (client) page reload src/mock-host.ts
+8:42:35 PM [vite] (client) page reload src/mock-host.ts
+8:44:00 PM [vite] (client) page reload src/mock-host.ts
+8:44:00 PM [vite] (client) page reload src/mock-host.ts
+8:44:02 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:44:02 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-aF1hkSqp.js
+8:44:02 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-aF1hkSqp.js
+8:44:02 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:44:02 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:44:02 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-ChATbOEM.js as it exceeds the max of 500KB.
+8:47:33 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:47:33 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-ChATbOEM.js
+8:47:33 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/features-DJ6wjOVB.js
+8:47:33 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:47:33 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:47:33 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:47:33 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:47:33 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Dqx0o5aN.js as it exceeds the max of 500KB.
+8:48:50 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:48:50 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Dqx0o5aN.js
+8:48:50 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Dqx0o5aN.js
+8:48:50 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:48:51 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:48:51 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:48:51 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:48:51 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-D6sAmmUz.js as it exceeds the max of 500KB.
+8:54:07 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:54:07 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-D6sAmmUz.js
+8:54:08 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-D6sAmmUz.js
+8:54:08 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:54:08 PM [vite] (client) hmr invalidate /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-D6sAmmUz.js Could not Fast Refresh ("$" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+8:54:08 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-D6sAmmUz.js
+8:54:08 PM [vite] (client) Pre-transform error: Failed to load url /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js (resolved id: /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js) in /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop/src/main.tsx. Does the file exist?
+8:54:08 PM [vite] (client) Pre-transform error: Failed to load url /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js (resolved id: /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js) in /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop/src/main.tsx. Does the file exist?
+8:54:08 PM [vite] (client) Pre-transform error: Failed to load url /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css (resolved id: /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css) in /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop/src/main.tsx. Does the file exist?
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js as it exceeds the max of 500KB.
+8:54:11 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:54:11 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js as it exceeds the max of 500KB.
+8:54:16 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:54:16 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:54:16 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js as it exceeds the max of 500KB.
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js as it exceeds the max of 500KB.
+8:58:26 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:58:26 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js
+8:58:26 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Bhj0eJUt.js
+8:58:26 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:26 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:58:26 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:58:26 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:26 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:27 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:27 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:58:43 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:58:43 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:44 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:44 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+8:58:44 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+8:58:44 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-CJ8hU63b.js as it exceeds the max of 500KB.
+9:01:11 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+9:01:11 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-CJ8hU63b.js
+9:01:11 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-CJ8hU63b.js
+9:01:11 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+9:01:12 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+9:01:12 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+9:01:12 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+9:01:12 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Dp0fHejg.js as it exceeds the max of 500KB.
+9:06:39 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+9:06:39 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Dp0fHejg.js
+9:06:39 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-Dp0fHejg.js
+9:06:39 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+9:06:40 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+9:06:40 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+9:06:40 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+9:06:40 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+9:06:42 PM [vite] (client) hmr update /@fs/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/app.css
+9:06:42 PM [vite] (client) page reload /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index.js
+[BABEL] Note: The code generator has deoptimised the styling of /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/dist/index-B3HsSmNm.js as it exceeds the max of 500KB.

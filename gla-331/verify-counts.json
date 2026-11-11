@@ -1,0 +1,13 @@
+{
+  "buildProjects": 11,
+  "typecheckProjects": 6,
+  "testProjects": 10,
+  "tsFiles": 158,
+  "tsPassed": 1472,
+  "tsSkipped": 1,
+  "rustPassed": 362,
+  "rustFailed": 0,
+  "rustIgnored": 1,
+  "result": "GREEN",
+  "revision": "7a6df986d8e39a10f9fa9232236df1d615a66354"
+}

@@ -1,0 +1,55 @@
+Skip to content
+Appliance
+Installed Apps
+Catalogue
+DEVELOP
+Projects
+Workbench
+Agents
+Machine
+Cloud
+Settings
+Developer mode
+Dev Machine
+this computer
+Developer mode
+Apps
+Deploy an app
+
+Choose your app folder, review its settings, then build and deploy it to the selected target.
+
+Target:
+Dev Machine
+· switch with the target menu in the top bar
+
+1. Target
+(current)
+2. Pick folder
+(upcoming)
+3. Configure
+(upcoming)
+4. Build & deploy
+(upcoming)
+Choose a deploy target
+Builds deploy into the selected target. Pick where this app should run — you can also switch from the target menu in the top bar.
+acme-prod
+cloud
+https://appliance.acme.example
+Hosting ready
+Select
+appliance
+This computer
+microvm
+Sandbox · hosting not set up
+traffic
+This computer
+microvm-traffic
+Hosting ready
+Select
+appliance needs App hosting
+appliance is running as a Sandbox, but hosting isn't set up yet. Setting it up takes 2–4 minutes (one-time) and restarts the machine; your folder and settings here are kept.
+Set up hosting & continue
+
+Selected Dev Machine.
+
+Next: pick folder

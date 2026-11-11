@@ -1,0 +1,85 @@
+S1 Create no-preference 32.7
+S1 Validation no-preference 31.4
+S1 Open row no-preference 48.8
+S2 Target change no-preference 24.7
+S3 Observe no-preference 31.2
+S3 Interact no-preference 31.0
+S3 Stop confirmation no-preference 31.3
+S3 Stop acknowledgment no-preference 30.5
+S4 Tab selection no-preference 31.0
+S4 File / diff selection no-preference 30.3
+S5 Readiness presentation no-preference 31.0
+S5 Package acknowledgment no-preference 30.6
+S7 Review no-preference 31.3
+S7 Deploy acknowledgment no-preference 30.1
+S7 Retry acknowledgment no-preference 30.3
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('button', { name: 'Cancel', exact: true })[22m
+[2m    - locator resolved to <button class="appliance-ui inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-(--duration-fast) active:translate-y-px active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:pointer-events-none disabled:opacity-50 border border…>Cancel</button>[22m
+[2m  - attempting click action[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is visible, enabled and stable[22m
+[2m      - scrolling into view if needed[22m
+[2m      - done scrolling[22m
+[2m      - performing click action[22m
+[2m      - <div data-state="open" aria-hidden="true" data-aria-hidden="true" class="appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]"></div> intercepts pointer events[22m
+[2m    - retrying click action[22m
+[2m    - waiting 20ms[22m
+[2m    2 × waiting for element to be visible, enabled and stable[22m
+[2m      - element is visible, enabled and stable[22m
+[2m      - scrolling into view if needed[22m
+[2m      - done scrolling[22m
+[2m      - performing click action[22m
+[2m      - <div data-state="open" aria-hidden="true" data-aria-hidden="true" class="appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]"></div> intercepts pointer events[22m
+[2m    - retrying click action[22m
+[2m      - waiting 100ms[22m
+[2m    58 × waiting for element to be visible, enabled and stable[22m
+[2m       - element is visible, enabled and stable[22m
+[2m       - scrolling into view if needed[22m
+[2m       - done scrolling[22m
+[2m       - performing click action[22m
+[2m       - <div data-state="open" aria-hidden="true" data-aria-hidden="true" class="appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]"></div> intercepts pointer events[22m
+[2m     - retrying click action[22m
+[2m       - waiting 500ms[22m
+
+    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/measure.mjs:40:161
+    at metric (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/measure.mjs:28:9)
+    at async file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/_evidence-gla331/measure.mjs:40:2 {
+  log: [
+    "  - waiting for getByRole('button', { name: 'Cancel', exact: true })",
+    '    - locator resolved to <button class="appliance-ui inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-(--duration-fast) active:translate-y-px active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] disabled:pointer-events-none disabled:opacity-50 border border…>Cancel</button>',
+    '  - attempting click action',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - performing click action',
+    '      - <div data-state="open" aria-hidden="true" data-aria-hidden="true" class="appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]"></div> intercepts pointer events',
+    '    - retrying click action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - performing click action',
+    '      - <div data-state="open" aria-hidden="true" data-aria-hidden="true" class="appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]"></div> intercepts pointer events',
+    '    - retrying click action',
+    '      - waiting 100ms',
+    '    58 × waiting for element to be visible, enabled and stable',
+    '       - element is visible, enabled and stable',
+    '       - scrolling into view if needed',
+    '       - done scrolling',
+    '       - performing click action',
+    '       - <div data-state="open" aria-hidden="true" data-aria-hidden="true" class="appliance-ui ui-dialog-scrim fixed inset-0 z-50 bg-[var(--color-scrim)]"></div> intercepts pointer events',
+    '     - retrying click action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.1

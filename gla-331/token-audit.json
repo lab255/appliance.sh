@@ -1,0 +1,50 @@
+{
+  "method": "Computed durations in rendered S2–S7 including imported components, plus added-source opacity recipe scan. 0s allowed for still/reduced-motion decisions. Spinner durations are counted if present.",
+  "surfaces": [
+    {
+      "surface": "S2",
+      "offTokenDurations": [],
+      "opacityDerivedColors": []
+    },
+    {
+      "surface": "S3",
+      "offTokenDurations": [],
+      "opacityDerivedColors": []
+    },
+    {
+      "surface": "S4",
+      "offTokenDurations": [],
+      "opacityDerivedColors": []
+    },
+    {
+      "surface": "S5",
+      "offTokenDurations": [],
+      "opacityDerivedColors": []
+    },
+    {
+      "surface": "S6",
+      "offTokenDurations": [],
+      "opacityDerivedColors": []
+    },
+    {
+      "surface": "S7",
+      "offTokenDurations": [],
+      "opacityDerivedColors": []
+    }
+  ],
+  "addedSourceOpacityRecipes": [],
+  "changedPaths": [
+    "packages/app/src/components/layout/app-shell.tsx",
+    "packages/app/src/lib/app-navigation.test.ts",
+    "packages/app/src/lib/app-navigation.ts",
+    "packages/app/src/pages/agents/index.tsx",
+    "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "packages/app/src/pages/workbench/README.md",
+    "packages/app/src/pages/workbench/fixtures.ts",
+    "packages/app/src/pages/workbench/index.tsx",
+    "packages/app/src/pages/workbench/package-evidence.ts",
+    "packages/app/src/pages/workbench/workbench.css",
+    "packages/app/src/router/routes.tsx",
+    "packages/desktop/src/mock-host.ts"
+  ]
+}
