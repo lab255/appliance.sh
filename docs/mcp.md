@@ -22,6 +22,8 @@ Generic MCP client configuration:
 
 Pass `--profile <name>` after `mcp` to pin the default credential profile; every tool also accepts a per-call `profile` argument.
 
+> **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** Superseding “every tool” above (GLA-328 recon X1): only the six SDK-targeting tools (`overview`, `deploy`, `deployment_status`, `health`, `logs`, `destroy`) accept per-call `profile`. Evidence: `packages/cli/src/utils/mcp-server.ts:225`, `packages/cli/src/utils/mcp-server.ts:319`, `packages/cli/src/utils/mcp-server.ts:382`, `packages/cli/src/utils/mcp-server.ts:407`, `packages/cli/src/utils/mcp-server.ts:466`, `packages/cli/src/utils/mcp-server.ts:524`. `doctor` accepts only optional `vm`; `vm` accepts `action` and optional `name`; neither accepts per-call `profile` (`packages/cli/src/utils/mcp-server.ts:558`, `packages/cli/src/utils/mcp-server.ts:600`). The server-level default-profile guidance remains valid.
+
 ## Tools
 
 | Tool                | What it does                                                                                                                                                                    |

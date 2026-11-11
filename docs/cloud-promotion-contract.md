@@ -2,6 +2,8 @@
 
 **Status:** Decision (SPIKE). No implementation. Informs the `appliance up` local-sandbox UX so it stays cloud-promotable.
 
+> **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** The “No implementation” status remains correct for this deployment API proposal: `services: [{ name, buildId }]` and per-service `urls` are still absent. Evidence: `packages/sdk/src/models/deployment.ts:36`, `packages/sdk/src/models/deployment.ts:97`, `packages/sdk/src/models/environment.ts:24`. This document is partly stale: SDK runnable-bundle service relationships and typed-edge cloud URLs are implemented, as qualified below. Provenance: GLA-328 recon X7–X9, re-verified in this checkout.
+
 ## Background: today's contract is one appliance per environment
 
 The data plane is a strict chain: `Project` → `Environment` → `Deployment` → `Build` → one infra unit.
@@ -13,6 +15,8 @@ The data plane is a strict chain: `Project` → `Environment` → `Deployment` �
 - The executor resolves one build and produces one infra unit — on k8s, one Deployment + Service + Ingress at `<stack>.<hostnameSuffix>` (`deployment-executor.service.ts:247-313` cloud / `:315-384` local; one-build resolve at `:256-257`/`:323`; `ARCHITECTURE.md:193-221`; `build.service.ts:65-83`).
 
 Nothing in the SDK or routes models a relationship _between_ services.
+
+> **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** Superseding the SDK-wide claim above (X8): the v2 runnable-bundle model has `dependsOn` and compound service records, including nested and root compounds. Evidence: `packages/sdk/src/models/appliance-v2.ts:264`, `packages/sdk/src/models/appliance-v2.ts:298`, `packages/sdk/src/models/appliance-v2.ts:319`, `packages/sdk/src/models/appliance-v2.ts:358`. The absence claim applies only to the proposed deployment API shapes (`packages/sdk/src/models/deployment.ts:36`, `packages/sdk/src/models/environment.ts:24`); runnable bundles do not implement this promotion contract.
 
 ## 1. Mapping: N appliances in one environment — RECOMMEND (a)
 
@@ -35,6 +39,10 @@ A multi-service deploy stays **one Deployment** (one transactional unit, one bus
 **Rationale.** The environment's single `url` becomes a `urls: Record<service, url>` (keep `url` as a back-compat alias — define a "primary" service selection rule, e.g. the ingress / first exposed service). One Deployment preserves atomic rollout and the existing cancel/refresh machinery. Rejected: one Deployment per service — loses atomicity and races on the shared stack.
 
 > **Work surface (review):** `url` is read by 6+ consumers (`app/src/lib/deployment.ts:76,94`, `dashboard.tsx:327`, `environments/detail.tsx:217`, `cli/appliance-open.ts:83`, `cli/appliance-app.ts:227,281`), and the **cloud path never sets `env.url`** — the URL is scraped from `deployment.message` via `extractDeploymentUrl` (`deploy-poll.ts:71-78`). The per-service `urls` map must therefore thread through that message-scraping fallback too, not just the `env.url` field.
+
+> **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** Superseding “the cloud path never sets `env.url`” above (X7): typed-edge cloud convergence returns `apiServerPublicUrl` as `url`, the executor forwards it, and common deployment finalization persists a supplied URL on the environment. Evidence: `packages/infra/src/lib/ApplianceDeploymentService.ts:446`, `packages/infra/src/lib/ApplianceDeploymentService.ts:456`, `packages/api-server/src/services/deployment-executor.service.ts:373`, `packages/api-server/src/services/deployment-executor.service.ts:219`. The claim is partly stale: ordinary app cloud deploy still returns no URL, only “Stack updated” / “No changes (idempotent)” messages (`packages/infra/src/lib/ApplianceDeploymentService.ts:391`), from which a message parser cannot extract an address.
+
+> **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** Superseding the `dashboard.tsx` consumer reference above (X9): `packages/app/src/pages/dashboard.tsx` no longer exists, and `/dashboard` redirects to `/projects`. The current reusable consumer is `urlForEnvironment`, which prefers `env.url` and falls back to the latest successful deployment message; the map helper follows the same precedence. Evidence: `packages/app/src/router/routes.tsx:271`, `packages/app/src/lib/deployment.ts:75`, `packages/app/src/lib/deployment.ts:87`. These remain single-address consumers requiring extension for the proposed per-service map.
 
 ## 4. Minimal SDK model shapes (LATER, sketches only)
 
