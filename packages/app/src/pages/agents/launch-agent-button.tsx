@@ -386,7 +386,7 @@ export function LaunchAgentButton({
           />
         </Field>
         <Button size="sm" onClick={() => void launch()} disabled={busy} aria-describedby="agent-launch-status">
-          <Bot className={cn('h-3.5 w-3.5', busy && 'animate-pulse')} />{' '}
+          <Bot className={cn('h-3.5 w-3.5', busy && !workbench && 'animate-pulse')} />{' '}
           {busy ? (workbench ? 'Starting agent…' : 'Starting…') : 'Run'}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
@@ -423,8 +423,12 @@ export function LaunchAgentButton({
         />
       ) : null}
       <p className="text-xs leading-4 text-[var(--color-muted-foreground)]">
-        Runs <code className="font-mono">{selectedBin}</code> in the shared workspace. Your {selectedLabel} sign-in
-        details stay on this computer and are used only when the agent connects.{' '}
+        Runs <code className="font-mono">{selectedBin}</code> in the shared workspace.{' '}
+        {workbench ? (
+          'See the selected-adapter credential details in Development VM.'
+        ) : (
+          <>Your {selectedLabel} sign-in details stay on this computer and are used only when the agent connects.</>
+        )}{' '}
         {agentAuth ? (
           authStatus?.configured ? (
             <>

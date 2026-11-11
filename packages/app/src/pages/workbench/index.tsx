@@ -229,6 +229,17 @@ export function WorkbenchPage() {
                 >
                   <Input id="workspace-parent" value={parent} onChange={(e) => setParent(e.target.value)} />
                 </Field>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setMessage('Opening folder picker…');
+                    const picked = await host.local?.pickDirectory();
+                    if (picked) setParent(picked);
+                    setMessage(picked ? 'Folder selected · fixture picker' : 'Folder selection canceled');
+                  }}
+                >
+                  Choose local folder
+                </Button>
                 <p className="wb-code">{preview}</p>
                 <p className="wb-muted">Validation fixtures: “existing” conflicts; “readonly” is not writable.</p>
                 <p className="wb-status" role="status">
@@ -257,7 +268,7 @@ function WorkspaceDetail({ workspace, scenario }: { workspace: Workspace; scenar
   );
   const [targetMessage, setTargetMessage] = React.useState('Binding target only · global target unchanged');
   const [vmDown, setVmDown] = React.useState(scenario === 'workbench-11');
-  const [mountMismatch, setMountMismatch] = React.useState(false);
+  const [mountMismatch, setMountMismatch] = React.useState(workspace.directory !== fixtureDirectory);
   const [adapter, setAdapter] = React.useState('claude-code');
   const [count, setCount] = React.useState(workspace.blank ? 0 : 4);
   const [runs, setRuns] = React.useState(() => fixtureRuns(count));
@@ -392,6 +403,26 @@ function Sessions({
   const [approval, setApproval] = React.useState('pending');
   const [stopping, setStopping] = React.useState(false);
   const latch = React.useRef(false);
+  React.useEffect(() => {
+    if (!host.vm || unavailable) return;
+    const timer = window.setInterval(() => {
+      void host
+        .vm!.instance('appliance')
+        .agent.list()
+        .then((items) => {
+          setRuns((previous) => [
+            ...previous,
+            ...items.filter(
+              (item) =>
+                !item.sessionId.startsWith('agent-workbench-') &&
+                !previous.some((old) => old.sessionId === item.sessionId)
+            ),
+          ]);
+        })
+        .catch(() => setStatus('Could not refresh status · previous values marked stale'));
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [host.vm, unavailable, setRuns]);
   const run = runs.find((r) => r.sessionId === selected);
   async function stop() {
     if (!run || latch.current) return;
@@ -431,22 +462,16 @@ function Sessions({
       <div className="wb-status" role="status">
         {!resolved ? 'Checking sign-in…' : !signedIn[adapter] ? 'Sign in to get started' : 'Signed in · fixture'}
       </div>
-      <p className="wb-muted">Choose an agent and sign in. {credentialCopy[adapter]}</p>
-      {resolved && (
-        <AgentSignIn
-          signedIn={signedIn}
-          agentType={adapter}
-          onAgentTypeChange={setAdapter}
-          onAuthenticated={() => setAuthBump((n) => n + 1)}
-        />
-      )}
-      <div className="wb-posture">
-        <h2>Development VM</h2>
-        <p>
-          The microVM is the isolation boundary. The sandbox is not a jail for hostile code. {credentialCopy[adapter]}{' '}
-          Development-VM egress is cooperative and bypassable. Approve, deny and stop steer the agent; they do not
-          provide containment. An agent can read anything in this folder and send it out over the network.
-        </p>
+      <p className="wb-muted wb-credential">Choose an agent and sign in. {credentialCopy[adapter]}</p>
+      <div className="wb-auth">
+        {resolved && (
+          <AgentSignIn
+            signedIn={signedIn}
+            agentType={adapter}
+            onAgentTypeChange={setAdapter}
+            onAuthenticated={() => setAuthBump((n) => n + 1)}
+          />
+        )}
       </div>
       <label className="wb-muted">
         Editing agent{' '}
@@ -481,9 +506,12 @@ function Sessions({
           <Banner tone="warning" title="Agent brokering unavailable on this platform">
             {wslCopy}
           </Banner>
-          <LogPane label="Technical log · fixture" copyText="Broker setup refused on WSL (fixture).">
-            Broker setup refused on WSL (fixture). Raw stderr is retained here only; no in-guest credential fallback is
-            offered.
+          <LogPane
+            label="Technical log · fixture"
+            copyText="Brokered credential injection is disabled on WSL v1: exact-lease re-attribution cannot survive SNAT; use an in-guest API key; brokered injection returns in WSL v2."
+          >
+            Brokered credential injection is disabled on WSL v1: exact-lease re-attribution cannot survive SNAT; use an
+            in-guest API key; brokered injection returns in WSL v2.
           </LogPane>
         </>
       )}
@@ -554,6 +582,14 @@ function Sessions({
             ? 'Result summary · fixture: entry form added. Inspect files; this is not package/test approval.'
             : 'No new output · ' + capturedAt + ' · fixture'}
       </p>
+      <div className="wb-posture">
+        <h2>Development VM</h2>
+        <p>
+          The microVM is the isolation boundary. The sandbox is not a jail for hostile code. {credentialCopy[adapter]}{' '}
+          Development-VM egress is cooperative and bypassable. Approve, deny and stop steer the agent; they do not
+          provide containment. An agent can read anything in this folder and send it out over the network.
+        </p>
+      </div>
       <div className="wb-row">
         <Button
           size="sm"
@@ -596,18 +632,20 @@ function Sessions({
       <p className="wb-status" role="status">
         {status}
       </p>
-      {mode === 'readonly' && (
-        <div className="wb-preview wb-code" tabIndex={0}>
-          <Fixture>F2 · isolated static output; no terminal-write routes</Fixture>
-          <p>Read-only view. You can copy output; this view sends no input. The agent may still change files.</p>
-          <p>
-            Observing · read-only · {selected}\nNo new output · {capturedAt}
-          </p>
-        </div>
-      )}
-      {mode === 'interactive' && <p className="wb-muted">Interactive terminal. Input is sent to the agent.</p>}
+      <div className="wb-observation">
+        {mode === 'readonly' && (
+          <div className="wb-preview wb-code" tabIndex={0}>
+            <Fixture>F2 · isolated static output; no terminal-write routes</Fixture>
+            <p>Read-only view. You can copy output; this view sends no input. The agent may still change files.</p>
+            <p>
+              Observing · read-only · {selected}\nNo new output · {capturedAt}
+            </p>
+          </div>
+        )}
+        {mode === 'interactive' && <p className="wb-muted">Interactive terminal. Input is sent to the agent.</p>}
+      </div>
       <div className="wb-panel wb-stack">
-        <Fixture>F3 · request wb-request-1 · {selected}</Fixture>
+        <Fixture>F3 · request wb-request-1 · agent-workbench-0</Fixture>
         <h2>Needs your response · fixture</h2>
         <p className="wb-muted">
           Write index.html in {directory}. Approve or deny this request in the agent. Denying does not undo earlier
@@ -832,7 +870,7 @@ function PackagePanel({ workspace }: { workspace: Workspace }) {
           <input type="checkbox" checked={fail} onChange={(e) => setFail(e.target.checked)} /> Package failure fixture
         </label>
       </div>
-      <div className="wb-row wb-between">
+      <div className="wb-row wb-between wb-readiness">
         <div className="wb-status" role="status">
           {ready ? (
             <>
@@ -891,6 +929,7 @@ function PackagePanel({ workspace }: { workspace: Workspace }) {
         {outcome === 'success' && (
           <div className="wb-stack mt-4">
             <p className="wb-code">{packageEvidence.name} · version 1.0.0 · Signature: Unsigned</p>
+            <p className="wb-muted">Unsigned — publisher prompts will warn</p>
             <p className="wb-code">Digest: {packageEvidence.digest}</p>
             <p className="wb-muted">
               No install, publication or deploy was requested. Unsigned does not mean verified publisher.
@@ -900,22 +939,29 @@ function PackagePanel({ workspace }: { workspace: Workspace }) {
       </div>
       <div className="wb-destinations">
         {[
-          ['File', 'A — hand-off file', 'v2 runtime bundle; a separate install decision.'],
-          ['Catalogue', 'B — catalogue publish', 'Bundle hosting and signed index publication remain unresolved.'],
+          ['File — ruled v1 headline', 'A — hand-off file', 'v2 runtime bundle; a separate install decision.'],
           [
-            'Deploy',
+            'Catalogue — roadmapped (later)',
+            'B — catalogue publish',
+            'Bundle hosting and signed index publication remain unresolved.',
+          ],
+          [
+            'Deploy — separate verb (see Deploy action)',
             'C — direct deploy',
             'Existing v1 source chain from the same folder; does not consume this bundle.',
           ],
         ].map(([label, option, copy]) => (
           <div className="wb-destination wb-stack" key={label}>
-            <h2>{label} — pending owner ruling</h2>
+            <h2>{label}</h2>
             <p className="wb-muted">{option}</p>
             <p className="wb-muted">{copy}</p>
-            <Fixture>unresolved destination · no default selection</Fixture>
+            <Fixture>equal-weight design-review artifact</Fixture>
           </div>
         ))}
       </div>
+      <p className="wb-muted">
+        Owner ruling 2026-11-11: one click = signed hand-off file; prototype shows all three for design review.
+      </p>
     </Panel>
   );
 }
@@ -966,6 +1012,12 @@ function InstallPanel({ wsl }: { wsl: boolean }) {
         Catalogue · only for a genuinely published entry
       </Link>
       <div className="wb-row">
+        <a className="wb-link wb-muted" href="/catalogue?mock-host&scenario=catalogue-stale">
+          Stale catalogue fixture
+        </a>
+        <a className="wb-link wb-muted" href="/catalogue?mock-host&scenario=catalogue-unverified">
+          Failed verification fixture
+        </a>
         <a className="wb-link wb-muted" href="/apps?mock-host&scenario=unknown-publisher">
           Unsigned recipient fixture
         </a>

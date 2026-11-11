@@ -127,11 +127,11 @@ export function mockHostEnabled(): boolean {
         sessionStorage.setItem(APP_MODE_KEY, 'developer');
         sessionStorage.setItem(fixtureKey, scenario);
         configureWorkspaceScenario('user-mode');
+        installWorkbenchApiFixture();
         mockVm('appliance').agents = fixtureRuns();
         for (const type of ['claude-code', 'codex', 'copilot']) mockAgentCreds.set(type, 'api-key');
         if (scenario === 'workbench-2') mockAgentCreds.clear();
-        if (window.location.pathname === '/')
-          window.history.replaceState(null, '', `/workbench${window.location.search}`);
+        if (window.location.pathname === '/') window.location.replace(`/workbench${window.location.search}`);
       }
       if (scenario === 'journey') {
         sessionStorage.setItem(APP_MODE_KEY, 'developer');
@@ -181,6 +181,25 @@ export function mockHostEnabled(): boolean {
   }
   if (scenario() === 'journey' || scenario() === 'journey-ledger') installJourneyHealthFixture();
   return sessionStorage.getItem(ENABLED_KEY) === '1';
+}
+
+// Workbench browser fixtures never send mock credentials to a real API.
+function installWorkbenchApiFixture(): void {
+  const original = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, window.location.href);
+    if (['127.0.0.1', 'appliance.acme.example'].includes(url.hostname)) {
+      const body = url.pathname.endsWith('/keys/self')
+        ? { id: 'fixture-key', name: 'Workbench fixture', role: 'admin' }
+        : url.pathname.endsWith('/cluster-info')
+          ? { version: '1.62.0', serverVersion: '1.62.0', minClientVersion: '1.0.0', baseConfig: {} }
+          : [];
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+      );
+    }
+    return original(input, init);
+  };
 }
 
 function mockPlatform(): HostPlatform {
@@ -1505,7 +1524,7 @@ export function createMockHost(): ConsoleHost {
           },
           agent: {
             async start(input: AgentLaunchInput) {
-              await sleep(400);
+              await sleep(sessionStorage.getItem(fixtureKey) === 'workbench-3' ? 65000 : 400);
               vm.agents.push({
                 id: input.sessionId.replace(/^agent-/, ''),
                 type: input.type ?? 'claude-code',

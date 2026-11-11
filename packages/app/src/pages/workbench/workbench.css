@@ -115,7 +115,7 @@
   border-radius: var(--radius);
 }
 .wb-operation {
-  min-height: 280px;
+  min-height: 420px;
 }
 .wb-posture {
   border-left: 2px solid var(--color-sandbox-border);
@@ -133,4 +133,28 @@
   .wb-file {
     transition: none;
   }
+}
+
+.wb-file.wb-row {
+  display: flex;
+}
+.wb-file.wb-stack {
+  display: grid;
+}
+.wb-auth {
+  min-height: 220px;
+}
+.wb-credential {
+  min-height: 96px;
+}
+.wb-observation {
+  height: 190px;
+  overflow: auto;
+}
+.wb-posture {
+  min-height: 220px;
+}
+
+.wb-readiness {
+  min-height: 100px;
 }
