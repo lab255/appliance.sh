@@ -1,0 +1,49 @@
+{
+  "config": {
+    "os": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "browser": "156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "build": "Vite development + built app library",
+    "adapter": "Claude unless specified",
+    "vm": "mock-host appliance",
+    "data": "fixture except real pre-run journal artifact",
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) → scoped DOM acknowledgment → requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+  },
+  "measurements": [
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        147.29999995231628, 147.29999995231628, 147.80000019073486, 148.10000014305115, 148, 146.90000009536743,
+        149.89999985694885, 147.40000009536743, 148.19999980926514, 147.79999995231628
+      ],
+      "median": 147.80000007152557,
+      "discardedAttempts": [],
+      "minimumMet": true
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        153.29999995231628, 147.79999995231628, 147.70000004768372, 148.5, 147.79999995231628, 147.90000009536743,
+        148.29999995231628, 143.5, 147, 143.79999995231628
+      ],
+      "median": 147.79999995231628,
+      "discardedAttempts": [],
+      "minimumMet": true
+    }
+  ],
+  "scenarios": [],
+  "checks": [],
+  "errors": []
+}

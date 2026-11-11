@@ -1,0 +1,421 @@
+{
+  "original": [
+    {
+      "scenario": 1,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 449.90000009536743,
+          "last": 449.90000009536743,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 449.90000009536743,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 2,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 431,
+          "last": 431,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 431,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 3,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 478.60000014305115,
+          "last": 478.60000014305115,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 478.60000014305115,
+              "hadRecentInput": false
+            }
+          ]
+        },
+        {
+          "start": 66526.80000019073,
+          "last": 66526.80000019073,
+          "score": 0.02164224537037037,
+          "shifts": [
+            {
+              "value": 0.02164224537037037,
+              "startTime": 66526.80000019073,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 4,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 408.09999990463257,
+          "last": 408.09999990463257,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 408.09999990463257,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 5,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 423.39999985694885,
+          "last": 423.39999985694885,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 423.39999985694885,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 6,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 420.40000009536743,
+          "last": 420.40000009536743,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 420.40000009536743,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 7,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 418.7000000476837,
+          "last": 418.7000000476837,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 418.7000000476837,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 8,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 414.5,
+          "last": 414.5,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 414.5,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 9,
+      "cls": 0.01015607638888889,
+      "sessionWindows": [
+        {
+          "start": 124.79999995231628,
+          "last": 124.79999995231628,
+          "score": 0.01015607638888889,
+          "shifts": [
+            {
+              "value": 0.01015607638888889,
+              "startTime": 124.79999995231628,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 10,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 419.10000014305115,
+          "last": 419.10000014305115,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 419.10000014305115,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 11,
+      "cls": 0.11723244598765431,
+      "sessionWindows": [
+        {
+          "start": 124.70000004768372,
+          "last": 139.40000009536743,
+          "score": 0.11723244598765431,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 124.70000004768372,
+              "hadRecentInput": false
+            },
+            {
+              "value": 0.0008520987654320987,
+              "startTime": 139.40000009536743,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 12,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 419.90000009536743,
+          "last": 419.90000009536743,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 419.90000009536743,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "rechecks": [
+    {
+      "scenario": 7,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 487.7000000476837,
+          "last": 487.7000000476837,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 487.7000000476837,
+              "hadRecentInput": false
+            }
+          ]
+        },
+        {
+          "start": 4212.700000047684,
+          "last": 4212.700000047684,
+          "score": 1.74109188126929e-5,
+          "shifts": [
+            {
+              "value": 1.74109188126929e-5,
+              "startTime": 4212.700000047684,
+              "hadRecentInput": false
+            }
+          ]
+        },
+        {
+          "start": 7096,
+          "last": 7096,
+          "score": 7.22644947193287e-6,
+          "shifts": [
+            {
+              "value": 7.22644947193287e-6,
+              "startTime": 7096,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ],
+      "documentWindows": [
+        {
+          "timeOrigin": 1794403332873.6,
+          "windows": [
+            {
+              "start": 487.7000000476837,
+              "last": 487.7000000476837,
+              "score": 0.11638034722222221,
+              "shifts": [
+                {
+                  "value": 0.11638034722222221,
+                  "startTime": 487.7000000476837,
+                  "hadRecentInput": false,
+                  "document": "http://localhost:1420/workbench?mock-host&scenario=workbench-7",
+                  "timeOrigin": 1794403332873.6
+                }
+              ]
+            },
+            {
+              "start": 4212.700000047684,
+              "last": 4212.700000047684,
+              "score": 1.74109188126929e-5,
+              "shifts": [
+                {
+                  "value": 1.74109188126929e-5,
+                  "startTime": 4212.700000047684,
+                  "hadRecentInput": false,
+                  "document": "http://localhost:1420/workbench/journal",
+                  "timeOrigin": 1794403332873.6
+                }
+              ]
+            },
+            {
+              "start": 7096,
+              "last": 7096,
+              "score": 7.22644947193287e-6,
+              "shifts": [
+                {
+                  "value": 7.22644947193287e-6,
+                  "startTime": 7096,
+                  "hadRecentInput": false,
+                  "document": "http://localhost:1420/workbench/journal",
+                  "timeOrigin": 1794403332873.6
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": 10,
+      "cls": 0.11638034722222221,
+      "sessionWindows": [
+        {
+          "start": 437.60000014305115,
+          "last": 437.60000014305115,
+          "score": 0.11638034722222221,
+          "shifts": [
+            {
+              "value": 0.11638034722222221,
+              "startTime": 437.60000014305115,
+              "hadRecentInput": false
+            }
+          ]
+        },
+        {
+          "start": 4024.600000143051,
+          "last": 4024.600000143051,
+          "score": 1.74109188126929e-5,
+          "shifts": [
+            {
+              "value": 1.74109188126929e-5,
+              "startTime": 4024.600000143051,
+              "hadRecentInput": false
+            }
+          ]
+        },
+        {
+          "start": 6939.800000190735,
+          "last": 6939.800000190735,
+          "score": 7.22644947193287e-6,
+          "shifts": [
+            {
+              "value": 7.22644947193287e-6,
+              "startTime": 6939.800000190735,
+              "hadRecentInput": false
+            }
+          ]
+        }
+      ],
+      "documentWindows": [
+        {
+          "timeOrigin": 1794403340658.7,
+          "windows": [
+            {
+              "start": 437.60000014305115,
+              "last": 437.60000014305115,
+              "score": 0.11638034722222221,
+              "shifts": [
+                {
+                  "value": 0.11638034722222221,
+                  "startTime": 437.60000014305115,
+                  "hadRecentInput": false,
+                  "document": "http://localhost:1420/workbench?mock-host&scenario=workbench-10",
+                  "timeOrigin": 1794403340658.7
+                }
+              ]
+            },
+            {
+              "start": 4024.600000143051,
+              "last": 4024.600000143051,
+              "score": 1.74109188126929e-5,
+              "shifts": [
+                {
+                  "value": 1.74109188126929e-5,
+                  "startTime": 4024.600000143051,
+                  "hadRecentInput": false,
+                  "document": "http://localhost:1420/workbench/journal",
+                  "timeOrigin": 1794403340658.7
+                }
+              ]
+            },
+            {
+              "start": 6939.800000190735,
+              "last": 6939.800000190735,
+              "score": 7.22644947193287e-6,
+              "shifts": [
+                {
+                  "value": 7.22644947193287e-6,
+                  "startTime": 6939.800000190735,
+                  "hadRecentInput": false,
+                  "document": "http://localhost:1420/workbench/journal",
+                  "timeOrigin": 1794403340658.7
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

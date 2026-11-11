@@ -18,10 +18,11 @@
   {
     "surface": "S3",
     "coldCls": 0.11638034722222221,
-    "interactionCls": 0,
-    "rawShiftSum": 0.001427193287037037,
+    "interactionCls": 0.02164224537037037,
+    "rawShiftSum": 0.02164224537037037,
     "worstInteractionMedianMs": 32.25000011920929,
-    "n": 80
+    "n": 80,
+    "rawShiftScope": "Maximum raw sum across surface update and separately recorded delayed-acceptance window"
   },
   {
     "surface": "S4",
@@ -34,8 +35,8 @@
   {
     "surface": "S5",
     "coldCls": 0.11638034722222221,
-    "interactionCls": 0,
-    "rawShiftSum": 0.09857901308412904,
+    "interactionCls": 1.74109188126929e-5,
+    "rawShiftSum": 2.463736828462577e-5,
     "worstInteractionMedianMs": 31.899999976158142,
     "n": 40
   },
@@ -44,14 +45,14 @@
     "coldCls": 0.11638034722222221,
     "interactionCls": 0.002545835262345679,
     "rawShiftSum": 0.002545835262345679,
-    "worstInteractionMedianMs": 147.30000007152557,
+    "worstInteractionMedianMs": 147.80000007152557,
     "n": 60
   },
   {
     "surface": "S7",
     "coldCls": 0.11638034722222221,
-    "interactionCls": 0,
-    "rawShiftSum": 0.03633139734338831,
+    "interactionCls": 1.74109188126929e-5,
+    "rawShiftSum": 2.463736828462577e-5,
     "worstInteractionMedianMs": 31.74999988079071,
     "n": 60
   }

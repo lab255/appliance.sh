@@ -1,0 +1,2348 @@
+
+> appliance.sh@1.62.0 verify /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> bash scripts/verify.sh
+
+
+[1;34m==> 1/5 build (nx run-many --target=build --all)[0m
+
+> appliance.sh@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> nx run-many --target=build --all
+
+
+ NX   Running target build for 11 projects:
+
+- @appliance.sh/install-aws
+- @appliance.sh/api-server
+- @appliance.sh/bootstrap
+- @appliance.sh/console
+- @appliance.sh/desktop
+- @appliance.sh/helper
+- @appliance.sh/infra
+- @appliance.sh/app
+- @appliance.sh/cli
+- @appliance.sh/sdk
+- @appliance.sh/ui
+
+
+
+> nx run @appliance.sh/sdk:build  [existing outputs match the cache, left as is]
+
+(node:14751) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14755) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> tsc --module commonjs --outDir dist/cjs && tsc --module esnext --moduleResolution bundler --outDir dist/esm && pnpm run postbuild
+
+(node:14811) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 postbuild /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> pnpm exec ts-node scripts/postbuild.ts
+
+(node:14826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Version updated to v1.62.0 in files: [
+  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk/dist/cjs/version.js'[39m,
+  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk/dist/esm/version.js'[39m
+]
+(node:14828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/helper:build  [existing outputs match the cache, left as is]
+
+(node:27191) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27194) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/helper@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/helper
+> tsc
+
+
+> nx run @appliance.sh/ui:build  [existing outputs match the cache, left as is]
+
+(node:14752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/ui@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+> node scripts/generate-motion.mjs && vite build && tsc --emitDeclarationOnly
+
+(node:14786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14787) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 45 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/5aaf17e01d441991.woff2      5.80 kB
+dist/assets/bd1b9caace920419.woff2      6.18 kB
+dist/assets/be2d997590216caf.woff2      7.72 kB
+dist/assets/856e341d01723920.woff2     12.88 kB
+dist/assets/63e27dba1a5baa70.woff2     14.78 kB
+dist/assets/935ab355938e6cd9.woff2     15.27 kB
+dist/assets/e0f32d9ee75a83f4.woff2     17.38 kB
+dist/assets/e1dea13a93c69f52.woff2     29.64 kB
+dist/assets/af61b969e7f99996.woff2     29.90 kB
+dist/assets/93c5ac80e25cda1c.woff2     30.20 kB
+dist/assets/e3a8d2d7497a325b.woff2     41.52 kB
+dist/assets/2c295d99e26dcf35.woff2     72.92 kB
+dist/assets/5e6d4fe9d9f4bff8.woff2    133.34 kB
+dist/tokens.css                         2.59 kB │ gzip: 0.91 kB
+dist/theme.css                          2.60 kB │ gzip: 0.91 kB
+dist/styles.css                        35.20 kB │ gzip: 7.60 kB
+dist/motion/features.js                 0.11 kB │ gzip: 0.10 kB
+dist/lib/utils.js                       0.25 kB │ gzip: 0.19 kB
+dist/motion/tokens.js                   0.29 kB │ gzip: 0.22 kB
+dist/components/entity-label.js         0.41 kB │ gzip: 0.28 kB
+dist/hooks/use-tail-autoscroll.js       0.43 kB │ gzip: 0.27 kB
+dist/components/weight-label.js         0.49 kB │ gzip: 0.27 kB
+dist/lib/springs.js                     0.58 kB │ gzip: 0.30 kB
+dist/components/tag.js                  0.67 kB │ gzip: 0.37 kB
+dist/motion/overlay.js                  0.69 kB │ gzip: 0.38 kB
+dist/components/switch.js               0.72 kB │ gzip: 0.39 kB
+dist/motion-provider.js                 0.72 kB │ gzip: 0.38 kB
+dist/components/key-value-list.js       0.84 kB │ gzip: 0.46 kB
+dist/components/field.js                0.86 kB │ gzip: 0.40 kB
+dist/components/selection-control.js    0.89 kB │ gzip: 0.43 kB
+dist/components/input.js                0.89 kB │ gzip: 0.48 kB
+dist/components/empty-state.js          0.93 kB │ gzip: 0.40 kB
+dist/components/skeleton.js             0.98 kB │ gzip: 0.46 kB
+dist/motion/use-transition.js           0.98 kB │ gzip: 0.49 kB
+dist/components/skeleton-swap.js        1.08 kB │ gzip: 0.53 kB
+dist/components/page-shell.js           1.13 kB │ gzip: 0.54 kB
+dist/components/table.js                1.23 kB │ gzip: 0.45 kB
+dist/components/checkbox.js             1.28 kB │ gzip: 0.59 kB
+dist/components/scroll-area.js          1.38 kB │ gzip: 0.62 kB
+dist/components/section-card.js         1.40 kB │ gzip: 0.56 kB
+dist/components/command-snippet.js      1.66 kB │ gzip: 0.76 kB
+dist/components/popover.js              1.72 kB │ gzip: 0.78 kB
+dist/components/status-pill.js          1.87 kB │ gzip: 0.71 kB
+dist/components/button.js               2.07 kB │ gzip: 0.85 kB
+dist/components/tooltip.js              2.11 kB │ gzip: 0.90 kB
+dist/components/live-url.js             2.14 kB │ gzip: 0.87 kB
+dist/components/dialog.js               2.63 kB │ gzip: 1.03 kB
+dist/components/status-dot.js           2.68 kB │ gzip: 1.03 kB
+dist/components/confirm-dialog.js       2.79 kB │ gzip: 1.04 kB
+dist/components/hover-glide.js          3.04 kB │ gzip: 1.19 kB
+dist/components/accordion.js            3.18 kB │ gzip: 1.30 kB
+dist/components/toast.js                3.29 kB │ gzip: 1.32 kB
+dist/components/tabs.js                 3.31 kB │ gzip: 1.37 kB
+dist/components/banner.js               3.32 kB │ gzip: 1.20 kB
+dist/components/dropdown-menu.js        3.67 kB │ gzip: 1.06 kB
+dist/components/combobox.js             3.94 kB │ gzip: 1.52 kB
+dist/components/log-pane.js             4.39 kB │ gzip: 1.55 kB
+dist/components/select.js               4.73 kB │ gzip: 1.73 kB
+dist/components/long-operation.js       5.38 kB │ gzip: 1.98 kB
+dist/index.js                           5.42 kB │ gzip: 1.56 kB
+✓ built in 229ms
+
+> nx run @appliance.sh/infra:build  [existing outputs match the cache, left as is]
+
+(node:14881) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14882) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/infra@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/infra
+> tsc
+
+
+> nx run @appliance.sh/install-aws:build  [existing outputs match the cache, left as is]
+
+(node:27192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27195) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+> tsc
+
+
+> nx run @appliance.sh/bootstrap:build  [existing outputs match the cache, left as is]
+
+(node:14913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+> tsc
+
+
+> nx run @appliance.sh/api-server:build  [existing outputs match the cache, left as is]
+
+(node:27265) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27279) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/api-server@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server
+> tsc -p tsconfig.build.json
+
+
+> nx run @appliance.sh/cli:build  [existing outputs match the cache, left as is]
+
+(node:27315) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27316) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> tsc && pnpm run compile
+
+(node:27342) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 compile /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> bun build src/appliance.ts --compile --outfile=dist/appliance
+
+[0m[2m[[1m1.716s[0m[2m][0m  [32mbundle[0m  9226 modules
+ [0m[2m[[1m377ms[0m[2m][0m [32mcompile[0m  [1m[34mdist/appliance[0m
+
+> nx run @appliance.sh/app:build
+
+(node:59137) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59138) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/app@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> vite build && tsc --emitDeclarationOnly
+
+(node:59153) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 2426 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/app.css                 617.11 kB │ gzip: 434.09 kB
+dist/index.js                  0.54 kB │ gzip:   0.32 kB │ map:     0.09 kB
+dist/index-C9Ahea4C.js        12.52 kB │ gzip:   5.10 kB │ map:    58.24 kB
+dist/features-DBPExLf-.js     58.36 kB │ gzip:  18.74 kB │ map:   251.79 kB
+dist/index-ByqGhOxy.js     1,980.49 kB │ gzip: 473.39 kB │ map: 5,228.31 kB
+✓ built in 1.89s
+
+> nx run @appliance.sh/console:build
+
+(node:59168) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59169) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/console@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/console
+> vite build
+
+(node:59198) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 35 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.54 kB │ gzip:   0.32 kB
+dist/assets/index-DKxJHkO0.css               617.11 kB │ gzip: 434.09 kB
+dist/assets/index-C9Ahea4C-4Aj90gcE.js         7.17 kB │ gzip:   3.66 kB │ map:    25.82 kB
+dist/assets/features-DBPExLf--BuOV78vR.js     40.56 kB │ gzip:  15.43 kB │ map:   116.85 kB
+dist/assets/index-CGkcsFT-.js              1,563.63 kB │ gzip: 447.00 kB │ map: 4,480.04 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.10s
+
+> nx run @appliance.sh/desktop:build
+
+(node:59167) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59170) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> pnpm run sidecar:build && pnpm run cli:bundle && pnpm run vm:build && pnpm run vm:bundle && vite build
+
+(node:59199) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 sidecar:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> tsc -p sidecar/tsconfig.json --noEmit && bun build sidecar/src/main.ts --target=node --outfile=sidecar/dist/main.mjs
+
+[32mBundled 8114 modules in 1023ms[0m
+
+  [34mmain.mjs[33m  39.13 MB  [2m(entry point)[0m
+
+(node:59229) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 cli:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/copy-cli.mjs
+
+    Finished `release` profile [optimized] target(s) in 0.49s
+copy-cli: packages/cli/dist/appliance → packages/desktop/src-tauri/binaries/appliance-aarch64-apple-darwin
+copy-cli: packages/credhelper/target/aarch64-apple-darwin/release/appliance-credhelper → packages/desktop/src-tauri/binaries/appliance-credhelper-aarch64-apple-darwin
+(node:59296) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 vm:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/build-vm.mjs
+
+    Finished `release` profile [optimized] target(s) in 0.18s
+target/release/appliance-vm: replacing existing signature
+signed target/release/appliance-vm with com.apple.security.virtualization
+(node:59342) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 vm:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> node scripts/copy-vm.mjs
+
+copy-vm: packages/vm/target/release/appliance-vm → packages/desktop/src-tauri/vm-bin/appliance-vm
+(node:59359) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v6.4.2 building for production...
+transforming...
+✓ 192 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                0.58 kB │ gzip:   0.34 kB
+dist/assets/index-BfHaT14u.css               617.04 kB │ gzip: 434.08 kB
+dist/assets/index-C9Ahea4C-CrMUND3h.js         7.13 kB │ gzip:   3.66 kB │ map:    25.80 kB
+dist/assets/index-B-_7gt5X.js                  8.16 kB │ gzip:   4.03 kB │ map:    57.36 kB
+dist/assets/features-DBPExLf--Dq5UW3Av.js     40.40 kB │ gzip:  15.40 kB │ map:   116.68 kB
+dist/assets/index-x7KX7apN.js              1,712.02 kB │ gzip: 491.81 kB │ map: 5,185.78 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.92s
+
+
+
+ NX   Successfully ran target build for 11 projects
+
+Nx read the output from the cache instead of running the command for 8 out of 11 tasks.
+
+
+[1;34m==> 2/5 typecheck (nx run-many --target=typecheck --all)[0m
+
+ NX   Running target typecheck for 6 projects:
+
+- @appliance.sh/install-aws
+- @appliance.sh/bootstrap
+- @appliance.sh/console
+- @appliance.sh/desktop
+- @appliance.sh/app
+- @appliance.sh/ui
+
+
+
+> nx run @appliance.sh/ui:typecheck
+
+(node:59407) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59408) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/ui@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+> tsc --noEmit
+
+
+> nx run @appliance.sh/install-aws:typecheck
+
+(node:59406) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59410) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+> tsc --noEmit
+
+
+> nx run @appliance.sh/desktop:typecheck
+
+(node:59476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59477) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> tsc --noEmit
+
+
+> nx run @appliance.sh/console:typecheck
+
+(node:59516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59517) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/console@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/console
+> tsc --noEmit
+
+
+> nx run @appliance.sh/app:typecheck
+
+(node:59474) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59475) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/app@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> tsc --noEmit
+
+
+> nx run @appliance.sh/bootstrap:typecheck
+
+(node:59405) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59409) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+> tsc --noEmit
+
+
+
+
+ NX   Successfully ran target typecheck for 6 projects
+
+
+
+[1;34m==> 3/5 lint:check (eslint + prettier --check)[0m
+
+> appliance.sh@1.62.0 lint:check /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh
+> node scripts/check-design-tokens.mjs && pnpm exec eslint . && prettier . --check
+
+Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.
+Checking formatting...
+All matched files use Prettier code style!
+
+[1;34m==> 4/5 test (nx run-many --target=test --all)[0m
+
+ NX   Running target test for 10 projects:
+
+- @appliance.sh/install-aws
+- @appliance.sh/api-server
+- @appliance.sh/bootstrap
+- @appliance.sh/desktop
+- @appliance.sh/helper
+- @appliance.sh/infra
+- @appliance.sh/app
+- @appliance.sh/cli
+- @appliance.sh/sdk
+- @appliance.sh/ui
+
+
+
+> nx run @appliance.sh/sdk:test  [existing outputs match the cache, left as is]
+
+(node:37702) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+> vitest run
+
+(node:37749) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/sdk
+
+(node:37784) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37782) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37796) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37789) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37795) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37793) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37792) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37794) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/models/appliance-base.spec.ts (15 tests) 6ms
+ ✓ src/models/catalogue-transport.spec.ts (12 tests) 37ms
+ ✓ src/models/appliance-v2.spec.ts (39 tests) 24ms
+ ✓ src/signing/signing.spec.ts (17 tests) 27ms
+(node:37830) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37831) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/models/release-trust.spec.ts (10 tests) 57ms
+(node:37833) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37834) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/models/catalogue-trust.spec.ts (20 tests) 212ms
+(node:37836) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37839) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/client/appliance-client.spec.ts (15 tests) 36ms
+ ✓ src/models/models.spec.ts (34 tests) 10ms
+
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+   Start at  21:07:48
+   Duration  1.04s (transform 597ms, setup 0ms, collect 2.06s, tests 409ms, environment 1ms, prepare 939ms)
+
+(node:37843) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37845) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/infra:test  [existing outputs match the cache, left as is]
+
+(node:37703) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37706) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/infra@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/infra
+> vitest run
+
+(node:37748) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/infra
+
+(node:37791) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37781) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37783) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37785) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37787) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37779) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37790) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37788) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/aws/edge-router-handler.spec.ts (1 test) 5ms
+(node:37827) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/local/LocalContainerDeploymentService.spec.ts (35 tests) 6ms
+(node:37852) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/ApplianceDeploymentService.edge-convergence.spec.ts (3 tests) 5ms
+(node:37887) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/lib/aws/ApplianceStack.spec.ts > ApplianceStack > uses the scoped role path, boundary output, and policy path for the no-build branch
+info: [runtime] ApplianceStack sample: timeout=30s memory=512MB storage=default
+
+(node:37781) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+ ✓ src/lib/aws/ApplianceStack.spec.ts (3 tests) 9283ms
+   ✓ ApplianceStack > uses the scoped role path, boundary output, and policy path for the no-build branch  9234ms
+ ✓ src/lib/aws/ApplianceEdgeBase.spec.ts (2 tests) 9511ms
+   ✓ ApplianceEdgeBase > creates edge-only resources, system routing, NONE permissions, and the edge-role invoke grant  9505ms
+(node:38658) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  5 passed (5)
+      Tests  44 passed (44)
+   Start at  21:07:48
+   Duration  11.04s (transform 297ms, setup 0ms, collect 3.82s, tests 18.81s, environment 2ms, prepare 711ms)
+
+(node:38661) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/bootstrap:test  [existing outputs match the cache, left as is]
+
+(node:37704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37707) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+> vitest run
+
+(node:37745) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/bootstrap
+
+(node:37776) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37771) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37775) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37770) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37773) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37774) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37777) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37778) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/runtime/ecr-mirror.spec.ts (5 tests) 5ms
+(node:37826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/deprecation.spec.ts (2 tests) 3ms
+
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+   Start at  21:07:48
+   Duration  953ms (transform 198ms, setup 0ms, collect 613ms, tests 8ms, environment 0ms, prepare 206ms)
+
+(node:37841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/ui:test  [existing outputs match the cache, left as is]
+
+(node:37847) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37850) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/ui@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+> vitest run
+
+(node:37867) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/ui
+
+(node:37919) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37921) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37922) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37923) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37924) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37925) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37926) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37927) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/table.test.tsx (2 tests) 192ms
+(node:37946) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/tabs.test.tsx (3 tests) 356ms
+ ✓ src/components/selection-controls.test.tsx (9 tests) 346ms
+(node:38060) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38059) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/hover-glide.test.tsx (7 tests) 838ms
+   ✓ holds the last rect across gaps, padding, active and disabled rows, then glides onward  400ms
+ ✓ src/components/icon-tooltip.test.tsx (2 tests) 769ms
+   ✓ names the control and exposes the same changing label on keyboard focus without losing ref or click  314ms
+   ✓ shows a hover hint and preserves native disabled behavior  454ms
+(node:38153) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/combobox.test.tsx (3 tests) 714ms
+   ✓ Combobox > handles empty results, resets stale active descendants and ignores IME Enter  306ms
+(node:38154) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-cyrillic-ext-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-cyrillic-ext-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-cyrillic-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-cyrillic-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-greek-ext-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-greek-ext-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-greek-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-greek-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-vietnamese-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-vietnamese-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-latin-ext-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-latin-ext-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/inter-latin-standard-normal.woff2 exposes optical size and the full weight range
+./files/inter-latin-standard-normal.woff2: fvar {"opsz":{"name":"Optical size","min":14,"default":14,"max":32},"wght":{"name":"Weight","min":100,"default":400,"max":900}}
+
+ ✓ src/font-axes.test.ts (8 tests) 43ms
+(node:38167) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/accordion.test.tsx (5 tests) 1225ms
+   ✓ reverses a partial entrance and reopens the same measured-height node during exit  875ms
+ ✓ src/components/fluid-policy.test.ts (5 tests) 12ms
+(node:38170) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38171) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/weight-label.test.tsx (1 test) 100ms
+ ✓ src/components/scroll-area.test.tsx (1 test) 210ms
+ ✓ src/components/overlays.test.tsx (11 tests) 1490ms
+   ✓ Overlay design system interactions > delays the first tooltip and opens subsequent hints without delay  455ms
+(node:38174) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38175) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/design-system.test.tsx (28 tests) 100ms
+(node:38176) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/select.test.tsx (6 tests) 1456ms
+   ✓ Select > labels the trigger, selects with Enter, and preserves raw form values including empty  654ms
+(node:38179) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/motion/use-transition.test.tsx (1 test) 62ms
+
+ Test Files  15 passed (15)
+      Tests  92 passed (92)
+   Start at  21:07:50
+   Duration  2.89s (transform 443ms, setup 0ms, collect 6.61s, tests 7.91s, environment 6.19s, prepare 1.04s)
+
+(node:38181) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38197) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/install-aws:test  [existing outputs match the cache, left as is]
+
+(node:37849) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37851) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+> vitest run
+
+(node:37881) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/install-aws
+
+(node:37898) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37901) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37902) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37899) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37900) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37897) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37896) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37903) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37904) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/ecr-mirror.spec.ts (11 tests) 25ms
+ ✓ src/template.spec.ts (21 tests) 25ms
+(node:37916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37917) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/cloud-install.spec.ts (18 tests) 79ms
+ ✓ src/cloud-lifecycle.spec.ts (18 tests) 91ms
+(node:37938) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  68 passed (68)
+   Start at  21:07:50
+   Duration  1.09s (transform 273ms, setup 0ms, collect 1.66s, tests 221ms, environment 0ms, prepare 211ms)
+
+(node:37939) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/helper:test  [existing outputs match the cache, left as is]
+
+(node:37942) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37943) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/helper@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/helper
+> vitest run
+
+(node:37971) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/helper
+
+(node:38112) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38113) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38114) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38138) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38137) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38142) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38139) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38144) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38145) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/able-account.spec.ts (4 tests) 2ms
+ ✓ src/credential-helper.spec.ts (5 tests) 5ms
+(node:38158) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38159) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/api-server.spec.ts (3 tests) 4ms
+
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+   Start at  21:07:52
+   Duration  506ms (transform 219ms, setup 0ms, collect 289ms, tests 11ms, environment 0ms, prepare 322ms)
+
+(node:38164) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/cli:test  [existing outputs match the cache, left as is]
+
+(node:38166) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38168) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+> vitest run
+
+(node:38196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/cli
+
+(node:38211) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38209) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38210) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38213) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38212) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38217) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38214) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38215) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38216) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/agent.spec.ts (52 tests) 28ms
+ ✓ src/utils/credential-store.spec.ts (15 tests) 78ms
+(node:38259) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38266) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/api-server-artifact.spec.ts (21 tests) 207ms
+ ✓ src/utils/runtime-doctor.spec.ts (56 tests) 11ms
+(node:38324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/doctor-bundle.spec.ts (11 tests) 185ms
+ ✓ src/utils/bundle-read.spec.ts (36 tests | 1 skipped) 531ms
+(node:38348) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38349) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38350) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sandbox/evaluate-manifest.spec.ts (16 tests) 369ms
+(node:38354) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/appliance-runtime.spec.ts (21 tests) 348ms
+ ✓ src/utils/mcp-server.spec.ts (13 tests) 292ms
+(node:38356) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/agents-registry.spec.ts (18 tests) 19ms
+(node:38366) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38368) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/stack.spec.ts (22 tests) 47ms
+(node:38386) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ scripts/binary-integrity.spec.mjs (8 tests) 301ms
+ ✓ src/utils/preflight.spec.ts (15 tests) 297ms
+(node:38494) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/entitlements.spec.ts (11 tests) 846ms
+   ✓ signed entitlement store > serializes cross-process writers without losing a CAS mutation  311ms
+ ✓ src/appliance-runtime-install.spec.ts (20 tests) 1122ms
+ ✓ src/utils/microvm-update.spec.ts (7 tests) 232ms
+(node:38506) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38508) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38507) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/appliance-runtime-open.spec.ts (11 tests) 8ms
+ ✓ src/utils/dev-watch.spec.ts (8 tests) 12ms
+ ✓ src/utils/cloud-update-output.spec.ts (7 tests) 4ms
+ ✓ src/utils/cluster-gc.spec.ts (23 tests) 137ms
+(node:38515) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38514) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38519) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/catalogue-index.spec.ts (2 tests) 522ms
+   ✓ keeps blacklist generations separate from index generations and pins exact blacklist snapshots  496ms
+ ✓ src/utils/keychain.spec.ts (11 tests) 2ms
+ ✓ src/utils/installed-apps.spec.ts (6 tests) 40ms
+ ✓ src/utils/cluster-target.spec.ts (12 tests) 4ms
+(node:38533) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38534) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38539) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38540) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/utils/bundle-package.spec.ts > runnable payload packaging > reports when docker is not installed for an image reference
+[2mExporting fixture:latest for linux/amd64 as an OCI image tar.[22m
+
+ ✓ src/utils/bundle-package.spec.ts (6 tests) 90ms
+(node:38544) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/microvm-up.spec.ts (11 tests) 2ms
+(node:38546) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/sandbox.spec.ts (10 tests) 3ms
+ ✓ src/utils/argv.spec.ts (8 tests) 2ms
+(node:38558) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38557) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/common.spec.ts (7 tests) 7ms
+ ✓ src/utils/release-evidence.spec.ts (4 tests) 233ms
+(node:38567) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/runtime-registry.spec.ts (4 tests) 60ms
+ ✓ src/utils/pod-health.spec.ts (8 tests) 2ms
+(node:38571) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38572) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38573) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/errors.spec.ts (10 tests) 9ms
+(node:38577) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/cluster-registry.spec.ts (9 tests) 2ms
+ ✓ scripts/normalize-credential-helper-pe.spec.mjs (2 tests) 6ms
+ ✓ src/utils/self-update-status.spec.ts (13 tests) 7ms
+ ✓ src/utils/deploy-core.spec.ts (4 tests) 6ms
+(node:38592) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38593) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38602) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38603) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ scripts/credential-helper-digest.spec.mjs (4 tests) 316ms
+(node:38609) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/bundle-sign.spec.ts (3 tests) 6ms
+(node:38614) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/entitlement-lock.spec.ts (5 tests) 66ms
+(node:38619) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/upgrade-channel.spec.ts (5 tests) 2ms
+(node:38648) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/appliance-runtime-search.spec.ts (1 test) 249ms
+(node:38654) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/deploy-poll.spec.ts (2 tests) 9ms
+ ✓ scripts/catalogue-public-key.spec.mjs (2 tests) 148ms
+(node:38673) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/bundle-deploy.spec.ts (5 tests) 1553ms
+   ✓ deploy bundle discrimination > preserves v1 deploy behaviour for symlinks and more than 4096 source entries  1442ms
+ ✓ src/utils/log-mux.spec.ts (4 tests) 3ms
+(node:38674) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38687) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38688) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/open-external-url.spec.ts (4 tests) 1ms
+ ✓ src/utils/runtime-wsl-egress.spec.ts (2 tests) 2ms
+ ✓ src/utils/bundle-digest.spec.ts (3 tests) 2ms
+(node:38697) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38698) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38709) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/runtime-reconcile.spec.ts (1 test) 2ms
+(node:38722) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/utils/bundle-oci.spec.ts (2 tests) 15ms
+ ✓ src/utils/profiles-lock.spec.ts (1 test) 2ms
+ ✓ src/utils/deploy-cluster.spec.ts (2 tests) 2ms
+(node:38736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38738) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/appliance-package.spec.ts (2 tests) 1711ms
+   ✓ appliance package > packages a manifest v2 fixture with --image pointing at a generated tiny tarball  1013ms
+   ✓ appliance package > explains that manifest v1 remains a source build  695ms
+(node:38762) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/appliance-runtime-binary.spec.ts (1 test) 5387ms
+   ✓ binary Runtime ELF fixture > generates a tiny static Linux ELF at test time  5386ms
+ ✓ src/appliance-cloud-install-bundle.spec.ts (1 test) 5095ms
+   ✓ standalone cloud installer bundle > loads the embedded CloudFormation YAML outside the workspace  5094ms
+(node:39003) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39007) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/appliance-routing.spec.ts (13 tests) 13999ms
+   ✓ appliance umbrella routing > groups top-level help by product surface  309ms
+   ✓ appliance umbrella routing > resolves Builder and existing shortcut aliases without changing command help  5178ms
+   ✓ appliance umbrella routing > routes cloud baseline-update and documents the scoped/admin escape hatch  514ms
+   ✓ appliance umbrella routing > documents signed cloud update, follow, JSON timing, and local break glass  1194ms
+   ✓ appliance umbrella routing > rejects JSON for the local path because it has no server job record  1307ms
+   ✓ appliance umbrella routing > validates the scheduled cloud update policy before profile or AWS access  3424ms
+   ✓ appliance umbrella routing > requires explicit confirmation before restoring AdministratorAccess  363ms
+   ✓ appliance umbrella routing > routes implemented runtime aliases to the shared command implementation  623ms
+   ✓ appliance umbrella routing > keeps runtime install separate from cluster-defaulting top-level install  491ms
+
+ Test Files  57 passed (57)
+      Tests  580 passed | 1 skipped (581)
+   Start at  21:07:53
+   Duration  15.91s (transform 1.96s, setup 0ms, collect 23.76s, tests 34.64s, environment 7ms, prepare 5.98s)
+
+(node:39167) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/api-server:test  [existing outputs match the cache, left as is]
+
+(node:38747) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38781) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/api-server@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server
+> vitest run
+
+(node:38848) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server
+
+(node:38915) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38919) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38921) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38917) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38918) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:03.582Z","level":"info","message":"environment created","projectId":"proj-1","environmentId":"env-1","environmentName":"production"}
+{"timestamp":"2026-11-11T13:08:03.588Z","level":"error","message":"create environment failed","error":"Cannot read properties of undefined (reading 'id')","stack":"TypeError: Cannot read properties of undefined (reading 'id')\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/environments/index.ts:32:34\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)","projectId":"proj-1"}
+{"timestamp":"2026-11-11T13:08:03.623Z","level":"info","message":"environment deleted","projectId":"proj-1","environmentId":"env-1"}
+ ✓ src/services/deployment-executor.edge.spec.ts (5 tests) 60ms
+{"timestamp":"2026-11-11T13:08:03.679Z","level":"info","message":"environment deleted","projectId":"proj-1","environmentId":"env-1"}
+{"timestamp":"2026-11-11T13:08:03.690Z","level":"info","message":"env vars set","environmentId":"env-1","keys":["API_KEY"]}
+{"timestamp":"2026-11-11T13:08:03.696Z","level":"info","message":"env var unset","environmentId":"env-1","key":"API_KEY"}
+{"timestamp":"2026-11-11T13:08:03.693Z","level":"error","message":"set env vars failed","error":"[\n  {\n    \"code\": \"invalid_key\",\n    \"origin\": \"record\",\n    \"issues\": [\n      {\n        \"origin\": \"string\",\n        \"code\": \"invalid_format\",\n        \"format\": \"regex\",\n        \"pattern\": \"/^[A-Za-z_][A-Za-z0-9_]*$/\",\n        \"path\": [],\n        \"message\": \"env var names must match [A-Za-z_][A-Za-z0-9_]*\"\n      }\n    ],\n    \"path\": [\n      \"variables\",\n      \"1bad-name\"\n    ],\n    \"message\": \"Invalid key in record\"\n  }\n]","stack":"ZodError: [\n  {\n    \"code\": \"invalid_key\",\n    \"origin\": \"record\",\n    \"issues\": [\n      {\n        \"origin\": \"string\",\n        \"code\": \"invalid_format\",\n        \"format\": \"regex\",\n        \"pattern\": \"/^[A-Za-z_][A-Za-z0-9_]*$/\",\n        \"path\": [],\n        \"message\": \"env var names must match [A-Za-z_][A-Za-z0-9_]*\"\n      }\n    ],\n    \"path\": [\n      \"variables\",\n      \"1bad-name\"\n    ],\n    \"message\": \"Invalid key in record\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/environments/index.ts:175:32\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"}
+ ✓ src/routes/environments/environments.spec.ts (17 tests) 130ms
+(node:38959) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38961) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:03.948Z","level":"info","message":"self-update-check skipped: policy off"}
+{"timestamp":"2026-11-11T13:08:03.956Z","level":"info","message":"self-update-check current","policy":"auto","version":"1.57.0"}
+{"timestamp":"2026-11-11T13:08:03.957Z","level":"warn","message":"self-update-check refused older release generation","policy":"auto","latestGeneration":6,"runningGeneration":7}
+{"timestamp":"2026-11-11T13:08:03.957Z","level":"info","message":"self-update-check update available","policy":"notify","version":"1.58.0","generation":8}
+{"timestamp":"2026-11-11T13:08:03.958Z","level":"info","message":"self-update-check update available","policy":"notify","version":"1.58.0","generation":8}
+{"timestamp":"2026-11-11T13:08:03.959Z","level":"info","message":"self-update-check scheduled job","policy":"auto","jobId":"selfupdate_scheduled","reused":false,"version":"1.58.0","generation":8}
+{"timestamp":"2026-11-11T13:08:03.960Z","level":"info","message":"self-update-check scheduled job","policy":"auto","jobId":"one","reused":false,"version":"1.58.0","generation":8}
+{"timestamp":"2026-11-11T13:08:03.960Z","level":"info","message":"self-update-check scheduled job","policy":"auto","jobId":"one","reused":true,"version":"1.58.0","generation":8}
+{"timestamp":"2026-11-11T13:08:03.961Z","level":"info","message":"self-update-check skipped: live self-update lease","policy":"auto","jobId":"selfupdate_live"}
+{"timestamp":"2026-11-11T13:08:03.985Z","level":"info","message":"self-update completed","jobId":"selfupdate_8e8b9a14-68f1-456c-8981-a4f9391c24b7","digestPrefix":"sha256:aaaaaaaaaaaa","phase":"complete","result":"succeeded"}
+{"timestamp":"2026-11-11T13:08:03.995Z","level":"error","message":"self-update worker resume dispatch failed; job remains resumable","error":"worker unavailable","stack":"Error: worker unavailable\n    at redactSelfUpdateError (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-redaction.ts:17:10)\n    at SelfUpdateService.dispatchForResume (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update.service.ts:473:88)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateService.getAndResume (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update.service.ts:298:7)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update.service.spec.ts:186:21\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_3818d523-db03-4e1d-ab89-b416c2aa3168","phase":"verifying"}
+{"timestamp":"2026-11-11T13:08:04.004Z","level":"error","message":"self-update-check failed","error":"release signature envelope is malformed","stack":"Error: release signature envelope is malformed\n    at redactSelfUpdateError (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-redaction.ts:17:10)\n    at SelfUpdateSchedulerService.checkOwnerTenant (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-scheduler.service.ts:263:48)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-scheduler.service.spec.ts:259:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","policy":"notify"}
+ ✓ src/services/self-update-scheduler.service.spec.ts (13 tests) 70ms
+{"timestamp":"2026-11-11T13:08:04.013Z","level":"error","message":"self-update recovery exhausted","error":"target health/version probe failed; recovery submission failed: recovery submission rejected","stack":"Error: target health/version probe failed; recovery submission failed: recovery submission rejected\n    at SelfUpdateExecutor.exhaust (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateExecutor.recover (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:579:9)\n    at SelfUpdateExecutor.executeWithLease (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:433:16)\n    at SelfUpdateExecutor.execute (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:309:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_5e460ac3-a067-4bc1-8af6-b4ccd8163deb","phase":"complete","result":"failed"}
+ ✓ src/services/self-update.service.spec.ts (25 tests) 44ms
+{"timestamp":"2026-11-11T13:08:04.099Z","level":"error","message":"self-update recovery exhausted","error":"target health/version probe failed; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]","stack":"Error: target health/version probe failed; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]\n    at SelfUpdateExecutor.exhaust (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateExecutor.recover (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:588:7)\n    at SelfUpdateExecutor.executeWithLease (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:433:16)\n    at SelfUpdateExecutor.execute (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:359:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_7dc9dfc1-0d8c-4b61-8d03-d155e6159424","phase":"complete","result":"failed"}
+(node:38963) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:04.106Z","level":"warn","message":"self-update completed but availability marker cleanup failed","jobId":"selfupdate_a1d99d20-b89f-422f-9f1d-21b7f49da2a1","error":"APPLIANCE_BASE_CONFIG environment variable is required"}
+{"timestamp":"2026-11-11T13:08:04.106Z","level":"info","message":"self-update completed","jobId":"selfupdate_a1d99d20-b89f-422f-9f1d-21b7f49da2a1","digestPrefix":"sha256:aaaaaaaaaaaa","phase":"complete","result":"succeeded"}
+{"timestamp":"2026-11-11T13:08:04.103Z","level":"error","message":"get pod logs failed","error":"pods \"nope\" not found","stack":"Error: pods \"nope\" not found\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/workloads/workloads.spec.ts:190:54\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)","podName":"nope"}
+{"timestamp":"2026-11-11T13:08:04.118Z","level":"info","message":"api key created","keyName":"cli"}
+(node:38964) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:04.131Z","level":"error","message":"self-update recovery exhausted","error":"CloudFormation reached UPDATE_ROLLBACK_FAILED; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]","stack":"Error: CloudFormation reached UPDATE_ROLLBACK_FAILED; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]\n    at SelfUpdateExecutor.exhaust (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at SelfUpdateExecutor.recover (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:543:7)\n    at SelfUpdateExecutor.executeWithLease (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:413:16)\n    at SelfUpdateExecutor.execute (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:535:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_84ca9a92-a2e2-4992-8c09-1d36de981da7","phase":"complete","result":"failed"}
+ ✓ src/services/self-update-executor.service.spec.ts (22 tests) 157ms
+{"timestamp":"2026-11-11T13:08:04.181Z","level":"warn","message":"bootstrap auth failed"}
+{"timestamp":"2026-11-11T13:08:04.183Z","level":"warn","message":"bootstrap auth failed"}
+{"timestamp":"2026-11-11T13:08:04.187Z","level":"warn","message":"auth failed: missing signature headers","path":"/api/v1/workloads"}
+{"timestamp":"2026-11-11T13:08:04.190Z","level":"warn","message":"auth failed: missing signature headers","path":"/api/v1/pods/demo-abc/logs"}
+ ✓ src/routes/workloads/workloads.spec.ts (14 tests) 228ms
+{"timestamp":"2026-11-11T13:08:04.199Z","level":"error","message":"create key failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/bootstrap/index.ts:39:31\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"}
+{"timestamp":"2026-11-11T13:08:04.207Z","level":"info","message":"invite redeemed","newKeyId":"apikey_new","keyName":"teammate"}
+(node:38967) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:04.221Z","level":"error","message":"redeem invite failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"token\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"token\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/bootstrap/index.ts:58:37\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-11T13:08:04.225Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/self-update/check","keyId":"member","role":"member"}
+{"timestamp":"2026-11-11T13:08:04.245Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/self-update","keyId":"admin","role":"member"}
+{"timestamp":"2026-11-11T13:08:04.247Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/self-update/selfupdate_job-1","keyId":"admin","role":"member"}
+ ✓ src/routes/bootstrap/bootstrap.spec.ts (16 tests) 204ms
+{"timestamp":"2026-11-11T13:08:04.274Z","level":"warn","message":"authz failed: owner tenant required","path":"/api/v1/self-update","keyId":"admin","tenantId":"tenant-b"}
+(node:38968) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:04.283Z","level":"warn","message":"authz failed: owner tenant required","path":"/api/v1/self-update/selfupdate_job-1","keyId":"admin","tenantId":"tenant-b"}
+{"timestamp":"2026-11-11T13:08:04.296Z","level":"warn","message":"self-update release rejected","keyId":"admin","code":"unknown-key"}
+ ✓ src/routes/self-update/self-update.spec.ts (14 tests) 255ms
+(node:38971) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38972) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:04.533Z","level":"warn","message":"auth failed: missing signature headers","path":"/api/v1/test"}
+{"timestamp":"2026-11-11T13:08:04.548Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature verification failed","cause":"unknown_key","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://127.0.0.1:65417/api/v1/test","protocol":"http","trustProxy":false,"host":"127.0.0.1:65417","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","host","signature","signature-input"]}}
+{"timestamp":"2026-11-11T13:08:04.589Z","level":"info","message":"generated framework Dockerfile","framework":"node"}
+ ✓ src/services/image-build.service.spec.ts (17 tests) 93ms
+{"timestamp":"2026-11-11T13:08:04.636Z","level":"warn","message":"auth failed: content-digest mismatch","path":"/api/v1/test"}
+{"timestamp":"2026-11-11T13:08:04.646Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature verification failed","cause":"unknown_key","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
+{"timestamp":"2026-11-11T13:08:04.650Z","level":"warn","message":"auth failed: missing content-digest","path":"/api/v1/test"}
+{"timestamp":"2026-11-11T13:08:04.653Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature verification failed","cause":"signature_mismatch","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
+{"timestamp":"2026-11-11T13:08:04.658Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature is too old","cause":"clock_skew","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
+{"timestamp":"2026-11-11T13:08:04.662Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"No corresponding signature for input","cause":"malformed_signature","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
+ ✓ src/services/deployment.service.spec.ts (6 tests) 6ms
+ ✓ src/middleware/auth.spec.ts (10 tests) 142ms
+{"timestamp":"2026-11-11T13:08:04.668Z","level":"info","message":"api key rotated","previousKeyId":"apikey_old","newKeyId":"apikey_new"}
+{"timestamp":"2026-11-11T13:08:04.688Z","level":"error","message":"rotate key failed","error":"storage down","stack":"Error: storage down\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/keys/keys.spec.ts:79:50\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)"}
+{"timestamp":"2026-11-11T13:08:04.702Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/keys","keyId":"apikey_b","role":"member"}
+{"timestamp":"2026-11-11T13:08:04.711Z","level":"info","message":"api key created","byKeyId":"apikey_admin","newKeyId":"apikey_new","keyName":"teammate","role":"member"}
+(node:38976) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38975) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38977) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:04.754Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/keys","keyId":"apikey_member","role":"member"}
+{"timestamp":"2026-11-11T13:08:04.759Z","level":"info","message":"api key revoked","byKeyId":"apikey_admin","revokedKeyId":"apikey_other"}
+{"timestamp":"2026-11-11T13:08:04.849Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/keys/apikey_other","keyId":"apikey_member","role":"member"}
+ ✓ src/routes/keys/keys.spec.ts (14 tests) 251ms
+(node:38992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:05.043Z","level":"warn","message":"environment health lookup failed","environmentId":"env-1","stackName":"demo-prod","error":"Error: ECONNREFUSED"}
+ ✓ src/services/environment-health.service.spec.ts (10 tests) 96ms
+ ✓ src/services/base-config.service.spec.ts (5 tests) 12ms
+{"timestamp":"2026-11-11T13:08:05.095Z","level":"info","message":"deployment started","environmentId":"env-1","action":"deploy"}
+{"timestamp":"2026-11-11T13:08:05.096Z","level":"info","message":"deployment dispatched","deploymentId":"deploy-1","status":"succeeded"}
+{"timestamp":"2026-11-11T13:08:05.104Z","level":"info","message":"deployment started","environmentId":"env-1","action":"destroy"}
+{"timestamp":"2026-11-11T13:08:05.104Z","level":"info","message":"deployment dispatched","deploymentId":"deploy-2","status":"succeeded"}
+{"timestamp":"2026-11-11T13:08:05.114Z","level":"error","message":"execute deployment failed","error":"[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"deploy\",\n      \"destroy\",\n      \"refresh\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"deploy\\\"|\\\"destroy\\\"|\\\"refresh\\\"\"\n  }\n]","stack":"ZodError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"deploy\",\n      \"destroy\",\n      \"refresh\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"deploy\\\"|\\\"destroy\\\"|\\\"refresh\\\"\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/deployments/index.ts:11:35\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-11T13:08:05.131Z","level":"error","message":"execute deployment failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"environmentId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"environmentId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/deployments/index.ts:11:35\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+(node:38996) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/services/tenant-context.spec.ts (14 tests) 3ms
+(node:38995) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:05.173Z","level":"info","message":"deployment started","environmentId":"env-edge","action":"deploy"}
+{"timestamp":"2026-11-11T13:08:05.173Z","level":"info","message":"deployment dispatched","deploymentId":"deploy-edge","status":"pending"}
+ ✓ src/routes/deployments/deployments.spec.ts (8 tests) 182ms
+ ✓ src/services/storage.service.spec.ts (12 tests) 12ms
+(node:38998) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/services/environment.service.spec.ts (9 tests) 6ms
+(node:39001) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/services/api-key.service.spec.ts (14 tests) 8ms
+(node:39000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39006) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39010) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:05.767Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-lofZzY","mode":"full"}
+{"timestamp":"2026-11-11T13:08:05.784Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-lofZzY","mode":"full"}
+{"timestamp":"2026-11-11T13:08:05.788Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-lofZzY","mode":"full"}
+{"timestamp":"2026-11-11T13:08:05.793Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-lofZzY","mode":"full"}
+{"timestamp":"2026-11-11T13:08:05.802Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-lofZzY","mode":"full"}
+{"timestamp":"2026-11-11T13:08:05.806Z","level":"info","message":"web console bundle not found — serving API only","hint":"set APPLIANCE_CONSOLE_DIR or stage console-dist next to the api-server package"}
+{"timestamp":"2026-11-11T13:08:05.809Z","level":"info","message":"web console disabled (APPLIANCE_CONSOLE_MODE=off) — serving API only"}
+{"timestamp":"2026-11-11T13:08:05.812Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-lofZzY","mode":"bootstrap"}
+ ✓ src/console-static.spec.ts (8 tests) 54ms
+ ✓ src/services/project.service.spec.ts (8 tests) 40ms
+ ✓ src/services/invite.service.spec.ts (7 tests) 10ms
+(node:39014) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39015) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39017) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:06.095Z","level":"info","message":"project created","projectId":"proj-1","projectName":"my-project"}
+{"timestamp":"2026-11-11T13:08:06.102Z","level":"error","message":"create project failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/projects/index.ts:10:32\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-11T13:08:06.114Z","level":"info","message":"project deleted","projectId":"proj-1"}
+ ✓ src/routes/projects/projects.spec.ts (7 tests) 72ms
+ ✓ src/services/env-var.service.spec.ts (5 tests) 5ms
+(node:39029) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39030) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:06.262Z","level":"info","message":"invite created","byKeyId":"apikey_admin","inviteId":"invite_1","inviteName":"teammate","role":"member","expiresAt":"2025-01-08T00:00:00.000Z"}
+{"timestamp":"2026-11-11T13:08:06.274Z","level":"error","message":"create invite failed","error":"[\n  {\n    \"origin\": \"string\",\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"inclusive\": true,\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Too small: expected string to have >=1 characters\"\n  }\n]","stack":"ZodError: [\n  {\n    \"origin\": \"string\",\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"inclusive\": true,\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Too small: expected string to have >=1 characters\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/invites/index.ts:16:31\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at requireAdmin (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/middleware/auth.ts:143:3)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15"}
+{"timestamp":"2026-11-11T13:08:06.281Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/invites","keyId":"apikey_member","role":"member"}
+{"timestamp":"2026-11-11T13:08:06.286Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/invites","keyId":"apikey_member","role":"member"}
+{"timestamp":"2026-11-11T13:08:06.289Z","level":"info","message":"invite revoked","byKeyId":"apikey_admin","inviteId":"invite_1"}
+{"timestamp":"2026-11-11T13:08:06.292Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/invites/invite_1","keyId":"apikey_member","role":"member"}
+ ✓ src/routes/invites/invites.spec.ts (7 tests) 55ms
+(node:39033) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/services/filesystem-object-store.spec.ts (7 tests) 38ms
+ ✓ src/middleware/cors.spec.ts (3 tests) 100ms
+(node:39035) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39036) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/dockerfile.spec.ts (1 test) 2ms
+ ✓ src/routes/cluster-info/cluster-info.spec.ts (11 tests) 190ms
+(node:39039) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39046) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:07.109Z","level":"info","message":"worker self-update check completed","decision":"notify","reason":"notify-marked","version":"1.58.0"}
+{"timestamp":"2026-11-11T13:08:07.133Z","level":"warn","message":"worker event rejected: invalid fixed payload","issueCount":1}
+{"timestamp":"2026-11-11T13:08:07.138Z","level":"warn","message":"worker event rejected: invalid fixed payload","issueCount":1}
+{"timestamp":"2026-11-11T13:08:07.141Z","level":"warn","message":"worker event rejected: invalid fixed payload","issueCount":1}
+{"timestamp":"2026-11-11T13:08:07.147Z","level":"warn","message":"worker event rejected: invalid fixed payload","issueCount":2}
+ ✓ src/routes/events/events.spec.ts (6 tests) 120ms
+(node:39052) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/services/build-upload.service.spec.ts (7 tests) 15ms
+{"timestamp":"2026-11-11T13:08:07.958Z","level":"warn","message":"self-update worker job rejected: invalid payload","issueCount":1}
+{"timestamp":"2026-11-11T13:08:07.969Z","level":"warn","message":"self-update worker job rejected: invalid payload","issueCount":1}
+{"timestamp":"2026-11-11T13:08:07.975Z","level":"warn","message":"self-update worker job rejected: invalid payload","issueCount":1}
+ ✓ src/routes/internal/internal-self-update.spec.ts (9 tests) 103ms
+{"timestamp":"2026-11-11T13:08:08.060Z","level":"info","message":"build content received","buildId":"build_1","bytes":9}
+ ✓ src/services/build-upload.tenant-scope.spec.ts (2 tests) 15ms
+(node:39063) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39064) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39065) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:08.147Z","level":"warn","message":"build content too large","buildId":"build_1"}
+ ✓ src/routes/builds/content.spec.ts (7 tests) 107ms
+(node:39069) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:08.448Z","level":"info","message":"build created","requestId":"7078f627-a8a6-42c1-88f9-71ac248f11d6","buildId":"build_1","type":"upload"}
+{"timestamp":"2026-11-11T13:08:08.451Z","level":"info","message":"request","requestId":"7078f627-a8a6-42c1-88f9-71ac248f11d6","method":"POST","path":"/api/v1/builds","statusCode":201,"durationMs":8,"ip":"::ffff:127.0.0.1","contentLength":17}
+{"timestamp":"2026-11-11T13:08:08.458Z","level":"warn","message":"build rejected: no builder on this base","requestId":"req-test-1234","error":"Upload-flow builds need a builder, and this base has none configured (kubernetes.buildkit.addr). Use a remote-image build referencing a container image instead."}
+{"timestamp":"2026-11-11T13:08:08.458Z","level":"warn","message":"request","requestId":"req-test-1234","method":"POST","path":"/api/v1/builds","statusCode":409,"durationMs":1,"ip":"::ffff:127.0.0.1","contentLength":17}
+{"timestamp":"2026-11-11T13:08:08.460Z","level":"error","message":"create build failed","error":"s3://internal-bucket/path exploded","stack":"Error: s3://internal-bucket/path exploded\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/api-server/src/routes/builds/builds.spec.ts:73:59\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)","requestId":"req-test-1234"}
+{"timestamp":"2026-11-11T13:08:08.463Z","level":"error","message":"request","requestId":"req-test-1234","method":"POST","path":"/api/v1/builds","statusCode":500,"durationMs":3,"ip":"::ffff:127.0.0.1","contentLength":17}
+ ✓ src/routes/builds/builds.spec.ts (3 tests) 26ms
+(node:39080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/services/build.service.spec.ts (1 test) 1ms
+(node:39091) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"timestamp":"2026-11-11T13:08:08.834Z","level":"info","message":"web console bundle not found — serving API only","hint":"set APPLIANCE_CONSOLE_DIR or stage console-dist next to the api-server package"}
+{"timestamp":"2026-11-11T13:08:08.838Z","level":"info","message":"server started","host":"0.0.0.0","port":3000,"mode":"server"}
+{"timestamp":"2026-11-11T13:08:08.839Z","level":"info","message":"web console bundle not found — serving API only","hint":"set APPLIANCE_CONSOLE_DIR or stage console-dist next to the api-server package"}
+{"timestamp":"2026-11-11T13:08:08.844Z","level":"info","message":"request","requestId":"77389305-6f97-40d5-bf34-87acb0689880","method":"GET","path":"/","statusCode":200,"durationMs":1,"ip":"::ffff:127.0.0.1"}
+{"timestamp":"2026-11-11T13:08:08.847Z","level":"info","message":"web console bundle not found — serving API only","hint":"set APPLIANCE_CONSOLE_DIR or stage console-dist next to the api-server package"}
+{"timestamp":"2026-11-11T13:08:08.848Z","level":"warn","message":"auth failed: missing signature headers","requestId":"25881585-a1e1-4cfd-b0e6-5094bbec2451","path":"/api/v1/projects"}
+{"timestamp":"2026-11-11T13:08:08.848Z","level":"warn","message":"request","requestId":"25881585-a1e1-4cfd-b0e6-5094bbec2451","method":"GET","path":"/api/v1/projects","statusCode":401,"durationMs":1,"ip":"::ffff:127.0.0.1"}
+ ✓ src/app.controller.spec.ts (2 tests) 10ms
+
+ Test Files  37 passed (37)
+      Tests  346 passed (346)
+   Start at  21:08:02
+   Duration  6.61s (transform 2.07s, setup 0ms, collect 37.61s, tests 2.92s, environment 4ms, prepare 3.71s)
+
+(node:39102) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/desktop:test  [existing outputs match the cache, left as is]
+
+(node:38686) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/desktop@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+> vitest run
+
+(node:38761) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/desktop
+
+(node:38814) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38810) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38818) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38809) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38808) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38813) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38815) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38811) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38812) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/credential-helper-layout.spec.ts (2 tests) 3ms
+ ✓ src/generation-routing.spec.ts (2 tests) 1ms
+ ✓ src/agent-envelope.spec.ts (19 tests) 22ms
+(node:38875) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38878) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/catalogue.spec.ts (1 test) 123ms
+(node:38945) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/mock-host.spec.ts (24 tests) 2434ms
+   ✓ mock host app mode > collects the default local alias but preserves a remote login named local  808ms
+   ✓ mock host platform > round-trips WSL mode through the mock egress host  508ms
+
+ Test Files  5 passed (5)
+      Tests  48 passed (48)
+   Start at  21:08:01
+   Duration  3.29s (transform 443ms, setup 0ms, collect 1.53s, tests 2.58s, environment 0ms, prepare 367ms)
+
+(node:38989) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/app:test
+
+(node:60029) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60058) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/app@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> vitest run
+
+(node:60092) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+
+(node:60358) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60362) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60361) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60364) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60365) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60359) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60356) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60366) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60360) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/vm-config-sync.test.ts (5 tests) 213ms
+(node:60475) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/lib/app-window.dom.spec.ts > app window document > shows an inline error and restores Reopen after a rejected attempt
+[app-window] reopen failed Error: restart failed
+    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app/src/lib/app-window.dom.spec.ts:52:43
+    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+
+ ✓ src/lib/app-window.dom.spec.ts (7 tests) 198ms
+(node:60477) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/cluster-compat-banner.test.tsx (6 tests) 78ms
+(node:60479) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/layout/app-shell.test.tsx (2 tests) 33ms
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Stop refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > keeps cards mounted during the Open refetch and shows success feedback
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > keeps pending detail reads skeletal before the API client is ready
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/journey-motion.test.tsx (8 tests) 122ms
+(node:60481) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/pages/async-recovery.test.tsx > async read recovery > keeps pending detail reads skeletal before the API client is ready
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+(node:60482) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > retries a failed deployment read without discarding cached rows or remounting their links
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > does not claim signed out while unknown, and recovers account reads in place
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > does not claim signed out while unknown, and recovers account reads in place
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > does not claim signed out while unknown, and recovers account reads in place
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > does not claim signed out while unknown, and recovers account reads in place
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > does not claim signed out while unknown, and recovers account reads in place
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/async-recovery.test.tsx > async read recovery > does not claim signed out while unknown, and recovers account reads in place
+The current testing environment is not configured to support act(...)
+
+ ✓ src/pages/async-recovery.test.tsx (3 tests) 141ms
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > renders unknown-publisher with separate requested controls
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/catalogue/catalogue-page.test.tsx > filters catalogue cards and selects by keyboard without installing
+The current testing environment is not configured to support act(...)
+
+ ✓ src/pages/catalogue/catalogue-page.test.tsx (9 tests) 249ms
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > Installed Apps mock scenarios > renders an accessible grant dialog with grouped required controls and selectable mounts
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+(node:60486) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > keeps optional mounts functional and delegates focus and busy Escape handling to Radix
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+(node:60487) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > keeps optional mounts functional and delegates focus and busy Escape handling to Radix
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > keeps optional mounts functional and delegates focus and busy Escape handling to Radix
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not grant when the retained grant dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not grant when the retained grant dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not grant when the retained grant dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not grant when the retained grant dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not accept when the retained unknown-publisher dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not accept when the retained unknown-publisher dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not accept when the retained unknown-publisher dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/installed-apps/installed-apps-page.test.tsx > security dialog interactions > does not accept when the retained unknown-publisher dialog is clicked during the exit window
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/pages/machine/credentials-panel.test.tsx (6 tests) 431ms
+ ✓ src/pages/installed-apps/installed-apps-page.test.tsx (17 tests) 436ms
+(node:60490) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60491) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/pages/cloud/panels.test.tsx (7 tests) 14ms
+ ✓ src/pages/environments/workloads-panel.test.tsx (2 tests) 26ms
+ ✓ src/lib/dev-machine-targets.test.ts (1 test) 3ms
+(node:60495) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60494) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/pages/machine/runtime-detail.test.tsx (3 tests) 43ms
+ ✓ src/pages/mode-choice.test.tsx (3 tests) 28ms
+(node:60496) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/pages/settings-entitlements.test.tsx (2 tests) 9ms
+ ✓ src/components/friendly-error.test.tsx (1 test) 17ms
+(node:60500) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60499) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/app-window.spec.ts (6 tests) 6ms
+(node:60502) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/app-navigation.test.ts (3 tests) 1ms
+(node:60506) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/pages/machine/egress-panel.test.tsx (4 tests) 37ms
+ ✓ src/lib/installed-apps.test.ts (3 tests) 2ms
+(node:60509) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60511) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60512) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/lib/self-update-ui.test.ts (9 tests) 3ms
+ ✓ src/components/layout/cluster-switcher.test.ts (6 tests) 6ms
+
+ Test Files  22 passed (22)
+      Tests  113 passed (113)
+   Start at  21:26:26
+   Duration  2.22s (transform 1.51s, setup 0ms, collect 9.21s, tests 2.10s, environment 2.81s, prepare 1.10s)
+
+(node:60516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60517) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+
+ NX   Successfully ran target test for 10 projects
+
+Nx read the output from the cache instead of running the command for 9 out of 10 tasks.
+
+
+[1;34m==> 5/5 rust (cargo build && cargo test && cargo clippy)[0m
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.27s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/appliance_credential_store-8446055646f5096e)
+
+running 7 tests
+test keyring_store::tests::macos_keyring_round_trip ... ignored, requires an unlocked interactive login Keychain; release macOS runners are headless
+test tests::validates_identifiers_and_canonical_names ... ok
+test tests::agent_envelope_vectors_are_byte_exact_round_trips ... ok
+test keyring_store::tests::opaque_encoding_preserves_utf8_binary_and_reserved_values ... ok
+test tests::identifier_encoding_matches_shared_vectors_and_allowlist ... ok
+test file::tests::uses_owner_only_directory_and_file_modes ... ok
+test file::tests::round_trip_probe_and_delete ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests appliance_credential_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/debug/deps/appliance_credhelper-01e24a81c0255d46)
+
+running 22 tests
+test able::tests::refuses_symlinks_and_unsafe_permissions ... ok
+test able::tests::refresh_retains_previous_token_when_replacement_is_missing_or_empty ... ok
+test tests::entitlement_anchor_import_preserves_an_existing_canonical_value ... ok
+test tests::entitlement_anchor_is_validated_without_changing_its_bytes ... ok
+test tests::entitlement_creation_returns_the_post_write_canonical_value ... ok
+test tests::entitlement_import_is_create_if_absent_and_returns_canonical_bytes ... ok
+test tests::existing_entitlement_key_always_wins_without_a_write ... ok
+test tests::exit_code_matrix_is_closed_and_fail_closed ... ok
+test tests::malformed_entitlement_anchor_is_rejected_before_write ... ok
+test tests::malformed_existing_entitlement_key_fails_without_a_write ... ok
+test tests::put_rejects_values_larger_than_one_megabyte_without_writing ... ok
+test tests::raw_pipe_contract_adds_no_bytes ... ok
+test tests::rejects_cluster_and_provider_identifiers ... ok
+test able::tests::rotation_reuse_invalidates_family_and_invalid_grant_erases ... ok
+test able::tests::busy_ipv4_or_ipv6_rolls_back_and_can_retry ... ok
+test able::tests::account_switch_requires_explicit_confirmation_and_transient_refresh_retains ... ok
+test able::tests::concurrent_refresh_rereads_rotation_and_signout_stays_signed_out ... ok
+test able::tests::both_ports_pkce_signed_jwt_and_private_storage ... ok
+test able::tests::callback_failure_copy_is_static_and_success_copy_stays_distinct ... ok
+test able::tests::signout_cancels_pending_login_before_callback_commit ... ok
+test able::tests::revoke_failure_erases_and_preserves_cloud_credentials ... ok
+test able::tests::tampering_denial_missing_tokens_and_timeout_fail_closed ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.41s
+
+     Running unittests src/main.rs (target/debug/deps/appliance_credhelper-61a9ee561d9f1cd1)
+
+running 2 tests
+test tests::malformed_shape_is_not_claps_default_exit_two ... ok
+test tests::parses_the_documented_command_shapes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_stdio.rs (target/debug/deps/cli_stdio-4705cdbb7dee8fe7)
+
+running 2 tests
+test malformed_cli_never_writes_to_stdout ... ok
+test help_and_version_never_write_to_stdout ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+     Running tests/windows_cli.rs (target/debug/deps/windows_cli-45e8d5da84703114)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests appliance_credhelper
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/main.rs (target/debug/deps/appliance_vm-b70ab84709450a77)
+
+running 330 tests
+test backend::runtime_guest::tests::drvfs_share_reconciliation_never_requires_a_pool_restart ... ok
+test backend::runtime_guest::tests::wsl_rules_fail_closed_after_the_broker_allows ... ok
+test backend::runtime_guest::tests::virtiofs_helper_keeps_the_existing_read_only_mount_contract ... ok
+test backend::runtime_guest::tests::control_plane_receiver_is_busybox_pinned_and_clears_the_first_slot ... ok
+test backend::runtime_guest::tests::drvfs_helper_targets_only_the_granted_read_only_share ... ok
+test backend::tests::clock_sync_never_invokes_after_stop_is_set ... ok
+test backend::tests::foreground_exit_wait_is_bounded_by_deadline ... ok
+test backend::tests::foreground_exit_wait_stops_when_pidfile_clears_early ... ok
+test backend::runtime_guest::tests::mount_containment_rejects_the_state_dir_and_its_parents ... ok
+test backend::vz::shell::tests::wake_watcher_ticks_are_much_finer_than_the_resync_interval ... ok
+test backend::vz::shell::tests::wake_jump_detection_has_slack_for_oversleep_but_catches_naps ... ok
+test backend::vz::runtime::tests::runtime_control_socket_is_inside_the_vm_directory ... ok
+test bringup::tests::elapsed_prefix_is_stable ... ok
+test bringup::tests::every_phase_has_a_nonempty_label ... ok
+test bringup::tests::budgeted_wait_caps_by_remaining_with_a_floor ... ok
+test backend::runtime_guest::tests::artifact_receive_plan_rejects_unsafe_targets_and_digests ... ok
+test backend::vz::shell::tests::clock_sync_runs_as_root ... ok
+test backend::runtime_guest::tests::wsl_host_path_validation_rejects_unc_and_non_translatable_paths ... ok
+test bringup::tests::budget_parse_defaults_on_absent_garbage_or_zero ... ok
+test bringup::tests::timings_render_is_empty_for_no_history ... ok
+test backend::runtime_guest::tests::wsl_runtime_apk_fragment_is_pinned_and_guest_local ... ok
+test control_plane::tests::sender_refuses_a_changed_open_handle_identity ... ok
+test bringup::tests::phase_serializes_kebab_case_for_the_ui ... ok
+test bringup::tests::timings_render_per_phase_deltas_and_a_total ... ok
+test creds::tests::broker_files_keep_a_leading_dot_legacy_vm_directory_name ... ok
+test control_plane::tests::raw_sender_preserves_header_and_bytes_with_a_fake_receiver ... ok
+test creds::tests::header_value_is_case_insensitive ... ok
+test bringup::tests::round_trips_through_the_state_file ... ok
+test creds::tests::helper_json_round_trips_argv_and_legacy_forms ... ok
+test creds::tests::broker_files_keep_the_legacy_vm_directory_name ... ok
+test bringup::tests::history_appends_every_transition ... ok
+test creds::tests::legacy_shell_helper_still_works_on_unix ... ok
+test creds::tests::set_header_adds_when_absent ... ok
+test creds::tests::set_header_replaces_existing ... ok
+test creds::tests::capture_false_never_stores_the_placeholder ... ok
+test creds::tests::helper_overrides_stored_secret ... ok
+test creds::tests::capture_and_inject_round_trip ... ok
+test doctor::tests::console_only_seed_marker_warns_while_api_remains_available ... ok
+test creds::tests::inject_rule_present_but_helper_fails_yields_no_value ... ok
+test doctor::tests::leaves_ordinary_log_lines_alone ... ok
+test doctor::tests::legacy_launcher_release_finding_requires_restage_and_reboot ... ok
+test doctor::tests::findings_serialize_in_the_cli_schema ... ok
+test creds::tests::unix_config_integrity_refuses_world_writable_parent ... ok
+test doctor::tests::mv1_release_finding_reports_current_console_and_key ... ok
+test doctor::tests::refused_seed_marker_is_a_hard_doctor_finding ... ok
+test doctor::tests::scrubs_jwt_shaped_tokens ... ok
+test creds::tests::verified_reader_refuses_unsafe_secret_file_before_parsing ... ok
+test doctor::tests::parses_wsl_mount_output_and_rejects_drvfs_outside_managed_targets ... ok
+test doctor::tests::scrubs_long_hex_tokens ... ok
+test doctor::tests::short_hex_and_uuids_survive ... ok
+test doctor::tests::scrubs_sk_prefixed_minted_secrets ... ok
+test doctor::tests::rejects_plain_windows_mounts_and_drive_root_appliance_shares ... ok
+test creds::tests::unix_config_integrity_accepts_private_and_refuses_world_writable_file ... ok
+test doctor::tests::skew_between_tolerance_bounds_warns ... ok
+test doctor::tests::skew_beyond_signature_tolerance_fails ... ok
+test doctor::tests::skew_within_ten_seconds_is_healthy ... ok
+test doctor::tests::unsigned_pre_mv0_seed_marker_warns ... ok
+test doctor::tests::unsupported_validating_admission_policy_is_visible ... ok
+test doctor::tests::wsl_proxy_failure_names_the_defender_firewall_boundary ... ok
+test egress::tests::absent_runtime_principal_fails_closed_without_baked_allowlist ... ok
+test egress::tests::authority_of_extracts_host ... ok
+test egress::tests::configmap_omits_ca_when_mitm_off ... ok
+test egress::tests::configmap_embeds_policy_and_quotes_values ... ok
+test egress::tests::credentialless_wsl_runtime_requests_are_unauthorized_in_every_mode ... ok
+test egress::tests::default_allow_passes_everything ... ok
+test egress::tests::default_deny_blocks_unless_allowlisted ... ok
+test egress::tests::host_without_port_is_handled ... ok
+test egress::tests::deny_wins_over_allow ... ok
+test egress::tests::peer_guard_allows_loopback_and_guest_subnet ... ok
+test egress::tests::netstack_policy_forces_deny_and_bakes_allowlist ... ok
+test egress::tests::peer_guard_pins_exact_guest_ip_when_known ... ok
+test egress::tests::peer_guard_refuses_lan_and_ipv6 ... ok
+test egress::tests::peer_guard_rejects_corrupt_overbroad_prefixes ... ok
+test egress::tests::authenticated_runtime_selection_never_unions_apps_or_ports ... ok
+test egress::tests::proxy_auth_parses_connect_and_absolute_form_http ... ok
+test egress::tests::policy_output_labels_both_boundary_kinds ... ok
+test egress::tests::proxy_credentials_compare_constant_time_and_never_enter_logs ... ok
+test egress::tests::peer_guard_uses_recorded_wsl_prefix_before_exact_lease ... ok
+test egress::tests::proxy_url_prefers_the_recorded_gateway ... ok
+test egress::tests::render_effective_distinguishes_baked_operator_and_deny_for_netstack ... ok
+test egress::tests::render_effective_keeps_nat_persisted_default ... ok
+test egress::tests::proxy_keeps_vz_on_persisted_policy_without_the_netstack_baked_allowlist ... ok
+test egress::tests::render_effective_marks_baked_host_overridden_by_deny ... ok
+test egress::tests::runtime_inspection_decision_matrix_is_policy_and_allowed_only ... ok
+test egress::tests::runtime_policy_is_default_deny_and_hostname_only ... ok
+test egress::tests::brokered_injection_requires_exact_lease_peer ... ok
+test egress::tests::split_host_port_defaults_to_443 ... ok
+test egress::tests::suffix_does_not_match_substring ... ok
+test egress::tests::unknown_revoked_and_strict_credentials_fail_closed_without_union_fallback ... ok
+test egress::tests::wsl_rendering_uses_truthful_mode_headers_and_never_host_enforced ... ok
+test fs_acl::tests::restricts_files_to_0600_and_directories_to_0700 ... ok
+test egress::tests::app_credential_is_never_issued_to_or_selected_from_a_compound_service_principal ... ok
+test guest::compound_supervisor_is_valid_shell_and_scopes_lifecycle_per_leaf ... ok
+test egress::tests::issued_proxy_credential_rotates_and_revokes_with_effective_state ... ok
+test guest::tests::agent_only_mounts_the_prebuilt_squashfs_and_puts_its_bin_first_on_path ... ok
+test guest::tests::airgap_volume_label_fits_fat_and_matches_the_probe ... ok
+test guest::tests::apiserver_heredocs_terminate ... ok
+test guest::tests::apiserver_launcher_never_traces_its_tokens ... ok
+test guest::tests::apiserver_manifest_heredoc_has_no_command_substitution ... ok
+test guest::tests::agent_only_docker_stub_gated_on_the_docker_flag ... ok
+test guest::tests::agent_only_substitution_leaks_no_literal_port_markers ... ok
+test egress::tests::pruning_a_vm_removes_all_of_its_runtime_principals_only ... ok
+test guest::tests::apiserver_ships_the_legacy_quarantine_watchdog ... ok
+test guest::tests::apiserver_provisioned_on_k3s_vms_with_staged_assets_only ... ok
+test guest::tests::apkovl_ca_pem_round_trips ... ok
+test guest::tests::apkovl_embeds_egress_ca_when_provided ... ok
+test egress::tests::runtime_policy_dispatch_round_trip_duplicates_and_port_gate ... ok
+test egress::tests::save_runtime_policy_refuses_corrupt_existing_file ... ok
+test guest::tests::buildkit_heredoc_terminates ... ok
+test guest::tests::apkovl_omits_egress_ca_when_absent ... ok
+test guest::tests::bootstrap_token_persists_and_round_trips ... ok
+test guest::tests::appliance_user_provisioned_on_every_vm ... ok
+test guest::tests::core_agent_and_k3s_host_service_plans_preserve_network_invariants ... ok
+test guest::tests::core_overlay_omits_lazy_platform_without_reordering_shared_bootstrap ... ok
+test guest::tests::appliance_user_uid_gid_pinned_per_mount ... ok
+test guest::tests::buildkit_provisioned_on_k3s_vms_but_not_agent_only ... ok
+test guest::tests::docker_provision_embeds_the_vm_egress_port ... ok
+test guest::tests::incomplete_or_malformed_release_evidence_is_poisoned ... ok
+test guest::tests::dev_provisioning_present_only_for_dev_vms ... ok
+test guest::tests::docker_provisioning_present_only_for_docker_vms ... ok
+test guest::tests::k3s_bringup_serves_grippable_progress_markers ... ok
+test guest::tests::k3s_airgap_preload_probes_by_label_and_marks_progress ... ok
+test guest::tests::mv1_overlay_composes_isolated_volume_raw_listener_psa_and_supervisor ... ok
+test guest::tests::resolve_app_ids_falls_back_when_host_is_root ... ok
+test guest::tests::k3s_provisioned_only_for_non_agent_only_vms ... ok
+test guest::tests::npm_global_wipes_on_a_project_switch_only_with_a_project_identity ... ok
+test guest::tests::runtime_overlay_selects_only_local_signed_repositories ... ok
+test guest::tests::runtime_supervisor_creates_plan_files_owner_only_and_keeps_proxy_credentials_out_of_argv ... ok
+test guest::tests::runtime_supervisor_enforces_principal_isolation_and_bounded_logs ... ok
+test guest::tests::runtime_supervisor_passes_multiline_non_proxy_environment_as_one_argv_entry ... ok
+test guest::tests::runtime_supervisor_stages_binary_without_following_symlinks_and_reuses_hardening ... ok
+test guest::tests::shell_agent_routes_session_verbs_to_tmux ... ok
+test guest::tests::tmux_is_in_the_base_world_set ... ok
+test guest::tests::transparent_tmux_conf_is_baked_in ... ok
+test backend::runtime_guest::tests::artifact_receive_plan_executes_size_and_stubbed_digest_checks ... ok
+test guest::tests::vsock_shell_agent_is_baked_into_every_vm ... ok
+test guest::tests::vz_media_nodes_match_the_storage_attachment_contract ... ok
+test guest_exec::tests::extracts_payload_between_expanded_markers ... ok
+test guest_exec::tests::missing_markers_yield_none ... ok
+test guest_exec::tests::runtime_json_is_shell_quoted_as_data ... ok
+test guest_exec::tests::wrapped_command_binds_payload_to_exit_status ... ok
+test images::tests::airgap_digests_are_committed_not_sentinels ... ok
+test images::tests::airgap_pin_matches_the_k3s_version ... ok
+test images::tests::content_sha256_is_lowercase_hex_of_the_digest ... ok
+test images::tests::download_and_verify_accepts_a_correct_cached_file_without_network ... ok
+test images::tests::download_and_verify_rejects_a_wrong_hash_cached_file ... ok
+test images::tests::passes_raw_kernels_through ... ok
+test images::tests::runtime_apk_resolver_closes_named_and_virtual_dependencies ... ok
+test images::tests::runtime_apk_validation_rejects_pin_skew_and_incomplete_critical_closure ... ok
+test images::tests::runtime_apkindex_rejects_path_components ... ok
+test images::tests::runtime_world_exactly_pins_one_openssl_abi_and_keys_the_cache ... ok
+test images::tests::unwraps_plain_gzip_kernels ... ok
+test images::tests::unwraps_zboot_kernels ... ok
+test images::tests::verify_sha256_accepts_matching_and_rejects_wrong ... ok
+test mint::tests::key_names_match_cli_labels_and_stay_json_safe ... ok
+test mint::tests::leaves_a_healthy_pairing_alone ... ok
+test mint::tests::mints_when_host_lost_its_profile ... ok
+test mint::tests::mints_when_store_is_uninitialized ... ok
+test mitm::tests::copy_chunked_forwards_body_verbatim ... ok
+test mitm::tests::copy_request_body_honors_content_length ... ok
+test mitm::tests::copy_request_body_none_when_no_length ... ok
+test mitm::tests::cred_unconfigured_is_actionable_and_keyless ... ok
+test mitm::tests::dial_first_iterates_public_candidates_until_one_connects ... ok
+test mitm::tests::dial_upstream_refuses_forbidden_host_without_connecting ... ok
+test mitm::tests::force_close_replaces_existing_connection_header ... ok
+test mitm::tests::force_close_strips_proxy_connection_and_adds_when_absent ... ok
+test mitm::tests::h2_only_client_is_refused_by_http11_inspection_server ... ok
+test mitm::tests::header_value_is_case_insensitive_and_trims ... ok
+test mitm::tests::observation_body_copies_are_byte_exact_and_counted ... ok
+test mitm::tests::observation_head_keeps_non_utf8_bytes_for_forwarding ... ok
+test mitm::tests::observed_mitm_request_strips_proxy_authorization_only ... ok
+test mitm::tests::pick_upstream_allows_legit_public_hosts ... ok
+test mitm::tests::pick_upstream_legacy_refuses_private_resolution ... ok
+test mitm::tests::pick_upstream_multi_a_never_dials_private ... ok
+test mitm::tests::pick_upstream_refuses_validated_private_addr ... ok
+test mitm::tests::public_upstreams_filters_private_and_preserves_order ... ok
+test net::tests::finds_lease_with_zero_stripped_octets ... ok
+test net::tests::misses_unknown_mac ... ok
+test net::tests::rejects_invalid_mac ... ok
+test netstack::dhcp::tests::discover_yields_offer_request_yields_ack ... ok
+test guest::tests::virtiofs_mount_present_only_with_a_share ... ok
+test netstack::dhcp::tests::option_walk_is_bounded_on_hostile_lengths ... ok
+test netstack::dhcp::tests::parses_discover_and_request ... ok
+test netstack::dhcp::tests::rejects_non_dhcp_and_truncated ... ok
+test netstack::dns::tests::answer_filter_drops_private_resolving_answer ... ok
+test netstack::dns::tests::answer_filter_records_public_answers ... ok
+test netstack::dns::tests::answer_ips_parses_a_and_aaaa ... ok
+test netstack::dns::tests::extracts_query_name ... ok
+test netstack::dns::tests::forward_relays_to_a_mock_upstream ... ok
+test netstack::dhcp::tests::fuzz_parse_never_panics ... ok
+test netstack::dns::tests::fuzz_answer_ips_never_panics ... ok
+test netstack::dns::tests::fuzz_query_name_never_panics ... ok
+test netstack::dns::tests::name_allowed_honors_default_deny ... ok
+test netstack::dns::tests::query_name_bounded_on_garbage ... ok
+test netstack::engine::tests::admit_syn_caps_concurrent_flows_and_dedups_retransmits ... ok
+test netstack::engine::tests::engine_answers_dhcp_over_the_link ... ok
+test netstack::engine::tests::guest_to_ext_backpressure_stops_draining_at_high_water ... ok
+test netstack::engine::tests::parse_positive_takes_override_else_default_and_rejects_invalid ... ok
+test netstack::engine::tests::principal_inbound_waits_for_request_and_preserves_half_close_response ... ok
+test netstack::engine::tests::runtime_inbound_nonblocking_forward_survives_two_hop_relay ... ok
+test netstack::frame::tests::arp_is_passthrough ... ok
+test netstack::frame::tests::built_udp_frame_has_valid_checksums ... ok
+test netstack::frame::tests::built_udp_frame_zero_length_payload_is_valid ... ok
+test netstack::frame::tests::dhcp_discover_is_recognised ... ok
+test netstack::frame::tests::dns_to_gateway_is_recognised_but_not_elsewhere ... ok
+test netstack::frame::tests::empty_and_runt_frames_drop_without_panic ... ok
+test netstack::dns::tests::forward_times_out_when_no_upstream_answers ... ok
+test netstack::frame::tests::ipv4_header_claims_more_than_present_drops ... ok
+test netstack::frame::tests::ipv6_and_unknown_ethertypes_drop ... ok
+test netstack::frame::tests::non_dns_udp_drops ... ok
+test netstack::frame::tests::tcp_syn_and_midflow_classified ... ok
+test netstack::frame::tests::truncated_tcp_and_udp_headers_drop ... ok
+test netstack::guard::tests::cluster_cidr_names_resolve_through_default_deny ... ok
+test netstack::guard::tests::denied_flow_is_dropped_and_logged ... ok
+test netstack::guard::tests::excluded_names_and_ips ... ok
+test netstack::guard::tests::fuzz_parse_sni_never_panics ... ok
+test netstack::guard::tests::http_host_allow_and_deny ... ok
+test netstack::guard::tests::parse_sni_extracts_host ... ok
+test netstack::guard::tests::parse_sni_fails_closed_on_garbage ... ok
+test netstack::guard::tests::private_range_filter_rejects_internal ... ok
+test netstack::guard::tests::raw_ip_backref_allows_public_recently_resolved ... ok
+test netstack::guard::tests::raw_ip_backrefs_are_isolated_by_principal ... ok
+test netstack::guard::tests::raw_ip_cidr_allow_rule_public_only ... ok
+test netstack::guard::tests::raw_ip_to_private_range_denied ... ok
+test netstack::guard::tests::resolve_public_rejects_internal_names ... ok
+test netstack::guard::tests::resolver_pool_is_bounded_and_reaped ... ok
+test netstack::guard::tests::sni_denied_host_is_dropped ... ok
+test netstack::guard::tests::sni_forged_ip_connects_to_name_not_dst ... ok
+test netstack::guard::tests::unavailable_runtime_ca_aborts_and_logs_fail_closed ... ok
+test netstack::guard::tests::unparseable_clienthello_denied ... ok
+test netstack::tests::bridge_pump_forwards_a_flow_to_a_mock_upstream ... ok
+test netstack::tests::bridge_stream_carries_bytes_and_eof_both_ways ... ok
+test netstack::tests::bridge_stream_read_errors_once_aborted ... ok
+test netstack::tests::gateway_mac_is_locally_administered_unicast ... ok
+test netstack::tests::legacy_connect_still_targets_the_guest_lease ... ok
+test netstack::tests::link_config_lease_is_deterministic ... ok
+test netstack::tests::parse_mac_round_trips_and_rejects_garbage ... ok
+test netstack::tests::run_isolated_contains_a_panic_and_the_caller_survives ... ok
+test network_lease::tests::parses_wsl_prefix_length_from_ip_addr ... ok
+test network_lease::tests::wsl_slash_20_admission_range_uses_the_recorded_prefix ... ok
+test profiles::tests::default_vm_owns_local_and_legacy_microvm_profiles ... ok
+test profiles::tests::epoch_converts_to_civil_utc ... ok
+test profiles::tests::removing_a_missing_profile_is_a_no_op ... ok
+test profiles::tests::removing_an_inactive_profile_keeps_the_active_slot ... ok
+test profiles::tests::removing_the_active_profile_falls_back_to_a_remaining_one ... ok
+test profiles::tests::removing_the_last_profile_clears_active_and_the_mirror ... ok
+test runtime_forward::tests::client_and_server_control_helpers_round_trip ... ok
+test runtime_forward::tests::collision_is_rejected ... ok
+test runtime_forward::tests::control_stream_emits_golden_frames ... ok
+test runtime_forward::tests::failed_listener_start_leaves_no_table_entry ... ok
+test runtime_forward::tests::host_port_range_is_enforced ... ok
+test runtime_forward::tests::identical_bind_is_idempotent_and_wsl_ignores_advisory_target ... ok
+test runtime_forward::tests::non_tcp_published_rows_do_not_authorize_a_forward ... ok
+test runtime_forward::tests::unbind_stops_and_removes_listener ... ok
+test runtime_forward::tests::unbind_survives_removed_spec_row_and_changed_wsl_lease ... ok
+test runtime_forward::tests::wsl_bind_derives_current_guest_ip_and_relay ... ok
+test runtime_forward::tests::wsl_bind_fails_when_the_lease_moves_or_is_absent ... ok
+test shell::tests::command_tries_epoch_then_formatted_fallback ... ok
+test shell::tests::epoch_parse_fails_closed_without_a_digit_line ... ok
+test shell::tests::formats_known_epochs_as_utc ... ok
+test shell::tests::ignores_echoed_literal_marker ... ok
+test shell::tests::parses_epoch_from_echoed_pty_output ... ok
+test shell::tests::parses_expanded_exit_code ... ok
+test shell::tests::parses_session_list_stripping_prefix_and_cr ... ok
+test shell::tests::pump_eof_without_sentinel_is_failure ... ok
+test shell::tests::pump_returns_code_and_withholds_sentinel ... ok
+test shell::tests::session_info_serializes_compactly ... ok
+test shell::tests::session_list_drops_noise_and_tolerates_missing_activity ... ok
+test shell::tests::validates_session_ids ... ok
+test spec::tests::agent_only_flag_defaults_off_and_round_trips ... ok
+test spec::tests::agent_ready_marker_is_a_sibling_of_kubeconfig ... ok
+test spec::tests::allocate_published_port_never_returns_a_reserved_or_nodeport ... ok
+test spec::tests::allocate_published_port_skips_used_and_errors_when_exhausted ... ok
+test spec::tests::allocation_fails_closed_for_an_unsafe_mode_vm_json ... ok
+test spec::tests::buildkit_port_round_trips_as_camel_case ... ok
+test spec::tests::core_ready_marker_is_a_sibling_of_other_readiness_markers ... ok
+test spec::tests::docker_flag_round_trips_through_json ... ok
+test spec::tests::fresh_and_fieldless_specs_default_to_core_only ... ok
+test spec::tests::generated_macs_are_locally_administered_unicast ... ok
+test spec::tests::net_link_defaults_to_nat_for_legacy_and_fresh_specs ... ok
+test spec::tests::netstack_env_override_only_forces_on ... ok
+test spec::tests::published_ports_round_trip_and_default_empty_for_legacy_specs ... ok
+test spec::tests::resource_overrides_apply_validate_and_preserve ... ok
+test spec::tests::runtime_mount_tags_are_stable_bounded_and_write_is_intersection ... ok
+test spec::tests::runtime_profile_is_core_only_and_netstack_enforced ... ok
+test spec::tests::runtime_published_port_carries_principal_target ... ok
+test spec::tests::spec_round_trips_through_json_with_defaults ... ok
+test spec::tests::wsl_mode_round_trips_and_global_config_defaults_fail_closed ... ok
+test spec::tests::wsl_specs_create_and_load_as_nat_while_vz_is_unchanged ... ok
+test store::tests::canonicalize_preserves_a_missing_state_tail ... ok
+test store::tests::control_plane_disk_keeps_three_signed_releases_and_headroom ... ok
+test store::tests::loading_a_persisted_wsl_netstack_spec_normalises_to_nat ... ok
+test store::tests::spec_load_verifies_the_open_handle_before_reading ... ok
+test tests::bare_windows_drive_root_is_rejected_before_canonicalize ... ok
+test tests::compound_plan_orders_dependencies_lexically_and_rejects_cycles_and_vm_isolation ... ok
+test tests::compound_plan_rejects_depth_and_health_ranges_at_the_engine_boundary ... ok
+test tests::compound_plan_reserves_service_discovery_environment_names ... ok
+test tests::compound_restart_backoff_is_deterministic_and_capped ... ok
+test tests::cooperative_runtime_proxy_environment_overrides_every_transport_value ... ok
+test tests::detached_host_process_uses_its_own_process_group ... ok
+test tests::mount_of_home_is_rejected_when_it_contains_vm_root ... ok
+test tests::runtime_binary_plan_round_trips_the_tagged_wire_variant ... ok
+test tests::runtime_binary_plan_validates_target_entrypoint_env_and_cwd ... ok
+test tests::runtime_container_plan_round_trips_camelcase_image_path ... ok
+test tests::runtime_plan_validation_binds_uid_target_tag_and_relay_slice ... ok
+test tests::runtime_start_forwards_only_valid_persisted_wsl_paths ... ok
+test tests::up_readiness_needs_marker_and_terminal_ready_phase ... ok
+test tests::windows_refuses_explicit_per_vm_sizing_flags ... ok
+test traffic::tests::aggregate_denied_counts_groups_and_orders_by_recency ... ok
+test traffic::tests::legacy_halves_only_when_oversized_and_runtime_compacts_after_append ... ok
+test traffic::tests::persisted_paths_strip_query_fragment_and_absolute_authority ... ok
+test traffic::tests::proxy_auth_failures_are_attributed_and_deduped_per_principal_minute ... ok
+test traffic::tests::records_path_for_intercepted ... ok
+test traffic::tests::render_denied_report_empty_is_reassuring ... ok
+test traffic::tests::render_denied_report_names_non_default_vm_in_hint ... ok
+test traffic::tests::render_denied_report_shows_counts_and_remediation_hint ... ok
+test traffic::tests::tail_limits_and_parses ... ok
+test wsl_config::tests::classifies_shared_wsl_output_fixtures_and_signatures ... ok
+test wsl_config::tests::decodes_every_shared_wsl_output_fixture ... ok
+test wsl_config::tests::detects_mirrored_mode_from_fixture ... ok
+test wsl_config::tests::ignores_comments_other_sections_and_overridden_values ... ok
+test guest::tests::runtime_compound_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv ... ok
+test netstack::frame::tests::fuzz_random_frames_never_panic ... ok
+test creds::tests::argv_helper_resolves_kind_value_envelope ... ok
+test creds::tests::helper_rejects_multiline_output ... ok
+test guest::tests::runtime_single_app_generated_launcher_keeps_proxy_credentials_out_of_executed_ctr_argv ... ok
+test backend::runtime_guest::tests::drvfs_helper_executes_with_host_path_edge_cases_confined ... ok
+test guest::tests::control_plane_update_binds_evidence_and_generation_to_content ... ok
+test guest::tests::control_plane_supervisor_executable_path_promotes_or_rolls_back ... ok
+test guest::tests::apiserver_seed_gate_runs_with_restricted_posix_userland_and_rejects_tampering ... ok
+
+test result: ok. 330 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s
+
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+
+[1;32m==> verify: GREEN[0m

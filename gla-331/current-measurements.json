@@ -1,0 +1,514 @@
+{
+  "config": {
+    "os": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "browser": "156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "build": "Vite development + built app library",
+    "adapter": "Claude unless specified",
+    "vm": "mock-host appliance",
+    "data": "fixture except real pre-run journal artifact",
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) \u2192 scoped DOM acknowledgment \u2192 requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+  },
+  "revision": "52b384959a4bc174e34190ac34924dd0d2f8a83e",
+  "measurements": [
+    {
+      "surface": "S1",
+      "name": "Create",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        50.200000047683716, 32.90000009536743, 30.90000009536743, 32.10000014305115, 30.40000009536743,
+        31.800000190734863, 33, 32.799999952316284, 31.299999952316284, 33.40000009536743
+      ],
+      "median": 32.450000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S1",
+      "name": "Validation",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        31.59999990463257, 30.299999952316284, 31.700000047683716, 29, 30.299999952316284, 30.09999990463257,
+        30.299999952316284, 30.40000009536743, 31.40000009536743, 31.799999952316284
+      ],
+      "median": 30.350000023841858,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S1",
+      "name": "Open row",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        64.20000004768372, 48.90000009536743, 47.700000047683716, 48, 49.40000009536743, 49, 48.69999980926514,
+        46.89999985694885, 50, 48.69999980926514
+      ],
+      "median": 48.799999952316284,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S2",
+      "name": "Target change",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        31.5, 25, 25.09999990463257, 25.09999990463257, 26.200000047683716, 23.5, 25.5, 25, 25.100000143051147,
+        26.59999990463257
+      ],
+      "median": 25.100000023841858,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Observe",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        30.600000143051147, 30.5, 29.799999952316284, 31.5, 32.59999990463257, 33.19999980926514, 32.200000047683716,
+        31.40000009536743, 30.799999952316284, 31.5
+      ],
+      "median": 31.450000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Interact",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        31.5, 30.90000009536743, 31.299999952316284, 31.200000047683716, 31.600000143051147, 31.299999952316284,
+        30.299999952316284, 30.90000009536743, 31.700000047683716, 30.100000143051147
+      ],
+      "median": 31.25,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Stop confirmation",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        31.600000143051147, 30.799999952316284, 31.200000047683716, 32.40000009536743, 30.90000009536743,
+        31.700000047683716, 30, 30.700000047683716, 32.200000047683716, 33.09999990463257
+      ],
+      "median": 31.40000009536743,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Stop acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        32.200000047683716, 29, 30.600000143051147, 28.799999952316284, 32.60000014305115, 31.700000047683716,
+        32.30000019073486, 32.89999985694885, 29.200000047683716, 31.40000009536743
+      ],
+      "median": 31.550000071525574,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S4",
+      "name": "Tab selection",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        32.10000014305115, 30.5, 29.40000009536743, 30.600000143051147, 31.5, 31.600000143051147, 31.299999952316284,
+        29.700000047683716, 31.5, 31.299999952316284
+      ],
+      "median": 31.299999952316284,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S4",
+      "name": "File / diff selection",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        32.700000047683716, 32.09999990463257, 30.5, 32.799999952316284, 31.40000009536743, 30.100000143051147,
+        29.59999990463257, 31.40000009536743, 32.89999985694885, 32.89999985694885
+      ],
+      "median": 31.75,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S5",
+      "name": "Readiness presentation",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        29.899999856948853, 31.40000009536743, 31, 32.89999985694885, 31.399999856948853, 31, 30.700000047683716,
+        31.40000009536743, 31.40000009536743, 32.09999990463257
+      ],
+      "median": 31.399999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S5",
+      "name": "Package acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        30.40000009536743, 30.59999990463257, 30.600000143051147, 30.299999952316284, 30.40000009536743,
+        29.799999952316284, 30, 30.200000047683716, 29.700000047683716, 29.300000190734863
+      ],
+      "median": 30.25,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S7",
+      "name": "Review",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        30.399999856948853, 32.30000019073486, 29.200000047683716, 29.399999856948853, 30.40000009536743,
+        32.700000047683716, 31.100000143051147, 29.799999952316284, 31, 30.90000009536743
+      ],
+      "median": 30.65000009536743,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S7",
+      "name": "Deploy acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        28.90000009536743, 30.40000009536743, 30.5, 30.100000143051147, 30.90000009536743, 29, 30.600000143051147, 31.5,
+        31.299999952316284, 29.600000143051147
+      ],
+      "median": 30.450000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S7",
+      "name": "Retry acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        31.700000047683716, 32.299999952316284, 30.59999990463257, 32.69999980926514, 30.700000047683716,
+        31.300000190734863, 31.399999856948853, 30.5, 31.09999990463257, 31.200000047683716
+      ],
+      "median": 31.25000011920929,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S1",
+      "name": "Create",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        46.09999990463257, 22.90000009536743, 22.600000143051147, 30.200000047683716, 23.799999952316284, 30.5,
+        30.40000009536743, 33, 32.5, 30.59999990463257
+      ],
+      "median": 30.450000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S1",
+      "name": "Validation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        34.40000009536743, 22.200000047683716, 25, 24, 34.700000047683716, 22.600000143051147, 18, 24.100000143051147,
+        23.799999952316284, 20.200000047683716
+      ],
+      "median": 23.899999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S1",
+      "name": "Open row",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        48.10000014305115, 48, 46.40000009536743, 48.200000047683716, 48.200000047683716, 49.40000009536743, 48.5,
+        50.40000009536743, 47.59999990463257, 50.10000014305115
+      ],
+      "median": 48.200000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S2",
+      "name": "Target change",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        18.59999990463257, 25.40000009536743, 21.09999990463257, 26, 24.799999952316284, 25.90000009536743,
+        24.299999952316284, 25.399999856948853, 25.40000009536743, 24.799999952316284
+      ],
+      "median": 25.09999990463257,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Observe",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        32.200000047683716, 32.40000009536743, 31.200000047683716, 31.90000009536743, 30.5, 31.699999809265137,
+        33.39999985694885, 31.800000190734863, 31.799999952316284, 31.700000047683716
+      ],
+      "median": 31.800000071525574,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Interact",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        33.30000019073486, 29.799999952316284, 32.90000009536743, 33.40000009536743, 32.60000014305115,
+        31.700000047683716, 31.799999952316284, 31.90000009536743, 31.200000047683716, 33
+      ],
+      "median": 32.25000011920929,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Stop confirmation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        30.59999990463257, 28.299999952316284, 24.899999856948853, 32.299999952316284, 32.09999990463257,
+        24.799999952316284, 25.100000143051147, 26.40000009536743, 27.09999990463257, 32.799999952316284
+      ],
+      "median": 27.699999928474426,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S3",
+      "name": "Stop acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        23.59999990463257, 23.899999856948853, 23.200000047683716, 23.200000047683716, 23.59999990463257,
+        22.799999952316284, 23.699999809265137, 22.5, 21.699999809265137, 20.600000143051147
+      ],
+      "median": 23.200000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S4",
+      "name": "Tab selection",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        32.09999990463257, 31.299999952316284, 31, 31.700000047683716, 31.399999856948853, 31.600000143051147,
+        30.09999990463257, 31.200000047683716, 31.700000047683716, 31.700000047683716
+      ],
+      "median": 31.5,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S4",
+      "name": "File / diff selection",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.399999856948853, 30.600000143051147, 31.399999856948853, 30.699999809265137, 31.200000047683716,
+        31.200000047683716, 31.59999990463257, 31.600000143051147, 31.09999990463257, 32.59999990463257
+      ],
+      "median": 31.299999952316284,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S5",
+      "name": "Readiness presentation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31, 31.399999856948853, 32, 31.5, 33.09999990463257, 33.700000047683716, 32.40000009536743, 31.799999952316284,
+        31.799999952316284, 33.30000019073486
+      ],
+      "median": 31.899999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S5",
+      "name": "Package acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.700000047683716, 31.90000009536743, 31.600000143051147, 22.59999990463257, 31.699999809265137,
+        31.300000190734863, 32.10000014305115, 31.5, 31.899999856948853, 31.59999990463257
+      ],
+      "median": 31.649999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S7",
+      "name": "Review",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.899999856948853, 30.799999952316284, 31.90000009536743, 30.09999990463257, 31.699999809265137,
+        30.699999809265137, 31.5, 31.799999952316284, 32.799999952316284, 33
+      ],
+      "median": 31.74999988079071,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S7",
+      "name": "Deploy acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        30.799999952316284, 32.5, 32.09999990463257, 33, 32.89999985694885, 31.600000143051147, 30, 31.299999952316284,
+        31.59999990463257, 31.800000190734863
+      ],
+      "median": 31.700000166893005,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S7",
+      "name": "Retry acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.800000190734863, 31.700000047683716, 31.5, 29.799999952316284, 31.600000143051147, 31.59999990463257, 23,
+        31.59999990463257, 31.59999990463257, 32.700000047683716
+      ],
+      "median": 31.59999990463257,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S6",
+      "name": "Hand-off navigation",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        67.20000004768372, 42.60000014305115, 38.90000009536743, 45.5, 48.299999952316284, 45.89999985694885,
+        44.90000009536743, 42.799999952316284, 36, 45.299999952316284
+      ],
+      "median": 45.10000002384186,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S6",
+      "name": "Open acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        45.40000009536743, 29.40000009536743, 29.59999990463257, 30.100000143051147, 30, 36.39999985694885,
+        29.600000143051147, 30.09999990463257, 30.40000009536743, 28.100000143051147
+      ],
+      "median": 30.049999952316284,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S6",
+      "name": "Hand-off navigation",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        59.59999990463257, 46, 40.5, 45.60000014305115, 43.39999985694885, 44, 32.299999952316284, 43.700000047683716,
+        43.89999985694885, 40.60000014305115
+      ],
+      "median": 43.799999952316284,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S6",
+      "name": "Open acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        36, 29.100000143051147, 31.899999856948853, 29.799999952316284, 29, 30.09999990463257, 30.90000009536743,
+        29.299999952316284, 29.5, 32
+      ],
+      "median": 29.949999928474426,
+      "minimumMet": true,
+      "discardedAttempts": []
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        147.29999995231628, 147.29999995231628, 147.80000019073486, 148.10000014305115, 148, 146.90000009536743,
+        149.89999985694885, 147.40000009536743, 148.19999980926514, 147.79999995231628
+      ],
+      "median": 147.80000007152557,
+      "discardedAttempts": [],
+      "minimumMet": true
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        153.29999995231628, 147.79999995231628, 147.70000004768372, 148.5, 147.79999995231628, 147.90000009536743,
+        148.29999995231628, 143.5, 147, 143.79999995231628
+      ],
+      "median": 147.79999995231628,
+      "discardedAttempts": [],
+      "minimumMet": true
+    }
+  ],
+  "checks": [
+    {
+      "name": "readiness invokes zero packages",
+      "pass": true
+    },
+    {
+      "name": "10 human Package clicks = 10 attempts; no install",
+      "pass": true
+    },
+    {
+      "name": "readiness invokes zero packages",
+      "pass": true
+    },
+    {
+      "name": "10 human Package clicks = 10 attempts; no install",
+      "pass": true
+    }
+  ],
+  "notes": [
+    "Reduced-motion Validation and Stop acknowledgment use keyboard Enter; Create setup reloads between samples. Native selects use automated input/change events; other actions are trusted pointer events.",
+    "Pointer interaction with reduced-motion dialog controls was unreliable in Chromium automation; keyboard path is measured instead. This remains a recorded Forgiveness limitation, not a pointer pass.",
+    "Narrow and 200%-equivalent layouts are legibility configurations, not timing claims.",
+    "Measurements use an after-paint upper-bound proxy; traces and recordings are retained. No native picker performance claim: picker is mock-host."
+  ],
+  "note": "Historical set remains corrected to 359 finite samples. This current 360-sample set replaces both Install series with fresh 10-finite-sample runs; other timings are retained from unchanged acknowledgment paths."
+}

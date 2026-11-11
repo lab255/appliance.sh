@@ -1,0 +1,342 @@
+[
+  {
+    "scenario": 7,
+    "allDocumentShifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 487.7000000476837,
+        "hadRecentInput": false,
+        "document": "http://localhost:1420/workbench?mock-host&scenario=workbench-7",
+        "timeOrigin": 1794403332873.6
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4212.700000047684,
+        "hadRecentInput": false,
+        "document": "http://localhost:1420/workbench/journal",
+        "timeOrigin": 1794403332873.6
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4485.200000047684,
+        "hadRecentInput": true,
+        "document": "http://localhost:1420/workbench/journal",
+        "timeOrigin": 1794403332873.6
+      },
+      {
+        "value": 7.22644947193287e-6,
+        "startTime": 7096,
+        "hadRecentInput": false,
+        "document": "http://localhost:1420/workbench/journal",
+        "timeOrigin": 1794403332873.6
+      }
+    ],
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "missing Package disabled",
+        "pass": true
+      },
+      {
+        "name": "v1 Package disabled",
+        "pass": true
+      },
+      {
+        "name": "proposal has zero package calls",
+        "pass": true
+      },
+      {
+        "name": "double click one failed attempt without result digest",
+        "pass": true
+      },
+      {
+        "name": "real artifact replay and unsigned warning",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.11642239550931952,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 487.7000000476837,
+        "hadRecentInput": false
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4212.700000047684,
+        "hadRecentInput": false
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4485.200000047684,
+        "hadRecentInput": true
+      },
+      {
+        "value": 7.22644947193287e-6,
+        "startTime": 7096,
+        "hadRecentInput": false
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 487.7000000476837,
+        "last": 487.7000000476837,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 487.7000000476837,
+            "hadRecentInput": false
+          }
+        ]
+      },
+      {
+        "start": 4212.700000047684,
+        "last": 4212.700000047684,
+        "score": 1.74109188126929e-5,
+        "shifts": [
+          {
+            "value": 1.74109188126929e-5,
+            "startTime": 4212.700000047684,
+            "hadRecentInput": false
+          }
+        ]
+      },
+      {
+        "start": 7096,
+        "last": 7096,
+        "score": 7.22644947193287e-6,
+        "shifts": [
+          {
+            "value": 7.22644947193287e-6,
+            "startTime": 7096,
+            "hadRecentInput": false
+          }
+        ]
+      }
+    ],
+    "documentWindows": [
+      {
+        "timeOrigin": 1794403332873.6,
+        "windows": [
+          {
+            "start": 487.7000000476837,
+            "last": 487.7000000476837,
+            "score": 0.11638034722222221,
+            "shifts": [
+              {
+                "value": 0.11638034722222221,
+                "startTime": 487.7000000476837,
+                "hadRecentInput": false,
+                "document": "http://localhost:1420/workbench?mock-host&scenario=workbench-7",
+                "timeOrigin": 1794403332873.6
+              }
+            ]
+          },
+          {
+            "start": 4212.700000047684,
+            "last": 4212.700000047684,
+            "score": 1.74109188126929e-5,
+            "shifts": [
+              {
+                "value": 1.74109188126929e-5,
+                "startTime": 4212.700000047684,
+                "hadRecentInput": false,
+                "document": "http://localhost:1420/workbench/journal",
+                "timeOrigin": 1794403332873.6
+              }
+            ]
+          },
+          {
+            "start": 7096,
+            "last": 7096,
+            "score": 7.22644947193287e-6,
+            "shifts": [
+              {
+                "value": 7.22644947193287e-6,
+                "startTime": 7096,
+                "hadRecentInput": false,
+                "document": "http://localhost:1420/workbench/journal",
+                "timeOrigin": 1794403332873.6
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "scenario": 10,
+    "allDocumentShifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 437.60000014305115,
+        "hadRecentInput": false,
+        "document": "http://localhost:1420/workbench?mock-host&scenario=workbench-10",
+        "timeOrigin": 1794403340658.7
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4024.600000143051,
+        "hadRecentInput": false,
+        "document": "http://localhost:1420/workbench/journal",
+        "timeOrigin": 1794403340658.7
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4331,
+        "hadRecentInput": true,
+        "document": "http://localhost:1420/workbench/journal",
+        "timeOrigin": 1794403340658.7
+      },
+      {
+        "value": 7.22644947193287e-6,
+        "startTime": 6939.800000190735,
+        "hadRecentInput": false,
+        "document": "http://localhost:1420/workbench/journal",
+        "timeOrigin": 1794403340658.7
+      },
+      {
+        "value": 0.00032881172839506175,
+        "startTime": 7258.300000190735,
+        "hadRecentInput": true,
+        "document": "http://localhost:1420/projects/deploy",
+        "timeOrigin": 1794403340658.7
+      }
+    ],
+    "mode": "fixture-only",
+    "checks": [
+      {
+        "name": "timeout requires reconcile",
+        "pass": true
+      },
+      {
+        "name": "success without invented URL",
+        "pass": true
+      },
+      {
+        "name": "ordinary deploy reachable without workbench metadata",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "cls": 0.11638034722222221,
+    "rawShiftSum": 0.11675120723771458,
+    "shifts": [
+      {
+        "value": 0.11638034722222221,
+        "startTime": 437.60000014305115,
+        "hadRecentInput": false
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4024.600000143051,
+        "hadRecentInput": false
+      },
+      {
+        "value": 1.74109188126929e-5,
+        "startTime": 4331,
+        "hadRecentInput": true
+      },
+      {
+        "value": 7.22644947193287e-6,
+        "startTime": 6939.800000190735,
+        "hadRecentInput": false
+      },
+      {
+        "value": 0.00032881172839506175,
+        "startTime": 7258.300000190735,
+        "hadRecentInput": true
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 437.60000014305115,
+        "last": 437.60000014305115,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 437.60000014305115,
+            "hadRecentInput": false
+          }
+        ]
+      },
+      {
+        "start": 4024.600000143051,
+        "last": 4024.600000143051,
+        "score": 1.74109188126929e-5,
+        "shifts": [
+          {
+            "value": 1.74109188126929e-5,
+            "startTime": 4024.600000143051,
+            "hadRecentInput": false
+          }
+        ]
+      },
+      {
+        "start": 6939.800000190735,
+        "last": 6939.800000190735,
+        "score": 7.22644947193287e-6,
+        "shifts": [
+          {
+            "value": 7.22644947193287e-6,
+            "startTime": 6939.800000190735,
+            "hadRecentInput": false
+          }
+        ]
+      }
+    ],
+    "documentWindows": [
+      {
+        "timeOrigin": 1794403340658.7,
+        "windows": [
+          {
+            "start": 437.60000014305115,
+            "last": 437.60000014305115,
+            "score": 0.11638034722222221,
+            "shifts": [
+              {
+                "value": 0.11638034722222221,
+                "startTime": 437.60000014305115,
+                "hadRecentInput": false,
+                "document": "http://localhost:1420/workbench?mock-host&scenario=workbench-10",
+                "timeOrigin": 1794403340658.7
+              }
+            ]
+          },
+          {
+            "start": 4024.600000143051,
+            "last": 4024.600000143051,
+            "score": 1.74109188126929e-5,
+            "shifts": [
+              {
+                "value": 1.74109188126929e-5,
+                "startTime": 4024.600000143051,
+                "hadRecentInput": false,
+                "document": "http://localhost:1420/workbench/journal",
+                "timeOrigin": 1794403340658.7
+              }
+            ]
+          },
+          {
+            "start": 6939.800000190735,
+            "last": 6939.800000190735,
+            "score": 7.22644947193287e-6,
+            "shifts": [
+              {
+                "value": 7.22644947193287e-6,
+                "startTime": 6939.800000190735,
+                "hadRecentInput": false,
+                "document": "http://localhost:1420/workbench/journal",
+                "timeOrigin": 1794403340658.7
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

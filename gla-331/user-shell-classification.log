@@ -1,0 +1,128 @@
+[
+  {
+    revision: '00a0bdd',
+    delayMs: 0,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 0,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 0,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 16,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 16,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 16,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 100,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 100,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: '00a0bdd',
+    delayMs: 100,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 0,
+    cls: 0.01015607638888889,
+    headers: [],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 0,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 0,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 16,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 16,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 16,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 100,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 100,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  },
+  {
+    revision: 'branch',
+    delayMs: 100,
+    cls: 0.01015607638888889,
+    headers: [ 41, 59 ],
+    errors: []
+  }
+]

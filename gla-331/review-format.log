@@ -1,0 +1,51 @@
+_evidence-gla331/all-measurements.json 22ms
+_evidence-gla331/audit.mjs 11ms (unchanged)
+_evidence-gla331/base-cold-compare.mjs 7ms
+_evidence-gla331/base-cold-comparison.json 13ms
+_evidence-gla331/capture.mjs 2ms
+_evidence-gla331/cls-cold-diagnostic.json 0ms (unchanged)
+_evidence-gla331/cls-inspect.mjs 2ms (unchanged)
+_evidence-gla331/current-measurements.json 5ms
+_evidence-gla331/dialog-hit-test.mjs 2ms (unchanged)
+_evidence-gla331/followups.md 10ms (unchanged)
+_evidence-gla331/inspect.mjs 2ms (unchanged)
+_evidence-gla331/install-inspect.mjs 1ms (unchanged)
+_evidence-gla331/install-measurements.json 1ms
+_evidence-gla331/interaction-audit.json 1ms (unchanged)
+_evidence-gla331/interaction-audit.mjs 4ms (unchanged)
+_evidence-gla331/keycheck.mjs 0ms (unchanged)
+_evidence-gla331/legibility.json 1ms (unchanged)
+_evidence-gla331/legibility.mjs 3ms (unchanged)
+_evidence-gla331/measure-install.mjs 6ms
+_evidence-gla331/measure-reduced.mjs 8ms
+_evidence-gla331/measure.mjs 7ms
+_evidence-gla331/measurements-reduced.json 15ms
+_evidence-gla331/measurements.json 16ms
+_evidence-gla331/normal-deploy.mjs 0ms (unchanged)
+_evidence-gla331/overflow.mjs 1ms (unchanged)
+_evidence-gla331/package-timing.json 0ms (unchanged)
+_evidence-gla331/README.md 19ms
+_evidence-gla331/recheck-install-measurements.json 1ms
+_evidence-gla331/reduced-dialog.mjs 1ms (unchanged)
+_evidence-gla331/review-baseline/all-measurements.json 2ms (unchanged)
+_evidence-gla331/review-baseline/install-measurements.json 0ms (unchanged)
+_evidence-gla331/review-baseline/measurements-reduced.json 12ms (unchanged)
+_evidence-gla331/review-baseline/measurements.json 16ms (unchanged)
+_evidence-gla331/review-baseline/README.md 12ms (unchanged)
+_evidence-gla331/review-baseline/scenarios.json 1ms (unchanged)
+_evidence-gla331/review-baseline/summary.json 0ms (unchanged)
+_evidence-gla331/review-baseline/surface-cls.json 0ms (unchanged)
+_evidence-gla331/review-failure-cls.json 1ms
+_evidence-gla331/review-remeasure.mjs 4ms
+_evidence-gla331/route-guards.json 1ms (unchanged)
+_evidence-gla331/route-guards.mjs 2ms (unchanged)
+_evidence-gla331/scenario-session-windows.json 2ms
+_evidence-gla331/scenarios-review.json 1ms
+_evidence-gla331/scenarios.json 2ms
+_evidence-gla331/scenarios.mjs 9ms
+_evidence-gla331/summary.json 0ms
+_evidence-gla331/surface-cls.json 3ms
+_evidence-gla331/surface-cls.mjs 4ms (unchanged)
+_evidence-gla331/token-audit.json 1ms (unchanged)
+_evidence-gla331/trace-index.json 2ms (unchanged)
+_evidence-gla331/verify-counts.json 0ms (unchanged)

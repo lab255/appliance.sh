@@ -1,0 +1,4 @@
+Checking formatting...
+[warn] _evidence-gla331/base-cold-compare.mjs
+[warn] _evidence-gla331/review-remeasure.mjs
+[warn] Code style issues found in 2 files. Run Prettier with --write to fix.

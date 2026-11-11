@@ -30,7 +30,7 @@
   {
     "surface": "S3",
     "coldCls": 0.11638034722222221,
-    "interactionCls": 0,
+    "interactionCls": 0.02164224537037037,
     "rawShiftSum": 0.001427193287037037,
     "cold": [
       {
@@ -45,13 +45,28 @@
         "value": 0.001427193287037037,
         "input": true
       }
-    ]
+    ],
+    "delayedAcceptanceWindows": [
+      {
+        "start": 66526.80000019073,
+        "last": 66526.80000019073,
+        "score": 0.02164224537037037,
+        "shifts": [
+          {
+            "value": 0.02164224537037037,
+            "startTime": 66526.80000019073,
+            "hadRecentInput": false
+          }
+        ]
+      }
+    ],
+    "note": "Includes scenario 3 delayed acceptance; not only immediate count/selection updates."
   },
   {
     "surface": "S4",
     "coldCls": 0.11638034722222221,
     "interactionCls": 0,
-    "rawShiftSum": 0.00006180555555555556,
+    "rawShiftSum": 6.180555555555556e-5,
     "cold": [
       {
         "time": 243.40000009536743,
@@ -62,7 +77,7 @@
     "shifts": [
       {
         "time": 1464.3000001907349,
-        "value": 0.00006180555555555556,
+        "value": 6.180555555555556e-5,
         "input": true
       }
     ]
@@ -70,8 +85,8 @@
   {
     "surface": "S5",
     "coldCls": 0.11638034722222221,
-    "interactionCls": 0,
-    "rawShiftSum": 0.09857901308412904,
+    "interactionCls": 1.74109188126929e-5,
+    "rawShiftSum": 2.463736828462577e-5,
     "cold": [
       {
         "time": 231.19999980926514,
@@ -81,21 +96,304 @@
     ],
     "shifts": [
       {
-        "time": 1905.1999998092651,
-        "value": 0.00000722644947193287,
-        "input": true
+        "time": 5906.599999904633,
+        "value": 7.22644947193287e-6,
+        "input": false,
+        "sources": [
+          {
+            "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-border)] bg-[var(--color-mute",
+            "previous": {
+              "x": 1315.8125,
+              "y": 392.75,
+              "width": 79.1875,
+              "height": 22,
+              "top": 392.75,
+              "right": 1395,
+              "bottom": 414.75,
+              "left": 1315.8125
+            },
+            "current": {
+              "x": 1314.390625,
+              "y": 395.75,
+              "width": 80.609375,
+              "height": 22,
+              "top": 395.75,
+              "right": 1395,
+              "bottom": 417.75,
+              "left": 1314.390625
+            }
+          }
+        ]
       },
       {
-        "time": 2410.5999999046326,
-        "value": 0.00000722644947193287,
-        "input": true
+        "time": 7167.699999809265,
+        "value": 7.22644947193287e-6,
+        "input": true,
+        "sources": [
+          {
+            "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-info-border)] bg-[var(--color",
+            "previous": {
+              "x": 1314.390625,
+              "y": 556.75,
+              "width": 80.609375,
+              "height": 22,
+              "top": 556.75,
+              "right": 1395,
+              "bottom": 578.75,
+              "left": 1314.390625
+            },
+            "current": {
+              "x": 1315.8125,
+              "y": 553.75,
+              "width": 79.1875,
+              "height": 22,
+              "top": 553.75,
+              "right": 1395,
+              "bottom": 575.75,
+              "left": 1315.8125
+            }
+          }
+        ]
       },
       {
-        "time": 2872.5,
-        "value": 0.09856456018518518,
-        "input": true
+        "time": 9773.299999952316,
+        "value": 1.74109188126929e-5,
+        "input": false,
+        "sources": [
+          {
+            "html": "<div role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium le",
+            "previous": {
+              "x": 1315.8125,
+              "y": 552.75,
+              "width": 79.1875,
+              "height": 24,
+              "top": 552.75,
+              "right": 1395,
+              "bottom": 576.75,
+              "left": 1315.8125
+            },
+            "current": {
+              "x": 1333.703125,
+              "y": 552.75,
+              "width": 61.296875,
+              "height": 26,
+              "top": 552.75,
+              "right": 1395,
+              "bottom": 578.75,
+              "left": 1333.703125
+            }
+          }
+        ]
       }
-    ]
+    ],
+    "priorTimingResult": {
+      "interactionCls": 0,
+      "rawShiftSum": 0.09857901308412904,
+      "shifts": [
+        {
+          "time": 1905.1999998092651,
+          "value": 7.22644947193287e-6,
+          "input": true
+        },
+        {
+          "time": 2410.5999999046326,
+          "value": 7.22644947193287e-6,
+          "input": true
+        },
+        {
+          "time": 2872.5,
+          "value": 0.09856456018518518,
+          "input": true
+        }
+      ]
+    },
+    "recheckStates": [
+      {
+        "failure": false,
+        "fixtureDelayMs": 2600,
+        "start": 3278.199999809265,
+        "windows": [
+          {
+            "start": 5906.599999904633,
+            "last": 5906.599999904633,
+            "score": 7.22644947193287e-6,
+            "shifts": [
+              {
+                "time": 5906.599999904633,
+                "value": 7.22644947193287e-6,
+                "input": false,
+                "sources": [
+                  {
+                    "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-border)] bg-[var(--color-mute",
+                    "previous": {
+                      "x": 1315.8125,
+                      "y": 392.75,
+                      "width": 79.1875,
+                      "height": 22,
+                      "top": 392.75,
+                      "right": 1395,
+                      "bottom": 414.75,
+                      "left": 1315.8125
+                    },
+                    "current": {
+                      "x": 1314.390625,
+                      "y": 395.75,
+                      "width": 80.609375,
+                      "height": 22,
+                      "top": 395.75,
+                      "right": 1395,
+                      "bottom": 417.75,
+                      "left": 1314.390625
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "rawShiftSum": 7.22644947193287e-6,
+        "shifts": [
+          {
+            "time": 5906.599999904633,
+            "value": 7.22644947193287e-6,
+            "input": false,
+            "sources": [
+              {
+                "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-border)] bg-[var(--color-mute",
+                "previous": {
+                  "x": 1315.8125,
+                  "y": 392.75,
+                  "width": 79.1875,
+                  "height": 22,
+                  "top": 392.75,
+                  "right": 1395,
+                  "bottom": 414.75,
+                  "left": 1315.8125
+                },
+                "current": {
+                  "x": 1314.390625,
+                  "y": 395.75,
+                  "width": 80.609375,
+                  "height": 22,
+                  "top": 395.75,
+                  "right": 1395,
+                  "bottom": 417.75,
+                  "left": 1314.390625
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "failure": true,
+        "fixtureDelayMs": 2600,
+        "start": 7140.199999809265,
+        "windows": [
+          {
+            "start": 9773.299999952316,
+            "last": 9773.299999952316,
+            "score": 1.74109188126929e-5,
+            "shifts": [
+              {
+                "time": 9773.299999952316,
+                "value": 1.74109188126929e-5,
+                "input": false,
+                "sources": [
+                  {
+                    "html": "<div role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium le",
+                    "previous": {
+                      "x": 1315.8125,
+                      "y": 552.75,
+                      "width": 79.1875,
+                      "height": 24,
+                      "top": 552.75,
+                      "right": 1395,
+                      "bottom": 576.75,
+                      "left": 1315.8125
+                    },
+                    "current": {
+                      "x": 1333.703125,
+                      "y": 552.75,
+                      "width": 61.296875,
+                      "height": 26,
+                      "top": 552.75,
+                      "right": 1395,
+                      "bottom": 578.75,
+                      "left": 1333.703125
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "rawShiftSum": 2.463736828462577e-5,
+        "shifts": [
+          {
+            "time": 7167.699999809265,
+            "value": 7.22644947193287e-6,
+            "input": true,
+            "sources": [
+              {
+                "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-info-border)] bg-[var(--color",
+                "previous": {
+                  "x": 1314.390625,
+                  "y": 556.75,
+                  "width": 80.609375,
+                  "height": 22,
+                  "top": 556.75,
+                  "right": 1395,
+                  "bottom": 578.75,
+                  "left": 1314.390625
+                },
+                "current": {
+                  "x": 1315.8125,
+                  "y": 553.75,
+                  "width": 79.1875,
+                  "height": 22,
+                  "top": 553.75,
+                  "right": 1395,
+                  "bottom": 575.75,
+                  "left": 1315.8125
+                }
+              }
+            ]
+          },
+          {
+            "time": 9773.299999952316,
+            "value": 1.74109188126929e-5,
+            "input": false,
+            "sources": [
+              {
+                "html": "<div role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium le",
+                "previous": {
+                  "x": 1315.8125,
+                  "y": 552.75,
+                  "width": 79.1875,
+                  "height": 24,
+                  "top": 552.75,
+                  "right": 1395,
+                  "bottom": 576.75,
+                  "left": 1315.8125
+                },
+                "current": {
+                  "x": 1333.703125,
+                  "y": 552.75,
+                  "width": 61.296875,
+                  "height": 26,
+                  "top": 552.75,
+                  "right": 1395,
+                  "bottom": 578.75,
+                  "left": 1333.703125
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "note": "2.6-second fixtures; maximum per-state CLS and raw shift sum, with expanded logs and fixed failure slots."
   },
   {
     "surface": "S6",
@@ -120,8 +418,8 @@
   {
     "surface": "S7",
     "coldCls": 0.11638034722222221,
-    "interactionCls": 0,
-    "rawShiftSum": 0.03633139734338831,
+    "interactionCls": 1.74109188126929e-5,
+    "rawShiftSum": 2.463736828462577e-5,
     "cold": [
       {
         "time": 245.80000019073486,
@@ -131,20 +429,303 @@
     ],
     "shifts": [
       {
-        "time": 1872.7000000476837,
-        "value": 0.00000722644947193287,
-        "input": true
+        "time": 4604.200000047684,
+        "value": 7.22644947193287e-6,
+        "input": false,
+        "sources": [
+          {
+            "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-border)] bg-[var(--color-mute",
+            "previous": {
+              "x": 1315.8125,
+              "y": 751.3125,
+              "width": 79.1875,
+              "height": 22,
+              "top": 751.3125,
+              "right": 1395,
+              "bottom": 773.3125,
+              "left": 1315.8125
+            },
+            "current": {
+              "x": 1314.390625,
+              "y": 754.3125,
+              "width": 80.609375,
+              "height": 22,
+              "top": 754.3125,
+              "right": 1395,
+              "bottom": 776.3125,
+              "left": 1314.390625
+            }
+          }
+        ]
       },
       {
-        "time": 2408.7000000476837,
-        "value": 0.00000722644947193287,
-        "input": true
+        "time": 5829,
+        "value": 7.22644947193287e-6,
+        "input": true,
+        "sources": [
+          {
+            "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-info-border)] bg-[var(--color",
+            "previous": {
+              "x": 1314.390625,
+              "y": 754.3125,
+              "width": 80.609375,
+              "height": 22,
+              "top": 754.3125,
+              "right": 1395,
+              "bottom": 776.3125,
+              "left": 1314.390625
+            },
+            "current": {
+              "x": 1315.8125,
+              "y": 751.3125,
+              "width": 79.1875,
+              "height": 22,
+              "top": 751.3125,
+              "right": 1395,
+              "bottom": 773.3125,
+              "left": 1315.8125
+            }
+          }
+        ]
       },
       {
-        "time": 2822.5,
-        "value": 0.03631694444444444,
-        "input": true
+        "time": 8438.200000047684,
+        "value": 1.74109188126929e-5,
+        "input": false,
+        "sources": [
+          {
+            "html": "<div role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium le",
+            "previous": {
+              "x": 1315.8125,
+              "y": 750.3125,
+              "width": 79.1875,
+              "height": 24,
+              "top": 750.3125,
+              "right": 1395,
+              "bottom": 774.3125,
+              "left": 1315.8125
+            },
+            "current": {
+              "x": 1333.703125,
+              "y": 750.3125,
+              "width": 61.296875,
+              "height": 26,
+              "top": 750.3125,
+              "right": 1395,
+              "bottom": 776.3125,
+              "left": 1333.703125
+            }
+          }
+        ]
       }
-    ]
+    ],
+    "priorTimingResult": {
+      "interactionCls": 0,
+      "rawShiftSum": 0.03633139734338831,
+      "shifts": [
+        {
+          "time": 1872.7000000476837,
+          "value": 7.22644947193287e-6,
+          "input": true
+        },
+        {
+          "time": 2408.7000000476837,
+          "value": 7.22644947193287e-6,
+          "input": true
+        },
+        {
+          "time": 2822.5,
+          "value": 0.03631694444444444,
+          "input": true
+        }
+      ]
+    },
+    "recheckStates": [
+      {
+        "failure": false,
+        "fixtureDelayMs": 2600,
+        "start": 1975.7999999523163,
+        "windows": [
+          {
+            "start": 4604.200000047684,
+            "last": 4604.200000047684,
+            "score": 7.22644947193287e-6,
+            "shifts": [
+              {
+                "time": 4604.200000047684,
+                "value": 7.22644947193287e-6,
+                "input": false,
+                "sources": [
+                  {
+                    "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-border)] bg-[var(--color-mute",
+                    "previous": {
+                      "x": 1315.8125,
+                      "y": 751.3125,
+                      "width": 79.1875,
+                      "height": 22,
+                      "top": 751.3125,
+                      "right": 1395,
+                      "bottom": 773.3125,
+                      "left": 1315.8125
+                    },
+                    "current": {
+                      "x": 1314.390625,
+                      "y": 754.3125,
+                      "width": 80.609375,
+                      "height": 22,
+                      "top": 754.3125,
+                      "right": 1395,
+                      "bottom": 776.3125,
+                      "left": 1314.390625
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "rawShiftSum": 7.22644947193287e-6,
+        "shifts": [
+          {
+            "time": 4604.200000047684,
+            "value": 7.22644947193287e-6,
+            "input": false,
+            "sources": [
+              {
+                "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-border)] bg-[var(--color-mute",
+                "previous": {
+                  "x": 1315.8125,
+                  "y": 751.3125,
+                  "width": 79.1875,
+                  "height": 22,
+                  "top": 751.3125,
+                  "right": 1395,
+                  "bottom": 773.3125,
+                  "left": 1315.8125
+                },
+                "current": {
+                  "x": 1314.390625,
+                  "y": 754.3125,
+                  "width": 80.609375,
+                  "height": 22,
+                  "top": 754.3125,
+                  "right": 1395,
+                  "bottom": 776.3125,
+                  "left": 1314.390625
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "failure": true,
+        "fixtureDelayMs": 2600,
+        "start": 5804.5,
+        "windows": [
+          {
+            "start": 8438.200000047684,
+            "last": 8438.200000047684,
+            "score": 1.74109188126929e-5,
+            "shifts": [
+              {
+                "time": 8438.200000047684,
+                "value": 1.74109188126929e-5,
+                "input": false,
+                "sources": [
+                  {
+                    "html": "<div role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium le",
+                    "previous": {
+                      "x": 1315.8125,
+                      "y": 750.3125,
+                      "width": 79.1875,
+                      "height": 24,
+                      "top": 750.3125,
+                      "right": 1395,
+                      "bottom": 774.3125,
+                      "left": 1315.8125
+                    },
+                    "current": {
+                      "x": 1333.703125,
+                      "y": 750.3125,
+                      "width": 61.296875,
+                      "height": 26,
+                      "top": 750.3125,
+                      "right": 1395,
+                      "bottom": 776.3125,
+                      "left": 1333.703125
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "rawShiftSum": 2.463736828462577e-5,
+        "shifts": [
+          {
+            "time": 5829,
+            "value": 7.22644947193287e-6,
+            "input": true,
+            "sources": [
+              {
+                "html": "<span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium leading-4 border-[var(--color-info-border)] bg-[var(--color",
+                "previous": {
+                  "x": 1314.390625,
+                  "y": 754.3125,
+                  "width": 80.609375,
+                  "height": 22,
+                  "top": 754.3125,
+                  "right": 1395,
+                  "bottom": 776.3125,
+                  "left": 1314.390625
+                },
+                "current": {
+                  "x": 1315.8125,
+                  "y": 751.3125,
+                  "width": 79.1875,
+                  "height": 22,
+                  "top": 751.3125,
+                  "right": 1395,
+                  "bottom": 773.3125,
+                  "left": 1315.8125
+                }
+              }
+            ]
+          },
+          {
+            "time": 8438.200000047684,
+            "value": 1.74109188126929e-5,
+            "input": false,
+            "sources": [
+              {
+                "html": "<div role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"><span class=\"appliance-ui inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-micro font-medium le",
+                "previous": {
+                  "x": 1315.8125,
+                  "y": 750.3125,
+                  "width": 79.1875,
+                  "height": 24,
+                  "top": 750.3125,
+                  "right": 1395,
+                  "bottom": 774.3125,
+                  "left": 1315.8125
+                },
+                "current": {
+                  "x": 1333.703125,
+                  "y": 750.3125,
+                  "width": 61.296875,
+                  "height": 26,
+                  "top": 750.3125,
+                  "right": 1395,
+                  "bottom": 776.3125,
+                  "left": 1333.703125
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "note": "2.6-second fixtures; maximum per-state CLS and raw shift sum, with expanded logs and fixed failure slots."
   }
 ]

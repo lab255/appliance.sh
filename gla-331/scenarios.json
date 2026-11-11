@@ -26,6 +26,20 @@
         "startTime": 1398,
         "hadRecentInput": true
       }
+    ],
+    "sessionWindows": [
+      {
+        "start": 449.90000009536743,
+        "last": 449.90000009536743,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 449.90000009536743,
+            "hadRecentInput": false
+          }
+        ]
+      }
     ]
   },
   {
@@ -49,6 +63,20 @@
         "value": 0.11638034722222221,
         "startTime": 431,
         "hadRecentInput": false
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 431,
+        "last": 431,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 431,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -102,6 +130,32 @@
         "startTime": 66526.80000019073,
         "hadRecentInput": false
       }
+    ],
+    "sessionWindows": [
+      {
+        "start": 478.60000014305115,
+        "last": 478.60000014305115,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 478.60000014305115,
+            "hadRecentInput": false
+          }
+        ]
+      },
+      {
+        "start": 66526.80000019073,
+        "last": 66526.80000019073,
+        "score": 0.02164224537037037,
+        "shifts": [
+          {
+            "value": 0.02164224537037037,
+            "startTime": 66526.80000019073,
+            "hadRecentInput": false
+          }
+        ]
+      }
     ]
   },
   {
@@ -134,6 +188,20 @@
         "value": 0.011288981481481481,
         "startTime": 1345.2000000476837,
         "hadRecentInput": true
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 408.09999990463257,
+        "last": 408.09999990463257,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 408.09999990463257,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -175,6 +243,20 @@
         "startTime": 423.39999985694885,
         "hadRecentInput": false
       }
+    ],
+    "sessionWindows": [
+      {
+        "start": 423.39999985694885,
+        "last": 423.39999985694885,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 423.39999985694885,
+            "hadRecentInput": false
+          }
+        ]
+      }
     ]
   },
   {
@@ -211,6 +293,20 @@
         "value": 0.0012793750000000001,
         "startTime": 1293.6000001430511,
         "hadRecentInput": true
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 420.40000009536743,
+        "last": 420.40000009536743,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 420.40000009536743,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -259,9 +355,23 @@
         "hadRecentInput": true
       },
       {
-        "value": 0.00000722644947193287,
+        "value": 7.22644947193287e-6,
         "startTime": 2556.5,
         "hadRecentInput": true
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 418.7000000476837,
+        "last": 418.7000000476837,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 418.7000000476837,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -277,19 +387,19 @@
             "width": 368.65625,
             "height": 175,
             "weight": "600",
-            "text": "File — ruled v1 headlineA — hand-off filev2 runtime bundle; a separate install decision.fixture · equal-weight design-review artifact"
+            "text": "File \u2014 ruled v1 headlineA \u2014 hand-off filev2 runtime bundle; a separate install decision.fixture \u00b7 equal-weight design-review artifact"
           },
           {
             "width": 368.671875,
             "height": 175,
             "weight": "600",
-            "text": "Catalogue — roadmapped (later)B — catalogue publishBundle hosting and signed index publication remain unresolved.fixture · equal-weight design-review artifact"
+            "text": "Catalogue \u2014 roadmapped (later)B \u2014 catalogue publishBundle hosting and signed index publication remain unresolved.fixture \u00b7 equal-weight design-review artifact"
           },
           {
             "width": 368.65625,
             "height": 175,
             "weight": "600",
-            "text": "Deploy — separate verb (see Deploy action)C — direct deployExisting v1 source chain from the same folder; does not consume this bundle.fixture · equal-weight design-review artifact"
+            "text": "Deploy \u2014 separate verb (see Deploy action)C \u2014 direct deployExisting v1 source chain from the same folder; does not consume this bundle.fixture \u00b7 equal-weight design-review artifact"
           }
         ]
       }
@@ -302,6 +412,20 @@
         "value": 0.11638034722222221,
         "startTime": 414.5,
         "hadRecentInput": false
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 414.5,
+        "last": 414.5,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 414.5,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -330,6 +454,20 @@
         "value": 0.01015607638888889,
         "startTime": 124.79999995231628,
         "hadRecentInput": false
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 124.79999995231628,
+        "last": 124.79999995231628,
+        "score": 0.01015607638888889,
+        "shifts": [
+          {
+            "value": 0.01015607638888889,
+            "startTime": 124.79999995231628,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -370,7 +508,7 @@
         "hadRecentInput": true
       },
       {
-        "value": 0.00000722644947193287,
+        "value": 7.22644947193287e-6,
         "startTime": 2471.4000000953674,
         "hadRecentInput": true
       },
@@ -378,6 +516,20 @@
         "value": 0.00032881172839506175,
         "startTime": 2737.9000000953674,
         "hadRecentInput": true
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 419.10000014305115,
+        "last": 419.10000014305115,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 419.10000014305115,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   },
@@ -417,6 +569,25 @@
         "startTime": 139.40000009536743,
         "hadRecentInput": false
       }
+    ],
+    "sessionWindows": [
+      {
+        "start": 124.70000004768372,
+        "last": 139.40000009536743,
+        "score": 0.11723244598765431,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 124.70000004768372,
+            "hadRecentInput": false
+          },
+          {
+            "value": 0.0008520987654320987,
+            "startTime": 139.40000009536743,
+            "hadRecentInput": false
+          }
+        ]
+      }
     ]
   },
   {
@@ -453,6 +624,20 @@
         "value": 0.030111666666666665,
         "startTime": 1310.7999999523163,
         "hadRecentInput": true
+      }
+    ],
+    "sessionWindows": [
+      {
+        "start": 419.90000009536743,
+        "last": 419.90000009536743,
+        "score": 0.11638034722222221,
+        "shifts": [
+          {
+            "value": 0.11638034722222221,
+            "startTime": 419.90000009536743,
+            "hadRecentInput": false
+          }
+        ]
       }
     ]
   }

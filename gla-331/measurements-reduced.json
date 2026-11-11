@@ -13,7 +13,7 @@
     "adapter": "Claude unless specified",
     "vm": "mock-host appliance",
     "data": "fixture except real pre-run journal artifact",
-    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) → scoped DOM acknowledgment → requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) \u2192 scoped DOM acknowledgment \u2192 requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
   },
   "measurements": [
     {
@@ -25,7 +25,9 @@
         46.09999990463257, 22.90000009536743, 22.600000143051147, 30.200000047683716, 23.799999952316284, 30.5,
         30.40000009536743, 33, 32.5, 30.59999990463257
       ],
-      "median": 30.450000047683716
+      "median": 30.450000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S1",
@@ -36,7 +38,9 @@
         34.40000009536743, 22.200000047683716, 25, 24, 34.700000047683716, 22.600000143051147, 18, 24.100000143051147,
         23.799999952316284, 20.200000047683716
       ],
-      "median": 23.899999976158142
+      "median": 23.899999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S1",
@@ -47,7 +51,9 @@
         48.10000014305115, 48, 46.40000009536743, 48.200000047683716, 48.200000047683716, 49.40000009536743, 48.5,
         50.40000009536743, 47.59999990463257, 50.10000014305115
       ],
-      "median": 48.200000047683716
+      "median": 48.200000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S2",
@@ -58,7 +64,9 @@
         18.59999990463257, 25.40000009536743, 21.09999990463257, 26, 24.799999952316284, 25.90000009536743,
         24.299999952316284, 25.399999856948853, 25.40000009536743, 24.799999952316284
       ],
-      "median": 25.09999990463257
+      "median": 25.09999990463257,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S3",
@@ -69,7 +77,9 @@
         32.200000047683716, 32.40000009536743, 31.200000047683716, 31.90000009536743, 30.5, 31.699999809265137,
         33.39999985694885, 31.800000190734863, 31.799999952316284, 31.700000047683716
       ],
-      "median": 31.800000071525574
+      "median": 31.800000071525574,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S3",
@@ -80,7 +90,9 @@
         33.30000019073486, 29.799999952316284, 32.90000009536743, 33.40000009536743, 32.60000014305115,
         31.700000047683716, 31.799999952316284, 31.90000009536743, 31.200000047683716, 33
       ],
-      "median": 32.25000011920929
+      "median": 32.25000011920929,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S3",
@@ -91,7 +103,9 @@
         30.59999990463257, 28.299999952316284, 24.899999856948853, 32.299999952316284, 32.09999990463257,
         24.799999952316284, 25.100000143051147, 26.40000009536743, 27.09999990463257, 32.799999952316284
       ],
-      "median": 27.699999928474426
+      "median": 27.699999928474426,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S3",
@@ -102,7 +116,9 @@
         23.59999990463257, 23.899999856948853, 23.200000047683716, 23.200000047683716, 23.59999990463257,
         22.799999952316284, 23.699999809265137, 22.5, 21.699999809265137, 20.600000143051147
       ],
-      "median": 23.200000047683716
+      "median": 23.200000047683716,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S4",
@@ -113,7 +129,9 @@
         32.09999990463257, 31.299999952316284, 31, 31.700000047683716, 31.399999856948853, 31.600000143051147,
         30.09999990463257, 31.200000047683716, 31.700000047683716, 31.700000047683716
       ],
-      "median": 31.5
+      "median": 31.5,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S4",
@@ -124,7 +142,9 @@
         31.399999856948853, 30.600000143051147, 31.399999856948853, 30.699999809265137, 31.200000047683716,
         31.200000047683716, 31.59999990463257, 31.600000143051147, 31.09999990463257, 32.59999990463257
       ],
-      "median": 31.299999952316284
+      "median": 31.299999952316284,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S5",
@@ -135,7 +155,9 @@
         31, 31.399999856948853, 32, 31.5, 33.09999990463257, 33.700000047683716, 32.40000009536743, 31.799999952316284,
         31.799999952316284, 33.30000019073486
       ],
-      "median": 31.899999976158142
+      "median": 31.899999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S5",
@@ -146,7 +168,9 @@
         31.700000047683716, 31.90000009536743, 31.600000143051147, 22.59999990463257, 31.699999809265137,
         31.300000190734863, 32.10000014305115, 31.5, 31.899999856948853, 31.59999990463257
       ],
-      "median": 31.649999976158142
+      "median": 31.649999976158142,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S7",
@@ -157,7 +181,9 @@
         31.899999856948853, 30.799999952316284, 31.90000009536743, 30.09999990463257, 31.699999809265137,
         30.699999809265137, 31.5, 31.799999952316284, 32.799999952316284, 33
       ],
-      "median": 31.74999988079071
+      "median": 31.74999988079071,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S7",
@@ -168,7 +194,9 @@
         30.799999952316284, 32.5, 32.09999990463257, 33, 32.89999985694885, 31.600000143051147, 30, 31.299999952316284,
         31.59999990463257, 31.800000190734863
       ],
-      "median": 31.700000166893005
+      "median": 31.700000166893005,
+      "minimumMet": true,
+      "discardedAttempts": []
     },
     {
       "surface": "S7",
@@ -179,7 +207,9 @@
         31.800000190734863, 31.700000047683716, 31.5, 29.799999952316284, 31.600000143051147, 31.59999990463257, 23,
         31.59999990463257, 31.59999990463257, 32.700000047683716
       ],
-      "median": 31.59999990463257
+      "median": 31.59999990463257,
+      "minimumMet": true,
+      "discardedAttempts": []
     }
   ],
   "scenarios": [
@@ -243,7 +273,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 4085.5999999046326,
           "hadRecentInput": true,
           "sources": [
@@ -273,7 +303,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 4314.5,
           "hadRecentInput": true,
           "sources": [
@@ -303,7 +333,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 4774.799999952316,
           "hadRecentInput": true,
           "sources": [
@@ -333,7 +363,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 4998.099999904633,
           "hadRecentInput": true,
           "sources": [
@@ -363,7 +393,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 5455.799999952316,
           "hadRecentInput": true,
           "sources": [
@@ -393,7 +423,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 5710.799999952316,
           "hadRecentInput": true,
           "sources": [
@@ -423,7 +453,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 6171.599999904633,
           "hadRecentInput": true,
           "sources": [
@@ -453,7 +483,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 6381.400000095367,
           "hadRecentInput": true,
           "sources": [
@@ -483,7 +513,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 6840.5,
           "hadRecentInput": true,
           "sources": [
@@ -513,7 +543,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 7063.299999952316,
           "hadRecentInput": true,
           "sources": [
@@ -543,7 +573,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 7522.900000095367,
           "hadRecentInput": true,
           "sources": [
@@ -573,7 +603,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 7748.200000047684,
           "hadRecentInput": true,
           "sources": [
@@ -603,7 +633,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 8207.900000095367,
           "hadRecentInput": true,
           "sources": [
@@ -633,7 +663,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 8431.5,
           "hadRecentInput": true,
           "sources": [
@@ -663,7 +693,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 8891.200000047684,
           "hadRecentInput": true,
           "sources": [
@@ -693,7 +723,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 9114.700000047684,
           "hadRecentInput": true,
           "sources": [
@@ -723,7 +753,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 9574.700000047684,
           "hadRecentInput": true,
           "sources": [
@@ -753,7 +783,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 9798.200000047684,
           "hadRecentInput": true,
           "sources": [
@@ -783,7 +813,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 10279.400000095367,
           "hadRecentInput": true,
           "sources": [
@@ -813,7 +843,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 12082.700000047684,
           "hadRecentInput": true,
           "sources": [
@@ -843,7 +873,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 12312.200000047684,
           "hadRecentInput": true,
           "sources": [
@@ -873,7 +903,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 12719.5,
           "hadRecentInput": true,
           "sources": [
@@ -903,7 +933,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 12945.900000095367,
           "hadRecentInput": true,
           "sources": [
@@ -933,7 +963,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 13352.799999952316,
           "hadRecentInput": true,
           "sources": [
@@ -963,7 +993,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 13578.599999904633,
           "hadRecentInput": true,
           "sources": [
@@ -993,7 +1023,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 13984.5,
           "hadRecentInput": true,
           "sources": [
@@ -1023,7 +1053,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 14212.099999904633,
           "hadRecentInput": true,
           "sources": [
@@ -1053,7 +1083,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 14619.200000047684,
           "hadRecentInput": true,
           "sources": [
@@ -1083,7 +1113,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 14845.299999952316,
           "hadRecentInput": true,
           "sources": [
@@ -1113,7 +1143,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 15275.299999952316,
           "hadRecentInput": true,
           "sources": [
@@ -1143,7 +1173,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 15480.099999904633,
           "hadRecentInput": true,
           "sources": [
@@ -1173,7 +1203,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 15886.799999952316,
           "hadRecentInput": true,
           "sources": [
@@ -1203,7 +1233,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 16129.599999904633,
           "hadRecentInput": true,
           "sources": [
@@ -1233,7 +1263,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 16537.799999952316,
           "hadRecentInput": true,
           "sources": [
@@ -1263,7 +1293,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 16763.299999952316,
           "hadRecentInput": true,
           "sources": [
@@ -1293,7 +1323,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 17167,
           "hadRecentInput": true,
           "sources": [
@@ -1323,7 +1353,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 17396.700000047684,
           "hadRecentInput": true,
           "sources": [
@@ -1353,7 +1383,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 17804,
           "hadRecentInput": true,
           "sources": [
@@ -1383,7 +1413,7 @@
           ]
         },
         {
-          "value": 0.00000722644947193287,
+          "value": 7.22644947193287e-6,
           "startTime": 18046.5,
           "hadRecentInput": true,
           "sources": [

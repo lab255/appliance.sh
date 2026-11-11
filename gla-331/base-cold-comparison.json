@@ -1,0 +1,1388 @@
+{
+  "config": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "motion": "no-preference",
+    "route": "/projects?mock-host&scenario=developer-mode",
+    "method": "10 fresh browser contexts per revision, identical mock-host storage, API fixtures and viewport. Base app built from detached 00a0bdd; desktop dependency alias points at that base dist. No Workbench code in base app."
+  },
+  "runs": [
+    {
+      "label": "base-00a0bdd",
+      "sample": 1,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 1891.7999999523163,
+          "last": 1891.7999999523163,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 1891.7999999523163,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 2,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 255,
+          "last": 255,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 255,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 3,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 262.5,
+          "last": 262.5,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 262.5,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 4,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 246.20000004768372,
+          "last": 246.20000004768372,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 246.20000004768372,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 5,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 244.70000004768372,
+          "last": 244.70000004768372,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 244.70000004768372,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 6,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 246.70000004768372,
+          "last": 246.70000004768372,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 246.70000004768372,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 7,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 248.79999995231628,
+          "last": 248.79999995231628,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 248.79999995231628,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 8,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 251.10000014305115,
+          "last": 251.10000014305115,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 251.10000014305115,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 9,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 249.19999980926514,
+          "last": 249.19999980926514,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 249.19999980926514,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "base-00a0bdd",
+      "sample": 10,
+      "hasWorkbench": false,
+      "cls": 0.09698362268518518,
+      "windows": [
+        {
+          "start": 221.30000019073486,
+          "last": 221.30000019073486,
+          "score": 0.09698362268518518
+        }
+      ],
+      "shifts": [
+        {
+          "time": 221.30000019073486,
+          "value": 0.09698362268518518,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 307,
+                "width": 203,
+                "height": 32,
+                "top": 307,
+                "right": 211,
+                "bottom": 339,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 1,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 253.29999995231628,
+          "last": 253.29999995231628,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 253.29999995231628,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 2,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 232.90000009536743,
+          "last": 232.90000009536743,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 232.90000009536743,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 3,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 230.5,
+          "last": 230.5,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 230.5,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 4,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 230,
+          "last": 230,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 230,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 5,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 228.40000009536743,
+          "last": 228.40000009536743,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 228.40000009536743,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 6,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 229.70000004768372,
+          "last": 229.70000004768372,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 229.70000004768372,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 7,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 232.90000009536743,
+          "last": 232.90000009536743,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 232.90000009536743,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 8,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 227.80000019073486,
+          "last": 227.80000019073486,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 227.80000019073486,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 9,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 226,
+          "last": 226,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 226,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "branch",
+      "sample": 10,
+      "hasWorkbench": true,
+      "cls": 0.11638034722222221,
+      "windows": [
+        {
+          "start": 229.09999990463257,
+          "last": 229.09999990463257,
+          "score": 0.11638034722222221
+        }
+      ],
+      "shifts": [
+        {
+          "time": 229.09999990463257,
+          "value": 0.11638034722222221,
+          "input": false,
+          "sources": [
+            {
+              "html": "<main id=\"main-content\" tabindex=\"-1\" class=\"col-start-2 min-h-0 overflow-auto p-6 focus:outline-none\"><div class=\"w-full max-w-5xl space-y-8\"><header class=\"mb-6 flex flex-wrap it",
+              "before": {
+                "x": 220,
+                "y": 41,
+                "width": 1220,
+                "height": 959,
+                "top": 41,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              },
+              "after": {
+                "x": 220,
+                "y": 59,
+                "width": 1220,
+                "height": 941,
+                "top": 59,
+                "right": 1440,
+                "bottom": 1000,
+                "left": 220
+              }
+            },
+            {
+              "html": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:bg-[var(--color-active)] active",
+              "before": {
+                "x": 8,
+                "y": 137,
+                "width": 203,
+                "height": 32,
+                "top": 137,
+                "right": 211,
+                "bottom": 169,
+                "left": 8
+              },
+              "after": {
+                "x": 8,
+                "y": 341,
+                "width": 203,
+                "height": 32,
+                "top": 341,
+                "right": 211,
+                "bottom": 373,
+                "left": 8
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "base-00a0bdd": {
+    "values": [
+      0.09698362268518518, 0.09698362268518518, 0.09698362268518518, 0.09698362268518518, 0.09698362268518518,
+      0.09698362268518518, 0.09698362268518518, 0.09698362268518518, 0.09698362268518518, 0.09698362268518518
+    ],
+    "median": 0.09698362268518518
+  },
+  "branch": {
+    "values": [
+      0.11638034722222221, 0.11638034722222221, 0.11638034722222221, 0.11638034722222221, 0.11638034722222221,
+      0.11638034722222221, 0.11638034722222221, 0.11638034722222221, 0.11638034722222221, 0.11638034722222221
+    ],
+    "median": 0.11638034722222221
+  },
+  "delta": 0.01939672453703703
+}
