@@ -1,3 +1,4 @@
+import { fixtureRuns, fixtureKey, fixtureDirectory } from '../../app/src/pages/workbench/fixtures';
 // Use the pure host contract without bootstrapping the browser router.
 import { microVmNameFromClusterId } from '../../app/src/lib/host';
 import type {
@@ -122,6 +123,16 @@ export function mockHostEnabled(): boolean {
     const scenario = params.get('scenario');
     if (scenario) {
       sessionStorage.setItem(SCENARIO_KEY, scenario);
+      if (scenario.startsWith('workbench')) {
+        sessionStorage.setItem(APP_MODE_KEY, 'developer');
+        sessionStorage.setItem(fixtureKey, scenario);
+        configureWorkspaceScenario('user-mode');
+        mockVm('appliance').agents = fixtureRuns();
+        for (const type of ['claude-code', 'codex', 'copilot']) mockAgentCreds.set(type, 'api-key');
+        if (scenario === 'workbench-2') mockAgentCreds.clear();
+        if (window.location.pathname === '/')
+          window.history.replaceState(null, '', `/workbench${window.location.search}`);
+      }
       if (scenario === 'journey') {
         sessionStorage.setItem(APP_MODE_KEY, 'developer');
         writeState({ clusters: [], selectedClusterId: null });
@@ -1239,7 +1250,11 @@ export function createMockHost(): ConsoleHost {
               dev: vm.dev,
               // Mock a shared workspace for dev VMs so the agent launcher
               // (gated on devMount) is exercisable in the browser shell.
-              devMount: vm.dev ? `/Users/you/projects/${vm.name}` : undefined,
+              devMount: vm.dev
+                ? sessionStorage.getItem(fixtureKey)
+                  ? fixtureDirectory
+                  : `/Users/you/projects/${vm.name}`
+                : undefined,
               apiServerUrl: `http://api.appliance.localhost:${vm.hostPort}`,
             };
           },

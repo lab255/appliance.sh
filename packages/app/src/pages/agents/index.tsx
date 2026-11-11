@@ -128,7 +128,7 @@ function onRadioGroupKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
 // refresh, AND the selected `agentType` are owned by the page so this picker
 // and the launcher's share one selection (Devon I4) and the cold-start banner
 // stays in lock-step.
-function AgentSignIn({
+export function AgentSignIn({
   signedIn,
   agentType,
   onAgentTypeChange,

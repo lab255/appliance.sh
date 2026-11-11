@@ -25,6 +25,7 @@ describe('getAppNavigation', () => {
       'Catalogue',
       'Setup',
       'Projects',
+      'Workbench',
       'Agents',
       'Machine',
       'Cloud',

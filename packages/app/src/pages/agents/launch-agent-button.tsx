@@ -60,6 +60,7 @@ export function LaunchAgentButton({
   agentType,
   onAgentTypeChange,
   disabledReason,
+  workbench = false,
   onAuthenticated,
 }: {
   name: string;
@@ -70,6 +71,7 @@ export function LaunchAgentButton({
   agentType: string;
   onAgentTypeChange: (type: string) => void;
   disabledReason?: string | null;
+  workbench?: boolean;
   onAuthenticated?: () => void;
 }) {
   const host = useHost();
@@ -363,7 +365,12 @@ export function LaunchAgentButton({
       <h3 className="text-sm font-semibold">Run {selectedLabel}</h3>
       {picker}
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Task" htmlFor={`agent-task-${name}`} optional className="w-64">
+        <Field
+          label={workbench ? 'What should the agent do?' : 'Task'}
+          htmlFor={`agent-task-${name}`}
+          optional
+          className="w-64"
+        >
           <Input
             data-launch-task
             id={`agent-task-${name}`}
@@ -379,7 +386,8 @@ export function LaunchAgentButton({
           />
         </Field>
         <Button size="sm" onClick={() => void launch()} disabled={busy} aria-describedby="agent-launch-status">
-          <Bot className={cn('h-3.5 w-3.5', busy && 'animate-pulse')} /> {busy ? 'Starting…' : 'Run'}
+          <Bot className={cn('h-3.5 w-3.5', busy && 'animate-pulse')} />{' '}
+          {busy ? (workbench ? 'Starting agent…' : 'Starting…') : 'Run'}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
           {busy ? 'Close after start' : 'Cancel'}

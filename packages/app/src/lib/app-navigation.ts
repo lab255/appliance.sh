@@ -5,6 +5,7 @@ export type AppNavKey =
   | 'catalogue'
   | 'setup'
   | 'projects'
+  | 'workbench'
   | 'agents'
   | 'machine'
   | 'cloud'
@@ -40,6 +41,7 @@ export function getAppNavigation(options: AppNavigationOptions): AppNavItem[] {
       ? [{ key: 'setup' as const, to: '/setup', label: 'Setup', prominent: true }]
       : []),
     { key: 'projects', to: '/projects', label: 'Projects' },
+    ...(options.isOperator ? [{ key: 'workbench' as const, to: '/workbench', label: 'Workbench' }] : []),
     ...(options.isOperator && options.hasVm ? [{ key: 'agents' as const, to: '/agents', label: 'Agents' }] : []),
     ...(options.isOperator && options.hasVm ? [{ key: 'machine' as const, to: '/machine', label: 'Machine' }] : []),
     ...(options.isOperator ? [{ key: 'cloud' as const, to: '/cloud', label: 'Cloud' }] : []),

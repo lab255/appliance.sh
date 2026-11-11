@@ -17,6 +17,7 @@ import { DeploymentsPage } from '@/pages/deployments/list';
 import { DeploymentDetailPage } from '@/pages/deployments/detail';
 import { SettingsPage } from '@/pages/settings';
 import { SetupDoctorPage } from '@/pages/setup/doctor';
+import { WorkbenchPage } from '@/pages/workbench';
 import { AgentsPage } from '@/pages/agents';
 import { MachinePage } from '@/pages/machine';
 import { CloudPage } from '@/pages/cloud';
@@ -126,6 +127,13 @@ function DeployAliasRedirect() {
   return <Navigate to={`/projects/deploy${search}`} replace />;
 }
 
+function RequireWorkbench({ children }: { children: React.ReactNode }) {
+  const { mode, isLoading } = useAppMode();
+  if (isLoading) return null;
+  if (mode !== 'developer') return <Navigate to="/apps" replace />;
+  return <RequireAdmin>{children}</RequireAdmin>;
+}
+
 // Query-preserving redirect to the canonical bootstrap wizard — the old
 // wizard paths carried `?mode=` deep links (e.g. the Setup hub's cards).
 function BootstrapAliasRedirect() {
@@ -200,6 +208,22 @@ export const routes: RouteObject[] = [
 
       // ③ Apps — the overview home, deploy wizard, app detail, and
       // Environments/Deployments folded UNDER the area as nested routes.
+      {
+        path: 'workbench',
+        element: (
+          <RequireWorkbench>
+            <WorkbenchPage />
+          </RequireWorkbench>
+        ),
+      },
+      {
+        path: 'workbench/:workspaceId',
+        element: (
+          <RequireWorkbench>
+            <WorkbenchPage />
+          </RequireWorkbench>
+        ),
+      },
       { path: 'projects', element: <AppsPage /> },
       { path: 'projects/deploy', element: <DeployPage /> },
       { path: 'projects/:id', element: <ProjectDetailPage /> },

@@ -26,6 +26,7 @@ const navIcons: Record<AppNavKey, React.ComponentType<{ className?: string }>> =
   setup: Wand,
   projects: Folder,
   agents: Bot,
+  workbench: Folder,
   machine: Laptop,
   cloud: Cloud,
   settings: Cog,
