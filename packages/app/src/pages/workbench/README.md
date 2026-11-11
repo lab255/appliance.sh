@@ -39,3 +39,19 @@ follow-on actions.
 The evidence report declares real-run versus fixture-backed claims at its top,
 and retains failed gates, raw timing samples, CLS, matched captures, videos and
 traces. Evidence binaries are deliberately not committed.
+
+Evidence provenance is recorded per series in
+`_evidence-gla331/current-measurements.json`. Package, Deploy and Retry
+acknowledgment were re-measured at `52b3849` in both motion configurations;
+other historical series retain their actual measurement revision. The evidence
+README records before/after medians without changing failure thresholds.
+
+Follow-up board card GLA-336, “Measured shell/installer defects exposed by
+GLA-331”, belongs to Morgan, who opens the build epic. It carries shell CLS
+(including the branch contribution and user-mode product defect), installer
+first acknowledgment and S3 delayed-acceptance liveness. The untracked
+`followups.md` preserves the README's `shell-cls` and
+`s3-delayed-acceptance` anchors and must accompany artifact publication.
+
+The branch and code follow-up `52b3849` are on origin. This prototype never
+merges; there is no product PR. Manager handles publication.
