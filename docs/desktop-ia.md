@@ -74,3 +74,5 @@ Older deep links redirect to their current equivalents: `/dashboard` to
 `/bootstrap` to `/cloud/bootstrap`, `/local-runtime` to `/machine`, and
 `/local-runtime/deploy` to `/projects/deploy`. Query parameters used by setup
 and deploy flows are preserved by these redirects.
+
+> **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** Superseding the blanket query-preservation claim above (GLA-328 recon X10): the bootstrap and deploy alias helpers preserve the search string, but `/connect` uses literal `<Navigate to="/setup/connect" replace />` and drops query parameters. Evidence: `packages/app/src/router/routes.tsx:124`, `packages/app/src/router/routes.tsx:131`, `packages/app/src/router/routes.tsx:272`. The listed destination routes remain correct; query preservation applies to those helpers, not every redirect.
