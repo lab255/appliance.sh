@@ -1,0 +1,14 @@
+[
+  {
+    motion: 'no-preference',
+    rawSum: 0.000014196513611593364,
+    before: { x: 1135.09375, y: 83, width: 132.90625, height: 32 },
+    after: { x: 1135.09375, y: 83, width: 132.90625, height: 32 }
+  },
+  {
+    motion: 'reduce',
+    rawSum: 0.000013738561559606482,
+    before: { x: 1135.09375, y: 83, width: 132.90625, height: 32 },
+    after: { x: 1135.09375, y: 83, width: 132.90625, height: 32 }
+  }
+]

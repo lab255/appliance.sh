@@ -1,0 +1,799 @@
+{
+  "config": {
+    "os": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "browser": "156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "build": "Vite development + built app library",
+    "adapter": "Claude unless specified",
+    "vm": "mock-host appliance",
+    "data": "fixture except real pre-run journal artifact",
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) \u2192 scoped DOM acknowledgment \u2192 requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+  },
+  "measurements": [
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        143.70000004768372, 142.79999995231628, 142.79999995231628, 141.40000009536743, 141.5, 142, 143.59999990463257,
+        141.89999985694885, 145.60000014305115, 145.09999990463257
+      ],
+      "median": 142.79999995231628,
+      "discardedAttempts": [],
+      "timelines": [
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 799.0999999046326
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 799.5
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 799.5
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 799.5
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 799.5999999046326
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 799.5999999046326
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 920.4000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 934.5999999046326
+            }
+          ],
+          "firstAckMs": 143.70000004768372
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 481.39999985694885
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 481.7999999523163
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 481.7999999523163
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 481.7999999523163
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 481.89999985694885
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 481.89999985694885
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 604.1999998092651
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 617.5
+            }
+          ],
+          "firstAckMs": 142.79999995231628
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 480.2000000476837
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 480.39999985694885
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 480.39999985694885
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 480.39999985694885
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 480.5
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 480.5
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 602.5999999046326
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 613.2999999523163
+            }
+          ],
+          "firstAckMs": 142.79999995231628
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 798.7000000476837
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 799.1000001430511
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 799.1000001430511
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 799.1000001430511
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 799.2000000476837
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 799.2000000476837
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 921.8000001907349
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 934
+            }
+          ],
+          "firstAckMs": 141.40000009536743
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 484.90000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 485.2000000476837
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 485.2000000476837
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 485.2000000476837
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 485.2999999523163
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 485.2999999523163
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 607.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 620.1000001430511
+            }
+          ],
+          "firstAckMs": 141.5
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 482.90000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 483.2000000476837
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 483.2000000476837
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 483.2000000476837
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 483.30000019073486
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 483.30000019073486
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 606.1000001430511
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 617.8000001907349
+            }
+          ],
+          "firstAckMs": 142
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 463.90000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 464.5
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 464.5
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 464.5
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 464.59999990463257
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 464.59999990463257
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 586.9000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 599.9000000953674
+            }
+          ],
+          "firstAckMs": 143.59999990463257
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 483.60000014305115
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 484.2000000476837
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 484.2000000476837
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 484.2000000476837
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 484.2999999523163
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 484.2999999523163
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 607.1000001430511
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 620.1000001430511
+            }
+          ],
+          "firstAckMs": 141.89999985694885
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 462.2999999523163
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 462.7999999523163
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 462.7999999523163
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 462.7999999523163
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 462.7999999523163
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 462.7999999523163
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 585.9000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 600
+            }
+          ],
+          "firstAckMs": 145.60000014305115
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 461.40000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 462
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 462
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 462
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 462
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 462
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 584.8000001907349
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 597.1000001430511
+            }
+          ],
+          "firstAckMs": 145.09999990463257
+        }
+      ],
+      "minimumMet": true,
+      "revision": "0c41304",
+      "measurementVariant": "Temporary performance marks in handler; otherwise original behavior",
+      "acknowledgment": "Publisher review dialog"
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        155.29999995231628, 143.59999990463257, 145.5, 145, 146.89999985694885, 146.19999980926514, 142,
+        144.40000009536743, 141.89999985694885, 142.70000004768372
+      ],
+      "median": 144.70000004768372,
+      "discardedAttempts": [],
+      "timelines": [
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 795.9000000953674
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 796.6000001430511
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 796.6000001430511
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 796.7000000476837
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 796.7000000476837
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 796.7000000476837
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 919.9000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 934.6000001430511
+            }
+          ],
+          "firstAckMs": 155.29999995231628
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 487.7000000476837
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 488.09999990463257
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 488.2000000476837
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 488.2000000476837
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 611.2999999523163
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 624.2000000476837
+            }
+          ],
+          "firstAckMs": 143.59999990463257
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 487.7999999523163
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 488.2999999523163
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 610.7999999523163
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 623.1000001430511
+            }
+          ],
+          "firstAckMs": 145.5
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 816.7000000476837
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 817.1000001430511
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 817.1000001430511
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 817.1000001430511
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 817.1000001430511
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 817.1000001430511
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 939.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 951
+            }
+          ],
+          "firstAckMs": 145
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 484.90000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 485.2999999523163
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 485.2999999523163
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 485.2999999523163
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 485.40000009536743
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 485.40000009536743
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 607.9000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 619.7000000476837
+            }
+          ],
+          "firstAckMs": 146.89999985694885
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 487.10000014305115
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 487.5
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 487.5
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 487.5
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 487.60000014305115
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 487.60000014305115
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 609.9000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 621.9000000953674
+            }
+          ],
+          "firstAckMs": 146.19999980926514
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 468.90000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 469.5
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 469.5
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 469.5
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 469.59999990463257
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 469.59999990463257
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 590.4000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 603.2000000476837
+            }
+          ],
+          "firstAckMs": 142
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 466.90000009536743
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 467.30000019073486
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 467.30000019073486
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 467.30000019073486
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 467.40000009536743
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 467.40000009536743
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 589.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 601.7000000476837
+            }
+          ],
+          "firstAckMs": 144.40000009536743
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 769.9000000953674
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 770.2999999523163
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 770.2999999523163
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 770.2999999523163
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 770.4000000953674
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 770.4000000953674
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 893.5
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 904.7999999523163
+            }
+          ],
+          "firstAckMs": 141.89999985694885
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 493.59999990463257
+            },
+            {
+              "name": "s6:handler-enter",
+              "time": 493.89999985694885
+            },
+            {
+              "name": "s6:picker-resolved",
+              "time": 493.89999985694885
+            },
+            {
+              "name": "s6:install-enter",
+              "time": 493.89999985694885
+            },
+            {
+              "name": "s6:busy-set",
+              "time": 494
+            },
+            {
+              "name": "s6:bridge-call",
+              "time": 494
+            },
+            {
+              "name": "s6:bridge-rejected",
+              "time": 616.2999999523163
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 628
+            }
+          ],
+          "firstAckMs": 142.70000004768372
+        }
+      ],
+      "minimumMet": true,
+      "revision": "0c41304",
+      "measurementVariant": "Temporary performance marks in handler; otherwise original behavior",
+      "acknowledgment": "Publisher review dialog"
+    }
+  ],
+  "scenarios": [],
+  "checks": [],
+  "errors": []
+}

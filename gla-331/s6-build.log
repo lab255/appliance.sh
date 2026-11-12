@@ -1,0 +1,15 @@
+
+> @appliance.sh/app@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_nixnfukthr-1/appliance.sh/packages/app
+> vite build && tsc --emitDeclarationOnly
+
+vite v6.4.2 building for production...
+transforming...
+✓ 2426 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/app.css                 617.14 kB │ gzip: 434.09 kB
+dist/index.js                  0.54 kB │ gzip:   0.32 kB │ map:     0.09 kB
+dist/index-C9Ahea4C.js        12.52 kB │ gzip:   5.10 kB │ map:    58.24 kB
+dist/features-BnOOgzqV.js     58.36 kB │ gzip:  18.74 kB │ map:   251.79 kB
+dist/index-Da4jeRcv.js     1,981.18 kB │ gzip: 473.51 kB │ map: 5,229.88 kB
+✓ built in 1.94s

@@ -1,0 +1,399 @@
+{
+  "config": {
+    "os": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "browser": "156.0.8078.4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "build": "Vite development + built app library",
+    "adapter": "Claude unless specified",
+    "vm": "mock-host appliance",
+    "data": "fixture except real pre-run journal artifact",
+    "method": "Pointer/key event capture timestamp (native select uses Playwright input/change event) \u2192 scoped DOM acknowledgment \u2192 requestAnimationFrame then setTimeout(0), an after-paint upper-bound proxy. Each sample excludes locator/pointer travel time. Not a hardware display measurement. Backend completion is excluded and separately recorded. CLS includes standard session-window maximum plus raw input-associated shifts."
+  },
+  "measurements": [
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "no-preference",
+      "count": 10,
+      "samples": [
+        29.399999856948853, 28, 22.799999952316284, 27.59999990463257, 29.100000143051147, 26, 25.40000009536743,
+        22.700000047683716, 26.299999952316284, 24.200000047683716
+      ],
+      "median": 26.149999976158142,
+      "discardedAttempts": [],
+      "timelines": [
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 825.1000001430511
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 828.7999999523163
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 964.5
+            }
+          ],
+          "firstAckMs": 29.399999856948853
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 480
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 484.30000019073486
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 616.6000001430511
+            }
+          ],
+          "firstAckMs": 28
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 484.80000019073486
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 489.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 620.7000000476837
+            }
+          ],
+          "firstAckMs": 22.799999952316284
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 749.5
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 753.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 886.5999999046326
+            }
+          ],
+          "firstAckMs": 27.59999990463257
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 476.19999980926514
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 480.19999980926514
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 611
+            }
+          ],
+          "firstAckMs": 29.100000143051147
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 465
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 469.5
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 600.8000001907349
+            }
+          ],
+          "firstAckMs": 26
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 465.2999999523163
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 470.2000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 601.0999999046326
+            }
+          ],
+          "firstAckMs": 25.40000009536743
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 467
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 471.40000009536743
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 601.7000000476837
+            }
+          ],
+          "firstAckMs": 22.700000047683716
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 464.7000000476837
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 469.10000014305115
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 601.1000001430511
+            }
+          ],
+          "firstAckMs": 26.299999952316284
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 483.59999990463257
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 487.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 619.7999999523163
+            }
+          ],
+          "firstAckMs": 24.200000047683716
+        }
+      ],
+      "minimumMet": true,
+      "revision": "8afe2d0a048fbf75f83b98e9634a9335527db2dd",
+      "measurementVariant": "Final committed code; no temporary handler marks",
+      "acknowledgment": "Visible Install button busy label (or review dialog if already available)"
+    },
+    {
+      "surface": "S6",
+      "name": "Install acknowledgment",
+      "config": "reduce",
+      "count": 10,
+      "samples": [
+        31.200000047683716, 27, 30.299999952316284, 31, 30.700000047683716, 32.799999952316284, 29.600000143051147,
+        30.700000047683716, 30.799999952316284, 31.600000143051147
+      ],
+      "median": 30.75,
+      "discardedAttempts": [],
+      "timelines": [
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 778
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 780.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 918.5
+            }
+          ],
+          "firstAckMs": 31.200000047683716
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 483.2999999523163
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 487.7000000476837
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 620.9000000953674
+            }
+          ],
+          "firstAckMs": 27
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 486.2000000476837
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 488.40000009536743
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 620.7000000476837
+            }
+          ],
+          "firstAckMs": 30.299999952316284
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 815.2000000476837
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 817.4000000953674
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 948.7999999523163
+            }
+          ],
+          "firstAckMs": 31
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 481.09999990463257
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 483.39999985694885
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 616.3999998569489
+            }
+          ],
+          "firstAckMs": 30.700000047683716
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 466.90000009536743
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 469.10000014305115
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 602
+            }
+          ],
+          "firstAckMs": 32.799999952316284
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 464.7000000476837
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 467.80000019073486
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 600.8000001907349
+            }
+          ],
+          "firstAckMs": 29.600000143051147
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 480.59999990463257
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 483
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 617.5999999046326
+            }
+          ],
+          "firstAckMs": 30.700000047683716
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 499.80000019073486
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 502.10000014305115
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 634.4000000953674
+            }
+          ],
+          "firstAckMs": 30.799999952316284
+        },
+        {
+          "marks": [
+            {
+              "name": "s6:input",
+              "time": 463.69999980926514
+            },
+            {
+              "name": "s6:busy-visible",
+              "time": 466
+            },
+            {
+              "name": "s6:dialog-visible",
+              "time": 598.6999998092651
+            }
+          ],
+          "firstAckMs": 31.600000143051147
+        }
+      ],
+      "minimumMet": true,
+      "revision": "8afe2d0a048fbf75f83b98e9634a9335527db2dd",
+      "measurementVariant": "Final committed code; no temporary handler marks",
+      "acknowledgment": "Visible Install button busy label (or review dialog if already available)"
+    }
+  ],
+  "scenarios": [],
+  "checks": [],
+  "errors": []
+}
