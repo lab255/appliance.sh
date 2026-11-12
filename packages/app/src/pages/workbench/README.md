@@ -55,3 +55,12 @@ first acknowledgment and S3 delayed-acceptance liveness. The untracked
 
 The branch and code follow-up `52b3849` are on origin. This prototype never
 merges; there is no product PR. Manager handles publication.
+
+Bounded S6 pass: Install-from-file now renders picker/install busy feedback in
+its existing buttons before awaiting the result. The former ~147 ms measurement
+waited for the publisher dialog behind mock-host's explicit 120 ms install delay;
+this pass changes first feedback, not publisher review or installer latency.
+Both motion configurations have ten finite after-paint samples below 100 ms;
+S6 CLS remains 0.00255. Full traces and before/after samples are in
+`_evidence-gla331/s6-*-measurements.json`. Runtime, Tauri and CLI internals are
+unchanged; GLA-336 inherits this branch-only ordering/presentation evidence.

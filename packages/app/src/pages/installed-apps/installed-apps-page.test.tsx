@@ -98,6 +98,72 @@ async function installedAppsInstallMessage(rejection: unknown): Promise<string> 
 }
 
 describe('Installed Apps mock scenarios', () => {
+  it.each(['cancel', 'reject', 'install'] as const)(
+    'acknowledges a pending picker and recovers after %s',
+    async (outcome) => {
+      let resolvePicker!: (path: string | null) => void;
+      let rejectPicker!: (error: Error) => void;
+      let resolveInstall!: (app: InstalledRuntimeApp['app']) => void;
+      const installedApps = {
+        list: vi.fn().mockResolvedValue([]),
+        pickBundle: vi.fn(
+          () =>
+            new Promise<string | null>((resolve, reject) => {
+              resolvePicker = resolve;
+              rejectPicker = reject;
+            })
+        ),
+        installBundle: vi.fn(
+          () =>
+            new Promise<InstalledRuntimeApp['app']>((resolve) => {
+              resolveInstall = resolve;
+            })
+        ),
+      };
+      const host = { installedApps, platform: 'macos' } as unknown as ConsoleHost;
+      const container = document.createElement('div');
+      const root = createRoot(container);
+      try {
+        await act(async () =>
+          root.render(
+            <MemoryRouter>
+              <HostProvider host={host}>
+                <ToastProvider>
+                  <InstalledAppsPage />
+                </ToastProvider>
+              </HostProvider>
+            </MemoryRouter>
+          )
+        );
+        const button = container.querySelector<HTMLButtonElement>('button[aria-busy]')!;
+        await act(async () => button.click());
+        expect(button.getAttribute('aria-busy')).toBe('true');
+        expect(button.textContent).toContain('Choose bundle…');
+        expect(button.disabled).toBe(true);
+        expect(installedApps.installBundle).not.toHaveBeenCalled();
+        await act(async () => button.click());
+        expect(installedApps.pickBundle).toHaveBeenCalledTimes(1);
+        await act(async () => {
+          if (outcome === 'reject') rejectPicker(new Error('Picker unavailable'));
+          else resolvePicker(outcome === 'install' ? '/tmp/test.appliance.zip' : null);
+        });
+        if (outcome === 'install') {
+          expect(button.textContent).toContain('Installing…');
+          expect(button.getAttribute('aria-busy')).toBe('true');
+          expect(installedApps.installBundle).toHaveBeenCalledWith('/tmp/test.appliance.zip', 'local', {
+            acceptUnknownPublisher: false,
+          });
+          await act(async () => resolveInstall(fixture().app));
+        } else expect(installedApps.installBundle).not.toHaveBeenCalled();
+        expect(button.getAttribute('aria-busy')).toBe('false');
+        expect(button.disabled).toBe(false);
+        if (outcome === 'reject') expect(container.textContent).toContain('Picker unavailable');
+      } finally {
+        await act(async () => root.unmount());
+      }
+    }
+  );
+
   it.each(['Stop', 'Open'] as const)(
     'keeps cards mounted during the %s refetch and shows success feedback',
     async (action) => {
