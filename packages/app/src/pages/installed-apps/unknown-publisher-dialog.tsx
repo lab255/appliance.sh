@@ -109,6 +109,8 @@ function UnknownPublisherDialogContent({
           <dd>
             {prompt.name} {prompt.version}
           </dd>
+          <dt className="text-[var(--color-muted-foreground)]">Publisher (unverified)</dt>
+          <dd>{prompt.publisher}</dd>
           <dt className="text-[var(--color-muted-foreground)]">License</dt>
           <dd>{prompt.license}</dd>
           <dt className="text-[var(--color-muted-foreground)]">Signature</dt>

@@ -1,4 +1,5 @@
 import type { InspectionHost } from './inspection';
+import type { WorkbenchPackageHost } from './workbench-package';
 import type {
   ApiServerUpdateInput,
   ApiServerUpdateOptions,
@@ -383,6 +384,8 @@ export interface WorkbenchHost {
 export interface ConsoleHost extends InspectionHost {
   /** Workbench bindings (desktop only). */
   workbench?: WorkbenchHost;
+  // ---- Workbench Package: explicit human action, separate from registry reads ----
+  workbenchPackage?: WorkbenchPackageHost;
   /** Resolved once when the host is constructed so render-time copy stays synchronous. */
   platform: HostPlatform;
   /** Explicit shell identity; do not infer desktop from an unrelated optional capability. */

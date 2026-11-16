@@ -1,0 +1,49 @@
+[
+  {
+    "type": "focused",
+    "commandId": "v1-real-click",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 395.09375,
+      "width": 128,
+      "height": 36,
+      "top": 395.09375,
+      "right": 924,
+      "bottom": 431.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "v1-real-click",
+    "start": 619694,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 39
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "v1-real-click",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 619733,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "v1-real-click",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-error",
+    "commandId": "v1-real-click",
+    "error": "This is a manifest v1 source project. `appliance package` only emits runnable manifest v2 bundles; use `appliance build` to create the existing source bundle."
+  }
+]

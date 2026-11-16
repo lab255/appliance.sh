@@ -1,0 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { verifyBundle } from '/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_zuucqw5twu-1/appliance.sh/packages/cli/src/utils/bundle-read.ts';
+const [produced, consumed, publicKeyFile] = process.argv.slice(2);
+const publicKey = publicKeyFile ? readFileSync(publicKeyFile,'utf8').trim() : undefined;
+const verify = (file:string) => {
+ const value=verifyBundle(file,{publicKey});
+ return {path:file,exists:true,bytes:readFileSync(file).length,zipSha256:createHash('sha256').update(readFileSync(file)).digest('hex'),contentDigest:value.digest,signature:value.signature??null,manifest:value.manifest};
+};
+const source=verify(produced),installed=verify(consumed);
+if(source.zipSha256!==installed.zipSha256||source.contentDigest!==installed.contentDigest)throw new Error('Hand-off bytes changed');
+if(publicKey && source.signature?.valid!==true)throw new Error('Developer signature did not verify');
+console.log(JSON.stringify({source,installed,byteIdentical:true,independentSignatureVerified:publicKey?source.signature?.valid:null},null,2));

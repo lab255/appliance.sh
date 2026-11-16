@@ -1,0 +1,2147 @@
+[
+  {
+    "type": "focused",
+    "commandId": "signed-01",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 395.09375,
+      "width": 128,
+      "height": 36,
+      "top": 395.09375,
+      "right": 924,
+      "bottom": 431.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-01",
+    "start": 169027,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 55
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-01",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 169083,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-01",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-01",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-01",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-01",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-01",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/9446c28e-b996-4912-9d0f-7bc1e4999e60/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 169664
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-02",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-02",
+    "start": 192868,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 80
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-02",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 192948,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-02",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-02",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-02",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-02",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-02",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/e4dbc813-4e60-4076-a53a-67c874128978/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 193319
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-03",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-03",
+    "start": 193891,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 74
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-03",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 193966,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-03",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-03",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-03",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-03",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-03",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/8c19f109-80b1-4fc3-a9c5-bf860db0e965/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 194338
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-04",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-04",
+    "start": 194924,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 74
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-04",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 194998,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-04",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-04",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-04",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-04",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-04",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/e3d85213-c623-43dc-85dd-3dfcde043866/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 195370
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-05",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-05",
+    "start": 195974,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 75
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-05",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 196049,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-05",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-05",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-05",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-05",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-05",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/c735657a-f256-46bd-bc9e-a20a938339ca/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 196419
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-06",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-06",
+    "start": 197004,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 78
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-06",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 197082,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-06",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-06",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-06",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-06",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-06",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/cd85883e-dadd-4ee9-bb27-53bbf9dc8a2a/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 197456
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-07",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-07",
+    "start": 197934,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 64
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-07",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 197998,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-07",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-07",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-07",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-07",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-07",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/b5bccdfd-ea27-441c-be89-e777aff801f9/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 198406
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-08",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-08",
+    "start": 198967,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 64
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-08",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 199032,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-08",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-08",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-08",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-08",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-08",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/b91c9f2f-4181-4fb6-b560-7fd8f3a57c9b/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 199650
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-09",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-09",
+    "start": 200225,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 76
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-09",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 200302,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-09",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-09",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-09",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-09",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-09",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/c06fd5e1-8f9a-4502-a35d-5f7af22eae5c/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 201376
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-10",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-10",
+    "start": 201925,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 74
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-10",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 201999,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-10",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-10",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-10",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-10",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-10",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/6d7925f1-8a9b-43d2-be7b-a0ef74bafbeb/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 203069
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-10"
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-11"
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-12",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 395.09375,
+      "width": 128,
+      "height": 36,
+      "top": 395.09375,
+      "right": 924,
+      "bottom": 431.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-12",
+    "start": 63314,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 29
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-12",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 63344,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-12",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/cb7b8dac-1034-4f47-bcc5-409e23809648/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 63907
+  },
+  {
+    "type": "ack",
+    "commandId": "signed-12",
+    "start": 90454,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 73
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "signed-12",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 90527,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Writing and signing hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "signed-12",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "signed-12",
+    "result": {
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "name": "workbench-w2-signed-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/10c7fbc8-78bd-49e5-b1c7-f0ce3b0e9383/review.appliance.zip",
+      "signatureStatus": "signed",
+      "sizeBytes": 1087,
+      "version": "1.0.0"
+    },
+    "at": 91083
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-01",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-01",
+    "start": 125933,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 61
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-01",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 125995,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-01",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-01",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-01",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-01",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-01",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/8266729d-7a70-4b7e-9623-7a7e01794379/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 126366
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-02",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-02",
+    "start": 126961,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 67
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-02",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 127028,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-02",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-02",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-02",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-02",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-02",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/a561b822-0cd9-439d-a8f8-8aecbb539718/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 127399
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-03",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-03",
+    "start": 127986,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 74
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-03",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 128060,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-03",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-03",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-03",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-03",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-03",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/4f83f9ec-3fb4-4891-aaee-b5b93004253c/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 128427
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-04",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-04",
+    "start": 128998,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 79
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-04",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 129077,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-04",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-04",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-04",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-04",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-04",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/34a89092-e6f2-49dc-96ef-e7c3ba46c933/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 129447
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-05",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-05",
+    "start": 130040,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 70
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-05",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 130110,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-05",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-05",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-05",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-05",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-05",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/e7fcc4d6-8902-43fa-a93a-518bdb95a1ec/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 130537
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-06",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-06",
+    "start": 131178,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 66
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-06",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 131245,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-06",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-06",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-06",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-06",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-06",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/eaf8bbe8-1286-4e21-9c39-7ac4ff4042a3/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 131616
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-07",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-07",
+    "start": 132215,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 63
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-07",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 132278,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-07",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-07",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-07",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-07",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-07",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/050a907c-145e-4865-9f43-fe8b79cf81e3/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 132657
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-08",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-08",
+    "start": 133245,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 66
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-08",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 133311,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-08",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-08",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-08",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-08",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-08",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/375b64f1-26a5-49a6-a87c-861ea868d745/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 133678
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-09",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-09",
+    "start": 134286,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 74
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-09",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 134360,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-09",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-09",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-09",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-09",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-09",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/dc0278a8-54be-4144-9fda-acf4b2315c7d/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 134734
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-10",
+    "label": "Package",
+    "rect": {
+      "x": 796,
+      "y": 366.09375,
+      "width": 128,
+      "height": 36,
+      "top": 366.09375,
+      "right": 924,
+      "bottom": 402.09375,
+      "left": 796
+    }
+  },
+  {
+    "type": "ack",
+    "commandId": "unsigned-10",
+    "start": 135311,
+    "reduced": false,
+    "trusted": true,
+    "viewport": [1280, 768],
+    "shifts": [],
+    "layoutShiftSupported": false,
+    "ack": 66
+  },
+  {
+    "type": "call",
+    "verb": "package",
+    "commandId": "unsigned-10",
+    "directory": "/private/tmp/w2-package-workspace",
+    "at": 135377,
+    "busy": true
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-10",
+    "event": {
+      "message": "Validating manifest\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-10",
+    "event": {
+      "message": "Staging runnable payloads\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-10",
+    "event": {
+      "message": "Writing unsigned hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "stage",
+    "commandId": "unsigned-10",
+    "event": {
+      "message": "Verifying hand-off file\u2026",
+      "type": "stage"
+    }
+  },
+  {
+    "type": "package-result",
+    "commandId": "unsigned-10",
+    "result": {
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "name": "workbench-w2-unsigned-review",
+      "outputPath": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip",
+      "signatureStatus": "unsigned",
+      "sizeBytes": 717,
+      "version": "1.0.0"
+    },
+    "at": 135765
+  },
+  {
+    "type": "status",
+    "commandId": "unsigned-visible-text",
+    "path": "/workbench/%2Fprivate%2Ftmp%2Fw2-package-workspace",
+    "text": "Skip to content\nAppliance\nInstalled Apps\nCatalogue\nDEVELOP\nSetup\nProjects\nWorkbench\nAgents\nMachine\nCloud\nSettings\nDeveloper mode\nSelect target\nDeveloper mode\nWorkbench\nW2 live Package review\n\n/private/tmp/w2-package-workspace\n\nAgent machine\n\nappliance\n\nNo mounted folder reported\n\nDeployment target\nChoose a deployment target\nUnavailable target \u00b7 microvm\nApplies to this workspace only.\n\nSessions\n\n0 recorded sessions. Live session controls are not available yet.\n\nNo agent is launched from this shell.\n\nChanges\nFiles\nLogs\n\nChanges inspection is not available yet.\n\nNo baseline captured \u2014 change comparison will be unavailable\n\nPackage for review\n\nPackaging creates an artifact; it does not install, publish or deploy it. You authorize each next step.\n\n/private/tmp/w2-package-workspace\n\nReview the changes before packaging. You can package without an agent proposal.\n\nPackage\n\nPackaging reads the current folder; it does not pin the inspected snapshot.\n\nPackage complete\nComplete\nDetails (log)\nValidating manifest\u2026\nStaging runnable payloads\u2026\nWriting unsigned hand-off file\u2026\nVerifying hand-off file\u2026\n\nDuration depends on the payload build. Keep this page open until it finishes.\n\nFile\n\nworkbench-w2-unsigned-review \u00b7 1.0.0\n\nUnsigned \u2014 publisher prompts will warn\n\n/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip\n\nsha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f\n\nCopy file path\nGo to Apps to install from file\n\nCatalogue \u2014 coming later\n\nDeploy source\n\nDeploy is a separate action. Package promotion is not available yet.",
+    "viewport": [1280, 768],
+    "buttons": [
+      {
+        "label": "Select target",
+        "rect": {
+          "x": 236,
+          "y": -154,
+          "width": 129.171875,
+          "height": 34,
+          "top": -154,
+          "right": 365.171875,
+          "bottom": -120,
+          "left": 236
+        }
+      },
+      {
+        "label": "Changes",
+        "rect": {
+          "x": 779,
+          "y": -655.890625,
+          "width": 83.5,
+          "height": 32,
+          "top": -655.890625,
+          "right": 862.5,
+          "bottom": -623.890625,
+          "left": 779
+        }
+      },
+      {
+        "label": "Files",
+        "rect": {
+          "x": 866.5,
+          "y": -655.890625,
+          "width": 55.078125,
+          "height": 32,
+          "top": -655.890625,
+          "right": 921.578125,
+          "bottom": -623.890625,
+          "left": 866.5
+        }
+      },
+      {
+        "label": "Logs",
+        "rect": {
+          "x": 925.578125,
+          "y": -655.890625,
+          "width": 56.59375,
+          "height": 32,
+          "top": -655.890625,
+          "right": 982.171875,
+          "bottom": -623.890625,
+          "left": 925.578125
+        }
+      },
+      {
+        "label": "Package",
+        "rect": {
+          "x": 796,
+          "y": -188.90625,
+          "width": 128,
+          "height": 36,
+          "top": -188.90625,
+          "right": 924,
+          "bottom": -152.90625,
+          "left": 796
+        }
+      },
+      {
+        "label": "Details (log)",
+        "rect": {
+          "x": 797,
+          "y": -74.109375,
+          "width": 394,
+          "height": 31.984375,
+          "top": -74.109375,
+          "right": 1191,
+          "bottom": -42.125,
+          "left": 797
+        }
+      },
+      {
+        "label": "Copy log",
+        "rect": {
+          "x": 1191,
+          "y": -69.125,
+          "width": 22,
+          "height": 22,
+          "top": -69.125,
+          "right": 1213,
+          "bottom": -47.125,
+          "left": 1191
+        }
+      },
+      {
+        "label": "Copy file path",
+        "rect": {
+          "x": 809,
+          "y": 416,
+          "width": 105.890625,
+          "height": 32,
+          "top": 416,
+          "right": 914.890625,
+          "bottom": 448,
+          "left": 809
+        }
+      }
+    ],
+    "sample": {
+      "type": "sample",
+      "commandId": "unsigned-10",
+      "start": 135311,
+      "reduced": false,
+      "trusted": true,
+      "viewport": [1280, 768],
+      "shifts": [],
+      "layoutShiftSupported": false
+    }
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-picker",
+    "label": "Install from fileInstall from file",
+    "rect": {
+      "x": 1123.09375,
+      "y": 83,
+      "width": 132.90625,
+      "height": 32,
+      "top": 83,
+      "right": 1256,
+      "bottom": 115,
+      "left": 1123.09375
+    }
+  },
+  {
+    "type": "call",
+    "verb": "install",
+    "commandId": "signed-picker",
+    "source": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/10c7fbc8-78bd-49e5-b1c7-f0ce3b0e9383/review.appliance.zip",
+    "target": "local",
+    "options": {
+      "acceptUnknownPublisher": false
+    }
+  },
+  {
+    "type": "install-error",
+    "commandId": "signed-picker",
+    "error": "Warning: no verified unsafe-app blacklist is available; local operation continues.\nUNKNOWN_PUBLISHER:{\"appId\":\"workbench-w2-signed-review\",\"name\":\"workbench-w2-signed-review\",\"version\":\"1.0.0\",\"license\":\"MIT\",\"source\":\"file\",\"digest\":\"sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb\",\"signature\":\"invalid\",\"publisher\":\"Workbench local developer\",\"controlsSummary\":{\"egressHosts\":[\"example.com\"],\"mounts\":[],\"publishedPorts\":[],\"resources\":{},\"serviceCount\":1,\"serviceNames\":[]}}"
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "signed-picker",
+    "text": "Unknown PublisherPublisher identity and code origin could not be verified. This does not mean the app is malicious.Appworkbench-w2-signed-review 1.0.0Publisher (unverified)Workbench local developerLicenseMITSignatureSignature could not be verifiedDigestsha256:31f6c5db6ab718881a0e\u2026SourcefileRequested controls1 service \u00b7 egress to example.com \u00b7 no mountsCancelInstall this bundle",
+    "titles": ["sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb", "file"]
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-accept",
+    "label": "Install this bundle",
+    "rect": {
+      "x": 750.5,
+      "y": 530.890625,
+      "width": 124.5,
+      "height": 32,
+      "top": 530.890625,
+      "right": 875,
+      "bottom": 562.890625,
+      "left": 750.5
+    }
+  },
+  {
+    "type": "call",
+    "verb": "install",
+    "commandId": "signed-accept",
+    "source": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/10c7fbc8-78bd-49e5-b1c7-f0ce3b0e9383/review.appliance.zip",
+    "target": "local",
+    "options": {
+      "acceptUnknownPublisher": true
+    }
+  },
+  {
+    "type": "install-error",
+    "commandId": "signed-accept",
+    "error": "Warning: no verified unsafe-app blacklist is available; local operation continues.\nENTITLEMENT_GRANT_REQUIRED:{\"appId\":\"workbench-w2-signed-review\",\"version\":\"1.0.0\",\"license\":\"MIT\",\"upgrade\":false,\"grants\":[{\"id\":\"egress:example.com\",\"control\":\"egress-host\",\"value\":{\"host\":\"example.com\",\"ports\":[443]},\"approvedAt\":\"2026-11-16T17:09:48.624Z\"}],\"requiredGrantIds\":[\"egress:example.com\"]}"
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "signed-accept",
+    "text": "Unknown PublisherPublisher identity and code origin could not be verified. This does not mean the app is malicious.Appworkbench-w2-signed-review 1.0.0Publisher (unverified)Workbench local developerLicenseMITSignatureSignature could not be verifiedDigestsha256:31f6c5db6ab718881a0e\u2026SourcefileRequested controls1 service \u00b7 egress to example.com \u00b7 no mountsCancelChecking\u2026",
+    "titles": ["sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb", "file"]
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "signed-accept",
+    "text": "Grant app controlsworkbench-w2-signed-review 1.0.0 (MIT) asks for the controls below. Required controls are needed to install; mounts can be declined.Requiredegress:example.comNetwork access to example.com:443CancelGrant and install",
+    "titles": []
+  },
+  {
+    "type": "focused",
+    "commandId": "signed-grant",
+    "label": "Grant and install",
+    "rect": {
+      "x": 789.78125,
+      "y": 459.953125,
+      "width": 117.21875,
+      "height": 32,
+      "top": 459.953125,
+      "right": 907,
+      "bottom": 491.953125,
+      "left": 789.78125
+    }
+  },
+  {
+    "type": "call",
+    "verb": "install",
+    "commandId": "signed-grant",
+    "source": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/10c7fbc8-78bd-49e5-b1c7-f0ce3b0e9383/review.appliance.zip",
+    "target": "local",
+    "options": {
+      "acceptUnknownPublisher": true,
+      "grantIds": ["egress:example.com"]
+    }
+  },
+  {
+    "type": "install-result",
+    "commandId": "signed-grant",
+    "result": {
+      "appId": "workbench-w2-signed-review",
+      "bundlePath": "/Users/eliot/.appliance/runtime/bundles/sha256-31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb.appliance.zip",
+      "controlsSummary": {
+        "egressHosts": ["example.com"],
+        "mounts": [],
+        "publishedPorts": [],
+        "resources": {},
+        "serviceCount": 1,
+        "serviceNames": []
+      },
+      "digest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+      "installedAt": "2026-11-16T17:10:03.723Z",
+      "license": "MIT",
+      "name": "workbench-w2-signed-review",
+      "publisher": {
+        "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+        "name": "Workbench local developer",
+        "tier": "unknown"
+      },
+      "source": "file",
+      "verification": {
+        "signature": "invalid"
+      },
+      "version": "1.0.0"
+    }
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "signed-grant",
+    "text": "Grant app controlsworkbench-w2-signed-review 1.0.0 (MIT) asks for the controls below. Required controls are needed to install; mounts can be declined.Requiredegress:example.comNetwork access to example.com:443CancelGranting\u2026",
+    "titles": []
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-picker",
+    "label": "Install from fileInstall from file",
+    "rect": {
+      "x": 1123.09375,
+      "y": 83,
+      "width": 132.90625,
+      "height": 32,
+      "top": 83,
+      "right": 1256,
+      "bottom": 115,
+      "left": 1123.09375
+    }
+  },
+  {
+    "type": "call",
+    "verb": "install",
+    "commandId": "unsigned-picker",
+    "source": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip",
+    "target": "local",
+    "options": {
+      "acceptUnknownPublisher": false
+    }
+  },
+  {
+    "type": "install-error",
+    "commandId": "unsigned-picker",
+    "error": "Warning: no verified unsafe-app blacklist is available; local operation continues.\nUNKNOWN_PUBLISHER:{\"appId\":\"workbench-w2-unsigned-review\",\"name\":\"workbench-w2-unsigned-review\",\"version\":\"1.0.0\",\"license\":\"MIT\",\"source\":\"file\",\"digest\":\"sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f\",\"signature\":\"unsigned\",\"publisher\":\"Workbench local developer\",\"controlsSummary\":{\"egressHosts\":[\"example.com\"],\"mounts\":[],\"publishedPorts\":[],\"resources\":{},\"serviceCount\":1,\"serviceNames\":[]}}"
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "unsigned-picker",
+    "text": "Unknown PublisherPublisher identity and code origin could not be verified. This does not mean the app is malicious.Appworkbench-w2-unsigned-review 1.0.0Publisher (unverified)Workbench local developerLicenseMITSignatureUnsignedDigestsha256:c1f2f6b5cd80f8e7ae17\u2026SourcefileRequested controls1 service \u00b7 egress to example.com \u00b7 no mountsCancelInstall this bundle",
+    "titles": ["sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f", "file"]
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-accept",
+    "label": "Install this bundle",
+    "rect": {
+      "x": 750.5,
+      "y": 530.890625,
+      "width": 124.5,
+      "height": 32,
+      "top": 530.890625,
+      "right": 875,
+      "bottom": 562.890625,
+      "left": 750.5
+    }
+  },
+  {
+    "type": "call",
+    "verb": "install",
+    "commandId": "unsigned-accept",
+    "source": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip",
+    "target": "local",
+    "options": {
+      "acceptUnknownPublisher": true
+    }
+  },
+  {
+    "type": "install-error",
+    "commandId": "unsigned-accept",
+    "error": "Warning: no verified unsafe-app blacklist is available; local operation continues.\nENTITLEMENT_GRANT_REQUIRED:{\"appId\":\"workbench-w2-unsigned-review\",\"version\":\"1.0.0\",\"license\":\"MIT\",\"upgrade\":false,\"grants\":[{\"id\":\"egress:example.com\",\"control\":\"egress-host\",\"value\":{\"host\":\"example.com\",\"ports\":[443]},\"approvedAt\":\"2026-11-16T17:12:22.545Z\"}],\"requiredGrantIds\":[\"egress:example.com\"]}"
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "unsigned-accept",
+    "text": "Unknown PublisherPublisher identity and code origin could not be verified. This does not mean the app is malicious.Appworkbench-w2-unsigned-review 1.0.0Publisher (unverified)Workbench local developerLicenseMITSignatureUnsignedDigestsha256:c1f2f6b5cd80f8e7ae17\u2026SourcefileRequested controls1 service \u00b7 egress to example.com \u00b7 no mountsCancelChecking\u2026",
+    "titles": ["sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f", "file"]
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "unsigned-accept",
+    "text": "Grant app controlsworkbench-w2-unsigned-review 1.0.0 (MIT) asks for the controls below. Required controls are needed to install; mounts can be declined.Requiredegress:example.comNetwork access to example.com:443CancelGrant and install",
+    "titles": []
+  },
+  {
+    "type": "focused",
+    "commandId": "unsigned-grant",
+    "label": "Grant and install",
+    "rect": {
+      "x": 789.78125,
+      "y": 459.953125,
+      "width": 117.21875,
+      "height": 32,
+      "top": 459.953125,
+      "right": 907,
+      "bottom": 491.953125,
+      "left": 789.78125
+    }
+  },
+  {
+    "type": "call",
+    "verb": "install",
+    "commandId": "unsigned-grant",
+    "source": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip",
+    "target": "local",
+    "options": {
+      "acceptUnknownPublisher": true,
+      "grantIds": ["egress:example.com"]
+    }
+  },
+  {
+    "type": "install-result",
+    "commandId": "unsigned-grant",
+    "result": {
+      "appId": "workbench-w2-unsigned-review",
+      "bundlePath": "/Users/eliot/.appliance/runtime/bundles/sha256-c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f.appliance.zip",
+      "controlsSummary": {
+        "egressHosts": ["example.com"],
+        "mounts": [],
+        "publishedPorts": [],
+        "resources": {},
+        "serviceCount": 1,
+        "serviceNames": []
+      },
+      "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+      "installedAt": "2026-11-16T17:12:31.304Z",
+      "license": "MIT",
+      "name": "workbench-w2-unsigned-review",
+      "publisher": {
+        "name": "Workbench local developer",
+        "tier": "unknown"
+      },
+      "source": "file",
+      "verification": {
+        "signature": "unsigned"
+      },
+      "version": "1.0.0"
+    }
+  },
+  {
+    "type": "publisher-dialog",
+    "commandId": "unsigned-grant",
+    "text": "Grant app controlsworkbench-w2-unsigned-review 1.0.0 (MIT) asks for the controls below. Required controls are needed to install; mounts can be declined.Requiredegress:example.comNetwork access to example.com:443CancelGranting\u2026",
+    "titles": []
+  }
+]

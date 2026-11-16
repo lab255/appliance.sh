@@ -62,6 +62,7 @@ export interface RunnablePackageOptions {
    * contains exactly one image.
    */
   images?: string[];
+  onStage?: (message: string) => void;
 }
 
 const PYTHON_VENV_DIR = '.venv';
@@ -128,6 +129,7 @@ export async function packageRunnableAppliance(options: RunnablePackageOptions):
   const selectedImages = resolveImageSelections(options.images ?? [], imageLeaves);
 
   try {
+    options.onStage?.('Staging runnable payloads…');
     for (const leaf of imageLeaves) {
       const selected = selectedImages.get(leaf.path);
       const staged = path.join(stagingDir, `${files.length}.oci.tar`);
@@ -157,12 +159,16 @@ export async function packageRunnableAppliance(options: RunnablePackageOptions):
 
     collectBinaryPayloads(options.manifest, projectDir, files);
     collectAssets(options.manifest, projectDir, files);
+    options.onStage?.(
+      options.signingKeyPath ? 'Writing and signing hand-off file…' : 'Writing unsigned hand-off file…'
+    );
     const result = await writeBundle({
       outputPath: options.outputPath,
       manifest: options.manifest,
       files,
       signingKeyPath: options.signingKeyPath,
     });
+    options.onStage?.('Verifying hand-off file…');
     verifyBundle(result.outputPath);
     return result;
   } finally {

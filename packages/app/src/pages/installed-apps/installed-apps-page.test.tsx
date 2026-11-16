@@ -315,6 +315,8 @@ describe('Installed Apps mock scenarios', () => {
       />
     );
     expect(html).toContain('Unknown Publisher');
+    expect(html).toContain('Publisher (unverified)');
+    expect(html).toContain('Local developer');
     expect(html).toContain('Unsigned');
     expect(html).toContain('Requested controls');
     expect(html).toContain('Open once');

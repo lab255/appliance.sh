@@ -1,0 +1,183 @@
+{
+  "clock": "Trusted Space activation to second rAF with busy DOM; backend = host invocation to actual CLI result. Not compositor pixels.",
+  "nativeReducedMotion": false,
+  "layoutShiftSupported": false,
+  "results": [
+    {
+      "branch": "signed",
+      "count": 10,
+      "medianAckMs": 74.0,
+      "medianBackendMs": 391.0,
+      "samples": [
+        {
+          "id": "signed-01",
+          "ackMs": 55,
+          "backendMs": 581,
+          "clickToResultMs": 637,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-02",
+          "ackMs": 80,
+          "backendMs": 371,
+          "clickToResultMs": 451,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-03",
+          "ackMs": 74,
+          "backendMs": 372,
+          "clickToResultMs": 447,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-04",
+          "ackMs": 74,
+          "backendMs": 372,
+          "clickToResultMs": 446,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-05",
+          "ackMs": 75,
+          "backendMs": 370,
+          "clickToResultMs": 445,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-06",
+          "ackMs": 78,
+          "backendMs": 374,
+          "clickToResultMs": 452,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-07",
+          "ackMs": 64,
+          "backendMs": 408,
+          "clickToResultMs": 472,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-08",
+          "ackMs": 64,
+          "backendMs": 618,
+          "clickToResultMs": 683,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-09",
+          "ackMs": 76,
+          "backendMs": 1074,
+          "clickToResultMs": 1151,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "signed-10",
+          "ackMs": 74,
+          "backendMs": 1070,
+          "clickToResultMs": 1144,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        }
+      ]
+    },
+    {
+      "branch": "unsigned",
+      "count": 10,
+      "medianAckMs": 66.5,
+      "medianBackendMs": 371.0,
+      "samples": [
+        {
+          "id": "unsigned-01",
+          "ackMs": 61,
+          "backendMs": 371,
+          "clickToResultMs": 433,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-02",
+          "ackMs": 67,
+          "backendMs": 371,
+          "clickToResultMs": 438,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-03",
+          "ackMs": 74,
+          "backendMs": 367,
+          "clickToResultMs": 441,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-04",
+          "ackMs": 79,
+          "backendMs": 370,
+          "clickToResultMs": 449,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-05",
+          "ackMs": 70,
+          "backendMs": 427,
+          "clickToResultMs": 497,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-06",
+          "ackMs": 66,
+          "backendMs": 371,
+          "clickToResultMs": 438,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-07",
+          "ackMs": 63,
+          "backendMs": 379,
+          "clickToResultMs": 442,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-08",
+          "ackMs": 66,
+          "backendMs": 367,
+          "clickToResultMs": 433,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-09",
+          "ackMs": 74,
+          "backendMs": 374,
+          "clickToResultMs": 448,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        },
+        {
+          "id": "unsigned-10",
+          "ackMs": 66,
+          "backendMs": 388,
+          "clickToResultMs": 454,
+          "busyBeforeBridge": true,
+          "trustedActivation": true
+        }
+      ]
+    }
+  ]
+}

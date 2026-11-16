@@ -99,3 +99,5 @@ export type {
 } from './lib/host';
 
 export type { Inspection, InspectionEntry, InspectionPreview } from './lib/inspection';
+// ---- Workbench Package host contract ----
+export type { WorkbenchPackageHost, WorkbenchPackageEvent, WorkbenchPackageResult } from './lib/workbench-package';

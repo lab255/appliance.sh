@@ -1,0 +1,48 @@
+{
+  "kind": "Simulated 65-second host, not a live packaging duration",
+  "samples": [
+    {
+      "seconds": 0,
+      "text": "Packaging…\nRunning · 0:00\nFixture: staging payload…\nDetails (log)\nFixture: staging payload…\n\nDuration depends on the payload build. Keep this page open until it finishes.",
+      "busy": 1,
+      "footer": {
+        "x": 214,
+        "y": 1019,
+        "width": 852,
+        "height": 24
+      }
+    },
+    {
+      "seconds": 11,
+      "text": "Packaging…\nRunning · 0:11\nFixture: payload build still running…\nDetails (log)\nFixture: staging payload…\nFixture: payload build still running…\n\nDuration depends on the payload build. Keep this page open until it finishes.",
+      "busy": 1,
+      "footer": {
+        "x": 214,
+        "y": 1019,
+        "width": 852,
+        "height": 24
+      }
+    },
+    {
+      "seconds": 61,
+      "text": "Packaging…\nRunning · 1:01\nFixture: waiting for payload build completion…\nDetails (log)\nFixture: staging payload…\nFixture: payload build still running…\nFixture: waiting for payload build completion…\n\nDuration depends on the payload build. Keep this page open until it finishes.",
+      "busy": 1,
+      "footer": {
+        "x": 214,
+        "y": 1019,
+        "width": 852,
+        "height": 24
+      }
+    },
+    {
+      "seconds": 65.361,
+      "text": "Package complete\nComplete\nDetails (log)\nFixture: staging payload…\nFixture: payload build still running…\nFixture: waiting for payload build completion…\n\nDuration depends on the payload build. Keep this page open until it finishes.",
+      "footer": {
+        "x": 214,
+        "y": 1019,
+        "width": 852,
+        "height": 24
+      }
+    }
+  ]
+}
