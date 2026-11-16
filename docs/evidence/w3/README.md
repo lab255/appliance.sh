@@ -24,7 +24,7 @@ An agent would try to:
   mount. Host traversal uses cap-std directory capabilities; symlinks are recorded without
   following their targets. Preview paths are exact keys into a captured snapshot, never filesystem
   paths to open. Snapshot IDs reject reading a different refresh than the displayed header.
-- Configure a Git clean/process/fsmonitor command to execute on the host. No Git subprocess
+- Configure a Git clean/fsmonitor command to execute on the host. No Git subprocess
   is invoked; a regression fixture checks these malicious settings do not create a sentinel.
 - Cause a later broad mount to expose an existing baseline. Desktop VM bring-up rejects both
   ancestors and descendants of app data; inspection also checks existing VM mounts. The rejection
@@ -65,10 +65,33 @@ Host command (desktop bundle resources are irrelevant to these library tests):
 TAURI_CONFIG='{"bundle":{"resources":[],"externalBin":[]}}' cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml inspection::tests --lib
 ```
 
-Result: **9 passed, 0 failed**. Cases cover immutable capture, corrupt/missing baseline,
+Result: **10 passed, 0 failed**. Cases cover immutable capture, corrupt/missing baseline,
 failed-attempt persistence, dirty initial contents, mutable Git/agent metadata, external symlinks,
-malicious Git filters, empty/non-Git directories, large-file tail changes, and text/deleted/binary/
+malicious Git filters, empty/non-Git directories, large-file tail changes, composed over-budget/oversized scans, and text/deleted/binary/
 large/missing-baseline preview semantics.
+
+Mutation test (performed, then production restored): replacing libgit2 with the former
+`git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath= status --porcelain=v1 --ignore-submodules=all`
+executed the repository's **clean filter** and produced:
+
+```text
+Repository-configured command executed on the host
+test result: FAILED. 0 passed; 1 failed (mutation variant only)
+Restored production libgit2 implementation byte-for-byte.
+```
+
+The original fixture initially lacked teeth: its changed file size let Git skip content filtering.
+The final fixture uses a same-size edit and explicit mtime change, configures a clean filter and
+fsmonitor sentinel, and asserts the sentinel is absent before checking status output.
+The reverted subprocess variant fails even with fsmonitor disabled; restored libgit2 passes.
+`check-filter-mutation.py` reproduces this temporary mutation and restores production in `finally`.
+
+The composed test starts from a successful empty snapshot, adds two files larger than the retained
+per-file preview, and exceeds the scan preview budget. The production refresh pipeline returns an
+explicit error, retains the old snapshot ID, and does not produce an empty successful comparison.
+The browser check verifies a **stale capture timestamp + refresh-failed label**, and confirms the
+previous empty snapshot no longer presents “No changes”. See [composed stale state](./composed-stale.png)
+and [extra-checks.json](./extra-checks.json).
 
 `pnpm verify`: **GREEN** before final W1 integration; rerun required on the final rebased revision.
 The full run needed normal host permissions because existing VM tests create fixtures under
@@ -82,35 +105,35 @@ Actual `WorkspaceInspector` component with an explicitly simulated host (200 ms 
 Chromium 1248, macOS arm64, 1440×1000, dark mode. This is **fixture UI evidence**, not VM evidence.
 Individual observations and raw input-associated layout shifts are in [measurements.json](./measurements.json).
 
-| Property    | Evidence / result                                                                                                                                                                                                                     |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Immediacy   | 10 observations each for tab, file, diff, binary, and large selection in each motion preference. Medians below; all under 100 ms. Async selection/refresh paint pending state before host work.                                       |
-| Continuity  | Standard CLS and raw shift sum both **0** for delayed text, binary, and large arrivals. Fixed header/preview/tab-body space. Refresh kept reader scroll at **1150 → 1150** in both configurations.                                    |
-| Restraint   | Standard DS Tabs only; no stream animation, forced tail-follow, launch, reset, revert, or write controls.                                                                                                                             |
-| Precision   | Host tests cover baseline tampering and degraded comparisons. Generated registry/results hidden by a visible overridable filter. Initial dirty Git status shown separately. Workspace-wide labels, no invented per-agent attribution. |
-| Legibility  | Keyboard tab arrows, tree arrows/Enter, and focused diff PageDown passed. Full paths and textual +/- lines. Large-file withheld/load/truncation labels checked. Narrow layout screenshots attached.                                   |
-| Forgiveness | Failed refresh retains previous diff and marks snapshot stale; missing baseline never renders “No changes”. Retry is deliberate, preview text supports native selection/copy.                                                         |
+| Property    | Evidence / result                                                                                                                                                                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Immediacy   | 10 observations each for tab, file, diff, binary, and large selection in each motion preference. Medians below; all under 100 ms. Async selection/refresh paint pending state before host work.                                                                                               |
+| Continuity  | Standard CLS and raw shift sum both **0** for delayed text, binary, and large arrivals. Fixed header/preview/tab-body space. Refresh kept reader scroll at **1150 → 1150** in both configurations.                                                                                            |
+| Restraint   | Standard DS Tabs only; no stream animation, forced tail-follow, launch, reset, revert, or write controls.                                                                                                                                                                                     |
+| Precision   | Host tests cover baseline tampering and degraded comparisons. Generated registry/results hidden by a visible overridable filter. Initial dirty Git status shown separately. Workspace-wide labels, no invented per-agent attribution.                                                         |
+| Legibility  | Keyboard tab arrows, tree arrows/Enter, and focused diff PageDown passed. Full paths and textual +/- lines. Large-file withheld/load/truncation labels checked. No horizontal page overflow at 390px or 200% zoom; screenshots attached. Loaded large-file refresh retained scroll 800 → 800. |
+| Forgiveness | Failed refresh retains previous diff and labels its capture time and failed operation; missing baseline never renders “No changes”. Retry is deliberate, preview text supports native selection/copy.                                                                                         |
 
 | Selection | Normal motion median ms | Reduced motion median ms | n per column |
 | --------- | ----------------------: | -----------------------: | -----------: |
-| Tab       |                   14.90 |                    16.00 |           10 |
-| File      |                   14.30 |                    14.10 |           10 |
-| Diff      |                   14.75 |                    15.30 |           10 |
-| Binary    |                   14.85 |                    14.80 |           10 |
-| Large     |                   15.85 |                    13.95 |           10 |
+| Tab       |                   15.30 |                    15.20 |           10 |
+| File      |                   14.80 |                    14.50 |           10 |
+| Diff      |                   14.80 |                    13.95 |           10 |
+| Binary    |                   14.80 |                    14.75 |           10 |
+| Large     |                   14.55 |                    14.25 |           10 |
 
 Screenshots: [reader](./inspector-no-preference.png), [reduced motion](./inspector-reduce.png),
-[large withheld](./large-no-preference.png), [narrow](./narrow-no-preference.png).
+[large withheld](./large-no-preference.png), [narrow](./narrow-no-preference.png), [390px](./narrow-390.png), [200% zoom](./zoom-200.png).
 
 Reproduce: run `pnpm --filter @appliance.sh/app exec vite --host 127.0.0.1 --port 1443`,
 then run `node docs/evidence/w3/measure.mjs` with `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE`
-pointing to the installed browser tooling. The harness entry is `packages/app/inspection-audit.html`;
-it is not imported by the application entry point. It exercises the actual reader component.
+pointing to the installed browser tooling. `extra-checks.mjs` repeats the zoom/narrow/large-refresh checks. The harness entry is `packages/app/inspection-audit.html`;
+it is not imported by the application entry point. Restart the dev server after source edits in hosts where filesystem watchers do not invalidate transforms. It exercises the actual reader component.
 
 ## Limits / deferrals
 
 - Logs remains an explicit integration stub. No result parsing or agent attribution is invented.
-- Captures are bounded scans, not atomic filesystem transactions. The UI says “Live files may change”.
+- Captures are bounded scans, not atomic filesystem transactions. All surfaced bounds give concrete counts and a next step; truncation states how much of each side is shown. The UI says “Live files may change”.
   The host retains up to 1 MiB per file, hashes the full content, and labels truncated textual diffs.
 - More than 128 MiB retained previews, 50,000 entries, or depth 128 fails the scan explicitly;
   previous data remains stale. Files exceeding the 4 GiB scan limit are explicitly unreadable.

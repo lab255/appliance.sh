@@ -14,7 +14,7 @@ const snapshot: Inspection = {
   directory,
   capturedAt: '2026-11-17T12:00:00Z',
   refreshedAt: '2026-11-17T12:10:00Z',
-  comparisonError: params.has('unavailable') ? 'Capture failed' : null,
+  comparisonError: params.has('unavailable') ? 'No baseline captured — change comparison will be unavailable' : null,
   initialGitStatus: ' M src/initial-dirty.ts\n?? notes.txt\n',
   entries: [
     { path: 'src/', size: 0, state: 'unchanged', generated: false, issue: 'Directory — read-only' },
@@ -33,8 +33,13 @@ let refreshes = 0;
 const host = {
   async inspectionRefresh() {
     await delay();
-    if (params.has('fail-refresh') && refreshes++) throw new Error('Fixture refresh failure');
-    return snapshot;
+    const refreshIndex = refreshes++;
+    if (params.has('composed') && refreshIndex)
+      throw new Error(
+        'Comparison unavailable: scan needs more than 1048576 retained preview bytes (already 2097152 bytes; oversized file is 1048640 bytes). Previous snapshot was not refreshed. Inspect a narrower project folder; no files were silently omitted.'
+      );
+    if (params.has('fail-refresh') && refreshIndex) throw new Error('Fixture refresh failure');
+    return params.has('composed') ? { ...snapshot, entries: [] } : snapshot;
   },
   async inspectionRead(_directory: string, path: string, large: boolean) {
     await delay();
@@ -51,8 +56,8 @@ const host = {
           ? 'Unreadable file'
           : big
             ? large
-              ? 'Truncated: only the first 1 MiB of each side is displayed and compared here.'
-              : 'Large file: 2000000 bytes. Preview withheld; load deliberately (maximum 1 MiB displayed).'
+              ? 'Truncated diff inputs: baseline 0 bytes of 0 bytes shown; current 1 MiB (1048576 bytes) of 1.91 MiB (2000000 bytes) shown. Changes beyond these prefixes are detected by full-file hash but omitted from this diff.'
+              : 'Large file: 1.91 MiB (2000000 bytes) total; 0 bytes shown. Load up to 1 MiB deliberately; the rest will be labelled as omitted.'
             : deleted
               ? 'Deleted file — baseline diff retained'
               : null,

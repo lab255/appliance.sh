@@ -20,9 +20,11 @@ function Inspector({ directory }: { directory: string }) {
   const [generated, setGenerated] = React.useState(false);
   const [busy, setBusy] = React.useState('');
   const [error, setError] = React.useState('');
+  const [failureKind, setFailureKind] = React.useState('initial refresh');
   const request = React.useRef(0);
   const reader = React.useRef<HTMLPreElement>(null);
   const busyRef = React.useRef(false);
+  const loadedLargePaths = React.useRef(new Set<string>());
 
   React.useEffect(() => {
     let active = true;
@@ -68,6 +70,7 @@ function Inspector({ directory }: { directory: string }) {
   }
   async function select(path: string, large = false) {
     savePosition();
+    if (large) loadedLargePaths.current.add(path);
     const id = ++request.current;
     await paintPending(() => {
       setSelected(path);
@@ -75,7 +78,7 @@ function Inspector({ directory }: { directory: string }) {
     });
     try {
       if (!host.inspectionRead || !snapshot) throw new Error('Host inspection is unavailable');
-      const value = await host.inspectionRead(directory, path, large, snapshot.snapshotId);
+      const value = await host.inspectionRead(directory, path, loadedLargePaths.current.has(path), snapshot.snapshotId);
       if (id === request.current) {
         setPreview(value);
         setBusy('');
@@ -83,6 +86,7 @@ function Inspector({ directory }: { directory: string }) {
     } catch (e) {
       if (id === request.current) {
         setError(String(e));
+        setFailureKind('file load');
         setBusy('');
       }
     }
@@ -98,7 +102,7 @@ function Inspector({ directory }: { directory: string }) {
       const value = await host.inspectionRefresh(directory);
       const next =
         selected && host.inspectionRead
-          ? await host.inspectionRead(directory, selected, false, value.snapshotId)
+          ? await host.inspectionRead(directory, selected, loadedLargePaths.current.has(selected), value.snapshotId)
           : undefined;
       if (id === request.current) {
         setSnapshot(value);
@@ -106,7 +110,10 @@ function Inspector({ directory }: { directory: string }) {
         setError('');
       }
     } catch (e) {
-      if (id === request.current) setError(String(e));
+      if (id === request.current) {
+        setError(String(e));
+        setFailureKind('refresh');
+      }
     } finally {
       busyRef.current = false;
       if (id === request.current) setBusy('');
@@ -116,7 +123,7 @@ function Inspector({ directory }: { directory: string }) {
   const changes = entries.filter((entry) => entry.state !== 'unchanged' && !entry.path.endsWith('/'));
   const shown = tab === 'changes' ? changes : entries;
   const matching = preview?.path === selected ? preview : undefined;
-  const comparisonUnavailable = !snapshot || !!snapshot.comparisonError;
+  const comparisonUnavailable = !snapshot || !!snapshot.comparisonError || !!error;
   const content = tab === 'changes' ? matching?.diff : matching?.text;
   const list = (
     <div className="grid h-96 min-h-0 grid-cols-[minmax(10rem,1fr)_minmax(0,3fr)] overflow-hidden rounded-md border border-border">
@@ -188,7 +195,11 @@ function Inspector({ directory }: { directory: string }) {
         )}
       </div>
       <div className="flex min-h-0 min-w-0 flex-col">
-        <div className="h-24 shrink-0 overflow-auto border-b border-border p-3 text-sm">
+        <div
+          tabIndex={0}
+          aria-label="Selected path and preview limits"
+          className="h-24 shrink-0 overflow-auto border-b border-border p-3 text-sm"
+        >
           <p className="break-all font-medium">{selected || 'Select a file'}</p>
           <p>{matching?.notice ?? (matching ? `${matching.size} bytes · read-only` : 'Read-only snapshot preview')}</p>
           {matching?.needsLoad && (
@@ -213,7 +224,7 @@ function Inspector({ directory }: { directory: string }) {
   );
   return (
     <section aria-label="Workspace inspection" className="space-y-3">
-      <div className="h-32 overflow-auto text-sm">
+      <div tabIndex={0} aria-label="Baseline and refresh status" className="h-32 overflow-auto text-sm">
         <p className="break-all">
           Baseline: host-side snapshot · {snapshot?.directory ?? directory} · captured{' '}
           {snapshot?.capturedAt ?? 'unavailable'}
@@ -223,12 +234,14 @@ function Inspector({ directory }: { directory: string }) {
         <p role="status" className="min-h-5">
           {busy ||
             (error
-              ? 'Previous snapshot is stale'
+              ? snapshot
+                ? `Previous snapshot is stale — captured ${snapshot.refreshedAt}; ${failureKind} failed`
+                : `Comparison unavailable — ${failureKind} failed`
               : snapshot?.comparisonError
-                ? 'No baseline captured — change comparison will be unavailable'
+                ? 'Comparison unavailable'
                 : 'Read-only · workspace-wide')}
         </p>
-        {error && <p role="alert">{error}</p>}
+        {(error || snapshot?.comparisonError) && <p role="alert">{error || snapshot?.comparisonError}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" disabled={!!busy} onClick={() => void refresh()}>

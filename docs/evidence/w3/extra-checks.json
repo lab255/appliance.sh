@@ -1,0 +1,18 @@
+{
+  "composedFailure": {
+    "staleCapturedAt": "2026-11-17T12:10:00Z",
+    "refreshFailed": true,
+    "noFalseNoChanges": true
+  },
+  "largeRefresh": {
+    "before": 800,
+    "after": 800,
+    "retainedText": true
+  },
+  "zoom200": {
+    "horizontalOverflow": false
+  },
+  "narrow390": {
+    "horizontalOverflow": false
+  }
+}

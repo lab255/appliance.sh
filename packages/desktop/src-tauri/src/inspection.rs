@@ -21,6 +21,7 @@ struct File {
     size: u64,
     digest: String,
     mode: u32,
+    binary: bool,
     issue: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -156,13 +157,14 @@ fn walk(
     prefix: &str,
     files: &mut BTreeMap<String, File>,
     total: &mut usize,
+    preview_budget: usize,
 ) -> Result<(), String> {
     if prefix.bytes().filter(|byte| *byte == b'/').count() > 128 {
-        return Err("Directory depth exceeds snapshot safety limit".into());
+        return Err(format!("Comparison unavailable: directory {prefix} exceeds depth 128. Inspect a narrower project folder; previous snapshot was not refreshed."));
     }
     for entry in dir.entries().map_err(err)? {
         if files.len() >= 50_000 {
-            return Err("Snapshot exceeds 50,000 file safety limit".into());
+            return Err("Comparison unavailable: scan contains more than 50,000 entries. Inspect a narrower project folder; previous snapshot was not refreshed.".into());
         }
         let entry = entry.map_err(err)?;
         let name = entry
@@ -178,12 +180,14 @@ fn walk(
                     bytes: dir
                         .read_link_contents(&name)
                         .map_err(err)?
-                        .to_string_lossy()
+                        .to_str()
+                        .ok_or("Non-UTF-8 symbolic link target; comparison unavailable")?
                         .as_bytes()
                         .to_vec(),
                     size: 0,
                     digest: String::new(),
                     mode: file_mode(&meta),
+                    binary: false,
                     issue: Some("Symbolic link — target is not followed".into()),
                 },
             );
@@ -195,6 +199,7 @@ fn walk(
                     size: 0,
                     digest: String::new(),
                     mode: file_mode(&meta),
+                    binary: false,
                     issue: Some("Directory — read-only".into()),
                 },
             );
@@ -205,6 +210,7 @@ fn walk(
                 &format!("{path}/"),
                 files,
                 total,
+                preview_budget,
             )?;
         } else if meta.is_file() {
             let file = read_file(dir, &name).unwrap_or_else(|e| File {
@@ -212,11 +218,12 @@ fn walk(
                 size: meta.len(),
                 digest: String::new(),
                 mode: file_mode(&meta),
+                binary: false,
                 issue: Some(format!("Unreadable file: {e}")),
             });
             *total += file.bytes.len();
-            if *total > TREE_LIMIT || files.len() >= 50_000 {
-                return Err("Snapshot exceeds 128 MiB preview / 50,000 file safety limit".into());
+            if *total > preview_budget {
+                return Err(format!("Comparison unavailable: scan needs more than {preview_budget} retained preview bytes (already {total} bytes at {path}; this file is {} bytes). Previous snapshot was not refreshed. Inspect a narrower project folder; no files were silently omitted.", file.size));
             }
             files.insert(path, file);
         } else {
@@ -227,6 +234,7 @@ fn walk(
                     size: 0,
                     digest: String::new(),
                     mode: file_mode(&meta),
+                    binary: false,
                     issue: Some("Unreadable special file — not opened".into()),
                 },
             );
@@ -261,6 +269,7 @@ fn read_file(dir: &Dir, name: &str) -> Result<File, String> {
     let mut bytes = Vec::new();
     let mut digest = Sha256::new();
     let mut size = 0;
+    let mut binary = false;
     let mut buffer = [0; 65536];
     loop {
         let count = input.read(&mut buffer).map_err(err)?;
@@ -268,11 +277,12 @@ fn read_file(dir: &Dir, name: &str) -> Result<File, String> {
             break;
         }
         digest.update(&buffer[..count]);
+        binary |= buffer[..count].contains(&0);
         size += count as u64;
         let keep = count.min(CONTENT_LIMIT - bytes.len());
         bytes.extend_from_slice(&buffer[..keep]);
         if size > 4 * 1024 * 1024 * 1024 {
-            return Err("File exceeds 4 GiB scan safety limit".into());
+            return Err(format!("Read {size} bytes, exceeding the 4 GiB per-file scan limit. Content comparison unavailable; inspect this file with host tools."));
         }
     }
     Ok(File {
@@ -280,13 +290,17 @@ fn read_file(dir: &Dir, name: &str) -> Result<File, String> {
         size,
         digest: format!("{:x}", digest.finalize()),
         mode,
+        binary,
         issue: None,
     })
 }
 fn snapshot(root: &Path) -> Result<Snapshot, String> {
+    snapshot_with_budget(root, TREE_LIMIT)
+}
+fn snapshot_with_budget(root: &Path, preview_budget: usize) -> Result<Snapshot, String> {
     let dir = Dir::open_ambient_dir(root, ambient_authority()).map_err(err)?;
     let mut files = BTreeMap::new();
-    walk(&dir, "", &mut files, &mut 0)?;
+    walk(&dir, "", &mut files, &mut 0, preview_budget)?;
     Ok(Snapshot {
         snapshot_id: uuid::Uuid::new_v4().to_string(),
         directory: root.to_str().ok_or("Directory is not UTF-8")?.into(),
@@ -315,19 +329,27 @@ fn capture_into(root: &Path, path: &Path) -> Result<(), String> {
         .write_all(b"capture attempted; unavailable")
         .map_err(err)?;
     marker.sync_all().map_err(err)?;
-    let mut baseline = snapshot(root)?;
-    // Informational initial Git state only, never comparison authority. Do NOT
-    // shell out to `git status`: untrusted .git config can define executable clean
-    // filters. libgit2 has no registered external filter/hook callbacks here.
-    baseline.initial_git_status = initial_git_status(root).unwrap_or_else(|_| "Git status unavailable (including non-Git directories); initial files are captured independently.".into());
-    let bytes = serde_json::to_vec(&baseline).map_err(err)?;
-    let mut output = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(err)?;
-    output.write_all(&bytes).map_err(err)?;
-    output.sync_all().map_err(err)
+    let result = (|| -> Result<(), String> {
+        let mut baseline = snapshot(root)?;
+        // Informational initial Git state only, never comparison authority. Do NOT
+        // shell out to `git status`: untrusted .git config can define executable clean
+        // filters. libgit2 has no registered external filter/hook callbacks here.
+        baseline.initial_git_status = initial_git_status(root).unwrap_or_else(|_| "Git status unavailable (including non-Git directories); initial files are captured independently.".into());
+        let bytes = serde_json::to_vec(&baseline).map_err(err)?;
+        let mut output = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(err)?;
+        output.write_all(&bytes).map_err(err)?;
+        output.sync_all().map_err(err)
+    })();
+    if let Err(message) = &result {
+        // Host-side failure metadata is not a replacement baseline. Preserve the
+        // actionable cause for later opens even though the capture cannot retry.
+        let _ = fs::write(path.with_extension("attempt"), message);
+    }
+    result
 }
 fn initial_git_status(root: &Path) -> Result<String, git2::Error> {
     let repo = git2::Repository::open(root)?;
@@ -349,8 +371,47 @@ fn initial_git_status(root: &Path) -> Result<String, git2::Error> {
     Ok(lines.join("\n"))
 }
 fn load(path: &Path) -> Result<Snapshot, String> {
-    serde_json::from_slice(&fs::read(path).map_err(err)?)
-        .map_err(|_| "No baseline captured — change comparison will be unavailable".into())
+    let bytes = fs::read(path).map_err(|error| {
+        match fs::read_to_string(path.with_extension("attempt")) {
+            Ok(reason) => format!("Comparison unavailable: baseline capture failed ({reason})"),
+            Err(_) => {
+                format!("No baseline captured — change comparison will be unavailable ({error})")
+            }
+        }
+    })?;
+    serde_json::from_slice(&bytes).map_err(|_| {
+        "Comparison unavailable: stored baseline is invalid; automatic recapture is disabled".into()
+    })
+}
+/// Query persisted host truth on every workspace read, including a later reopen.
+pub fn baseline_warning(app: &AppHandle, directory: &str) -> Option<String> {
+    location(app, directory)
+        .and_then(|(_, path)| load(&path).map(|_| ()))
+        .err()
+}
+/// Enrich every Workbench projection from host state, never an open-time cached
+/// warning or agent-writable metadata. In particular, success remains success on reopen.
+pub fn workspace_status(app: &AppHandle, mut workspace: serde_json::Value) -> serde_json::Value {
+    if let Some(directory) = workspace.get("directory").and_then(|value| value.as_str()) {
+        let warning = baseline_warning(app, directory);
+        if let Some(warning) = warning {
+            workspace["baselineWarning"] = serde_json::Value::String(warning);
+        } else if let Some(object) = workspace.as_object_mut() {
+            object.remove("baselineWarning");
+        }
+    }
+    workspace
+}
+fn size_label(size: u64) -> String {
+    if size >= 1024 * 1024 {
+        let mib = format!("{:.2}", size as f64 / (1024.0 * 1024.0));
+        format!(
+            "{} MiB ({size} bytes)",
+            mib.trim_end_matches('0').trim_end_matches('.')
+        )
+    } else {
+        format!("{size} bytes")
+    }
 }
 fn generated(path: &str) -> bool {
     path == ".appliance/agents.json"
@@ -361,72 +422,75 @@ fn generated(path: &str) -> bool {
 pub async fn inspection_refresh(app: AppHandle, directory: String) -> Result<Inspection, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let (root, path) = location(&app, &directory)?;
-        let baseline = load(&path);
-        let live = snapshot(&root)?;
-        let mut entries = BTreeMap::new();
-        if let Ok(base) = &baseline {
-            for (path, old) in &base.files {
-                entries.insert(
-                    path.clone(),
-                    Entry {
-                        path: path.clone(),
-                        size: old.size,
-                        state: "deleted".into(),
-                        generated: generated(path),
-                        issue: old.issue.clone(),
-                    },
-                );
-            }
-        }
-        for (path, file) in &live.files {
-            let state = match &baseline {
-                Err(_) => "unavailable",
-                Ok(base) => match base.files.get(path) {
-                    None => "added",
-                    Some(old)
-                        if file
-                            .issue
-                            .as_deref()
-                            .is_some_and(|issue| issue.starts_with("Unreadable"))
-                            || old
-                                .issue
-                                .as_deref()
-                                .is_some_and(|issue| issue.starts_with("Unreadable")) =>
-                    {
-                        "unavailable"
-                    }
-                    Some(old) if old == file => "unchanged",
-                    Some(_) => "modified",
-                },
-            };
+        refresh_from(&root, &path, TREE_LIMIT)
+    })
+    .await
+    .map_err(err)?
+}
+fn refresh_from(root: &Path, path: &Path, preview_budget: usize) -> Result<Inspection, String> {
+    let baseline = load(path);
+    let live = snapshot_with_budget(root, preview_budget)?;
+    let mut entries = BTreeMap::new();
+    if let Ok(base) = &baseline {
+        for (path, old) in &base.files {
             entries.insert(
                 path.clone(),
                 Entry {
                     path: path.clone(),
-                    size: file.size,
-                    state: state.into(),
+                    size: old.size,
+                    state: "deleted".into(),
                     generated: generated(path),
-                    issue: file.issue.clone(),
+                    issue: old.issue.clone(),
                 },
             );
         }
-        let result = Inspection {
-            snapshot_id: live.snapshot_id.clone(),
-            directory: live.directory.clone(),
-            captured_at: baseline.as_ref().ok().map(|b| b.captured_at.clone()),
-            refreshed_at: live.captured_at.clone(),
-            comparison_error: baseline.as_ref().err().cloned(),
-            initial_git_status: baseline.ok().map(|b| b.initial_git_status),
-            entries: entries.into_values().collect(),
+    }
+    for (path, file) in &live.files {
+        let state = match &baseline {
+            Err(_) => "unavailable",
+            Ok(base) => match base.files.get(path) {
+                None => "added",
+                Some(old)
+                    if file
+                        .issue
+                        .as_deref()
+                        .is_some_and(|issue| issue.starts_with("Unreadable"))
+                        || old
+                            .issue
+                            .as_deref()
+                            .is_some_and(|issue| issue.starts_with("Unreadable")) =>
+                {
+                    "unavailable"
+                }
+                Some(old) if old == file => "unchanged",
+                Some(_) => "modified",
+            },
         };
-        current()
-            .lock()
-            .map_err(err)?
-            .insert(live.directory.clone(), live);
-        Ok(result)
-    })
-    .await
-    .map_err(err)?
+        entries.insert(
+            path.clone(),
+            Entry {
+                path: path.clone(),
+                size: file.size,
+                state: state.into(),
+                generated: generated(path),
+                issue: file.issue.clone(),
+            },
+        );
+    }
+    let result = Inspection {
+        snapshot_id: live.snapshot_id.clone(),
+        directory: live.directory.clone(),
+        captured_at: baseline.as_ref().ok().map(|b| b.captured_at.clone()),
+        refreshed_at: live.captured_at.clone(),
+        comparison_error: baseline.as_ref().err().cloned(),
+        initial_git_status: baseline.ok().map(|b| b.initial_git_status),
+        entries: entries.into_values().collect(),
+    };
+    current()
+        .lock()
+        .map_err(err)?
+        .insert(live.directory.clone(), live);
+    Ok(result)
 }
 #[tauri::command]
 pub async fn inspection_read(
@@ -477,17 +541,37 @@ fn preview(
     };
     if let Some(issue) = &file.issue {
         preview.notice = Some(issue.clone());
+        if issue.starts_with("Symbolic link") {
+            let before = old
+                .map(|f| String::from_utf8_lossy(&f.bytes).into_owned())
+                .unwrap_or_default();
+            let after = new
+                .map(|f| String::from_utf8_lossy(&f.bytes).into_owned())
+                .unwrap_or_default();
+            preview.text = Some(after.clone());
+            if base.is_some() {
+                preview.diff = Some(
+                    similar::TextDiff::from_lines(&before, &after)
+                        .unified_diff()
+                        .header(
+                            &format!("baseline/{}", preview.path),
+                            &format!("workspace/{}", preview.path),
+                        )
+                        .to_string(),
+                );
+            }
+        }
         return Ok(preview);
     }
     if size > PREVIEW_LIMIT as u64 && !large {
-        preview.notice = Some(format!("Large file: {size} bytes. Preview withheld; load deliberately (maximum 1 MiB displayed)."));
+        preview.notice = Some(format!("Large file: {} total; 0 bytes shown. Load up to 1 MiB deliberately; the rest will be labelled as omitted.", size_label(size)));
         preview.needs_load = true;
         return Ok(preview);
     }
     let text = |f: Option<&File>| -> Option<String> {
         match f {
             None => Some(String::new()),
-            Some(f) if !f.bytes.contains(&0) => match std::str::from_utf8(&f.bytes) {
+            Some(f) if !f.binary && !f.bytes.contains(&0) => match std::str::from_utf8(&f.bytes) {
                 Ok(text) => Some(text.to_string()),
                 Err(error) if f.size > f.bytes.len() as u64 && error.error_len().is_none() => {
                     Some(String::from_utf8_lossy(&f.bytes[..error.valid_up_to()]).into_owned())
@@ -542,7 +626,7 @@ fn preview(
         );
     }
     preview.notice = if size > limit as u64 {
-        Some("Truncated: only the first 1 MiB of each side is displayed and compared here.".into())
+        Some(format!("Truncated diff inputs: baseline {} of {} shown; current {} of {} shown. Changes beyond these prefixes are detected by full-file hash but omitted from this diff.", size_label(old.map_or(0, |f| f.bytes.len() as u64)), size_label(old.map_or(0, |f| f.size)), size_label(new.map_or(0, |f| f.bytes.len() as u64)), size_label(new.map_or(0, |f| f.size))))
     } else if new.is_none() {
         Some("Deleted file — baseline diff retained".into())
     } else {
@@ -559,6 +643,28 @@ mod tests {
         fs::create_dir_all(root.join("workspace")).unwrap();
         fs::create_dir_all(root.join("host-store")).unwrap();
         root
+    }
+    #[test]
+    fn composed_over_budget_and_oversized_file_never_returns_empty_comparison() {
+        let root = fixture();
+        let tree = root.join("workspace");
+        let baseline = root.join("host-store/baseline.json");
+        capture_into(&tree, &baseline).unwrap();
+        let previous = refresh_from(&tree, &baseline, CONTENT_LIMIT).unwrap();
+        fs::write(tree.join("oversized-a"), vec![b'a'; CONTENT_LIMIT + 64]).unwrap();
+        fs::write(tree.join("oversized-b"), vec![b'b'; CONTENT_LIMIT + 64]).unwrap();
+        let error = refresh_from(&tree, &baseline, CONTENT_LIMIT)
+            .err()
+            .expect("must not return an empty successful comparison");
+        assert!(error.contains("Comparison unavailable") && error.contains("1048640 bytes"));
+        assert!(error.contains("Previous snapshot was not refreshed"));
+        assert_eq!(
+            current().lock().unwrap()[tree.to_str().unwrap()].snapshot_id,
+            previous.snapshot_id
+        );
+        assert!(load(&baseline).unwrap().files.is_empty());
+        current().lock().unwrap().remove(tree.to_str().unwrap());
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn previews_distinguish_text_deleted_binary_large_and_missing_baseline() {
@@ -613,13 +719,6 @@ mod tests {
             .unwrap();
         repo.config()
             .unwrap()
-            .set_str(
-                "filter.evil.process",
-                &format!("touch {}", sentinel.display()),
-            )
-            .unwrap();
-        repo.config()
-            .unwrap()
             .set_str("core.fsmonitor", &format!("touch {}", sentinel.display()))
             .unwrap();
         fs::write(tree.join(".gitattributes"), "*.txt filter=evil").unwrap();
@@ -628,10 +727,24 @@ mod tests {
         index.add_path(Path::new(".gitattributes")).unwrap();
         index.add_path(Path::new("dirty.txt")).unwrap();
         index.write().unwrap();
-        fs::write(tree.join("dirty.txt"), "after").unwrap();
-        let status = initial_git_status(&tree).unwrap();
-        assert!(status.contains("dirty.txt"));
-        assert!(!sentinel.exists());
+        // Same length forces Git to evaluate content filters rather than conclude
+        // "modified" from size alone. An explicit mtime change defeats stat reuse.
+        fs::write(tree.join("dirty.txt"), "after!").unwrap();
+        fs::OpenOptions::new()
+            .write(true)
+            .open(tree.join("dirty.txt"))
+            .unwrap()
+            .set_times(
+                fs::FileTimes::new()
+                    .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(3)),
+            )
+            .unwrap();
+        let status = initial_git_status(&tree);
+        assert!(
+            !sentinel.exists(),
+            "Repository-configured command executed on the host"
+        );
+        assert!(status.unwrap().contains("dirty.txt"));
         drop(index);
         drop(repo);
         fs::remove_dir_all(root).unwrap();

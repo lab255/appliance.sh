@@ -109,7 +109,7 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
   await page.getByRole('button', { name: 'Load large file' }).waitFor();
   await page.screenshot({ path: `docs/evidence/w3/large-${reducedMotion}.png` });
   await page.getByRole('button', { name: 'Load large file' }).click();
-  await page.getByText('Truncated: only the first 1 MiB of each side is displayed and compared here.').waitFor();
+  await page.getByText(/Truncated diff inputs:/).waitFor();
   if (await page.getByRole('treeitem').filter({ hasText: 'agent-1.json' }).count())
     throw new Error('Generated results leaked into default changes');
   await page.getByRole('checkbox').check();
