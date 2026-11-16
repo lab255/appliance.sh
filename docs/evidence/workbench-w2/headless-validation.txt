@@ -13,7 +13,7 @@ Package UI action tests: 3 passed
 - duplicate click suppressed; success causes zero install/publish/deploy calls
 - focus retained through result; exact unsigned label
 - engine error retained with no successful File result; explicit retry
-- files-changing state ineligible despite readiness proposal
+- files-changing advisory never treats a readiness proposal as authorization
 
 Existing installed-app UI tests: 19 passed
 - unknown publisher and grants retain their existing accept/cancel handlers

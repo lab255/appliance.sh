@@ -44,7 +44,7 @@ export function PackageSection({
   }, [status]);
 
   async function packageFromClick() {
-    if (!packageHost || inFlight.current || filesChanging) return;
+    if (!packageHost || inFlight.current) return;
     inFlight.current = true;
     await paintPending(() => {
       setStatus('running');
@@ -99,7 +99,7 @@ export function PackageSection({
         {!packageHost && <p className="text-sm">Packaging requires the desktop host.</p>}
         <Button
           onClick={packageFromClick}
-          disabled={!packageHost || filesChanging}
+          disabled={!packageHost}
           aria-disabled={status === 'running'}
           className="min-w-32"
           aria-busy={status === 'running'}

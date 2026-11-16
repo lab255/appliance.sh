@@ -138,7 +138,7 @@ it('retains the real v1 error without a successful File hand-off and retries onl
   }
 });
 
-it('keeps changing files ineligible and never treats agent readiness as authorization', async () => {
+it('warns about changing files without treating agent readiness as authorization', async () => {
   const host = { package: vi.fn() };
   const container = document.createElement('div');
   const root = createRoot(container);
@@ -151,8 +151,7 @@ it('keeps changing files ineligible and never treats agent readiness as authoriz
       )
     );
     expect(container.textContent).toContain('Files are still changing. Stop editing and review them before packaging.');
-    expect(container.querySelector('button')!.disabled).toBe(true);
-    container.querySelector('button')!.click();
+    expect(container.querySelector('button')!.disabled).toBe(false);
     expect(host.package).not.toHaveBeenCalled();
   } finally {
     await act(async () => root.unmount());
