@@ -129,6 +129,7 @@ describe('Workbench packaging protocol (real CLI)', () => {
     const artifact = events.at(-1).result;
     expect(artifact.signatureStatus).toBe('signed');
     expect(artifact.keyId).toBe(readDevSigningKey(key).keyId);
+    expect(verifyBundle(out, { publicKey: readDevSigningKey(key).publicKey }).signature?.valid).toBe(true);
     expect(artifact.digest).toBe(verifyBundle(out).digest);
   });
   it('rejects v1 with the engine error and never emits a success result or file', () => {
