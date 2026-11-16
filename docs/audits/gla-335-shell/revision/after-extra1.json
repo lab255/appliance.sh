@@ -1,0 +1,1788 @@
+{
+  "phase": "after-revision-extra1",
+  "viewport": [1440, 1000],
+  "browser": "156.0.8078.4",
+  "results": [
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 0,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 482.7999999821186,
+          "last": 482.7999999821186,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 482.7999999821186,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2792.7999999821186,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2793.699999988079,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 415,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 1,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 443.5,
+          "last": 443.5,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 443.5,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2598,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2598.300000011921,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 378.5,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 2,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 494.09999999403954,
+          "last": 494.09999999403954,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 494.09999999403954,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2647.7999999821186,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2648.2999999821186,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 418.5,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 3,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 778.6000000238419,
+          "last": 778.6000000238419,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 778.6000000238419,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2959.5,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2960,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 702.3000000119209,
+          "height": 59,
+          "text": "\u2026"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 4,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 454.39999997615814,
+          "last": 454.39999997615814,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 454.39999997615814,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2587.399999976158,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2588.399999976158,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 391,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 5,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 431.10000002384186,
+          "last": 431.10000002384186,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 431.10000002384186,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2551.5,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2551.9000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 365.40000000596046,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 6,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 423.2999999821186,
+          "last": 423.2999999821186,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 423.2999999821186,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2537.2999999821186,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2537.699999988079,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 363,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 7,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 489.09999999403954,
+          "last": 489.09999999403954,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 489.09999999403954,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2576.4000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2576.800000011921,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 433,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 8,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 422.59999999403954,
+          "last": 422.59999999403954,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 422.59999999403954,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2525.5999999940395,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2525.9000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 329.59999999403954,
+          "height": 59,
+          "text": "\u2026"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "no-preference",
+      "sample": 9,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 415.7999999821186,
+          "last": 415.7999999821186,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 415.7999999821186,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2534.0999999940395,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2534.5,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 351,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 0,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 445.80000001192093,
+          "last": 445.80000001192093,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 445.80000001192093,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2625.4000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2625.800000011921,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 364.80000001192093,
+          "height": 59,
+          "text": "\u2026"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 1,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 422.59999999403954,
+          "last": 422.59999999403954,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 422.59999999403954,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2543.199999988079,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2543.5,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 357,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 2,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 453.2000000178814,
+          "last": 453.2000000178814,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 453.2000000178814,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2571.2000000178814,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2571.5,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 392.90000000596046,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 3,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 461.2999999821186,
+          "last": 461.2999999821186,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 461.2999999821186,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2611.5,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2611.7999999821186,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 397.90000000596046,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 4,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 420.40000000596046,
+          "last": 420.40000000596046,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 420.40000000596046,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2548.7000000178814,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2549,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 354.60000002384186,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 5,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 426,
+          "last": 426,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 426,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2538,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2538.4000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 343,
+          "height": 59,
+          "text": "\u2026"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 6,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 452.09999999403954,
+          "last": 452.09999999403954,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 452.09999999403954,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2572.699999988079,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2573,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 390.59999999403954,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 7,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 572.4000000059605,
+          "last": 572.4000000059605,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 572.4000000059605,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2673.5999999940395,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2673.9000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 482.69999998807907,
+          "height": 59,
+          "text": "\u2026"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 8,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 518.8999999761581,
+          "last": 518.8999999761581,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 518.8999999761581,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2639,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2639.2999999821186,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 446.39999997615814,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "geometry": {
+        "header": {
+          "height": 59,
+          "minHeight": "59px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "12px",
+          "paddingBottom": "12px",
+          "borderTop": "0px",
+          "borderBottom": "1px"
+        },
+        "switcher": {
+          "height": 34,
+          "minHeight": "0px",
+          "fontSize": "14px",
+          "lineHeight": "20px",
+          "paddingTop": "6px",
+          "paddingBottom": "6px",
+          "borderTop": "1px",
+          "borderBottom": "1px"
+        },
+        "spacing": ".25rem"
+      },
+      "extraNav": 1,
+      "name": "developer-apps",
+      "reducedMotion": "reduce",
+      "sample": 9,
+      "cls": 1.9036458333333335e-5,
+      "sessionWindows": [
+        {
+          "start": 495.69999998807907,
+          "last": 495.69999998807907,
+          "score": 1.9036458333333335e-5
+        }
+      ],
+      "shifts": [
+        {
+          "time": 495.69999998807907,
+          "value": 1.9036458333333335e-5,
+          "hadRecentInput": false,
+          "sources": [
+            {
+              "node": "<div class=\"relative\"><button type=\"button\" class=\"flex items-center gap-2 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-hover)] active:bg-[var(--color-active)] active:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]\" id=\"radix-_r_3_\" aria-haspopup=\"m",
+              "before": {
+                "x": 236,
+                "y": 21,
+                "width": 10.375,
+                "height": 16,
+                "top": 21,
+                "right": 246.375,
+                "bottom": 37,
+                "left": 236
+              },
+              "after": {
+                "x": 236,
+                "y": 12,
+                "width": 129.171875,
+                "height": 34,
+                "top": 12,
+                "right": 365.171875,
+                "bottom": 46,
+                "left": 236
+              }
+            }
+          ]
+        }
+      ],
+      "inputs": [
+        {
+          "type": "pointerdown",
+          "time": 2610.4000000059605,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        },
+        {
+          "type": "click",
+          "time": 2611,
+          "target": "<a data-hover-glide-item=\"\" data-hover-glide-press-fill=\"\" title=\"Settings\" class=\"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm active:b"
+        }
+      ],
+      "headers": [
+        {
+          "time": 436.2999999821186,
+          "height": 59,
+          "text": "\u2026Developer mode"
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "sourceRevision": "a076796"
+}

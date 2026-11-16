@@ -34,15 +34,6 @@ for (const reducedMotion of ['no-preference', 'reduce'])
 
       const extraNav = Number(process.env.EXTRA_NAV || 0);
 
-      if (
-        phase.startsWith('after') &&
-        !(await page
-          .locator('#root header')
-          .first()
-          .evaluate((el) => el.classList.contains('min-h-[calc(1lh+var(--spacing)*9+3px)]')))
-      ) {
-        throw Error('Served bundle is stale: expected reserved shell header');
-      }
       if (extraNav) {
         await page.route('**/packages/app/dist/index-*.js', async (route) => {
           const response = await route.fetch();

@@ -1,5 +1,7 @@
 # GLA-335 cold-shell layout reservation
 
+**Superseded after-series and readiness behavior:** see the [PR review revision](revision/README.md) for the final cold-only latch, restored role policy, chosen deadline, footer evidence, and reruns. The original pack below is retained as the initial implementation record.
+
 Base: `a6d79c6` (main at worktree creation). Product changes are confined to
 `packages/app/src/components/layout/app-shell.tsx`.
 
