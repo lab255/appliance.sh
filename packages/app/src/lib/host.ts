@@ -336,12 +336,52 @@ export interface UpdaterHost {
   relaunch(): Promise<void>;
 }
 
+// ---- Workbench bindings: project-local view state, never authorization ----
+export interface WorkbenchBinding {
+  version: 1;
+  label?: string;
+  selectedTarget?: { kind: 'local' | 'cloud'; ref: string };
+  mutatingSessionId?: string;
+}
+export interface WorkbenchSession {
+  sessionId: string;
+  status: string;
+  launchedAt?: string;
+  endedAt?: string;
+  summary?: string;
+  vm?: string;
+}
+export type WorkbenchError =
+  | { kind: 'unreadable-file'; path: string; reason: string }
+  | { kind: 'operation'; message: string };
+export interface WorkbenchWorkspace {
+  directory: string;
+  binding: WorkbenchBinding;
+  machine?: string;
+  mount?: string;
+  sessions: WorkbenchSession[];
+  affectedSessions?: WorkbenchSession[];
+  baselineWarning?: string;
+  error?: string | WorkbenchError;
+}
+export interface WorkbenchHost {
+  /** Forget an opened reference only; never deletes project files. */
+  forget(directory: string): Promise<void>;
+  list(): Promise<WorkbenchWorkspace[]>;
+  open(directory: string): Promise<WorkbenchWorkspace>;
+  read(directory: string): Promise<WorkbenchWorkspace>;
+  create(parent: string, name: string): Promise<WorkbenchWorkspace>;
+  update(directory: string, binding: WorkbenchBinding): Promise<WorkbenchWorkspace>;
+}
+
 // Capabilities the surrounding shell (web PWA, future Tauri/Electron)
 // must provide to the shared app. Kept minimal: anything a browser
 // tab can do on its own isn't here. Desktop-only hooks (OS keychain,
 // system tray, native notifications, bootstrap driver) are optional
 // fields so the web host can omit them entirely.
 export interface ConsoleHost {
+  /** Workbench bindings (desktop only). */
+  workbench?: WorkbenchHost;
   /** Resolved once when the host is constructed so render-time copy stays synchronous. */
   platform: HostPlatform;
   /** Explicit shell identity; do not infer desktop from an unrelated optional capability. */

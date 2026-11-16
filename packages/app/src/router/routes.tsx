@@ -1,3 +1,6 @@
+import { RequireWorkbench } from '@/pages/workbench/access';
+import { WorkbenchPage } from '@/pages/workbench';
+import { WorkbenchDetailPage } from '@/pages/workbench/detail';
 import * as React from 'react';
 import type { RouteObject } from 'react-router';
 import { Navigate, useLocation, useParams } from 'react-router';
@@ -200,6 +203,22 @@ export const routes: RouteObject[] = [
 
       // ③ Apps — the overview home, deploy wizard, app detail, and
       // Environments/Deployments folded UNDER the area as nested routes.
+      {
+        path: 'workbench',
+        element: (
+          <RequireWorkbench>
+            <WorkbenchPage />
+          </RequireWorkbench>
+        ),
+      },
+      {
+        path: 'workbench/:workspaceId',
+        element: (
+          <RequireWorkbench>
+            <WorkbenchDetailPage />
+          </RequireWorkbench>
+        ),
+      },
       { path: 'projects', element: <AppsPage /> },
       { path: 'projects/deploy', element: <DeployPage /> },
       { path: 'projects/:id', element: <ProjectDetailPage /> },

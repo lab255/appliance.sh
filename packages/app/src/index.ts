@@ -25,6 +25,10 @@ export type {
 } from './lib/app-window';
 export type {
   ConsoleHost,
+  WorkbenchBinding,
+  WorkbenchWorkspace,
+  WorkbenchHost,
+  WorkbenchSession,
   HostPlatform,
   AppMode,
   AppModeHost,

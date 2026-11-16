@@ -1,0 +1,534 @@
+[
+  {
+    "motion": "no-preference",
+    "run": 0,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 2241.5999999940395
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 2604.199999988079
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 1,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 260.2999999821186
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 606.0999999940395
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 2,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 307.2999999821186
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 642.1999999880791
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 3,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 263.7999999821186
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 589.4000000059605
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 4,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 261.59999999403954
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 595.3000000119209
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 5,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 263.19999998807907
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 600.5999999940395
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 6,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 253.5
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 588.6999999880791
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 7,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 259
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 602.1999999880791
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 8,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 260.09999999403954
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 586.8999999761581
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "run": 9,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 268.19999998807907
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 602.1999999880791
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "no-preference",
+    "scenario": "both-success-paths",
+    "workspaceTarget": "mock-acme-prod",
+    "globalTarget": "microvm",
+    "stayedOnDetail": true
+  },
+  {
+    "motion": "no-preference",
+    "path": "/workbench/%2FUsers%2Fdev%2Fprojects%2Fdemo-node-container",
+    "fixture": "corrupt-binding",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected. Back to Workbench"
+  },
+  {
+    "motion": "no-preference",
+    "path": "/workbench",
+    "fixture": "corrupt-binding",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "no-preference",
+    "scenario": "dead-row-removed",
+    "passed": true
+  },
+  {
+    "motion": "no-preference",
+    "path": "/workbench",
+    "fixture": "corrupt-index",
+    "message": "/app-data/workbench-directories.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "no-preference",
+    "path": "/workbench/%2FUsers%2Fdev%2Fprojects%2Fdemo-node-container",
+    "fixture": "corrupt-save",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "no-preference",
+    "scenario": "open-dialog",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "reduce",
+    "run": 0,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 264.59999999403954
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 576
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 593.0999999940395
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 1,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 260.59999999403954
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 559
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 575.7000000178814
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 2,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 261.59999999403954
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 579.7999999821186
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 595.6999999880791
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 3,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 268.09999999403954
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 578.3000000119209
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 594.8000000119209
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 4,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 255
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 548.8000000119209
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 565.5
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 5,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 255.39999997615814
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 576.5999999940395
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 592.5
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 6,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 252.69999998807907
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 558.5999999940395
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 574.3999999761581
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 7,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 263.59999999403954
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 576
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 592.2999999821186
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 8,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 259.69999998807907
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 571.8000000119209
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 588.1999999880791
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "run": 9,
+    "previousWorkspaceTargetRetained": true,
+    "globalTargetRetained": true,
+    "stayedOnDetail": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false,
+        "time": 256.5
+      },
+      {
+        "value": 0.000007680483217592592,
+        "input": true,
+        "time": 573.8000000119209
+      },
+      {
+        "value": 0.0020922298177083335,
+        "input": true,
+        "time": 589.7000000178814
+      }
+    ],
+    "saveShifts": []
+  },
+  {
+    "motion": "reduce",
+    "scenario": "both-success-paths",
+    "workspaceTarget": "mock-acme-prod",
+    "globalTarget": "microvm",
+    "stayedOnDetail": true
+  },
+  {
+    "motion": "reduce",
+    "path": "/workbench/%2FUsers%2Fdev%2Fprojects%2Fdemo-node-container",
+    "fixture": "corrupt-binding",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected. Back to Workbench"
+  },
+  {
+    "motion": "reduce",
+    "path": "/workbench",
+    "fixture": "corrupt-binding",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "reduce",
+    "scenario": "dead-row-removed",
+    "passed": true
+  },
+  {
+    "motion": "reduce",
+    "path": "/workbench",
+    "fixture": "corrupt-index",
+    "message": "/app-data/workbench-directories.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "reduce",
+    "path": "/workbench/%2FUsers%2Fdev%2Fprojects%2Fdemo-node-container",
+    "fixture": "corrupt-save",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  },
+  {
+    "motion": "reduce",
+    "scenario": "open-dialog",
+    "message": "/Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+  }
+]
