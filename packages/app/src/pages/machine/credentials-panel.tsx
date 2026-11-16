@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { Checkbox } from '@appliance.sh/ui';
 import * as React from 'react';
@@ -71,8 +72,10 @@ export function CredentialsPanel({
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['microvm', name, 'creds'] });
 
   const act = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setErr(null);
+    await paintPending(() => {
+      setBusy(true);
+      setErr(null);
+    });
     try {
       await fn();
       return true;

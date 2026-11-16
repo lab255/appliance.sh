@@ -1,0 +1,91 @@
+Command: pnpm verify
+Execution: foreground; exit status 0
+Captured summary of /tmp/gla337-final-verify.log (full raw log retained locally).
+Builds precede consumer typechecks, as scripts/verify.sh requires.
+
+> appliance.sh@1.62.0 verify /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh
+==> 1/5 build (nx run-many --target=build --all)
+> appliance.sh@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh
+> @appliance.sh/sdk@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/sdk
+> @appliance.sh/sdk@1.62.0 postbuild /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/sdk
+> @appliance.sh/helper@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/helper
+> @appliance.sh/ui@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/ui
+> @appliance.sh/infra@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/infra
+> @appliance.sh/install-aws@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/install-aws
+> @appliance.sh/bootstrap@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/bootstrap
+> @appliance.sh/api-server@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/api-server
+> @appliance.sh/app@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/app
+> @appliance.sh/cli@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/cli
+> @appliance.sh/cli@1.62.0 compile /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/cli
+> @appliance.sh/console@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/console
+> @appliance.sh/desktop@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 sidecar:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 cli:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+    Finished `release` profile [optimized] target(s) in 27.93s
+> @appliance.sh/desktop@1.62.0 vm:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+    Finished `release` profile [optimized] target(s) in 26.19s
+> @appliance.sh/desktop@1.62.0 vm:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+ NX   Successfully ran target build for 11 projects
+==> 2/5 typecheck (nx run-many --target=typecheck --all)
+> @appliance.sh/ui@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/ui
+> @appliance.sh/install-aws@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/install-aws
+> @appliance.sh/desktop@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+> @appliance.sh/console@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/console
+> @appliance.sh/app@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/app
+> @appliance.sh/bootstrap@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/bootstrap
+ NX   Successfully ran target typecheck for 6 projects
+==> 3/5 lint:check (eslint + prettier --check)
+> appliance.sh@1.62.0 lint:check /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh
+Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.
+All matched files use Prettier code style!
+==> 4/5 test (nx run-many --target=test --all)
+> @appliance.sh/bootstrap@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/bootstrap
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+> @appliance.sh/sdk@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/sdk
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+> @appliance.sh/install-aws@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/install-aws
+ Test Files  4 passed (4)
+      Tests  68 passed (68)
+> @appliance.sh/helper@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/helper
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+> @appliance.sh/ui@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/ui
+ Test Files  15 passed (15)
+      Tests  92 passed (92)
+> @appliance.sh/infra@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/infra
+ Test Files  5 passed (5)
+      Tests  44 passed (44)
+> @appliance.sh/app@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/app
+ Test Files  23 passed (23)
+      Tests  120 passed (120)
+> @appliance.sh/desktop@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+ Test Files  5 passed (5)
+      Tests  48 passed (48)
+> @appliance.sh/api-server@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/api-server
+ Test Files  37 passed (37)
+      Tests  346 passed (346)
+> @appliance.sh/cli@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/cli
+ Test Files  56 passed | 1 skipped (57)
+      Tests  579 passed | 2 skipped (581)
+ NX   Successfully ran target test for 10 projects
+==> 5/5 rust (cargo build && cargo test && cargo clippy)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.06s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.28s
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.34s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.29s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.37s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.20s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.16s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.30s
+test result: ok. 330 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.30s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.41s
+==> verify: GREEN

@@ -1,0 +1,14 @@
+Native measurement workaround (not committed to product):
+- No packages/desktop/src-tauri/Cargo.lock is tracked by main.
+- Direct local Cargo pins: tauri 2.11.0, updater 2.10.1, process 2.3.1, dialog 2.7.1, shell 2.3.5, notification 2.3.3.
+- Transitive pins: tauri-plugin-fs 2.5.1, tauri-runtime-wry 2.11.0, tauri-runtime 2.11.0, tauri-macros 2.6.0, tauri-codegen 2.6.0.
+- Start checkout Vite on 1420, then:
+  pnpm --filter @appliance.sh/desktop exec tauri dev --no-watch --config '{"build":{"beforeDevCommand":""},"app":{"windows":[{"title":"GLA-337 measurement","width":1440,"height":1000}]}}' -- --locked
+- macOS visible frame initially clamped content to 1440x928. Temporarily hiding Dock then setting outer size 1440x1032 produced window.innerWidth/innerHeight 1440x1000. Dock restored after recording.
+- Local-only timing probe imported by desktop main.tsx: forced /apps before router initialization, observed trusted Space-key-triggered clicks, sampled pending button visibility over a completed rAF boundary. No host method, native bridge, or installer replaced. Reduced-motion twin overrides matchMedia only for prefers-reduced-motion in the probe; no system setting changed.
+- Unsigned real binary bundle built via appliance builder package, from /tmp/gla337-journal/appliance.json; payload is a Linux arm64 shell executable. Bundle digest sha256:5e04fb1372c9fb63150e43c8e784fb8c51c3b78948f71236ea9ad7cccf2486eb.
+- Each run selects the bundle through native NSOpenPanel, reaches UNKNOWN_PUBLISHER review, then cancels. No installation is accepted; no runtime app state is changed.
+
+Final native probe start: trusted Space keydown; end: next rAF after observing the committed visible pending button. The recorded trusted flag is from the resulting native keyboard-generated click. Clock: WKWebView performance.now, integer-ms precision in this run.
+Actual installBundle timing: local-only desktop main wrapper binds the original host method, records performance.now before calling it, observes the original Promise settlement through .then(finish, finish), and returns that same original Promise. No fake result or delay; logging is not awaited.
+Final native acknowledgment focus at every sample: aria-label Choose bundle… on the same mounted button. Scroll offsets at acknowledgment equal offsets before action. Native Layout Instability API is not supported; empty shifts arrays are NOT zero CLS evidence.

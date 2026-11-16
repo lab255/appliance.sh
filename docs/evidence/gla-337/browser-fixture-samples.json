@@ -1,0 +1,1547 @@
+{
+  "kind": "Browser fixture ONLY; not native installer hardware evidence",
+  "clock": "pointerdown to second rAF observing visible changed DOM (paint-opportunity upper bound, not compositor pixels)",
+  "backend": "deterministic synchronous 120ms JS setup; completion measured separately",
+  "results": [
+    {
+      "surface": "installed",
+      "before": true,
+      "reducedMotion": "no-preference",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 155.70000000298023,
+      "samples": [
+        {
+          "start": 438.80000001192093,
+          "ack": 162.19999998807907,
+          "shifts": [],
+          "backend": 120.80000001192093,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 260.5,
+          "ack": 147.5,
+          "shifts": [],
+          "backend": 120.5,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 247,
+          "ack": 145.90000000596046,
+          "shifts": [],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 230.5,
+          "ack": 164.7999999821186,
+          "shifts": [],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 230.40000000596046,
+          "ack": 148.40000000596046,
+          "shifts": [],
+          "backend": 120.30000001192093,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 227.09999999403954,
+          "ack": 149.2000000178814,
+          "shifts": [],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 230.90000000596046,
+          "ack": 163.80000001192093,
+          "shifts": [],
+          "backend": 120.30000001192093,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 264,
+          "ack": 148,
+          "shifts": [],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.09999999403954,
+          "ack": 164.7000000178814,
+          "shifts": [],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 231.90000000596046,
+          "ack": 163.59999999403954,
+          "shifts": [],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "installed",
+      "before": false,
+      "reducedMotion": "no-preference",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 31.200000002980232,
+      "samples": [
+        {
+          "start": 378.19999998807907,
+          "ack": 32.599999994039536,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 3.5
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 34.70000001788139
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 195.90000000596046
+            }
+          ],
+          "backend": 182.59999999403954,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 288.60000002384186,
+          "ack": 31.19999998807907,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 2.199999988079071
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.29999998211861
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 193
+            }
+          ],
+          "backend": 184.39999997615814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 229.90000000596046,
+          "ack": 31.099999994039536,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 3.199999988079071
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.900000005960464
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 194
+            }
+          ],
+          "backend": 184.90000000596046,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 246.90000000596046,
+          "ack": 30.80000001192093,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.400000005960464
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.5
+            }
+          ],
+          "backend": 184.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 228.59999999403954,
+          "ack": 32,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 1.800000011920929
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 33.5
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 193.40000000596046
+            }
+          ],
+          "backend": 184.90000000596046,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 228.89999997615814,
+          "ack": 31.400000005960464,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 2.4000000059604645
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.5
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.7000000178814
+            }
+          ],
+          "backend": 184.10000002384186,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 230.80000001192093,
+          "ack": 30.69999998807907,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 2.0999999940395355
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.099999994039536
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.30000001192093
+            }
+          ],
+          "backend": 184,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 229.39999997615814,
+          "ack": 31.200000017881393,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 1.9000000059604645
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.60000002384186
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 193.10000002384186
+            }
+          ],
+          "backend": 185,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 229.09999999403954,
+          "ack": 32,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 2.4000000059604645
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 33.19999998807907
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.59999999403954
+            }
+          ],
+          "backend": 184.5,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 229.5,
+          "ack": 30.400000005960464,
+          "shifts": [
+            {
+              "value": 0.00011386970425829475,
+              "recentInput": true,
+              "at": 2.699999988079071
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 31.599999994039536
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.90000000596046
+            }
+          ],
+          "backend": 184.5,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "installed",
+      "before": true,
+      "reducedMotion": "reduce",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 129.90000000596046,
+      "samples": [
+        {
+          "start": 398.09999999403954,
+          "ack": 151.90000000596046,
+          "shifts": [],
+          "backend": 120.40000000596046,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 262,
+          "ack": 129.7000000178814,
+          "shifts": [],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 238.59999999403954,
+          "ack": 129.90000000596046,
+          "shifts": [],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 256.40000000596046,
+          "ack": 129.69999998807907,
+          "shifts": [],
+          "backend": 120.2999999821186,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 239.09999999403954,
+          "ack": 130.09999999403954,
+          "shifts": [],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.30000001192093,
+          "ack": 129.39999997615814,
+          "shifts": [],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.10000002384186,
+          "ack": 129.7999999821186,
+          "shifts": [],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.09999999403954,
+          "ack": 130.2000000178814,
+          "shifts": [],
+          "backend": 120.30000001192093,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 237.7999999821186,
+          "ack": 129.90000000596046,
+          "shifts": [],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 256.59999999403954,
+          "ack": 129.90000000596046,
+          "shifts": [],
+          "backend": 120.2999999821186,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "installed",
+      "before": false,
+      "reducedMotion": "reduce",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 31.150000020861626,
+      "samples": [
+        {
+          "start": 354.90000000596046,
+          "ack": 34.39999997615814,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 2.699999988079071
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 36
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 195.2999999821186
+            }
+          ],
+          "backend": 182.69999998807907,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 257.69999998807907,
+          "ack": 30.700000017881393,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 1.9000000059604645
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.30000001192093
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.30000001192093
+            }
+          ],
+          "backend": 184.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 229.40000000596046,
+          "ack": 31.599999994039536,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 2.199999988079071
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.89999997615814
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.89999997615814
+            }
+          ],
+          "backend": 185,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 248.10000002384186,
+          "ack": 30.5,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 2.399999976158142
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 31.899999976158142
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 191.5
+            }
+          ],
+          "backend": 183.89999997615814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 228.39999997615814,
+          "ack": 31.200000017881393,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 2.5
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 33.900000005960464
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.60000002384186
+            }
+          ],
+          "backend": 185,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 245,
+          "ack": 31.100000023841858,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 2.800000011920929
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.80000001192093
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192
+            }
+          ],
+          "backend": 184.40000000596046,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 228.5,
+          "ack": 31.900000005960464,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 33.69999998807907
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 192.80000001192093
+            }
+          ],
+          "backend": 185.30000001192093,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 311.5,
+          "ack": 30.30000001192093,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 1.9000000059604645
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 31.599999994039536
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 193.90000000596046
+            }
+          ],
+          "backend": 183.7000000178814,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 230.19999998807907,
+          "ack": 31.5,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 1.800000011920929
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.80000001192093
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 193.09999999403954
+            }
+          ],
+          "backend": 184.80000001192093,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 231.19999998807907,
+          "ack": 30.100000023841858,
+          "shifts": [
+            {
+              "value": 0.00011300121166087963,
+              "recentInput": true,
+              "at": 3.100000023841858
+            },
+            {
+              "value": 0.00021324422200520832,
+              "recentInput": true,
+              "at": 32.10000002384186
+            },
+            {
+              "value": 0.000013657746491608797,
+              "recentInput": true,
+              "at": 191.7000000178814
+            }
+          ],
+          "backend": 183.5,
+          "focusBefore": null,
+          "focusAfter": "Cancel",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "catalogue",
+      "before": true,
+      "reducedMotion": "no-preference",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 126.6000000089407,
+      "samples": [
+        {
+          "start": 401.90000000596046,
+          "ack": 150.39999997615814,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 126.59999999403954
+            }
+          ],
+          "backend": 120.2999999821186,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 259.5,
+          "ack": 126,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.40000000596046
+            }
+          ],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 244.19999998807907,
+          "ack": 126.90000000596046,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124
+            }
+          ],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.39999997615814,
+          "ack": 126.10000002384186,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 123.7000000178814
+            }
+          ],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 242,
+          "ack": 126.40000000596046,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124
+            }
+          ],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 247.39999997615814,
+          "ack": 127.30000001192093,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.5
+            }
+          ],
+          "backend": 120.30000001192093,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 244.7000000178814,
+          "ack": 126.90000000596046,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 241.59999999403954,
+          "ack": 126.30000001192093,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.19999998807907
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 232.09999999403954,
+          "ack": 126.2999999821186,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 244.09999999403954,
+          "ack": 126.80000001192093,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "catalogue",
+      "before": false,
+      "reducedMotion": "no-preference",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 31.049999997019768,
+      "samples": [
+        {
+          "start": 377.80000001192093,
+          "ack": 31.19999998807907,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2.899999976158142
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 160.89999997615814
+            }
+          ],
+          "backend": 151.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 261.80000001192093,
+          "ack": 31.599999994039536,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2.2999999821186066
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.89999997615814
+            }
+          ],
+          "backend": 151.59999999403954,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 261,
+          "ack": 31.400000005960464,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.59999999403954
+            }
+          ],
+          "backend": 151.40000000596046,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 242.80000001192093,
+          "ack": 30.599999994039536,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2.199999988079071
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155.19999998807907
+            }
+          ],
+          "backend": 150.69999998807907,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 241.90000000596046,
+          "ack": 30.900000005960464,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155.19999998807907
+            }
+          ],
+          "backend": 150.90000000596046,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.5,
+          "ack": 31.700000017881393,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.5
+            }
+          ],
+          "backend": 151.7000000178814,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 244.90000000596046,
+          "ack": 30,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2.2000000178813934
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155.30000001192093
+            }
+          ],
+          "backend": 150,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 242.7000000178814,
+          "ack": 31.400000005960464,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 1.7999999821186066
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.5
+            }
+          ],
+          "backend": 151.5,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.69999998807907,
+          "ack": 29.80000001192093,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 3.699999988079071
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 154.19999998807907
+            }
+          ],
+          "backend": 149.80000001192093,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 242.09999999403954,
+          "ack": 30.80000001192093,
+          "shifts": [
+            {
+              "value": 0.000006839554398148147,
+              "recentInput": true,
+              "at": 2.4000000059604645
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155.80000001192093
+            }
+          ],
+          "backend": 150.80000001192093,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "catalogue",
+      "before": true,
+      "reducedMotion": "reduce",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 125.59999999403954,
+      "samples": [
+        {
+          "start": 403.7000000178814,
+          "ack": 149.2999999821186,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 126.7999999821186
+            }
+          ],
+          "backend": 120.2999999821186,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 251,
+          "ack": 125,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 123.90000000596046
+            }
+          ],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 247.2000000178814,
+          "ack": 125.5,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 123.69999998807907
+            }
+          ],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 322.19999998807907,
+          "ack": 125.2000000178814,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.30000001192093
+            }
+          ],
+          "backend": 120.5,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 278,
+          "ack": 125.69999998807907,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.69999998807907
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 279.59999999403954,
+          "ack": 125.30000001192093,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.40000000596046
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 297.69999998807907,
+          "ack": 125.90000000596046,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.90000000596046
+            }
+          ],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 246.39999997615814,
+          "ack": 125.10000002384186,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 123.90000000596046
+            }
+          ],
+          "backend": 120.2000000178814,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 231.40000000596046,
+          "ack": 125.90000000596046,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.2999999821186
+            }
+          ],
+          "backend": 120.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 247.60000002384186,
+          "ack": 125.89999997615814,
+          "shifts": [
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 124.2999999821186
+            }
+          ],
+          "backend": 120.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    },
+    {
+      "surface": "catalogue",
+      "before": false,
+      "reducedMotion": "reduce",
+      "viewport": [1440, 1000],
+      "count": 10,
+      "median": 31.75,
+      "samples": [
+        {
+          "start": 386.40000000596046,
+          "ack": 32.5,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 3.199999988079071
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 159.5
+            }
+          ],
+          "backend": 152.5,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 250.60000002384186,
+          "ack": 30.799999982118607,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155
+            }
+          ],
+          "backend": 150.89999997615814,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 241.5,
+          "ack": 31.30000001192093,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155.59999999403954
+            }
+          ],
+          "backend": 151.30000001192093,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 242.09999999403954,
+          "ack": 32.70000001788139,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2.4000000059604645
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 157.10000002384186
+            }
+          ],
+          "backend": 152.7000000178814,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 243.59999999403954,
+          "ack": 31.80000001192093,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2.300000011920929
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.30000001192093
+            }
+          ],
+          "backend": 151.80000001192093,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 242.40000000596046,
+          "ack": 32,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2.5
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.2999999821186
+            }
+          ],
+          "backend": 152,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 245.09999999403954,
+          "ack": 31.69999998807907,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2.0999999940395355
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156.40000000596046
+            }
+          ],
+          "backend": 151.80000001192093,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 241.7999999821186,
+          "ack": 32.099999994039536,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 1.800000011920929
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 156
+            }
+          ],
+          "backend": 152.09999999403954,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 244.2000000178814,
+          "ack": 31.19999998807907,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2.0999999940395355
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 155.5
+            }
+          ],
+          "backend": 151.2999999821186,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        },
+        {
+          "start": 244.10000002384186,
+          "ack": 30.19999998807907,
+          "shifts": [
+            {
+              "value": 0.000006412082248263889,
+              "recentInput": true,
+              "at": 2.0999999940395355
+            },
+            {
+              "value": 0.012009876543209877,
+              "recentInput": true,
+              "at": 154.39999997615814
+            }
+          ],
+          "backend": 150.19999998807907,
+          "focusBefore": null,
+          "focusAfter": "Installing…Install",
+          "scrollBefore": [0, 0],
+          "scrollAfter": [0, 0]
+        }
+      ]
+    }
+  ]
+}

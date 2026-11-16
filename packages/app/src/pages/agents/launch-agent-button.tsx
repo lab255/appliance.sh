@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Bot, Loader2 } from 'lucide-react';
 import { Banner } from '@/components/ui/banner';
@@ -148,8 +149,10 @@ export function LaunchAgentButton({
   const launch = async () => {
     if (launchingRef.current) return;
     launchingRef.current = true;
-    setBusy(true);
-    setErr(null);
+    await paintPending(() => {
+      setBusy(true);
+      setErr(null);
+    });
     try {
       const sessionId = mintAgentSessionId();
       const t = task.trim() || undefined;

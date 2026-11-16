@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHost } from '@/providers/host-provider';
 import type { AppMode } from '@/lib/host';
@@ -22,6 +23,7 @@ export function useAppMode() {
       return mode;
     },
     onMutate: async (mode) => {
+      await afterPendingPaint();
       await queryClient.cancelQueries({ queryKey: APP_MODE_QUERY_KEY });
       const previous = queryClient.getQueryData<AppMode | null>(APP_MODE_QUERY_KEY);
       queryClient.setQueryData(APP_MODE_QUERY_KEY, mode);

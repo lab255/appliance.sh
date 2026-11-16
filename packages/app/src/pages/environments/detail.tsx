@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, useNavigate, useParams, Navigate } from 'react-router';
@@ -99,6 +100,7 @@ export function EnvironmentDetailPage() {
   }, [queryClient, projectId, id]);
 
   const deployMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async () => {
       const r = await client!.deploy(id!);
       if (!r.success) throw r.error;
@@ -113,6 +115,7 @@ export function EnvironmentDetailPage() {
   });
 
   const destroyMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async () => {
       const r = await client!.destroy(id!);
       if (!r.success) throw r.error;

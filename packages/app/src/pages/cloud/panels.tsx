@@ -1,3 +1,4 @@
+import { paintPending, afterPendingPaint } from '@/lib/paint-pending';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import * as React from 'react';
 import { useNavigate } from 'react-router';
@@ -76,7 +77,7 @@ function DeployToCloudCard({ cluster }: { cluster: Cluster }) {
   const canDeployInApp = Boolean(host.local?.deployToCloud);
 
   const deployHere = async () => {
-    setBusy(true);
+    await paintPending(() => setBusy(true));
     try {
       if (!isSelected) {
         await host.selectCluster(cluster.id);
@@ -156,6 +157,7 @@ function CloudLifecyclePanels({ cluster }: { cluster: Cluster }) {
       : undefined;
 
   const selectMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async (id: string) => host.selectCluster(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['host', 'config'] }),
   });
@@ -374,9 +376,11 @@ function UpdateBaselinePanel({ cluster }: { cluster: Cluster }) {
   const onRun = async () => {
     if (!host.bootstrap?.updateBaseline) return;
     if (!cluster.lastBootstrapInput) return;
-    setStatus('running');
-    setLogs([]);
-    setError(null);
+    await paintPending(() => {
+      setStatus('running');
+      setLogs([]);
+      setError(null);
+    });
     try {
       await host.bootstrap.updateBaseline(
         {
@@ -590,10 +594,12 @@ function UpdateApiServerPanel({ cluster, cloudFormation = false }: { cluster: Cl
       setError('No API key loaded for this cluster — switch to it first.');
       return;
     }
-    setStatus('running');
-    setLogs([]);
-    setError(null);
-    setRollbackMessage(null);
+    await paintPending(() => {
+      setStatus('running');
+      setLogs([]);
+      setError(null);
+      setRollbackMessage(null);
+    });
     try {
       if (cloudFormation) {
         const update = await runDesktopCloudSelfUpdate(client, requestedVersion, {
@@ -967,9 +973,11 @@ function StateMigrationPanel({ cluster, direction }: { cluster: Cluster; directi
     if (!stateBackendUrlValid) return;
     const action = direction === 'promote' ? host.bootstrap?.promoteState : host.bootstrap?.demoteState;
     if (!action) return;
-    setStatus('running');
-    setLogs([]);
-    setError(null);
+    await paintPending(() => {
+      setStatus('running');
+      setLogs([]);
+      setError(null);
+    });
     try {
       await action.call(
         host.bootstrap,
@@ -1148,9 +1156,11 @@ function DestroyClusterPanel({ cluster }: { cluster: Cluster }) {
       confirmLabel: 'Destroy cloud installation',
     });
     if (!ok) return;
-    setStatus('running');
-    setLogs([]);
-    setError(null);
+    await paintPending(() => {
+      setStatus('running');
+      setLogs([]);
+      setError(null);
+    });
     try {
       await host.bootstrap.teardown(
         { awsProfile: awsProfile || undefined, cluster, apiKey: config?.apiKey ?? undefined },

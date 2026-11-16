@@ -1,0 +1,74 @@
+tauri-plugin-updater 2.10.1
+    Updating crates.io index
+      Adding arbitrary v1.5.0
+      Adding cfb v0.7.3
+    Removing cfg_aliases v0.2.2
+    Removing constant_time_eq v0.6.1
+      Adding derive_arbitrary v1.5.0
+      Adding dirs v6.0.0
+      Adding infer v0.19.0
+ Downgrading minisign-verify v0.3.0 -> v0.2.5
+    Removing nix v0.32.0
+    Removing system-configuration v0.7.0
+    Removing system-configuration-sys v0.6.0
+ Downgrading tauri-plugin-updater v2.14.1 -> v2.10.1
+    Removing typed-path v0.13.0
+    Removing windows-registry v0.6.1
+ Downgrading zip v9.6.0 -> v4.6.1
+note: pass `--verbose` to see 9 unchanged dependencies behind latest
+tauri-plugin-process 2.3.1
+    Updating crates.io index
+ Downgrading tauri-plugin-process v2.4.0 -> v2.3.1
+note: pass `--verbose` to see 10 unchanged dependencies behind latest
+tauri-plugin-dialog 2.7.1
+    Updating crates.io index
+ Downgrading rfd v0.17.2 -> v0.16.1
+ Downgrading tauri-plugin-dialog v2.8.4 -> v2.7.1
+note: pass `--verbose` to see 11 unchanged dependencies behind latest
+tauri-plugin-shell 2.3.5
+    Updating crates.io index
+      Adding sigchld v0.2.5
+      Adding signal-hook v0.4.6
+ Downgrading tauri-plugin-shell v2.6.0 -> v2.3.5
+note: pass `--verbose` to see 12 unchanged dependencies behind latest
+tauri-plugin-notification 2.3.3
+    Updating crates.io index
+    Removing async-broadcast v0.7.2
+    Removing async-channel v2.5.0
+    Removing async-executor v1.14.1
+    Removing async-io v2.6.0
+    Removing async-lock v3.5.0
+    Removing async-process v2.5.0
+    Removing async-recursion v1.2.0
+    Removing async-signal v0.2.14
+    Removing async-task v4.7.1
+    Removing blocking v1.7.0
+    Removing chacha20 v0.10.2
+    Removing concurrent-queue v2.5.0
+    Removing enumflags2 v0.7.12
+    Removing enumflags2_derive v0.7.12
+    Removing event-listener v5.4.2
+    Removing event-listener-strategy v0.5.4
+    Removing hermit-abi v0.5.3
+    Removing piper v0.2.5
+    Removing polling v3.11.0
+ Downgrading rand v0.10.4 -> v0.9.5
+      Adding rand_chacha v0.9.0
+ Downgrading rand_core v0.10.1 -> v0.9.5
+ Downgrading tauri-plugin-notification v2.8.1 -> v2.3.3
+    Removing tracing-attributes v0.1.31
+    Removing zbus v5.19.0
+    Removing zbus_macros v5.19.0
+    Removing zbus_names v4.3.5
+    Removing zvariant v5.15.1
+    Removing zvariant_derive v5.15.1
+    Removing zvariant_utils v4.2.0
+note: pass `--verbose` to see 13 unchanged dependencies behind latest
+tauri 2.11.0
+    Updating crates.io index
+error: failed to select a version for the requirement `tauri = "^2.12"`
+candidate versions found which didn't match: 2.11.0
+location searched: crates.io index
+required by package `tauri-plugin-fs v2.7.1`
+    ... which satisfies dependency `tauri-plugin-fs = "^2.5.1"` (locked to 2.7.1) of package `tauri-plugin-dialog v2.7.1`
+    ... which satisfies dependency `tauri-plugin-dialog = "^2"` (locked to 2.7.1) of package `appliance-desktop v1.48.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop/src-tauri)`

@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -87,9 +88,11 @@ export function StartMachineRecovery({
   }, [ready, queryClient, onRecovered]);
 
   const startMachine = async () => {
-    setBusy('up');
-    setStartError(null);
-    setLog([]);
+    await paintPending(() => {
+      setBusy('up');
+      setStartError(null);
+      setLog([]);
+    });
     try {
       const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
       // Dev is a one-way engine flag: a VM already provisioned as a dev
@@ -110,8 +113,10 @@ export function StartMachineRecovery({
   };
 
   const installEngine = async () => {
-    setBusy('install');
-    setStartError(null);
+    await paintPending(() => {
+      setBusy('install');
+      setStartError(null);
+    });
     try {
       await host.vm!.install();
       void queryClient.invalidateQueries({ queryKey: ['microvm', vmName, 'status'] });

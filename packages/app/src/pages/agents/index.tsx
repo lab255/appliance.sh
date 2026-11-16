@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import * as React from 'react';
 import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, useSearchParams } from 'react-router';
@@ -546,6 +547,7 @@ function RunRow({ run, onObserve }: { run: AgentInfo & { vmName: string }; onObs
   // surface a dead shell — hide Observe then.
   const observable = run.status === 'running' && run.live !== false;
   const stopMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: () => host.vm!.instance(run.vmName).agent.stop(run.sessionId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents', 'runs'] }),
   });

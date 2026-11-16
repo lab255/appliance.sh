@@ -1,5 +1,7 @@
 'use client';
 
+import { afterPendingPaint } from '@/lib/paint-pending';
+
 import * as React from 'react';
 import {
   DropdownMenu,
@@ -106,6 +108,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
   const developerMissingLocal = coreMachines.length === 0 && localClusters.length === 0;
 
   const selectMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async (id: string) => host.selectCluster(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['host', 'config'] });

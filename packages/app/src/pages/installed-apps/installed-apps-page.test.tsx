@@ -12,6 +12,9 @@ import { HostProvider } from '@/providers/host-provider';
 import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState, InstalledAppsPage } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
 
+// These tests exercise outcomes; paint ordering is covered in paint-pending.test.tsx.
+vi.mock('@/lib/paint-pending', () => ({ paintPending: async (update: () => void) => update() }));
+
 vi.mock('@/components/layout/workspace-switcher', () => ({
   useCurrentWorkspace: () => ({ cluster: null, kind: 'local', isLoading: false }),
 }));
@@ -98,6 +101,43 @@ async function installedAppsInstallMessage(rejection: unknown): Promise<string> 
 }
 
 describe('Installed Apps mock scenarios', () => {
+  it.each(['Open', 'Stop'] as const)('keeps Install from file available during %s', async (action) => {
+    const item = fixture({ state: action === 'Open' ? 'stopped' : 'running' });
+    const pending = () => new Promise<never>(() => {});
+    const installedApps = {
+      list: vi.fn().mockResolvedValue([item]),
+      run: vi.fn(pending),
+      stop: vi.fn(pending),
+      pickBundle: vi.fn().mockResolvedValue(null),
+    };
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          <MemoryRouter>
+            <HostProvider host={{ platform: 'macos', installedApps } as unknown as ConsoleHost}>
+              <ToastProvider>
+                <InstalledAppsPage />
+              </ToastProvider>
+            </HostProvider>
+          </MemoryRouter>
+        )
+      );
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>(`button[aria-label="${action} Notes+Sync"]`)!.click()
+      );
+      const install = container.querySelector<HTMLButtonElement>('button[aria-label="Install from file"]')!;
+      expect(install.getAttribute('aria-disabled')).toBe('false');
+      expect(install.getAttribute('aria-busy')).toBe('false');
+      expect(install.querySelector('[role="status"]')).toBeNull();
+      await act(async () => install.click());
+      expect(installedApps.pickBundle).toHaveBeenCalledOnce();
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+
   it.each(['Stop', 'Open'] as const)(
     'keeps cards mounted during the %s refetch and shows success feedback',
     async (action) => {

@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { Checkbox } from '@appliance.sh/ui';
 import { HostingStatus } from '@/components/journey-motion';
@@ -138,13 +139,15 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
     kind: 'install' | 'up' | 'cluster' | 'stop' | 'delete',
     action: () => Promise<void>
   ): Promise<boolean> => {
-    setBusy(kind);
-    setError(null);
-    setErrorAction(null);
-    if (kind === 'up' || kind === 'cluster') {
-      setLog([]);
-      setLogAction(kind);
-    }
+    await paintPending(() => {
+      setBusy(kind);
+      setError(null);
+      setErrorAction(null);
+      if (kind === 'up' || kind === 'cluster') {
+        setLog([]);
+        setLogAction(kind);
+      }
+    });
     try {
       await action();
       return true;

@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -60,10 +61,12 @@ export function ClusterCompatBanner() {
         type="button"
         disabled={updating}
         className="underline disabled:opacity-60"
-        onClick={() => {
-          setUpdating(true);
-          setUpdatePhase('Checking VM capability…');
-          setUpdateError(null);
+        onClick={async () => {
+          await paintPending(() => {
+            setUpdating(true);
+            setUpdatePhase('Checking VM capability…');
+            setUpdateError(null);
+          });
           void host
             .vm!.instance(compat.vmName)
             .update(compat.clientVersion, ({ message }) => {

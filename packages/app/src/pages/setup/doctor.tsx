@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@appliance.sh/ui/accordion';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
@@ -234,8 +235,10 @@ function PreflightRow({
   };
 
   const onClickInstall = async () => {
-    setInstalling(true);
-    setInstallError(null);
+    await paintPending(() => {
+      setInstalling(true);
+      setInstallError(null);
+    });
     try {
       await onInstall(check.tool);
     } catch (err) {
@@ -246,8 +249,10 @@ function PreflightRow({
   };
 
   const onClickStart = async () => {
-    setStarting(true);
-    setStartError(null);
+    await paintPending(() => {
+      setStarting(true);
+      setStartError(null);
+    });
     try {
       await onStartRuntime();
     } catch (err) {

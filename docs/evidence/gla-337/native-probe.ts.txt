@@ -1,0 +1,43 @@
+// LOCAL MEASUREMENT ONLY — removed before commit. Host/bridge methods are untouched.
+const post = (value: unknown) => fetch('http://127.0.0.1:1438', {method:'POST',body:JSON.stringify(value)});
+const reduced = localStorage.getItem('gla337-reduced') === 'true';
+const originalMatchMedia = window.matchMedia.bind(window);
+window.matchMedia = (query: string) => query.includes('prefers-reduced-motion') ? new Proxy(originalMatchMedia(query), {get(target, key) { if(key === 'matches') return reduced; const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value; }}) : originalMatchMedia(query);
+history.replaceState({},'', '/apps');
+let sample: any = null;
+(window as any).__gla337Backend = (duration: number) => { if(sample) post({...sample,stage:'backend',backendMs:duration}); };
+let keyStarted: number | null = null;
+window.addEventListener('keydown', (event) => { if(event.code === 'Space' && (event.target as HTMLElement)?.closest('button')?.textContent?.includes('Install from file')) keyStarted = performance.now(); }, true);
+let lastCommand = sessionStorage.getItem('gla337-command') ?? '';
+let observing = false;
+window.addEventListener('click', (event) => {
+  post({type:'pointer',x:event.clientX,y:event.clientY,tag:(event.target as HTMLElement)?.tagName});
+  const button = (event.target as HTMLElement)?.closest('button');
+  if (!button?.textContent?.includes('Install from file')) return;
+  const start=keyStarted ?? performance.now(); keyStarted=null; sample={type:'sample',runId:lastCommand,start,reduced,trusted:event.isTrusted,viewport:[innerWidth,innerHeight],layoutShiftSupported:PerformanceObserver.supportedEntryTypes.includes('layout-shift'),scrollBefore:[scrollX,scrollY],shifts:[]};
+  const observe = () => {
+    const pending=document.querySelector('button[aria-busy="true"]');
+    if(pending)requestAnimationFrame(()=>{sample.ack=performance.now()-start;post({...sample,stage:'ack',label:pending.textContent,focusAtAck:document.activeElement?.getAttribute('aria-label'),scrollAtAck:[scrollX,scrollY]});});
+    else requestAnimationFrame(observe);
+  };requestAnimationFrame(observe);
+},true);
+if(PerformanceObserver.supportedEntryTypes.includes('layout-shift'))new PerformanceObserver(list=>{if(sample)for(const e of list.getEntries())sample.shifts.push(e.toJSON());}).observe({type:'layout-shift'});
+setInterval(async()=>{
+ if (!observing) {
+  observing=true;
+  new MutationObserver(()=>{
+    const dialog=document.querySelector('[role="alertdialog"]');
+    if(sample&&dialog&&!sample.dialog){sample.dialog=performance.now()-sample.start;post({...sample,stage:'publisher',dialogText:dialog.textContent});}
+  }).observe(document.body,{childList:true,subtree:true});
+ }
+ const command=await fetch('http://127.0.0.1:1438').then(r=>r.json());
+ if(command.id && command.id!==lastCommand){lastCommand=command.id; sessionStorage.setItem('gla337-command',lastCommand);
+  if(command.action==='focus') Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b => b.innerText === 'Install from file')?.focus();
+  if(command.action==='click') document.querySelector<HTMLButtonElement>('button[aria-label="Install from file"]')?.click();
+  if(command.action==='cancel') document.querySelector<HTMLButtonElement>('[role="alertdialog"] button')?.click();
+  if(command.action==='status')post({type:'status',viewport:[innerWidth,innerHeight],screen:[screen.width,screen.height],path:location.pathname,text:document.body.innerText.slice(0,1500),buttons:Array.from(document.querySelectorAll('button')).map(b=>({label:b.getAttribute('aria-label')||b.innerText,rect:b.getBoundingClientRect().toJSON()}))});
+  if(command.action==='reduce'){localStorage.setItem('gla337-reduced',String(command.value));location.reload();}
+  if(command.action==='reload')location.reload();
+ }
+},250);
+post({type:'ready',reduced,viewport:[innerWidth,innerHeight]});

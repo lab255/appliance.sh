@@ -1,0 +1,36 @@
+import {chromium} from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import fs from 'node:fs';
+const output=process.cwd()+'/docs/evidence/gla-337';
+const browser=await chromium.launch({headless:true,executablePath:'/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'});
+const results=[];
+for(const surface of ['installed','catalogue']) for(const reducedMotion of ['no-preference','reduce']) for(const before of [true,false]) {
+ const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion});page.on('pageerror',e=>console.log('ERROR',e.message));
+ const samples=[];const name=`${surface}-${before?'before':'after'}-${reducedMotion}`;
+ for(let run=0;run<10;run++){
+  await page.goto(`http://localhost:1439/?${before?'before&':''}${surface==='catalogue'?'catalogue':''}`);
+  const button=surface==='catalogue'?page.getByRole('button',{name:'Install Journal',exact:true}):page.getByRole('button',{name:'Install from file',exact:true}).first();
+  await button.waitFor();await page.waitForTimeout(150);
+  if(run===0)await page.screenshot({path:`${output}/${name}-idle.png`});
+  await page.evaluate(({surface})=>{
+    window.__sample={start:0,ack:null,shifts:[],backend:null,focusBefore:null,focusAfter:null,scrollBefore:[scrollX,scrollY],scrollAfter:null};
+    const observer=new PerformanceObserver(list=>{for(const e of list.getEntries()) if(window.__sample.start && e.startTime>=window.__sample.start)window.__sample.shifts.push({value:e.value,recentInput:e.hadRecentInput,at:e.startTime-window.__sample.start});});
+    observer.observe({type:'layout-shift',buffered:false});
+    document.addEventListener('pointerdown',()=>{const m=window.__sample;m.start=performance.now();m.focusBefore=document.activeElement?.getAttribute('aria-label');
+      const sample=()=>{
+       let visible=false;
+       if(surface==='installed') {const b=document.querySelector('button[aria-busy="true"]');const d=document.querySelector('[role="alertdialog"]');visible=!!b||!!(d&&Number(getComputedStyle(d).opacity)>0);}
+       else {const b=document.querySelector('button[aria-busy="true"]');visible=!!b||document.body.innerText.includes('Journal 1.0.0 was installed.');}
+       if(visible)requestAnimationFrame(()=>{m.ack=performance.now()-m.start;});else requestAnimationFrame(sample);
+      };requestAnimationFrame(sample);
+    },{once:true,capture:true});
+  },{surface});
+  await button.click();
+  await page.waitForFunction(()=>window.__sample.ack!==null);
+  await page.waitForTimeout(350);
+  const sample=await page.evaluate(()=>{const m=window.__sample;m.backend=window.__backend-m.start;m.focusAfter=document.activeElement?.textContent;m.scrollAfter=[scrollX,scrollY];return m;});
+  samples.push(sample);if(run===0)await page.screenshot({path:`${output}/${name}-completed.png`});
+ }
+ const timings=samples.map(s=>s.ack).sort((a,b)=>a-b);const median=(timings[4]+timings[5])/2;
+ results.push({surface,before,reducedMotion,viewport:[1440,1000],count:10,median,samples});console.log(name,median.toFixed(3), 'ms', 'raw shifts',Math.max(...samples.map(s=>s.shifts.reduce((a,b)=>a+b.value,0))));await page.close();
+}
+fs.writeFileSync(`${output}/browser-fixture-samples.json`,JSON.stringify({kind:'Browser fixture ONLY; not native installer hardware evidence',clock:'pointerdown to second rAF observing visible changed DOM (paint-opportunity upper bound, not compositor pixels)',backend:'deterministic synchronous 120ms JS setup; completion measured separately',results},null,2));await browser.close();

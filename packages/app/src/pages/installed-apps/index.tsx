@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
 import { FolderOpen, Grid2X2, Loader2, Search } from 'lucide-react';
@@ -184,12 +185,40 @@ export function InstalledAppCard({
   );
 }
 
+function InstallFromFileButton({ onClick, busy }: { onClick: () => void; busy?: string | null }) {
+  const installing = busy === 'pick' || busy === 'install';
+  const label = busy === 'pick' ? 'Choose bundle…' : busy === 'install' ? 'Installing…' : 'Install from file';
+  return (
+    <Button
+      size="sm"
+      onClick={() => {
+        if (!installing) onClick();
+      }}
+      aria-disabled={installing}
+      aria-label={label}
+      aria-busy={installing}
+    >
+      <FolderOpen className="h-4 w-4" aria-hidden />
+      <span className="inline-grid">
+        <span className="invisible col-start-1 row-start-1" aria-hidden>
+          Install from file
+        </span>
+        <span className="col-start-1 row-start-1" aria-hidden>
+          {label}
+        </span>
+      </span>
+    </Button>
+  );
+}
+
 export function InstalledAppsEmptyState({
   filtered = false,
   onInstall,
+  busy,
 }: {
   filtered?: boolean;
   onInstall?: () => void;
+  busy?: string | null;
 }) {
   return (
     <EmptyState
@@ -204,13 +233,7 @@ export function InstalledAppsEmptyState({
           </>
         )
       }
-      action={
-        !filtered && onInstall ? (
-          <Button size="sm" onClick={onInstall}>
-            <FolderOpen className="h-4 w-4" aria-hidden /> Install from file
-          </Button>
-        ) : undefined
-      }
+      action={!filtered && onInstall ? <InstallFromFileButton onClick={onInstall} busy={busy} /> : undefined}
     />
   );
 }
@@ -289,7 +312,7 @@ export function InstalledAppsPage() {
 
   const installSource = async (source: string, accepted = false, grantIds?: string[]) => {
     if (!host.installedApps) return;
-    setBusy('install');
+    await paintPending(() => setBusy('install'));
     try {
       const installed = await host.installedApps.installBundle(source, target, {
         acceptUnknownPublisher: accepted,
@@ -317,8 +340,17 @@ export function InstalledAppsPage() {
   };
 
   const pickAndInstall = async () => {
-    const source = await host.installedApps?.pickBundle();
-    if (source) await installSource(source);
+    if (!host.installedApps || busy === 'pick' || busy === 'install') return;
+    // Acknowledge the picker before awaiting it; installSource carries the busy state onward.
+    await paintPending(() => setBusy('pick'));
+    try {
+      const source = await host.installedApps.pickBundle();
+      if (source) await installSource(source);
+    } catch (cause) {
+      setError(errorMessage(cause, 'The bundle picker could not be opened.'));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const openApp = async (item: InstalledRuntimeApp, accepted = false, remember = false) => {
@@ -334,8 +366,10 @@ export function InstalledAppsPage() {
       setPending({ kind: 'publisher', action: 'open', app: item, prompt: promptForInstalledApp(item) });
       return;
     }
-    setBusy(item.app.appId);
-    setBusyAction('opening');
+    await paintPending(() => {
+      setBusy(item.app.appId);
+      setBusyAction('opening');
+    });
     const openMetric = {
       kind:
         item.state === 'running' || item.state === 'degraded' || item.state === 'starting'
@@ -371,8 +405,10 @@ export function InstalledAppsPage() {
 
   const stopApp = async (item: InstalledRuntimeApp) => {
     if (!host.installedApps) return;
-    setBusy(item.app.appId);
-    setBusyAction('stopping');
+    await paintPending(() => {
+      setBusy(item.app.appId);
+      setBusyAction('stopping');
+    });
     recordAppStopStart(item.app.appId);
     try {
       await host.installedApps.stop(item.app.appId);
@@ -410,9 +446,7 @@ export function InstalledAppsPage() {
             <Button variant="outline" size="sm" onClick={() => navigate('/catalogue')}>
               Browse catalogue
             </Button>
-            <Button size="sm" onClick={() => void pickAndInstall()}>
-              <FolderOpen className="h-4 w-4" aria-hidden /> Install from file
-            </Button>
+            <InstallFromFileButton onClick={() => void pickAndInstall()} busy={busy} />
           </>
         }
       />
@@ -464,7 +498,7 @@ export function InstalledAppsPage() {
           </p>
         </SectionCard>
       ) : visible.length === 0 ? (
-        <InstalledAppsEmptyState filtered={apps.length > 0} onInstall={() => void pickAndInstall()} />
+        <InstalledAppsEmptyState filtered={apps.length > 0} onInstall={() => void pickAndInstall()} busy={busy} />
       ) : (
         <HoverGlide className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => (

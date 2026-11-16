@@ -1,3 +1,4 @@
+import { afterPendingPaint } from './paint-pending';
 import { errorMessage } from './installed-apps';
 
 export type AppWindowClosePolicy = 'keep-running' | 'stop-on-close';
@@ -170,13 +171,15 @@ export function renderAppWindow(
       const reopenError = document.createElement('p');
       reopenError.className = 'appliance-app-reopen-error';
       reopenError.setAttribute('role', 'alert');
-      reopen.addEventListener('click', () => {
+      reopen.addEventListener('click', async () => {
         if (!options.reopen) return;
         const startedAtMs = Date.now();
         reopen.disabled = true;
         reopen.setAttribute('aria-busy', 'true');
         reopen.textContent = 'Reopening…';
         reopenError.textContent = '';
+        await afterPendingPaint();
+        if (stopped) return;
         void options
           .reopen()
           .then((next) => {

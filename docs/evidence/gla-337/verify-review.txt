@@ -1,0 +1,45 @@
+Command: NX_SKIP_NX_CACHE=true NX_DAEMON=false pnpm verify
+Execution: foreground; exit status 0; Nx cache disabled
+Full raw log retained locally: /tmp/gla337-review-verify.log
+Builds precede consumer typechecks. Includes 124 app tests across 24 files.
+Targeted bootstrap/installed-app tests: 21 passed (2 files).
+
+==> 1/5 build (nx run-many --target=build --all)
+ NX   Successfully ran target build for 11 projects
+==> 2/5 typecheck (nx run-many --target=typecheck --all)
+ NX   Successfully ran target typecheck for 6 projects
+==> 3/5 lint:check (eslint + prettier --check)
+Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.
+All matched files use Prettier code style!
+==> 4/5 test (nx run-many --target=test --all)
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+ Test Files  8 passed (8)
+      Tests  162 passed (162)
+ Test Files  4 passed (4)
+      Tests  68 passed (68)
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+ Test Files  15 passed (15)
+      Tests  92 passed (92)
+ Test Files  5 passed (5)
+      Tests  44 passed (44)
+ Test Files  24 passed (24)
+      Tests  124 passed (124)
+ Test Files  5 passed (5)
+      Tests  48 passed (48)
+ Test Files  37 passed (37)
+      Tests  346 passed (346)
+ Test Files  56 passed | 1 skipped (57)
+      Tests  579 passed | 2 skipped (581)
+ NX   Successfully ran target test for 10 projects
+==> 5/5 rust (cargo build && cargo test && cargo clippy)
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.39s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 330 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+==> verify: GREEN

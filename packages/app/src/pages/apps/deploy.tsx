@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
@@ -288,8 +289,10 @@ export function DeployPage() {
 
   const onPickFolder = async () => {
     if (!local?.pickDirectory) return;
-    setPickBusy(true);
-    setPickError(null);
+    await paintPending(() => {
+      setPickBusy(true);
+      setPickError(null);
+    });
     try {
       const picked = await local.pickDirectory();
       if (!picked) return;
@@ -304,8 +307,10 @@ export function DeployPage() {
 
   const onPickRecent = async (entry: RecentFolder) => {
     if (!local?.readApplianceManifest) return;
-    setPickBusy(true);
-    setPickError(null);
+    await paintPending(() => {
+      setPickBusy(true);
+      setPickError(null);
+    });
     try {
       const m = await local.readApplianceManifest(entry.path);
       applyPickedManifest(entry.path, m);
@@ -342,10 +347,12 @@ export function DeployPage() {
       });
       return;
     }
-    setRunStatus('running');
-    setLogs([]);
-    setRunError(null);
-    setResultUrl(null);
+    await paintPending(() => {
+      setRunStatus('running');
+      setLogs([]);
+      setRunError(null);
+      setResultUrl(null);
+    });
 
     const append = (line: LogLine) => setLogs((prev) => [...prev, line]);
 
@@ -443,10 +450,12 @@ export function DeployPage() {
   // stream its output and watch for the final deployed URL banner.
   const runCloudDeploy = async (target: { path: string; project: string; environment: string }) => {
     if (!local?.deployToCloud || !selectedCluster) return;
-    setRunStatus('running');
-    setLogs([]);
-    setRunError(null);
-    setResultUrl(null);
+    await paintPending(() => {
+      setRunStatus('running');
+      setLogs([]);
+      setRunError(null);
+      setResultUrl(null);
+    });
     const append = (line: LogLine) => setLogs((prev) => [...prev, line]);
     append({
       stream: 'meta',
@@ -494,8 +503,10 @@ export function DeployPage() {
   // environment (deep link) wins over the defaults.
   const pickFolderForCloud = async () => {
     if (!local?.deployToCloud || !local?.pickDirectory || !selectedCluster) return;
-    setCloudPickBusy(true);
-    setPickError(null);
+    await paintPending(() => {
+      setCloudPickBusy(true);
+      setPickError(null);
+    });
     try {
       const picked = await local.pickDirectory();
       if (!picked) return;
@@ -830,7 +841,7 @@ function TargetStep({
 
   const selectTarget = async (id: string) => {
     if (selectedCluster?.id === id) return;
-    setPendingVmName(microVmNameFromClusterId(id));
+    await paintPending(() => setPendingVmName(microVmNameFromClusterId(id)));
     try {
       await host.selectCluster(id);
       setPendingVmName(null);
@@ -853,9 +864,11 @@ function TargetStep({
 
   const startRuntime = async () => {
     if (!host.vm || !startTargetName) return;
-    setStarting(true);
-    setStartError(null);
-    setStartLog([]);
+    await paintPending(() => {
+      setStarting(true);
+      setStartError(null);
+      setStartLog([]);
+    });
     const append = (m: string) => setStartLog((p) => [...p.slice(-120), m]);
     try {
       const vm = host.vm.instance(startTargetName);

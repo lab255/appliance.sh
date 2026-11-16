@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import * as React from 'react';
 import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, Navigate, useNavigate, useParams } from 'react-router';
@@ -80,6 +81,7 @@ export function ProjectDetailPage() {
   const [actionError, setActionError] = React.useState<string | null>(null);
 
   const deleteMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async () => {
       const r = await client!.deleteProject(id!);
       if (!r.success) throw r.error;
