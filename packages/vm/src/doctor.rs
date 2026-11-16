@@ -620,10 +620,7 @@ fn is_secret_shaped(word: &str) -> bool {
     }
     // JWT: three dot-separated base64url segments starting with the
     // `{"` header ("eyJ"). ServiceAccount tokens are exactly this.
-    if word.starts_with("eyJ") && word.len() >= 20 && word.matches('.').count() >= 1 {
-        return true;
-    }
-    false
+    word.starts_with("eyJ") && word.len() >= 20 && word.matches('.').count() >= 1
 }
 
 #[cfg(test)]
