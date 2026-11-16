@@ -6,6 +6,14 @@ const browser = await chromium.launch({ headless: true, executablePath: process.
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: 'dark' });
 await page.goto('http://127.0.0.1:1443/inspection-audit.html');
 await page.getByRole('treeitem').filter({ hasText: 'data/large.txt' }).click();
+await page.evaluate(() => {
+  window.largeShifts = [];
+  window.largeObserver = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries())
+      window.largeShifts.push({ value: entry.value, recentInput: entry.hadRecentInput });
+  });
+  window.largeObserver.observe({ type: 'layout-shift' });
+});
 await page.getByRole('button', { name: 'Load large file' }).click();
 await page.getByText(/Truncated diff inputs:/).waitFor();
 await page.locator('pre[aria-label="Unified diff"]').evaluate((el) => (el.scrollTop = 800));
@@ -16,6 +24,10 @@ const largeRefresh = await page
   .evaluate((el) => ({ scrollTop: el.scrollTop, text: el.textContent }));
 if (largeRefresh.scrollTop !== 800 || !largeRefresh.text.includes('baseline/data/large.txt'))
   throw Error(`Large refresh lost reading state: ${JSON.stringify(largeRefresh)}`);
+const largeShifts = await page.evaluate(() => {
+  window.largeObserver.disconnect();
+  return window.largeShifts;
+});
 await page.evaluate(() => (document.documentElement.style.zoom = '2'));
 await page.screenshot({ path: 'docs/evidence/w3/zoom-200.png' });
 const zoomOverflow = await page.evaluate(
@@ -41,6 +53,11 @@ fs.writeFileSync(
   JSON.stringify(
     {
       composedFailure: { staleCapturedAt: '2026-11-17T12:10:00Z', refreshFailed: true, noFalseNoChanges: true },
+      largePayload: {
+        retainedBytes: 1048576,
+        rawShifts: largeShifts,
+        cls: largeShifts.filter((s) => !s.recentInput).reduce((sum, s) => sum + s.value, 0),
+      },
       largeRefresh: { before: 800, after: largeRefresh.scrollTop, retainedText: true },
       zoom200: { horizontalOverflow: zoomOverflow },
       narrow390: { horizontalOverflow: narrowOverflow },

@@ -47,6 +47,10 @@ const host = {
     const big = path.includes('large');
     const unreadable = path === 'private.txt';
     const deleted = path.includes('deleted');
+    const lines =
+      big && large
+        ? '+large retained prefix line\n'.repeat(50000).slice(0, 1048576)
+        : Array.from({ length: 200 }, (_, i) => `${i % 2 ? '+' : '-'}line ${i}`).join('\n');
     return {
       path,
       size: big ? 2000000 : 4096,
@@ -62,12 +66,11 @@ const host = {
               ? 'Deleted file — baseline diff retained'
               : null,
       needsLoad: big && !large,
-      text:
-        binary || unreadable || (big && !large) ? null : Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
+      text: binary || unreadable || (big && !large) ? null : lines,
       diff:
         binary || unreadable || (big && !large)
           ? null
-          : `--- baseline/${path}\n+++ workspace/${path}\n@@ -1,100 +1,100 @@\n${Array.from({ length: 200 }, (_, i) => `${i % 2 ? '+' : '-'}line ${i}`).join('\n')}`,
+          : `--- baseline/${path}\n+++ workspace/${path}\n@@ -1,100 +1,100 @@\n${lines}`,
     };
   },
 } as unknown as ConsoleHost;

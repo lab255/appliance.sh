@@ -196,6 +196,7 @@ function Inspector({ directory }: { directory: string }) {
       </div>
       <div className="flex min-h-0 min-w-0 flex-col">
         <div
+          role="region"
           tabIndex={0}
           aria-label="Selected path and preview limits"
           className="h-24 shrink-0 overflow-auto border-b border-border p-3 text-sm"
@@ -210,6 +211,7 @@ function Inspector({ directory }: { directory: string }) {
         </div>
         <pre
           ref={reader}
+          role="region"
           tabIndex={0}
           aria-label={tab === 'changes' ? 'Unified diff' : 'File preview'}
           className="min-h-0 flex-1 overflow-auto p-3 text-xs"
@@ -224,7 +226,7 @@ function Inspector({ directory }: { directory: string }) {
   );
   return (
     <section aria-label="Workspace inspection" className="space-y-3">
-      <div tabIndex={0} aria-label="Baseline and refresh status" className="h-32 overflow-auto text-sm">
+      <div role="region" tabIndex={0} aria-label="Baseline and refresh status" className="h-32 overflow-auto text-sm">
         <p className="break-all">
           Baseline: host-side snapshot · {snapshot?.directory ?? directory} · captured{' '}
           {snapshot?.capturedAt ?? 'unavailable'}
