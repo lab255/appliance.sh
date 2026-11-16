@@ -1,0 +1,564 @@
+{
+  "kind": "Browser fixture only; real component with simulated 700ms host result; supplementary layout evidence, not native packaging evidence",
+  "clock": "pointerdown to second rAF with visible busy DOM (paint opportunity, not compositor pixels)",
+  "results": [
+    {
+      "reducedMotion": "no-preference",
+      "count": 10,
+      "median": 30.899999976158142,
+      "samples": [
+        {
+          "start": 439.2000000178814,
+          "ack": 30.899999976158142,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.69999998807907
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 747.1999999880791
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 227,
+          "ack": 17.5,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 34.39999997615814
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 735.1999999880791
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 173.40000000596046,
+          "ack": 19.599999994039536,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 36.900000005960464
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 736.7000000178814
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 149,
+          "ack": 29.69999998807907,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 46.900000005960464
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 747
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 170.39999997615814,
+          "ack": 30.100000023841858,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 45.400000005960464
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 745.3000000119209
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 143.90000000596046,
+          "ack": 30.899999976158142,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.599999994039536
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 746.2999999821186
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 135.5,
+          "ack": 31.599999994039536,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.30000001192093
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 748.8000000119209
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 140.69999998807907,
+          "ack": 31.599999994039536,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 49.30000001192093
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 747.9000000059605
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 139,
+          "ack": 32.80000001192093,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 50.20000001788139
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 750.2000000178814
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 153.40000000596046,
+          "ack": 32.099999994039536,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 48.900000005960464
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 748.7999999821186
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        }
+      ],
+      "readinessSamples": [
+        {
+          "start": 349.30000001192093,
+          "ack": 23.69999998807907,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 149.69999998807907,
+          "ack": 28.599999994039536,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 99,
+          "ack": 27.400000005960464,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 91.5,
+          "ack": 21,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 101.7999999821186,
+          "ack": 30.200000017881393,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 83.90000000596046,
+          "ack": 23.399999976158142,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 69.09999999403954,
+          "ack": 30.5,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 80.09999999403954,
+          "ack": 25.19999998807907,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 74.80000001192093,
+          "ack": 30.900000005960464,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 88.69999998807907,
+          "ack": 29.100000023841858,
+          "shifts": [],
+          "packageCalls": 0
+        }
+      ]
+    },
+    {
+      "reducedMotion": "reduce",
+      "count": 10,
+      "median": 31.049999997019768,
+      "samples": [
+        {
+          "start": 267.5,
+          "ack": 30.599999994039536,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 46
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 736.7999999821186
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 172.19999998807907,
+          "ack": 31.400000005960464,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 49.400000005960464
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 737.0999999940395
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 140.59999999403954,
+          "ack": 28.400000005960464,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 733.9000000059605
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 153.5,
+          "ack": 31.099999994039536,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.5
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 735.3000000119209
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 137.69999998807907,
+          "ack": 31.700000017881393,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 48.5
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 736.8000000119209
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 140.59999999403954,
+          "ack": 30.799999982118607,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.599999994039536
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 735.7999999821186
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 152.5,
+          "ack": 31.400000005960464,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 48.69999998807907
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 737.0999999940395
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 138.90000000596046,
+          "ack": 31.5,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 48.29999998211861
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 737.5999999940395
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 153.90000000596046,
+          "ack": 31,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.69999998807907
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 736.0999999940395
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        },
+        {
+          "start": 153.7999999821186,
+          "ack": 30.600000023841858,
+          "shifts": [
+            {
+              "value": 0.00023238636363636365,
+              "recentInput": true,
+              "time": 47.400000005960464
+            },
+            {
+              "value": 0.0017227887933904476,
+              "recentInput": false,
+              "time": 736
+            }
+          ],
+          "focusBefore": "Receive agent proposal",
+          "footerBefore": 1019,
+          "footerAfter": 1019,
+          "calls": 1,
+          "focusAfter": "Package"
+        }
+      ],
+      "readinessSamples": [
+        {
+          "start": 202.39999997615814,
+          "ack": 34.70000001788139,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 109.90000000596046,
+          "ack": 28.5,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 75.59999999403954,
+          "ack": 26.80000001192093,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 86,
+          "ack": 31.099999994039536,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 72.90000000596046,
+          "ack": 29.599999994039536,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 75.89999997615814,
+          "ack": 28.600000023841858,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 86.19999998807907,
+          "ack": 31.100000023841858,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 74,
+          "ack": 29.900000005960464,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 87.5,
+          "ack": 30.80000001192093,
+          "shifts": [],
+          "packageCalls": 0
+        },
+        {
+          "start": 87.40000000596046,
+          "ack": 30.5,
+          "shifts": [],
+          "packageCalls": 0
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,7 @@ export function PackageSection({
   const [status, setStatus] = React.useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [result, setResult] = React.useState<WorkbenchPackageResult>();
   const [error, setError] = React.useState('');
+  const [copyLabel, setCopyLabel] = React.useState('Copy file path');
   const [logs, setLogs] = React.useState<string[]>([]);
   const [stage, setStage] = React.useState('');
   const [startedAt, setStartedAt] = React.useState(0);
@@ -48,6 +49,7 @@ export function PackageSection({
       setStatus('running');
       setResult(undefined);
       setError('');
+      setCopyLabel('Copy file path');
       setLogs([]);
       setStage('Starting packaging…');
       setStartedAt(Date.now());
@@ -77,19 +79,27 @@ export function PackageSection({
           Packaging creates an artifact; it does not install, publish or deploy it. You authorize each next step.
         </p>
         <p className="break-all font-mono text-xs">{directory}</p>
-        {readinessProposal && (
-          <p className="text-sm">
-            <strong>Agent proposal: Ready to package.</strong> Review the changes. You decide when to package; the agent
-            cannot authorize this step. Select <strong>Package</strong> to start packaging.
-          </p>
-        )}
+        <div className="h-24 overflow-auto" data-package-readiness="">
+          {readinessProposal ? (
+            <p className="text-sm">
+              <strong>Agent proposal: Ready to package.</strong> Review the changes. You decide when to package; the
+              agent cannot authorize this step. Select <strong>Package</strong> to start packaging.
+            </p>
+          ) : (
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              Review the changes before packaging. You can package without an agent proposal.
+            </p>
+          )}
+        </div>
         {filesChanging && (
           <p className="text-sm">Files are still changing. Stop editing and review them before packaging.</p>
         )}
         {!packageHost && <p className="text-sm">Packaging requires the desktop host.</p>}
         <Button
           onClick={packageFromClick}
-          disabled={!packageHost || filesChanging || status === 'running'}
+          disabled={!packageHost || filesChanging}
+          aria-disabled={status === 'running'}
+          className="min-w-32"
           aria-busy={status === 'running'}
         >
           {status === 'running' ? 'Packaging…' : status === 'error' ? 'Retry Package' : 'Package'}
@@ -138,7 +148,21 @@ export function PackageSection({
                 {result.digest}
               </p>
               {result.keyId && <p className="break-all font-mono text-xs">Publisher key: {result.keyId}</p>}
-              <Link to="/apps" className="text-sm underline">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(result.outputPath);
+                    setCopyLabel('Path copied');
+                  } catch {
+                    setCopyLabel('Select the path above to copy it');
+                  }
+                }}
+              >
+                {copyLabel}
+              </Button>
+              <Link to="/apps" className="block text-sm underline">
                 Go to Apps to install from file
               </Link>
             </>

@@ -71,12 +71,14 @@ it('readiness/result updates make zero calls; only one click crosses the bridge 
     await render(true);
     expect(calls).toEqual([]);
     const button = container.querySelector('button')!;
+    button.focus();
     await act(async () => {
       button.click();
       button.click();
     });
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toBe('Packaging…');
+    expect(document.activeElement).toBe(button);
     expect(calls).toEqual([]);
     await frame();
     expect(calls).toEqual([]);
@@ -84,6 +86,7 @@ it('readiness/result updates make zero calls; only one click crosses the bridge 
     expect(calls).toEqual(['package']);
     await act(async () => finish(artifact));
     expect(container.textContent).toContain(UNSIGNED_PACKAGE_LABEL);
+    expect(document.activeElement).toBe(button);
     expect(container.textContent).toContain(artifact.digest);
     expect(calls).toEqual(['package']);
     await render(true);

@@ -1,0 +1,40 @@
+import {chromium} from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import fs from 'node:fs';
+const out=process.cwd()+'/docs/evidence/workbench-w2';
+const browser=await chromium.launch({headless:true,executablePath:'/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'});
+const results=[];
+for(const reducedMotion of ['no-preference','reduce']) {
+ const page=await browser.newPage({viewport:{width:1280,height:1100},reducedMotion});
+ page.on('pageerror',error=>console.log('PAGE ERROR',error.message));
+ const samples=[]; const readinessSamples=[];
+ for(let run=0;run<10;run++){
+  await page.goto('http://localhost:1444');
+  const button=page.getByRole('button',{name:'Package',exact:true});await button.waitFor();
+  await page.evaluate(()=>{window.__ready={start:0,ack:null,shifts:[]};new PerformanceObserver(list=>{if(window.__ready.start)for(const e of list.getEntries())window.__ready.shifts.push({value:e.value,recentInput:e.hadRecentInput});}).observe({type:'layout-shift'});document.querySelector('main>button').addEventListener('pointerdown',()=>{window.__ready.start=performance.now();const check=()=>{if(document.body.innerText.includes('Agent proposal: Ready to package.'))requestAnimationFrame(()=>window.__ready.ack=performance.now()-window.__ready.start);else requestAnimationFrame(check);};requestAnimationFrame(check);},{once:true});});
+  await page.getByRole('button',{name:'Receive agent proposal',exact:true}).click();await page.waitForFunction(()=>window.__ready.ack!==null);
+  readinessSamples.push(await page.evaluate(()=>({...window.__ready,packageCalls:window.__calls||0})));
+
+  await page.evaluate(()=>{
+   window.__sample={start:0,ack:null,shifts:[],focusBefore:null,footerBefore:document.querySelector('[data-footer]').getBoundingClientRect().top};
+   new PerformanceObserver(list=>{for(const e of list.getEntries())if(window.__sample.start)window.__sample.shifts.push({value:e.value,recentInput:e.hadRecentInput,time:e.startTime-window.__sample.start});}).observe({type:'layout-shift'});
+   document.querySelector('section button').addEventListener('pointerdown',()=>{window.__sample.start=performance.now();window.__sample.focusBefore=document.activeElement?.textContent;const check=()=>{if(document.querySelector('button[aria-busy="true"]'))requestAnimationFrame(()=>window.__sample.ack=performance.now()-window.__sample.start);else requestAnimationFrame(check);};requestAnimationFrame(check);},{once:true});
+  });
+  await button.click();await page.waitForFunction(()=>window.__sample.ack!==null);
+  await page.getByText('Unsigned — publisher prompts will warn',{exact:true}).waitFor();await page.waitForTimeout(120);
+  samples.push(await page.evaluate(()=>({...window.__sample,footerAfter:document.querySelector('[data-footer]').getBoundingClientRect().top,calls:window.__calls,focusAfter:document.activeElement?.textContent})));
+  if(run===0)await page.screenshot({path:out+'/browser-fixture-result-'+reducedMotion+'.png',fullPage:true});
+ }
+ const sorted=samples.map(s=>s.ack).sort((a,b)=>a-b);
+ results.push({reducedMotion,count:10,median:(sorted[4]+sorted[5])/2,samples,readinessSamples});
+ await page.setViewportSize({width:480,height:1000});await page.goto('http://localhost:1444/?changing');
+ await page.getByText('Files are still changing. Stop editing and review them before packaging.',{exact:true}).waitFor();
+ await page.screenshot({path:out+'/browser-fixture-narrow-'+reducedMotion+'.png',fullPage:true});
+ await page.setViewportSize({width:1280,height:1000});await page.goto('http://localhost:1444/?signed');
+ await page.getByRole('button',{name:'Package',exact:true}).click();await page.getByText('Signed with your local developer key',{exact:true}).waitFor();
+ await page.evaluate(()=>document.body.style.zoom='2');
+ await page.screenshot({path:out+'/browser-fixture-zoom-'+reducedMotion+'.png',fullPage:true});
+ await page.close();
+}
+fs.writeFileSync(out+'/browser-fixture-samples.json',JSON.stringify({kind:'Browser fixture only; real component with simulated 700ms host result; supplementary layout evidence, not native packaging evidence',clock:'pointerdown to second rAF with visible busy DOM (paint opportunity, not compositor pixels)',results},null,2));
+console.log(results.map(r=>({motion:r.reducedMotion,median:r.median,rawCLS:Math.max(...r.samples.map(s=>s.shifts.reduce((n,e)=>n+e.value,0))),footerMovement:Math.max(...r.samples.map(s=>Math.abs(s.footerAfter-s.footerBefore)))})));
+await browser.close();
