@@ -17,6 +17,8 @@
 
 > **Amendment 2026-11-11 (GLA-333, verified against checkout 00a0bdd4fbd1314ada6e6d64a216f624ab568a15):** The WSL (and unresolved Windows backend) refusal copy currently recommends an in-guest API key. This contradicts the host-side broker posture and is flagged for a future **code-copy fix**; per the GLA-333 Manager ruling, **no in-guest key fallback is approved**. The refusal remains in force; real credentials must not be moved into the guest to bypass it. Evidence: `packages/cli/src/utils/agent.ts:908`. This documentation amendment does not change that code or weaken the §0 / §9 security caveats.
 
+> **Resolution 2026-11-16 (GLA-334):** Both follow-ups recorded in the 2026-11-11 amendments above are resolved: the WSL and unresolved-Windows-backend refusal messages no longer recommend an in-guest API key, and the §0/§3 body now scopes its guarantees to the brokered MITM path and notes the Copilot session-token exception. The refusals and control flow are unchanged; no in-guest key fallback is supported. The earlier amendments are retained as history.
+
 **Goal.** Run a coding agent — **Claude Code first**, with a pluggable
 adapter seam for other CLI agents later — inside the Phase-4 microVM
 sandbox, against a linked project's workspace, observed and steered from
@@ -207,7 +209,7 @@ add`) writes one rule to the VM's `egress-credentials.json`
    `ANTHROPIC_API_KEY` (e.g. `sk-ant-appliance-proxy`) so the CLI proceeds
    and sends `X-Api-Key: sk-ant-appliance-proxy`. The proxy's `set_header`
    **overwrites** that placeholder with the real key before it leaves the
-   host on the **brokered MITM path** (`creds.rs:226` replaces
+   host on the **brokered MITM path** (`creds.rs:793` replaces
    case-insensitively). **The brokered Anthropic API key never exists
    inside the VM** — the placeholder is inert if exfiltrated.
    _(One untested point, §11: confirm Claude Code accepts a
@@ -219,9 +221,9 @@ add`) writes one rule to the VM's `egress-credentials.json`
 5. **Fail closed (A2 — implemented).** If the host helper yields nothing
    for `api.anthropic.com` (platform store denied, not logged in, helper
    non-zero), the **brokered MITM path** must **never** forward the
-   in-guest placeholder upstream. `mitm::intercept` now resolves `injection_for` **before
-   dialing upstream**; when it's empty but the host has an inject rule
-   (`creds::has_inject_rule`), the proxy **refuses** with a clear
+   in-guest placeholder upstream. `mitm::intercept` calls `resolve_injection`
+   (`creds.rs:605`, `mitm.rs:309`) **before dialing upstream**; when it returns
+   `Injection::RuleButUnresolved`, the proxy **refuses** with a clear
    `502 — Anthropic key not configured (run \`appliance agent login\`)`and
 dials no upstream. On this brokered MITM path, the placeholder crosses
 the host boundary **zero times**, even on the error path. Paths that never
