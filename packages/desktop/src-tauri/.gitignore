@@ -1,6 +1,6 @@
 target
 gen
-Cargo.lock
+# Commit Cargo.lock: Tauri and plugin crate minors must match pnpm-lock.yaml.
 # Tauri externalBin staging. Populated by ../scripts/copy-cli.mjs
 # right before each desktop build; same binaries are also released as
 # GitHub Release assets by release-cli-binaries.yml.
