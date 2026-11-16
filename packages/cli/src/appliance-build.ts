@@ -23,6 +23,7 @@ if (packageMode) {
     .description('package a manifest v2 project as a runnable .appliance.zip bundle')
     .option('-o, --out <file>', 'output file (defaults to <manifest-name>.appliance.zip)')
     .option('--sign <dev-key-file>', 'sign with a local development Ed25519 key file')
+    .option('--json', 'emit package stage/error/result events for the desktop bridge')
     .option(
       '--image <selector=ref-or-tar>',
       'use a prebuilt image ref/tar (repeatable; selector is platform or payload path)',
@@ -34,20 +35,26 @@ if (packageMode) {
         out?: string;
         sign?: string;
         image: string[];
+        json?: boolean;
         file?: string;
         directory?: string;
       }>();
+      const emit = (event: object) => console.log(JSON.stringify(event));
+      const stage = (message: string) => (opts.json ? emit({ type: 'stage', message }) : console.log(message));
       const projectDir = resolveApplianceDir(program);
       const manifestPath =
         opts.file && opts.file !== 'appliance.json'
           ? path.resolve(process.cwd(), opts.file)
           : path.join(projectDir, 'appliance.json');
       if (!fs.existsSync(manifestPath)) {
-        console.error(chalk.red(`No appliance.json found at ${manifestPath}.`));
+        const error = `No appliance.json found at ${manifestPath}.`;
+        if (opts.json) emit({ type: 'error', error });
+        else console.error(chalk.red(error));
         process.exit(1);
       }
 
       try {
+        stage('Validating manifest…');
         const raw = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
         if (raw.manifest === 'v1') {
           throw new Error(
@@ -69,13 +76,31 @@ if (packageMode) {
           outputPath,
           signingKeyPath: opts.sign ? path.resolve(opts.sign) : undefined,
           images: opts.image,
+          onStage: stage,
         });
+        if (opts.json) {
+          emit({
+            type: 'result',
+            result: {
+              outputPath: result.outputPath,
+              digest: result.digest,
+              sizeBytes: result.sizeBytes,
+              name: result.manifest.name,
+              version: result.manifest.version,
+              signatureStatus: result.keyId ? 'signed' : 'unsigned',
+              keyId: result.keyId,
+            },
+          });
+          return;
+        }
         const sizeMb = (result.sizeBytes / 1024 / 1024).toFixed(1);
         console.log(chalk.green(`Packaged: ${result.outputPath} (${sizeMb} MB)`));
         console.log(chalk.dim(`Digest: ${result.digest}`));
         if (result.keyId) console.log(`Publisher keyId: ${result.keyId}`);
       } catch (error) {
-        console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+        const message = error instanceof Error ? error.message : String(error);
+        if (opts.json) emit({ type: 'error', error: message });
+        else console.error(chalk.red(message));
         process.exit(1);
       }
     });
