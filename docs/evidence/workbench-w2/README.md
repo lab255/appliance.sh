@@ -118,7 +118,7 @@ declarations; `cargo test --locked --manifest-path
 packages/desktop/src-tauri/Cargo.toml --lib`: **72 passed, 0 failed**.
 
 Prior-head GitHub CI used Rust 1.100 and rejected the existing VM doctor's
-`if predicate { return true; } false` with `clippy::needless_bool`. A separate
-compatibility commit replaces that with the identical predicate expression; no
-redaction decision changes. The prior CI logs identify `src/doctor.rs:623` in
+`if predicate { return true; } false` with `clippy::needless_bool`. A separate main-based CI compatibility PR replaces that with the identical
+predicate expression; it is excluded from this Package branch. No redaction
+decision changes. The prior CI logs identify `src/doctor.rs:623` in
 both Rust verification and Windows desktop jobs.
