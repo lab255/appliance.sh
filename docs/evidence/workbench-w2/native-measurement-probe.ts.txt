@@ -1,0 +1,45 @@
+// LOCAL MEASUREMENT ONLY: imported temporarily by desktop main.tsx; removed before commit.
+import { tauriHost } from './host';
+const post = (value: unknown) => fetch('http://127.0.0.1:1445', {method:'POST',body:JSON.stringify(value)}).catch(()=>{});
+let commandId = '';
+let sample: any = null;
+let keyStart: number | null = null;
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const packageHost=tauriHost.workbenchPackage!;
+const realPackage=packageHost.package.bind(packageHost);
+packageHost.package=async(directory,onEvent)=>{
+ post({type:'call',verb:'package',commandId,directory,at:performance.now(),busy:!!document.querySelector('button[aria-busy="true"]')});
+ try {const result=await realPackage(directory,event=>{post({type:'stage',commandId,event});onEvent(event);});post({type:'package-result',commandId,result,at:performance.now()});return result;}
+ catch(error){post({type:'package-error',commandId,error:String(error)});throw error;}
+};
+for (const name of ['packageAndUploadBuild','deployToCloud'] as const) {
+ const original=tauriHost.local![name].bind(tauriHost.local);
+ (tauriHost.local as any)[name]=(...args:any[])=>{post({type:'call',verb:name,commandId});return (original as any)(...args);};
+}
+const realRun=tauriHost.installedApps!.run.bind(tauriHost.installedApps);
+tauriHost.installedApps!.run=async(...args)=>{post({type:'call',verb:'run',commandId});return realRun(...args);};
+const realInstall=tauriHost.installedApps!.installBundle.bind(tauriHost.installedApps);
+tauriHost.installedApps!.installBundle=async(...args)=>{post({type:'call',verb:'install',commandId,source:args[0],target:args[1],options:args[2]});try{const result=await realInstall(...args);post({type:'install-result',commandId,result});return result;}catch(error){post({type:'install-error',commandId,error:String(error)});throw error;}};
+window.addEventListener('keydown',event=>{if(event.code==='Space'&&(event.target as HTMLElement)?.closest('button')?.textContent==='Package')keyStart=performance.now();},true);
+window.addEventListener('click',event=>{
+ const button=(event.target as HTMLElement)?.closest('button');
+ if(button?.textContent!=='Package'&&button?.textContent!=='Retry Package')return;
+ const start=keyStart??performance.now();keyStart=null;
+ sample={type:'sample',commandId,start,reduced,trusted:event.isTrusted,viewport:[innerWidth,innerHeight],shifts:[],layoutShiftSupported:PerformanceObserver.supportedEntryTypes.includes('layout-shift')};
+ const check=()=>{if(document.querySelector('button[aria-busy="true"]'))requestAnimationFrame(()=>post({...sample,type:'ack',ack:performance.now()-start}));else requestAnimationFrame(check);};requestAnimationFrame(check);
+},true);
+if(PerformanceObserver.supportedEntryTypes.includes('layout-shift'))new PerformanceObserver(list=>{if(sample)for(const entry of list.getEntries())sample.shifts.push(entry.toJSON());}).observe({type:'layout-shift'});
+let lastDialog='';
+new MutationObserver(()=>{const dialog=document.querySelector('[role="alertdialog"]');if(dialog&&dialog.textContent!==lastDialog){lastDialog=dialog.textContent??'';post({type:'publisher-dialog',commandId,text:lastDialog,titles:Array.from(dialog.querySelectorAll('[title]')).map(node=>node.getAttribute('title'))});}}).observe(document.body,{subtree:true,childList:true});
+setInterval(async()=>{
+ const command=await fetch('http://127.0.0.1:1445').then(r=>r.json()).catch(()=>({}));
+ if(!command.id||command.id===commandId)return;commandId=command.id;
+ const button=(label:string)=>Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent?.trim()===label||b.getAttribute('aria-label')===label);
+ if(command.action==='scroll')document.querySelector(command.selector)?.scrollIntoView({block:'center'});
+ if(command.action==='focus'){const target=button(command.label);target?.scrollIntoView({block:'center'});target?.focus();post({type:'focused',commandId,label:target?.textContent,rect:target?.getBoundingClientRect().toJSON()});}
+ if(command.action==='click')button(command.label)?.click();
+ if(command.action==='deselect'){await tauriHost.selectCluster(null);location.reload();}
+ if(command.action==='navigate'){history.pushState({},'',command.path);window.dispatchEvent(new PopStateEvent('popstate'));}
+ if(command.action==='status')post({type:'status',commandId,path:location.pathname,text:document.body.innerText,viewport:[innerWidth,innerHeight],buttons:Array.from(document.querySelectorAll('button')).map(b=>({label:b.getAttribute('aria-label')||b.textContent,rect:b.getBoundingClientRect().toJSON()})),sample});
+},200);
+post({type:'ready',reduced,viewport:[innerWidth,innerHeight]});

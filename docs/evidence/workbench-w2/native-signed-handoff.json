@@ -1,0 +1,88 @@
+{
+  "source": {
+    "path": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/10c7fbc8-78bd-49e5-b1c7-f0ce3b0e9383/review.appliance.zip",
+    "exists": true,
+    "bytes": 1087,
+    "zipSha256": "d839c844bd6c8a2e86943d1067afae785c3cb0d17d922e58ccbd7aeaf6547610",
+    "contentDigest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+    "signature": {
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "valid": true
+    },
+    "manifest": {
+      "manifest": "v2",
+      "kind": "runnable",
+      "name": "workbench-w2-signed-review",
+      "version": "1.0.0",
+      "license": "MIT",
+      "publisher": {
+        "name": "Workbench local developer",
+        "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e"
+      },
+      "platforms": [],
+      "env": {},
+      "network": {
+        "egress": [
+          {
+            "host": "example.com",
+            "ports": [443]
+          }
+        ]
+      },
+      "type": "binary",
+      "payload": {
+        "targets": {
+          "linux/arm64": {
+            "root": "payload/bin",
+            "entrypoint": "review",
+            "args": []
+          }
+        }
+      }
+    }
+  },
+  "installed": {
+    "path": "/Users/eliot/.appliance/runtime/bundles/sha256-31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb.appliance.zip",
+    "exists": true,
+    "bytes": 1087,
+    "zipSha256": "d839c844bd6c8a2e86943d1067afae785c3cb0d17d922e58ccbd7aeaf6547610",
+    "contentDigest": "sha256:31f6c5db6ab718881a0e5e83019fafe831ea4aba74248feb93a72dd1bb5a1ecb",
+    "signature": {
+      "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e",
+      "valid": true
+    },
+    "manifest": {
+      "manifest": "v2",
+      "kind": "runnable",
+      "name": "workbench-w2-signed-review",
+      "version": "1.0.0",
+      "license": "MIT",
+      "publisher": {
+        "name": "Workbench local developer",
+        "keyId": "ed25519:sha256:94ed717db1e8ad6248210bce2221ebacc2382dda8595202d328f17b099ed4a3e"
+      },
+      "platforms": [],
+      "env": {},
+      "network": {
+        "egress": [
+          {
+            "host": "example.com",
+            "ports": [443]
+          }
+        ]
+      },
+      "type": "binary",
+      "payload": {
+        "targets": {
+          "linux/arm64": {
+            "root": "payload/bin",
+            "entrypoint": "review",
+            "args": []
+          }
+        }
+      }
+    }
+  },
+  "byteIdentical": true,
+  "independentSignatureVerified": true
+}

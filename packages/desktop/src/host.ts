@@ -1,4 +1,5 @@
 import type { Inspection, InspectionPreview } from '@appliance.sh/app';
+import { workbenchPackageHost } from './workbench-package';
 import { fetchDesktopCatalogue } from './catalogue';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { open as openShell } from '@tauri-apps/plugin-shell';
@@ -306,6 +307,9 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
       await invoke('teardown_cluster', { input: { input }, onEvent: channel });
     },
   },
+
+  // ---- Workbench Package: no registry/result subscription ----
+  workbenchPackage: workbenchPackageHost,
 
   // ---- Workbench bindings ----
   workbench: {

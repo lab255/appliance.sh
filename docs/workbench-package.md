@@ -82,7 +82,7 @@ that gives them the wrong creator ACL. Do not delete non-recoverable canonical k
 A developer-signed file arriving without catalogue binding or another resolvable
 public-key source still follows Unknown Publisher review. The existing recipient
 copy says “Signature could not be verified”; the publisher remains untrusted.
-The “Publisher (unverified)” row displays the name already carried by that prompt,
-not a verified identity. Signing provides independently verifiable integrity when
+The “Publisher (unverified)” row displays the publisher name as declared in the
+bundle manifest, unverified. It is not key-derived or a verified identity. Signing provides independently verifiable integrity when
 the developer public key is supplied; it does not grant recipient trust. Catalogue
 publisher trust remains a later-phase question. Trust/grant decisions are unchanged.

@@ -1,3 +1,4 @@
+import { PackageSection } from './package-section';
 import { isUnreadableWorkbenchFile, workbenchErrorMessage } from './errors';
 import * as React from 'react';
 import { Link, useLocation, useParams } from 'react-router';
@@ -151,23 +152,14 @@ export function WorkbenchDetailPage() {
         </section>
         <section className="min-w-0 rounded-lg border border-[var(--color-border)] p-4">
           <WorkspaceInspector directory={workspace.directory} />
-          {/* Persistent action section: W2 Package / wave 2b Deploy integration seam. */}
-          <div className="mt-4 space-y-4 border-t border-[var(--color-border)] pt-4">
-            <div>
-              <Button disabled>Package</Button>
-              <p className="mt-2 text-sm">Packaging is not available yet.</p>
-            </div>
-            <div>
-              <Button variant="outline" disabled>
-                Deploy
-              </Button>
-              <p className="mt-2 text-sm">
-                Workspace deployment is not available yet.{' '}
-                <Link to="/projects/deploy" className="underline">
-                  Open ordinary source deployment
-                </Link>
-              </p>
-            </div>
+          {/* Workbench Package: sibling action; registry reads never invoke it. */}
+          <div className="mt-4 border-t border-[var(--color-border)] pt-4">
+            <PackageSection
+              key={workspace.directory}
+              directory={workspace.directory}
+              packageHost={host.workbenchPackage}
+              filesChanging={workspace.sessions.some((session) => ['running', 'spawning'].includes(session.status))}
+            />
           </div>
         </section>
       </div>

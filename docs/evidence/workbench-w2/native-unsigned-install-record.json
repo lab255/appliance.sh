@@ -1,0 +1,29 @@
+{
+  "type": "install-result",
+  "commandId": "unsigned-grant",
+  "result": {
+    "appId": "workbench-w2-unsigned-review",
+    "bundlePath": "/Users/eliot/.appliance/runtime/bundles/sha256-c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f.appliance.zip",
+    "controlsSummary": {
+      "egressHosts": ["example.com"],
+      "mounts": [],
+      "publishedPorts": [],
+      "resources": {},
+      "serviceCount": 1,
+      "serviceNames": []
+    },
+    "digest": "sha256:c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f",
+    "installedAt": "2026-11-16T17:12:31.304Z",
+    "license": "MIT",
+    "name": "workbench-w2-unsigned-review",
+    "publisher": {
+      "name": "Workbench local developer",
+      "tier": "unknown"
+    },
+    "source": "file",
+    "verification": {
+      "signature": "unsigned"
+    },
+    "version": "1.0.0"
+  }
+}

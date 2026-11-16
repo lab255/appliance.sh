@@ -1,3 +1,6 @@
+// ---- Workbench Package (W2): explicit human action ----
+mod workbench_package;
+
 // ---- Workbench bindings (W1); sibling Inspection and Package blocks follow ----
 mod workbench;
 
@@ -7611,6 +7614,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // ---- Workbench Package (W2) ----
+            workbench_package::workbench_package,
             workbench_forget,
             workbench_list,
             workbench_open,
