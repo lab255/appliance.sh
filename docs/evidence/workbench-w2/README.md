@@ -122,3 +122,11 @@ Prior-head GitHub CI used Rust 1.100 and rejected the existing VM doctor's
 predicate expression; it is excluded from this Package branch. No redaction
 decision changes. The prior CI logs identify `src/doctor.rs:623` in
 both Rust verification and Windows desktop jobs.
+
+Final base: `479a374`, after the separate CI compatibility PR #178 merged.
+The final rebase was conflict-free. The Package diff contains no VM or Cargo.lock
+changes relative to that base. Native evidence retains its original build labels
+above; the final combined-state verification is recorded separately.
+
+Final-base check: `pnpm verify` → `==> verify: GREEN` on `479a374` plus the
+Package commits; the complete check includes VM tests and Clippy.
