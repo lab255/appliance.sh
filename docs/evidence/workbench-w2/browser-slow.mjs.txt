@@ -1,0 +1,16 @@
+import {chromium} from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import fs from 'node:fs';
+const out=process.cwd()+'/docs/evidence/workbench-w2';
+const browser=await chromium.launch({headless:true,executablePath:'/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'});
+const page=await browser.newPage({viewport:{width:1280,height:1100}});
+await page.goto('http://localhost:1444/?slow');await page.getByRole('button',{name:'Package',exact:true}).click();
+const start=Date.now(),samples=[];
+for(const seconds of [0,11,61]) {
+ if(seconds)await page.waitForTimeout(Math.max(0,seconds*1000-(Date.now()-start)));
+ samples.push({seconds,text:await page.locator('[data-package-operation]').innerText(),busy:await page.locator('button[aria-busy=true]').count(),footer:await page.locator('[data-footer]').boundingBox()});
+ await page.screenshot({path:out+'/browser-fixture-slow-'+seconds+'s.png',fullPage:true});
+}
+await page.getByText('Unsigned — publisher prompts will warn',{exact:true}).waitFor();
+samples.push({seconds:(Date.now()-start)/1000,text:await page.locator('[data-package-operation]').innerText(),footer:await page.locator('[data-footer]').boundingBox()});
+fs.writeFileSync(out+'/browser-fixture-slow.json',JSON.stringify({kind:'Simulated 65-second host, not a live packaging duration',samples},null,2));
+await browser.close();

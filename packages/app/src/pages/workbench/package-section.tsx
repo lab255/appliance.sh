@@ -120,7 +120,7 @@ export function PackageSection({
             status={status}
             nowLine={status === 'running' ? stage : undefined}
             timeClass="minutes"
-            estimate="Duration depends on the payload build."
+            estimate="Duration depends on the payload build"
             leaveSafety="keep-page"
             startedAt={startedAt}
             lastActivityAt={lastActivityAt}
