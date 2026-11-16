@@ -1,5 +1,7 @@
 import { createRequire } from 'node:module';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE });
@@ -30,7 +32,7 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
             });
       await page.evaluate(
         ({ kind }) => {
-          window.sample = { start: 0, ack: null, shifts: [] };
+          window.sample = { start: 0, ack: null, completionMs: null, shifts: [] };
           const observer = new PerformanceObserver((list) => {
             for (const entry of list.getEntries())
               window.sample.shifts.push({ value: entry.value, recentInput: entry.hadRecentInput });
@@ -49,6 +51,17 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
                 else requestAnimationFrame(poll);
               };
               requestAnimationFrame(poll);
+              if (kind !== 'tab') {
+                const completion = () => {
+                  if (
+                    window.sample.ack !== null &&
+                    !document.querySelector('[role=status]')?.textContent?.includes('Loading file')
+                  )
+                    window.sample.completionMs = performance.now() - window.sample.start;
+                  else requestAnimationFrame(completion);
+                };
+                requestAnimationFrame(completion);
+              }
             },
             { once: true }
           );
@@ -140,6 +153,11 @@ writeFileSync(
   'docs/evidence/w3/measurements.json',
   JSON.stringify(
     {
+      sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      componentSha256: createHash('sha256')
+        .update(readFileSync('packages/app/src/pages/workbench/workspace-inspector.tsx'))
+        .digest('hex'),
+      capturedAt: new Date().toISOString(),
       platform: process.platform,
       arch: process.arch,
       viewport: [1440, 1000],

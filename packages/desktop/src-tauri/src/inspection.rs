@@ -649,6 +649,62 @@ mod tests {
         root
     }
     #[test]
+    fn dirty_git_state_is_initial_context_not_a_since_baseline_change() {
+        let root = fixture();
+        let tree = root.join("workspace");
+        let baseline = root.join("host-store/baseline.json");
+        let repo = git2::Repository::init(&tree).unwrap();
+        fs::write(tree.join("app.txt"), "committed content").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("app.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let git_tree = repo.find_tree(tree_id).unwrap();
+        let signature = git2::Signature::now("Inspection test", "inspection@example.com").unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "initial",
+            &git_tree,
+            &[],
+        )
+        .unwrap();
+        fs::write(tree.join("app.txt"), "dirty at open").unwrap();
+        capture_into(&tree, &baseline).unwrap();
+        let initial = refresh_from(&tree, &baseline, TREE_LIMIT).unwrap();
+        assert!(initial.initial_git_status.unwrap().contains("app.txt"));
+        assert_eq!(
+            initial
+                .entries
+                .iter()
+                .find(|entry| entry.path == "app.txt")
+                .unwrap()
+                .state,
+            "unchanged"
+        );
+        fs::write(tree.join("app.txt"), "later agent edit").unwrap();
+        let later = refresh_from(&tree, &baseline, TREE_LIMIT).unwrap();
+        assert_eq!(
+            later
+                .entries
+                .iter()
+                .find(|entry| entry.path == "app.txt")
+                .unwrap()
+                .state,
+            "modified"
+        );
+        assert_eq!(
+            load(&baseline).unwrap().files["app.txt"].bytes,
+            b"dirty at open"
+        );
+        current().lock().unwrap().remove(tree.to_str().unwrap());
+        drop(git_tree);
+        drop(index);
+        drop(repo);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn composed_over_budget_and_oversized_file_never_returns_empty_comparison() {
         let root = fixture();
         let tree = root.join("workspace");

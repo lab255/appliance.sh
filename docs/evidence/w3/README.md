@@ -1,7 +1,7 @@
 # W3 host inspection evidence
 
 This is the dedicated M3 trust-boundary change. It must receive its own review gate.
-The initial draft awaits W1 merge and final open-hook/detail-shell integration.
+Rebased onto W1 squash `912c2ae`; the detail shell, open/create capture hook, and read-time baseline status are integrated. Capture/status scans run off the event loop. The inspector and all host projections read persisted host state on reopen; the obsolete warning fallback is removed.
 
 ## Trust boundary and adversarial check
 
@@ -37,6 +37,17 @@ Out-of-band host-CLI remounts remain host-operator authority, not something this
 inspection fails closed when an overlapping mount is detected. A host operator can deliberately
 expose or alter app data. No live hostile-VM containment certification is claimed by these tests.
 
+## Review locations
+
+| Location                                                           | Boundary comment / role                                                                                                                                                       |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/desktop/src-tauri/src/inspection.rs:102`                 | “The agent cannot rewrite the baseline; a human comparing changes against it sees host-side truth.” The following lines state the remote-host and host-CLI-remount residuals. |
+| `packages/desktop/src-tauri/src/inspection.rs:86`                  | Mount protection is independent of baseline availability; never share desktop app data into a VM.                                                                             |
+| `packages/desktop/src-tauri/src/inspection.rs:318`                 | Workspace-open capture is attempt-once; refresh must never silently move the baseline.                                                                                        |
+| `packages/desktop/src-tauri/src/workbench.rs:174`                  | Host capture completes (or records failure) before open/create returns.                                                                                                       |
+| `packages/desktop/src-tauri/src/lib.rs:33` and `inspection.rs:391` | Read-time projection consults persisted host truth, including reopening an existing directory.                                                                                |
+| `packages/app/src/pages/workbench/workspace-inspector.tsx:234`     | Remote-host caveat displayed beside the host-side baseline label.                                                                                                             |
+
 ## Approved mount-containment extension
 
 Fable 5 PM authorized the guard as part of W3, with PM²'s requirement for concrete rejection copy
@@ -65,10 +76,17 @@ Host command (desktop bundle resources are irrelevant to these library tests):
 TAURI_CONFIG='{"bundle":{"resources":[],"externalBin":[]}}' cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml inspection::tests --lib
 ```
 
-Result: **10 passed, 0 failed**. Cases cover immutable capture, corrupt/missing baseline,
+Inspection result: **11 passed, 0 failed**. Full desktop library suite: **71 passed, 0 failed**. Cases cover immutable capture, corrupt/missing baseline,
 failed-attempt persistence, dirty initial contents, mutable Git/agent metadata, external symlinks,
-malicious Git filters, empty/non-Git directories, large-file tail changes, composed over-budget/oversized scans, and text/deleted/binary/
+malicious Git filters, dirty Git state separate from since-baseline edits, empty/non-Git directories, large-file tail changes, composed over-budget/oversized scans, and text/deleted/binary/
 large/missing-baseline preview semantics.
+
+The sentinel is `<fixture-root>/filter-executed`, outside the working tree and initially absent.
+The configured clean filter is `touch <fixture-root>/filter-executed`; only executing that command
+creates the file. A separate `workspace/dirty.txt` receives the same-size edit and changed mtime
+that force content filtering. The test checks **sentinel absence**, not the dirty work-file change.
+With fsmonitor disabled in the reverted variant, the sentinel's creation is causally downstream
+of the clean filter. Restored libgit2 leaves it absent.
 
 Mutation test (performed, then production restored): replacing libgit2 with the former
 `git --no-optional-locks -c core.fsmonitor=false -c core.hooksPath= status --porcelain=v1 --ignore-submodules=all`
@@ -93,7 +111,7 @@ The browser check verifies a **stale capture timestamp + refresh-failed label**,
 previous empty snapshot no longer presents “No changes”. See [composed stale state](./composed-stale.png)
 and [extra-checks.json](./extra-checks.json).
 
-`pnpm verify`: **GREEN** before final W1 integration; rerun required on the final rebased revision.
+`NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`: **GREEN** on the final integrated tree. The daemon/cache are disabled because filesystem watchers previously retained obsolete transforms/declarations.
 The full run needed normal host permissions because existing VM tests create fixtures under
 `~/.appliance/vm`. An earlier sandbox run failed those fixture writes. An infra timeout under
 concurrent builds passed on rerun (44 tests); the UI token check caught and fixed shorthand
@@ -103,12 +121,12 @@ hover syntax. No thresholds or tests were weakened.
 
 Actual `WorkspaceInspector` component with an explicitly simulated host (200 ms response delay),
 Chromium 1248, macOS arm64, 1440×1000, dark mode. This is **fixture UI evidence**, not VM evidence.
-Individual observations and raw input-associated layout shifts are in [measurements.json](./measurements.json).
+The frozen component hash and source revision are recorded with individual observations. Fixture response-presentation medians are 248–249 ms, reported separately from acknowledgment; no native filesystem completion budget is claimed. Individual observations and raw input-associated layout shifts are in [measurements.json](./measurements.json).
 
 | Property    | Evidence / result                                                                                                                                                                                                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Immediacy   | 10 observations each for tab, file, diff, binary, and large selection in each motion preference. Medians below; all under 100 ms. Async selection/refresh paint pending state before host work.                                                                                               |
-| Continuity  | Standard CLS and raw shift sum both **0** for delayed text, binary, and large arrivals. Fixed header/preview/tab-body space. Refresh kept reader scroll at **1150 → 1150** in both configurations.                                                                                            |
+| Continuity  | Standard CLS and raw shift sum both **0** for delayed text, binary, and large arrivals. An actual 1 MiB retained preview arrival also has CLS 0 and no raw shifts. Fixed header/preview/tab-body space. Refresh kept reader scroll at **1150 → 1150** in both configurations.                 |
 | Restraint   | Standard DS Tabs only; no stream animation, forced tail-follow, launch, reset, revert, or write controls.                                                                                                                                                                                     |
 | Precision   | Host tests cover baseline tampering and degraded comparisons. Generated registry/results hidden by a visible overridable filter. Initial dirty Git status shown separately. Workspace-wide labels, no invented per-agent attribution.                                                         |
 | Legibility  | Keyboard tab arrows, tree arrows/Enter, and focused diff PageDown passed. Full paths and textual +/- lines. Large-file withheld/load/truncation labels checked. No horizontal page overflow at 390px or 200% zoom; screenshots attached. Loaded large-file refresh retained scroll 800 → 800. |
@@ -116,11 +134,11 @@ Individual observations and raw input-associated layout shifts are in [measureme
 
 | Selection | Normal motion median ms | Reduced motion median ms | n per column |
 | --------- | ----------------------: | -----------------------: | -----------: |
-| Tab       |                   15.30 |                    15.20 |           10 |
-| File      |                   14.80 |                    14.50 |           10 |
-| Diff      |                   14.80 |                    13.95 |           10 |
-| Binary    |                   14.80 |                    14.75 |           10 |
-| Large     |                   14.55 |                    14.25 |           10 |
+| Tab       |                   15.65 |                    15.70 |           10 |
+| File      |                   14.90 |                    15.10 |           10 |
+| Diff      |                   14.95 |                    15.25 |           10 |
+| Binary    |                   15.20 |                    15.40 |           10 |
+| Large     |                   15.20 |                    15.20 |           10 |
 
 Screenshots: [reader](./inspector-no-preference.png), [reduced motion](./inspector-reduce.png),
 [large withheld](./large-no-preference.png), [narrow](./narrow-no-preference.png), [390px](./narrow-390.png), [200% zoom](./zoom-200.png).

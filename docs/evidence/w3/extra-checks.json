@@ -4,6 +4,11 @@
     "refreshFailed": true,
     "noFalseNoChanges": true
   },
+  "largePayload": {
+    "retainedBytes": 1048576,
+    "rawShifts": [],
+    "cls": 0
+  },
   "largeRefresh": {
     "before": 800,
     "after": 800,
