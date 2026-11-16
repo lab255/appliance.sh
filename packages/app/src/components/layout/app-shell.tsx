@@ -60,7 +60,7 @@ export function AppShell() {
   // their apps and Settings. Machine / Cloud / Agents / Setup are operator
   // tools — the API 403s a member on them anyway, so showing the nav
   // items would only manufacture dead ends.
-  const { role } = useKeyRole();
+  const { role, isLoading: isRoleLoading } = useKeyRole();
   const isOperator = role === 'admin';
   const { mode, isLoading: isModeLoading, savingMode, error: modeError, setMode } = useAppMode();
 
@@ -83,6 +83,11 @@ export function AppShell() {
     isLoading,
   });
   const isChoosingMode = !isModeLoading && mode === null;
+  // The sidebar already reserves the full navigation area. Do not paint a
+  // provisional short list: resolving mode/cluster/role can insert any number
+  // of rows above Settings. Reveal the settled list in that reserved area,
+  // without placeholder links or a reservation tied to today's row count.
+  const isNavLoading = isModeLoading || isLoading || isRoleLoading;
 
   return (
     // Below `sm` the sidebar collapses to an icon rail so narrow
@@ -98,7 +103,7 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <aside className="row-span-3 flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+      <aside className="row-span-3 flex min-h-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Brand — height + divider align with the content header so the
             top-left corner reads as one clean grid, not two strips. */}
         <div className="flex h-[57px] shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
@@ -108,7 +113,11 @@ export function AppShell() {
           <span className="hidden text-sm font-semibold tracking-tight sm:block">Appliance</span>
         </div>
 
-        <HoverGlide as="nav" className="flex flex-1 flex-col gap-0.5 px-2 py-3">
+        <HoverGlide
+          as="nav"
+          aria-busy={isNavLoading}
+          className={cn('flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3', isNavLoading && 'invisible')}
+        >
           {nav.map((item) => {
             const Icon = navIcons[item.key];
             return (
@@ -166,14 +175,22 @@ export function AppShell() {
             );
           })}
         </HoverGlide>
-        {mode === 'developer' ? (
-          <div className="hidden border-t border-[var(--color-border)] p-3 sm:block">
-            <StatusPill tone="info" dot={false} label="Developer mode" />
-          </div>
-        ) : null}
+        {/* Keep the footer's dimensions while mode resolves, too. */}
+        <div
+          className={cn(
+            'hidden shrink-0 border-t border-[var(--color-border)] p-3 sm:block',
+            mode !== 'developer' && 'invisible'
+          )}
+        >
+          <StatusPill tone="info" dot={false} label="Developer mode" />
+        </div>
       </aside>
 
-      <header className="col-start-2 flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+      {/* The switcher uses text-sm (1lh), py-1.5 (3 spacing units), and
+          two 1px borders. Header py-3 adds 6 spacing units plus its divider.
+          Derive the reserve from those same font/spacing tokens, not a pixel
+          snapshot: at the default scale this is 20 + 12 + 2 + 24 + 1 = 59px. */}
+      <header className="col-start-2 flex min-h-[calc(1lh+var(--spacing)*9+3px)] items-center justify-between border-b border-[var(--color-border)] px-4 py-3 text-sm">
         {mode === 'user' ? (
           <WorkspaceSwitcher
             onSetup={() => {
