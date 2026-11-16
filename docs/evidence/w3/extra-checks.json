@@ -1,4 +1,10 @@
 {
+  "generatedOnly": {
+    "hiddenCount": 3,
+    "disclosed": true,
+    "overrideCount": 3,
+    "noFalseNoChanges": true
+  },
   "composedFailure": {
     "staleCapturedAt": "2026-11-17T12:10:00Z",
     "refreshFailed": true,

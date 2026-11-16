@@ -48,10 +48,20 @@ const composedText = await page.locator('body').textContent();
 if (composedText.includes('No changes since workspace baseline'))
   throw new Error('Composed failure falsely claims no changes');
 await page.screenshot({ path: 'docs/evidence/w3/composed-stale.png' });
+await page.goto('http://127.0.0.1:1443/inspection-audit.html?generated-only');
+await page.getByText(/0 files · 3 generated changes hidden/).waitFor();
+await page.getByText(/No changes to tracked files. 3 generated paths changed/).waitFor();
+if ((await page.locator('body').textContent()).includes('No changes since workspace baseline'))
+  throw Error('Generated-only changes falsely claim an unchanged workspace');
+await page.screenshot({ path: 'docs/evidence/w3/generated-hidden.png' });
+await page.getByRole('checkbox').check();
+if ((await page.getByRole('treeitem').count()) !== 3) throw Error('Generated override must reveal all three paths');
+await page.getByText(/Changed since workspace baseline · 3 files/).waitFor();
 fs.writeFileSync(
   'docs/evidence/w3/extra-checks.json',
   JSON.stringify(
     {
+      generatedOnly: { hiddenCount: 3, disclosed: true, overrideCount: 3, noFalseNoChanges: true },
       composedFailure: { staleCapturedAt: '2026-11-17T12:10:00Z', refreshFailed: true, noFalseNoChanges: true },
       largePayload: {
         retainedBytes: 1048576,

@@ -28,6 +28,12 @@ const snapshot: Inspection = {
     { path: '.appliance/agent-results/agent-1.json', size: 200, state: 'added', generated: true, issue: null },
   ],
 };
+if (params.has('generated-only'))
+  snapshot.entries = [
+    { path: '.appliance/agents.json', size: 100, state: 'modified', generated: true, issue: null },
+    { path: '.appliance/agent-results/agent-1.json', size: 200, state: 'added', generated: true, issue: null },
+    { path: '.appliance/.agents.lock', size: 10, state: 'deleted', generated: true, issue: null },
+  ];
 const delay = () => new Promise((resolve) => setTimeout(resolve, 200));
 let refreshes = 0;
 const host = {
@@ -36,7 +42,7 @@ const host = {
     const refreshIndex = refreshes++;
     if (params.has('composed') && refreshIndex)
       throw new Error(
-        'Comparison unavailable: scan needs more than 1048576 retained preview bytes (already 2097152 bytes; oversized file is 1048640 bytes). Previous snapshot was not refreshed. Inspect a narrower project folder; no files were silently omitted.'
+        'Comparison unavailable: scan needs more than 1 MiB (1048576 bytes) of retained previews (already 2 MiB (2097152 bytes) at oversized-b; this file is 1 MiB (1048640 bytes)). Previous snapshot was not refreshed. Inspect a narrower project folder; no files were silently omitted.'
       );
     if (params.has('fail-refresh') && refreshIndex) throw new Error('Fixture refresh failure');
     return params.has('composed') ? { ...snapshot, entries: [] } : snapshot;

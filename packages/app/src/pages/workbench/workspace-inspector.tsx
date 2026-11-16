@@ -119,6 +119,11 @@ function Inspector({ directory }: { directory: string }) {
       if (id === request.current) setBusy('');
     }
   }
+  const hiddenChanges = generated
+    ? 0
+    : (snapshot?.entries ?? []).filter(
+        (entry) => entry.generated && entry.state !== 'unchanged' && !entry.path.endsWith('/')
+      ).length;
   const entries = (snapshot?.entries ?? []).filter((entry) => generated || !entry.generated);
   const changes = entries.filter((entry) => entry.state !== 'unchanged' && !entry.path.endsWith('/'));
   const shown = tab === 'changes' ? changes : entries;
@@ -189,7 +194,9 @@ function Inspector({ directory }: { directory: string }) {
             {comparisonUnavailable
               ? 'Comparison unavailable'
               : tab === 'changes'
-                ? 'No changes since workspace baseline'
+                ? hiddenChanges
+                  ? `No changes to tracked files. ${hiddenChanges} generated paths changed and are not shown (.appliance/agents.json, .appliance/agent-results/*, .appliance/.agents.*). Enable the generated filter to inspect them.`
+                  : 'No changes since workspace baseline'
                 : 'Empty directory'}
           </p>
         )}
@@ -264,7 +271,9 @@ function Inspector({ directory }: { directory: string }) {
           <TabsContent value="changes">
             <p className="mb-2 text-sm">
               Changed since workspace baseline
-              {!comparisonUnavailable ? ` · ${changes.length} files` : ' · Comparison unavailable'}
+              {!comparisonUnavailable
+                ? ` · ${changes.length} files${hiddenChanges ? ` · ${hiddenChanges} generated changes hidden` : ''}`
+                : ' · Comparison unavailable'}
             </p>
             {list}
             <details className="mt-3 text-sm">

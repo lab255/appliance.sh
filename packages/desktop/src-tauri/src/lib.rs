@@ -1,44 +1,30 @@
 // ---- Workbench bindings (W1); sibling Inspection and Package blocks follow ----
 mod workbench;
 
-// Capture/status scans run off the event loop. Every projection reads baseline
-// status from protected host state, including existing-folder reopen/read/update.
+// Capture and workspace I/O run off the event loop. Baseline status is read by
+// inspection refresh, not unused enrichment on every workspace listing.
 #[tauri::command]
 async fn workbench_list(
     app: tauri::AppHandle,
 ) -> Result<Vec<serde_json::Value>, workbench::WorkbenchError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        workbench::list(&app).map(|items| {
-            items
-                .into_iter()
-                .map(|item| inspection::workspace_status(&app, item))
-                .collect()
-        })
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || workbench::list(&app))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
 async fn workbench_open(
     app: tauri::AppHandle,
     directory: String,
 ) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        workbench::open(&app, &directory).map(|item| inspection::workspace_status(&app, item))
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || workbench::open(&app, &directory))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-async fn workbench_read(
-    app: tauri::AppHandle,
-    directory: String,
-) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        workbench::read(&directory).map(|item| inspection::workspace_status(&app, item))
-    })
-    .await
-    .map_err(|error| error.to_string())?
+async fn workbench_read(directory: String) -> Result<serde_json::Value, workbench::WorkbenchError> {
+    tauri::async_runtime::spawn_blocking(move || workbench::read(&directory))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
 async fn workbench_create(
@@ -46,23 +32,18 @@ async fn workbench_create(
     parent: String,
     name: String,
 ) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        workbench::create(&app, &parent, &name).map(|item| inspection::workspace_status(&app, item))
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || workbench::create(&app, &parent, &name))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
 async fn workbench_update(
-    app: tauri::AppHandle,
     directory: String,
     binding: workbench::Binding,
 ) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        workbench::update(&directory, binding).map(|item| inspection::workspace_status(&app, item))
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || workbench::update(&directory, binding))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

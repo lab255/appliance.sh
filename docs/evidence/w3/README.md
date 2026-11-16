@@ -1,7 +1,7 @@
 # W3 host inspection evidence
 
 This is the dedicated M3 trust-boundary change. It must receive its own review gate.
-Rebased onto W1 squash `912c2ae`; the detail shell, open/create capture hook, and read-time baseline status are integrated. Capture/status scans run off the event loop. The inspector and all host projections read persisted host state on reopen; the obsolete warning fallback is removed.
+Rebased onto W1 squash `912c2ae`; the detail shell, open/create capture hook, and read-time baseline status are integrated. Capture and workspace I/O run off the event loop. The inspector reads persisted host state on refresh/reopen; unused baselineWarning projection enrichment is removed, so listings do not parse baselines; the obsolete warning fallback is removed.
 
 ## Trust boundary and adversarial check
 
@@ -34,19 +34,18 @@ An agent would try to:
 
 The code comment and UI both state that the guarantee weakens on a host the user does not control.
 Out-of-band host-CLI remounts remain host-operator authority, not something this app can prevent;
-inspection fails closed when an overlapping mount is detected. A host operator can deliberately
-expose or alter app data. No live hostile-VM containment certification is claimed by these tests.
+overlapping mounts are rejected at desktop mount time, and inspection fails closed only while an overlapping devMount is recorded. A baseline written while an overlapping mount was active is trusted after the mount narrows. Baselines exposed during such a window cannot be trusted afterwards; this is not detected. See follow-up card: keychain-HMAC baseline authentication. No live hostile-VM containment certification is claimed by these tests.
 
 ## Review locations
 
-| Location                                                           | Boundary comment / role                                                                                                                                                       |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/desktop/src-tauri/src/inspection.rs:102`                 | “The agent cannot rewrite the baseline; a human comparing changes against it sees host-side truth.” The following lines state the remote-host and host-CLI-remount residuals. |
-| `packages/desktop/src-tauri/src/inspection.rs:86`                  | Mount protection is independent of baseline availability; never share desktop app data into a VM.                                                                             |
-| `packages/desktop/src-tauri/src/inspection.rs:318`                 | Workspace-open capture is attempt-once; refresh must never silently move the baseline.                                                                                        |
-| `packages/desktop/src-tauri/src/workbench.rs:174`                  | Host capture completes (or records failure) before open/create returns.                                                                                                       |
-| `packages/desktop/src-tauri/src/lib.rs:33` and `inspection.rs:391` | Read-time projection consults persisted host truth, including reopening an existing directory.                                                                                |
-| `packages/app/src/pages/workbench/workspace-inspector.tsx:234`     | Remote-host caveat displayed beside the host-side baseline label.                                                                                                             |
+| Location                                                        | Boundary comment / role                                                                                                                                                       |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/desktop/src-tauri/src/inspection.rs:103`              | “The agent cannot rewrite the baseline; a human comparing changes against it sees host-side truth.” The following lines state the remote-host and host-CLI-remount residuals. |
+| `packages/desktop/src-tauri/src/inspection.rs:86`               | Mount protection is independent of baseline availability; never share desktop app data into a VM.                                                                             |
+| `packages/desktop/src-tauri/src/inspection.rs:320`              | Workspace-open capture is attempt-once; refresh must never silently move the baseline.                                                                                        |
+| `packages/desktop/src-tauri/src/workbench.rs:174`               | Host capture completes (or records failure) before open/create returns.                                                                                                       |
+| `packages/desktop/src-tauri/src/inspection.rs` — `refresh_from` | Inspector refresh reads host baseline status, including reopen; workspace listings no longer parse baselines.                                                                 |
+| `packages/app/src/pages/workbench/workspace-inspector.tsx:241`  | Remote-host caveat displayed beside the host-side baseline label.                                                                                                             |
 
 ## Approved mount-containment extension
 
@@ -121,7 +120,7 @@ hover syntax. No thresholds or tests were weakened.
 
 Actual `WorkspaceInspector` component with an explicitly simulated host (200 ms response delay),
 Chromium 1248, macOS arm64, 1440×1000, dark mode. This is **fixture UI evidence**, not VM evidence.
-The frozen component hash and source revision are recorded with individual observations. Fixture response-presentation medians are 248–249 ms, reported separately from acknowledgment; no native filesystem completion budget is claimed. Individual observations and raw input-associated layout shifts are in [measurements.json](./measurements.json).
+The frozen component hash and source revision are recorded with individual observations. Fixture response-presentation medians are 246–248 ms, reported separately from acknowledgment; no native filesystem completion budget is claimed. The ~15 ms acknowledgment medians exclude native baseline parsing. The reviewer measured 60 MiB retained content producing 251 MB JSON and a 434 ms load; JSON number-array storage and repeated inspection parsing/cache work are carded follow-ups. The on-disk format is unchanged in this delta: no encoding change, version bump, or migration. Individual observations and raw input-associated layout shifts are in [measurements.json](./measurements.json).
 
 | Property    | Evidence / result                                                                                                                                                                                                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -134,11 +133,11 @@ The frozen component hash and source revision are recorded with individual obser
 
 | Selection | Normal motion median ms | Reduced motion median ms | n per column |
 | --------- | ----------------------: | -----------------------: | -----------: |
-| Tab       |                   15.65 |                    15.70 |           10 |
-| File      |                   14.90 |                    15.10 |           10 |
-| Diff      |                   14.95 |                    15.25 |           10 |
-| Binary    |                   15.20 |                    15.40 |           10 |
-| Large     |                   15.20 |                    15.20 |           10 |
+| Tab       |                   15.40 |                    14.30 |           10 |
+| File      |                   14.40 |                    14.15 |           10 |
+| Diff      |                   12.80 |                    14.50 |           10 |
+| Binary    |                   13.60 |                    14.20 |           10 |
+| Large     |                   13.45 |                    14.05 |           10 |
 
 Screenshots: [reader](./inspector-no-preference.png), [reduced motion](./inspector-reduce.png),
 [large withheld](./large-no-preference.png), [narrow](./narrow-no-preference.png), [390px](./narrow-390.png), [200% zoom](./zoom-200.png).
@@ -156,6 +155,13 @@ it is not imported by the application entry point. Restart the dev server after 
 - More than 128 MiB retained previews, 50,000 entries, or depth 128 fails the scan explicitly;
   previous data remains stale. Files exceeding the 4 GiB scan limit are explicitly unreadable.
   A larger streaming/blob-backed store is deferred; no files are silently excluded by a Git ignore rule.
-- Baseline retention/garbage collection and human rebaseline UX are deferred; no automatic moving baseline.
+- Baseline retention/garbage collection and human rebaseline UX are deferred; no automatic moving baseline. Product risk: attempt-once capture plus no rebaseline permanently disables comparison for projects exceeding scan bounds (for example node_modules-scale trees), even after the tree is reduced.
+- Storage encoding and parsed-baseline caching are carded follow-ups; the existing format remains unchanged. Removing unused projection enrichment eliminates per-listing parsing only. Keychain-HMAC baseline authentication is also carded; exposure history is not detected.
 - Browser evidence uses fixtures, not a native VM session. Windows/Linux host builds and live hostile-VM
   testing are not claimed. Remote-host/operator authority remains the stated residual.
+
+## Gate delta
+
+The reviewer ran the mutation personally and constructed the composed case at production limits — the findings are the value of an adversarial brief working as designed, not a black mark.
+
+Generated-only edits now disclose their hidden count and patterns; an unchanged-workspace claim requires both visible and hidden counts to be zero. The browser regression verifies three hidden paths (registry, result, lock), then reveals all three with the filter override. See [generated disclosure](./generated-hidden.png). The composed stale screenshot uses the current production MiB wording (fixture budget 1 MiB). Capture comments now acknowledge independent Agents-page launches and possible prior agent output. Missing mount paths name the rejected directory.

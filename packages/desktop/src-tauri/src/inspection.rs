@@ -86,7 +86,8 @@ fn disjoint(store: &Path, root: &Path) -> Result<(), String> {
 pub fn validate_mount(app: &AppHandle, directory: &str) -> Result<(), String> {
     disjoint(
         &resolved_future_path(&app.path().app_data_dir().map_err(err)?)?,
-        &fs::canonicalize(directory).map_err(err)?,
+        &fs::canonicalize(directory)
+            .map_err(|error| format!("Cannot mount {directory}: {error}"))?,
     )
 }
 fn resolved_future_path(path: &Path) -> Result<PathBuf, String> {
@@ -105,9 +106,12 @@ fn location(app: &AppHandle, directory: &str) -> Result<(PathBuf, PathBuf), Stri
     // ancestor mounts as well as direct overlap, before writing any baseline bytes.
     // On a remote host the user does not control, this guarantee weakens: that
     // host's operator can alter app data. This is not protection from hostile hosts.
-    // Out-of-band host CLI remounts remain host-operator authority; comparison
-    // fails closed if such a mount overlaps app data. We cannot prevent a host
-    // operator from deliberately exposing/changing the store outside this app.
+    // Out-of-band host CLI remounts remain host-operator authority. Overlapping
+    // mounts are rejected at mount time; inspection fails closed only while an
+    // overlapping devMount is recorded. Baselines exposed during such a window
+    // cannot be trusted afterwards; this is not detected. A baseline written
+    // while an overlapping mount was active is trusted after it narrows — see
+    // follow-up card: keychain-HMAC baseline authentication.
     // A future mount/API change MUST preserve this separation for every VM.
     disjoint(&data, &root)?;
     if let Some(home) = crate::home_dir() {
@@ -182,7 +186,7 @@ fn walk(
                 .to_vec();
             *total += bytes.len();
             if *total > preview_budget {
-                return Err(format!("Comparison unavailable: {total} retained preview bytes exceed the {preview_budget}-byte budget at symbolic link {path}. Inspect a narrower project folder; previous snapshot was not refreshed."));
+                return Err(format!("Comparison unavailable: {} retained previews exceed the {} budget at symbolic link {path}. Inspect a narrower project folder; previous snapshot was not refreshed.", size_label(*total as u64), size_label(preview_budget as u64)));
             }
             files.insert(
                 path,
@@ -227,7 +231,7 @@ fn walk(
             });
             *total += file.bytes.len();
             if *total > preview_budget {
-                return Err(format!("Comparison unavailable: scan needs more than {preview_budget} retained preview bytes (already {total} bytes at {path}; this file is {} bytes). Previous snapshot was not refreshed. Inspect a narrower project folder; no files were silently omitted.", file.size));
+                return Err(format!("Comparison unavailable: scan needs more than {} of retained previews (already {} at {path}; this file is {}). Previous snapshot was not refreshed. Inspect a narrower project folder; no files were silently omitted.", size_label(preview_budget as u64), size_label(*total as u64), size_label(file.size)));
             }
             files.insert(path, file);
         } else {
@@ -313,7 +317,8 @@ fn snapshot_with_budget(root: &Path, preview_budget: usize) -> Result<Snapshot, 
         initial_git_status: String::new(),
     })
 }
-/// Called only by workspace open, before launch is possible. A failed attempt is
+/// Called on first Workbench open/create before that operation returns. Agents-page
+/// launches are independent: first capture may include prior agent output. A failed attempt is
 /// permanent for this binding: refreshing must NEVER silently move the baseline.
 pub fn capture(app: &AppHandle, directory: &str) -> Result<(), String> {
     let _lock = CAPTURE_LOCK.lock().map_err(err)?;
@@ -386,25 +391,6 @@ fn load(path: &Path) -> Result<Snapshot, String> {
     serde_json::from_slice(&bytes).map_err(|_| {
         "Comparison unavailable: stored baseline is invalid; automatic recapture is disabled".into()
     })
-}
-/// Query persisted host truth on every workspace read, including a later reopen.
-pub fn baseline_warning(app: &AppHandle, directory: &str) -> Option<String> {
-    location(app, directory)
-        .and_then(|(_, path)| load(&path).map(|_| ()))
-        .err()
-}
-/// Enrich every Workbench projection from host state, never an open-time cached
-/// warning or agent-writable metadata. In particular, success remains success on reopen.
-pub fn workspace_status(app: &AppHandle, mut workspace: serde_json::Value) -> serde_json::Value {
-    if let Some(directory) = workspace.get("directory").and_then(|value| value.as_str()) {
-        let warning = baseline_warning(app, directory);
-        if let Some(warning) = warning {
-            workspace["baselineWarning"] = serde_json::Value::String(warning);
-        } else if let Some(object) = workspace.as_object_mut() {
-            object.remove("baselineWarning");
-        }
-    }
-    workspace
 }
 fn size_label(size: u64) -> String {
     if size >= 1024 * 1024 {
