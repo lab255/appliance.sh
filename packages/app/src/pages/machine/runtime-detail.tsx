@@ -143,11 +143,11 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
       setBusy(kind);
       setError(null);
       setErrorAction(null);
+      if (kind === 'up' || kind === 'cluster') {
+        setLog([]);
+        setLogAction(kind);
+      }
     });
-    if (kind === 'up' || kind === 'cluster') {
-      setLog([]);
-      setLogAction(kind);
-    }
     try {
       await action();
       return true;

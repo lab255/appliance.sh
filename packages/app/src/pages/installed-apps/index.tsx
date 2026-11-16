@@ -186,23 +186,24 @@ export function InstalledAppCard({
 }
 
 function InstallFromFileButton({ onClick, busy }: { onClick: () => void; busy?: string | null }) {
+  const installing = busy === 'pick' || busy === 'install';
   const label = busy === 'pick' ? 'Choose bundle…' : busy === 'install' ? 'Installing…' : 'Install from file';
   return (
     <Button
       size="sm"
       onClick={() => {
-        if (!busy) onClick();
+        if (!installing) onClick();
       }}
-      aria-disabled={!!busy}
+      aria-disabled={installing}
       aria-label={label}
-      aria-busy={busy === 'pick' || busy === 'install'}
+      aria-busy={installing}
     >
       <FolderOpen className="h-4 w-4" aria-hidden />
       <span className="inline-grid">
         <span className="invisible col-start-1 row-start-1" aria-hidden>
           Install from file
         </span>
-        <span className="col-start-1 row-start-1" role="status">
+        <span className="col-start-1 row-start-1" aria-hidden>
           {label}
         </span>
       </span>
@@ -339,7 +340,7 @@ export function InstalledAppsPage() {
   };
 
   const pickAndInstall = async () => {
-    if (!host.installedApps || busy !== null) return;
+    if (!host.installedApps || busy === 'pick' || busy === 'install') return;
     // Acknowledge the picker before awaiting it; installSource carries the busy state onward.
     await paintPending(() => setBusy('pick'));
     try {
@@ -365,8 +366,10 @@ export function InstalledAppsPage() {
       setPending({ kind: 'publisher', action: 'open', app: item, prompt: promptForInstalledApp(item) });
       return;
     }
-    setBusy(item.app.appId);
-    await paintPending(() => setBusyAction('opening'));
+    await paintPending(() => {
+      setBusy(item.app.appId);
+      setBusyAction('opening');
+    });
     const openMetric = {
       kind:
         item.state === 'running' || item.state === 'degraded' || item.state === 'starting'
@@ -402,8 +405,10 @@ export function InstalledAppsPage() {
 
   const stopApp = async (item: InstalledRuntimeApp) => {
     if (!host.installedApps) return;
-    setBusy(item.app.appId);
-    await paintPending(() => setBusyAction('stopping'));
+    await paintPending(() => {
+      setBusy(item.app.appId);
+      setBusyAction('stopping');
+    });
     recordAppStopStart(item.app.appId);
     try {
       await host.installedApps.stop(item.app.appId);

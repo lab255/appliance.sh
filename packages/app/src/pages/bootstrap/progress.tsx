@@ -100,6 +100,13 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
   const [retrying, setRetrying] = React.useState(false);
   const [handoff, setHandoff] = React.useState<HandoffState>('idle');
   const [handoffError, setHandoffError] = React.useState<string | null>(null);
+  const mountedRef = React.useRef(false);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const startedRef = React.useRef(false);
   const handoffStartedRef = React.useRef(false);
   const logIdRef = React.useRef(0);
@@ -178,7 +185,10 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
       setError(null);
       setFailedPhase(null);
       setRetrying(true);
-      if (acknowledge) await afterPendingPaint();
+      if (acknowledge) {
+        await afterPendingPaint();
+        if (!mountedRef.current) return;
+      }
 
       host.bootstrap
         .run(input, { phases: phasesToRun, prior: priorRef.current }, handleEvent)

@@ -381,7 +381,7 @@ export function CatalogueContent({
                         <span className="invisible col-start-1 row-start-1" aria-hidden>
                           Installing…
                         </span>
-                        <span className="col-start-1 row-start-1" role="status">
+                        <span className="col-start-1 row-start-1" aria-hidden>
                           {installingEntry === entry.appId ? 'Installing…' : 'Install'}
                         </span>
                       </span>
