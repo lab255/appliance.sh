@@ -97,3 +97,28 @@ The first sandboxed verify attempt could not write existing VM fixtures under
 `~/.appliance`; the complete rerun with fixture access passed. No implementation
 change or lockfile refresh was used to make it pass. Registry springs,
 `ff-manifest`, motion tokens and MCP registration source are untouched.
+
+## Final W3 integration
+
+Rebased onto merged W3 main `882c995`. Four conflicts were reported before
+resolution: adjacent imports/exports in app index, app host and desktop host, plus
+the detail-shell inspector/action seam. The final diff preserves W3’s live
+`WorkspaceInspector`, `ConsoleHost extends InspectionHost`, native inspection
+commands and async workspace commands. Package replaces only the action placeholder
+below the inspector. All 24 other W3 files are byte-for-byte unchanged from main,
+including its mount guard implementation and Cargo dependency changes.
+
+The native measurements/captures above remain explicitly attributed to W1 plus W2
+before this rebase. The Package engine, bridge, component and recipient dialog code
+did not change; the surrounding inspector composition did. They are not relabelled
+as fresh measurements of the W3 inspector.
+
+Final combined-state validation: `pnpm verify` GREEN after rebuilding stale app
+declarations; `cargo test --locked --manifest-path
+packages/desktop/src-tauri/Cargo.toml --lib`: **72 passed, 0 failed**.
+
+Prior-head GitHub CI used Rust 1.100 and rejected the existing VM doctor's
+`if predicate { return true; } false` with `clippy::needless_bool`. A separate
+compatibility commit replaces that with the identical predicate expression; no
+redaction decision changes. The prior CI logs identify `src/doctor.rs:623` in
+both Rust verification and Windows desktop jobs.
