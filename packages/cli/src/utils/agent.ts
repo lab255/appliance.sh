@@ -908,12 +908,12 @@ function resolveProxyUrl(vm: string): string {
 export function assertAgentBrokerBackendSupported(backend: string | undefined, platform = process.platform): void {
   if (backend === 'wsl') {
     throw new Error(
-      'Brokered credential injection is disabled on WSL v1: exact-lease re-attribution cannot survive SNAT; use an in-guest API key; brokered injection returns in WSL v2.'
+      'Brokered sign-in is unavailable on WSL: exact-lease re-attribution cannot survive SNAT. The API key is not placed in the VM; no in-guest key fallback is supported.'
     );
   }
   if (platform === 'win32' && backend === undefined) {
     throw new Error(
-      'Brokered credential injection is disabled because the VM backend could not be resolved on Windows; use an in-guest API key; brokered injection returns in WSL v2.'
+      'Brokered sign-in is unavailable because the VM backend could not be resolved on Windows. The API key is not placed in the VM; no in-guest key fallback is supported.'
     );
   }
 }

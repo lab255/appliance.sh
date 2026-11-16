@@ -210,7 +210,7 @@ export function createApplianceMcpServer(overrides: Partial<McpDeps> = {}): McpS
         '(point it at a directory containing an appliance.json manifest or an appliance.stack.json). ' +
         'When something is broken: `health` shows whether the workload is up and why not (crashloops, image pulls), ' +
         '`logs` fetches container logs, `doctor` diagnoses the host and runtime, and `vm` manages the local VM. ' +
-        'All tools accept an optional `profile` to target a specific installation.',
+        'The SDK-targeting tools accept an optional `profile` to target a specific installation; `doctor` and `vm` are machine-local and do not accept `profile`.',
     }
   );
 

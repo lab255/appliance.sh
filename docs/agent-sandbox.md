@@ -48,9 +48,15 @@ modes both; **MVP** = one agent per project/VM, observed via a tab
 >    bypassable while routing stays cooperative — the firewall follow-up
 >    (§9 fork 2) is the real mitigation.
 >
-> What the broker _does_ guarantee: the **Anthropic API key never enters
-> the VM** (§3), and the proxy **fails closed** — it never forwards the
-> in-guest placeholder upstream (§3, A2).
+> On the **brokered MITM path** (`mitm::intercept`), the **Anthropic API
+> key never enters the VM** (§3), and an unresolved inject rule **fails
+> closed before dialing upstream** — it never forwards the in-guest
+> placeholder (§3, A2). Paths that never reach the inject decision can
+> emit the inert placeholder; cooperative proxy routing is bypassable.
+> This is not a guarantee that every credential stays out of the guest:
+> the Copilot adapter keeps the durable PAT host-side, but a **short-lived
+> Copilot session token does transit the guest** (see
+> [multi-agent adapters §7](multi-agent-adapters.md#7-security)).
 
 The agent is a process in a **reattachable tmux session `agent-<id>`**,
 launched as the non-root `appliance` user in `/persist/workspace` — the
@@ -201,8 +207,9 @@ add`) writes one rule to the VM's `egress-credentials.json`
    `ANTHROPIC_API_KEY` (e.g. `sk-ant-appliance-proxy`) so the CLI proceeds
    and sends `X-Api-Key: sk-ant-appliance-proxy`. The proxy's `set_header`
    **overwrites** that placeholder with the real key before it leaves the
-   host (`creds.rs:226` replaces case-insensitively). **A real key never
-   exists inside the VM** — the placeholder is inert if exfiltrated.
+   host on the **brokered MITM path** (`creds.rs:226` replaces
+   case-insensitively). **The brokered Anthropic API key never exists
+   inside the VM** — the placeholder is inert if exfiltrated.
    _(One untested point, §11: confirm Claude Code accepts a
    syntactically-shaped placeholder without local pre-validation. We do NOT
    use Claude Code's own in-guest `apiKeyHelper` setting — that would resolve
@@ -211,14 +218,18 @@ add`) writes one rule to the VM's `egress-credentials.json`
 
 5. **Fail closed (A2 — implemented).** If the host helper yields nothing
    for `api.anthropic.com` (platform store denied, not logged in, helper
-   non-zero), the proxy must **never** forward the in-guest placeholder
-   upstream. `mitm::intercept` now resolves `injection_for` **before
+   non-zero), the **brokered MITM path** must **never** forward the
+   in-guest placeholder upstream. `mitm::intercept` now resolves `injection_for` **before
    dialing upstream**; when it's empty but the host has an inject rule
    (`creds::has_inject_rule`), the proxy **refuses** with a clear
    `502 — Anthropic key not configured (run \`appliance agent login\`)`and
-dials no upstream. The placeholder therefore crosses the host boundary
-**zero times**, even on the error path. The Anthropic rule is`capture:false`, so the placeholder is never lifted into
-`egress-secrets.json` either.
+dials no upstream. On this brokered MITM path, the placeholder crosses
+the host boundary **zero times**, even on the error path. Paths that never
+reach the inject decision — interception off, pre-lease legacy CONNECT,
+observe-only runtime principals, or a guest bypassing the proxy — can emit
+the inert placeholder. This fail-closed guarantee does not enforce proxy
+routing. The Anthropic rule is `capture:false`, so the placeholder is never
+lifted into `egress-secrets.json` either.
 
 6. **Helper TTL cache (A2 — implemented).** `run_helper`
    (`creds.rs`) caches the resolved key for a short TTL (~15s) keyed on
@@ -229,10 +240,13 @@ dials no upstream. The placeholder therefore crosses the host boundary
    a secret and is never logged. The cred rule pins the helper's
    **absolute** binary path (not a PATH-relative `appliance`).
 
-**Net key flow:** platform host store → `appliance agent print-key --type
+**Net key flow on the brokered MITM path:** platform host store → `appliance agent print-key --type
 <agent>` → helper stdout (host, TTL-cached) →
-proxy `set_header` on the outbound TLS (host) → Anthropic. The key
-crosses the host↔guest boundary **zero times**. The proxy logs the
+proxy `set_header` on the outbound TLS (host) → Anthropic. The brokered
+Anthropic API key crosses the host↔guest boundary **zero times**. This does
+not apply to every adapter credential: Copilot keeps its durable PAT
+host-side, but its short-lived session token **does transit the guest**
+([multi-agent adapters §7](multi-agent-adapters.md#7-security)). The proxy logs the
 request **line only** (never headers), so a brokered key never reaches a
 log.
 

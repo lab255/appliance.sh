@@ -324,7 +324,7 @@ describe('printKeyHelperCommand', () => {
 describe('resolveAuthMode (per stored kind)', () => {
   it('disables brokered credential injection on WSL v1 before writing a rule', () => {
     expect(() => assertAgentBrokerBackendSupported('wsl')).toThrow(
-      'use an in-guest API key; brokered injection returns in WSL v2'
+      'The API key is not placed in the VM; no in-guest key fallback is supported.'
     );
     expect(() => assertAgentBrokerBackendSupported('vz')).not.toThrow();
     runVmMock.mockReset();
@@ -336,7 +336,7 @@ describe('resolveAuthMode (per stored kind)', () => {
 
   it('refuses broker rule writes when Windows cannot resolve the VM backend', () => {
     expect(() => assertAgentBrokerBackendSupported(undefined, 'win32')).toThrow(
-      'VM backend could not be resolved on Windows; use an in-guest API key; brokered injection returns in WSL v2'
+      'VM backend could not be resolved on Windows. The API key is not placed in the VM; no in-guest key fallback is supported.'
     );
     expect(() => assertAgentBrokerBackendSupported(undefined, 'darwin')).not.toThrow();
     runVmMock.mockReset();
