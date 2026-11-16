@@ -103,3 +103,67 @@ Build UI/app dependencies and start the desktop Vite server. Set
 `node surface.mjs`, `node recovery.mjs`, and `node acceptance.mjs` from this folder.
 The nav harness retains the original GLA-335 fixtures and CLS window calculation.
 Restart Vite after rebuilding the app library if it retains a stale library entry.
+
+## Gate delta: unreadable files and target recovery
+
+The review fixes are scoped to typed file errors/recovery, query-local retry
+behavior, parent-picker acknowledgment, the target error's reserved status line,
+and documentation/comment corrections. Native tests now pass **3/3** and the new
+UI recovery suite passes **4/4**. `read(directory)` keeps its signature for W3.
+The CLI module is explicitly documented as currently test-exercised format-parity
+code, not a shipped CLI command.
+
+For a file containing `{`, the exact before/after text is:
+
+| Surface              | Before                                                                     |
+| -------------------- | -------------------------------------------------------------------------- |
+| Detail               | `Could not open workspace. Retry`                                          |
+| Row                  | `Could not read workspace: EOF while parsing an object at line 1 column 1` |
+| Open-existing dialog | `EOF while parsing an object at line 1 column 1`                           |
+| Target save          | `Could not save target: EOF while parsing an object at line 1 column 1`    |
+| Opened-folder index  | `Could not read workspaces. Retry`                                         |
+
+All four project-file surfaces now render exactly:
+
+> /Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected.
+
+The opened-folder index renders exactly (fixture path; native uses the actual
+app-data path):
+
+> /app-data/workbench-directories.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected.
+
+Typed unreadable errors have no ineffective Retry button. Both Workbench queries
+use `retry: false`; tests set the global default to three retries and prove one
+request and an immediately rendered error while that global default stays three.
+**Remove from Workbench** removes a failed row's reference, with adjacent copy
+“Removes this list entry only. Project files are kept.” Native tests verify both
+that removal preserves project files and that a corrupt index is not overwritten.
+
+**Re-measured target-save failure:** 10 runs in each motion setting, 1440×1000.
+Previously error arrival contributed **0.00201333333** (cold + error total
+**0.00203236979**). After placing the error inside the reserved status line,
+error-arrival standard CLS and raw shift sum are **0 in every run**; cold + error
+median is **0.00001903646** in both settings. These supersede the initial recovery
+numbers above. [Samples](delta.json), [harness](delta.mjs),
+[normal capture](delta-save-error-no-preference.png),
+[reduced capture](delta-save-error-reduce.png).
+
+**Both target paths were exercised:** successful workspace selection saved
+`mock-acme-prod` while the global selection stayed null. The existing global
+switcher then selected `microvm` while the workspace target remained
+`mock-acme-prod` and the detail route remained open. For all 20 failure runs,
+that global path was exercised first; failing a workspace save to `microvm`
+retained the previous nonempty workspace target `mock-acme-prod` and the global
+`microvm` selection. This is fixture evidence of both compatibility paths,
+not an assumption based on source separation.
+
+**Evidence does not ship in the app:** harnesses, samples, reports and screenshots
+live under `docs/workbench/evidence/`, outside the product source tree. Auditing
+all production JavaScript sourcemaps found no harness, `.test`/`.spec`, or mock-host
+sources: app library **4 maps / 589 source entries**, desktop product **4 maps /
+79 source entries** ([audit](bundle-audit.json)). Regression tests under
+`packages/app/src` are Vitest inputs, not imported by the production entrypoint;
+TypeScript may emit declaration-only test files into the internal app library's
+build directory, but those are not runtime JavaScript or included in the desktop
+product's `dist` assets. Browser host fixtures are development-only and are also
+absent from both production JavaScript graphs.

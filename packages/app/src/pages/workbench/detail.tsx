@@ -1,3 +1,4 @@
+import { isUnreadableWorkbenchFile, workbenchErrorMessage } from './errors';
 import * as React from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +28,7 @@ export function WorkbenchDetailPage() {
     enabled: !!host.workbench,
     initialData: initial?.directory === workspaceId ? initial : undefined,
     staleTime: Infinity,
+    retry: false,
   });
   const workspace = query.data;
   if (!host.workbench)
@@ -43,7 +45,11 @@ export function WorkbenchDetailPage() {
         <div className="min-h-64">
           {query.isError ? (
             <p role="alert">
-              Could not open workspace. <Button onClick={() => query.refetch()}>Retry</Button>
+              {workbenchErrorMessage(query.error)}{' '}
+              {!isUnreadableWorkbenchFile(query.error) && <Button onClick={() => query.refetch()}>Retry</Button>}
+              <Link to="/workbench" className="underline">
+                Back to Workbench
+              </Link>
             </p>
           ) : (
             <p role="status">Opening workspace…</p>
@@ -67,7 +73,7 @@ export function WorkbenchDetailPage() {
       cache.setQueryData(['workbench', workspaceId], { ...updated, baselineWarning: workspace.baselineWarning });
       void cache.invalidateQueries({ queryKey: ['workbench'], exact: true });
     } catch (e) {
-      setError(String(e));
+      setError(workbenchErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -112,10 +118,13 @@ export function WorkbenchDetailPage() {
                 </option>
               ))}
           </select>
-          <div className="min-h-6 text-sm" role="status">
-            {saving ? 'Saving deployment target…' : 'Applies to this workspace only.'}
+          <div className="min-h-6 break-words text-sm">
+            {error ? (
+              <p role="alert">{error}</p>
+            ) : (
+              <p role="status">{saving ? 'Saving deployment target…' : 'Applies to this workspace only.'}</p>
+            )}
           </div>
-          {error && <p role="alert">Could not save target: {error}</p>}
         </div>
       </div>
       {mismatch && (

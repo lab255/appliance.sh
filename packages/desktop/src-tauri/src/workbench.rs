@@ -8,6 +8,51 @@ use std::{
 use tauri::Manager;
 static IO: Mutex<()> = Mutex::new(());
 
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum WorkbenchError {
+    UnreadableFile { path: String, reason: String },
+    Operation { message: String },
+}
+impl From<String> for WorkbenchError {
+    fn from(message: String) -> Self {
+        Self::Operation { message }
+    }
+}
+impl From<&str> for WorkbenchError {
+    fn from(message: &str) -> Self {
+        message.to_owned().into()
+    }
+}
+fn unreadable(path: &Path, reason: impl ToString) -> WorkbenchError {
+    WorkbenchError::UnreadableFile {
+        path: path.to_string_lossy().into_owned(),
+        reason: reason.to_string(),
+    }
+}
+fn read_file<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, WorkbenchError> {
+    let bytes = fs::read(path).map_err(|e| unreadable(path, e))?;
+    serde_json::from_slice(&bytes).map_err(|e| unreadable(path, e))
+}
+fn directories(path: &Path) -> Result<Vec<String>, WorkbenchError> {
+    if path.exists() {
+        read_file(path)
+    } else {
+        Ok(vec![])
+    }
+}
+fn forget_directory(path: &Path, directory: &str) -> Result<(), WorkbenchError> {
+    let mut entries = directories(path)?;
+    entries.retain(|entry| entry != directory);
+    atomic(path, &entries)?;
+    Ok(())
+}
+/// Removes only an opened-directory reference, never project files.
+pub fn forget(app: &tauri::AppHandle, directory: &str) -> Result<(), WorkbenchError> {
+    let _lock = IO.lock().map_err(|e| e.to_string())?;
+    forget_directory(&index(app)?, directory)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Binding {
@@ -75,14 +120,9 @@ fn index(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())?
         .join("workbench-directories.json"))
 }
-fn remember(app: &tauri::AppHandle, directory: &str) -> Result<bool, String> {
+fn remember(app: &tauri::AppHandle, directory: &str) -> Result<bool, WorkbenchError> {
     let path = index(app)?;
-    let mut directories: Vec<String> = if path.exists() {
-        serde_json::from_slice(&fs::read(&path).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?
-    } else {
-        vec![]
-    };
+    let mut directories = directories(&path)?;
     if !directories.iter().any(|d| d == directory) {
         directories.push(directory.to_owned());
         atomic(&path, &directories)?;
@@ -90,12 +130,11 @@ fn remember(app: &tauri::AppHandle, directory: &str) -> Result<bool, String> {
     }
     Ok(false)
 }
-pub fn read(directory: &str) -> Result<serde_json::Value, String> {
+pub fn read(directory: &str) -> Result<serde_json::Value, WorkbenchError> {
     let root = resolve(directory)?;
     let file = root.join(".appliance/workbench.json");
     let binding: Binding = if file.exists() {
-        serde_json::from_slice(&fs::read(file).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?
+        read_file(&file)?
     } else {
         Binding {
             version: 1,
@@ -104,7 +143,7 @@ pub fn read(directory: &str) -> Result<serde_json::Value, String> {
             mutating_session_id: None,
         }
     };
-    validate(&binding)?;
+    validate(&binding).map_err(|e| unreadable(&file, e))?;
     let link = json(&root.join(".appliance/link.json")).unwrap_or_default();
     let machine = link
         .pointer("/sandbox/vm")
@@ -135,7 +174,7 @@ pub fn read(directory: &str) -> Result<serde_json::Value, String> {
 fn capture_workbench_baseline(_app: &tauri::AppHandle, _directory: &str) -> Result<(), String> {
     Err("No baseline captured — change comparison will be unavailable".into())
 }
-pub fn open(app: &tauri::AppHandle, directory: &str) -> Result<serde_json::Value, String> {
+pub fn open(app: &tauri::AppHandle, directory: &str) -> Result<serde_json::Value, WorkbenchError> {
     let _lock = IO.lock().map_err(|e| e.to_string())?;
     let mut workspace = read(directory)?;
     let resolved = workspace["directory"]
@@ -149,14 +188,9 @@ pub fn open(app: &tauri::AppHandle, directory: &str) -> Result<serde_json::Value
     }
     Ok(workspace)
 }
-pub fn list(app: &tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+pub fn list(app: &tauri::AppHandle) -> Result<Vec<serde_json::Value>, WorkbenchError> {
     let path = index(app)?;
-    if !path.exists() {
-        return Ok(vec![]);
-    }
-    let directories: Vec<String> =
-        serde_json::from_slice(&fs::read(path).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+    let directories = directories(&path)?;
     Ok(directories.iter().map(|d| read(d).unwrap_or_else(|e| serde_json::json!({"directory":d,"binding":{"version":1},"sessions":[],"error":e}))).collect())
 }
 fn create_directory(parent: &str, name: &str) -> Result<PathBuf, String> {
@@ -189,7 +223,7 @@ pub fn create(
     app: &tauri::AppHandle,
     parent: &str,
     name: &str,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, WorkbenchError> {
     let directory = create_directory(parent, name)?;
     // Blank creation writes no project metadata and never launches/remounts a VM.
     // Parent project roots are rejected to preserve link walk-up identity.
@@ -206,7 +240,7 @@ pub fn create(
     }
     Ok(workspace)
 }
-pub fn update(directory: &str, binding: Binding) -> Result<serde_json::Value, String> {
+pub fn update(directory: &str, binding: Binding) -> Result<serde_json::Value, WorkbenchError> {
     let _lock = IO.lock().map_err(|e| e.to_string())?;
     validate(&binding)?;
     let root = resolve(directory)?;
@@ -219,6 +253,32 @@ pub fn update(directory: &str, binding: Binding) -> Result<serde_json::Value, St
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn corrupt_files_report_path_and_forgetting_preserves_project() {
+        let root =
+            std::env::temp_dir().join(format!("workbench-errors-test-{}", std::process::id()));
+        fs::create_dir_all(root.join(".appliance")).unwrap();
+        let file = root.join(".appliance/workbench.json");
+        fs::write(&file, "{").unwrap();
+        let canonical = fs::canonicalize(&root)
+            .unwrap()
+            .join(".appliance/workbench.json");
+        let error = serde_json::to_value(read(root.to_str().unwrap()).unwrap_err()).unwrap();
+        assert_eq!(error["kind"], "unreadable-file");
+        assert_eq!(error["path"], canonical.to_string_lossy().as_ref());
+        assert!(error["reason"].as_str().unwrap().contains("EOF"));
+        let index = root.join("workbench-directories.json");
+        fs::write(&index, "{").unwrap();
+        let error = serde_json::to_value(directories(&index).unwrap_err()).unwrap();
+        assert_eq!(error["path"], index.to_string_lossy().as_ref());
+        assert!(forget_directory(&index, "missing").is_err());
+        assert_eq!(fs::read_to_string(&index).unwrap(), "{");
+        atomic(&index, &vec!["missing", "keep"]).unwrap();
+        forget_directory(&index, "missing").unwrap();
+        assert_eq!(directories(&index).unwrap(), vec!["keep"]);
+        assert_eq!(fs::read_to_string(file).unwrap(), "{");
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn blank_creation_is_exclusive_and_directory_only() {
         let root =

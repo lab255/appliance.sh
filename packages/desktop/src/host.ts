@@ -300,6 +300,7 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
 
   // ---- Workbench bindings ----
   workbench: {
+    forget: (directory) => invoke('workbench_forget', { directory }),
     list: () => invoke('workbench_list'),
     open: (directory) => invoke('workbench_open', { directory }),
     read: (directory) => invoke('workbench_read', { directory }),

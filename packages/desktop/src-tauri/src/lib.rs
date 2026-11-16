@@ -2,15 +2,20 @@
 mod workbench;
 
 #[tauri::command]
-fn workbench_list(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+fn workbench_list(
+    app: tauri::AppHandle,
+) -> Result<Vec<serde_json::Value>, workbench::WorkbenchError> {
     workbench::list(&app)
 }
 #[tauri::command]
-fn workbench_open(app: tauri::AppHandle, directory: String) -> Result<serde_json::Value, String> {
+fn workbench_open(
+    app: tauri::AppHandle,
+    directory: String,
+) -> Result<serde_json::Value, workbench::WorkbenchError> {
     workbench::open(&app, &directory)
 }
 #[tauri::command]
-fn workbench_read(directory: String) -> Result<serde_json::Value, String> {
+fn workbench_read(directory: String) -> Result<serde_json::Value, workbench::WorkbenchError> {
     workbench::read(&directory)
 }
 #[tauri::command]
@@ -18,15 +23,23 @@ fn workbench_create(
     app: tauri::AppHandle,
     parent: String,
     name: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, workbench::WorkbenchError> {
     workbench::create(&app, &parent, &name)
 }
 #[tauri::command]
 fn workbench_update(
     directory: String,
     binding: workbench::Binding,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, workbench::WorkbenchError> {
     workbench::update(&directory, binding)
+}
+
+#[tauri::command]
+fn workbench_forget(
+    app: tauri::AppHandle,
+    directory: String,
+) -> Result<(), workbench::WorkbenchError> {
+    workbench::forget(&app, &directory)
 }
 
 mod cluster_gc;
@@ -7577,6 +7590,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            workbench_forget,
             workbench_list,
             workbench_open,
             workbench_read,

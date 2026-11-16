@@ -336,11 +336,6 @@ export interface UpdaterHost {
   relaunch(): Promise<void>;
 }
 
-// Capabilities the surrounding shell (web PWA, future Tauri/Electron)
-// must provide to the shared app. Kept minimal: anything a browser
-// tab can do on its own isn't here. Desktop-only hooks (OS keychain,
-// system tray, native notifications, bootstrap driver) are optional
-// fields so the web host can omit them entirely.
 // ---- Workbench bindings: project-local view state, never authorization ----
 export interface WorkbenchBinding {
   version: 1;
@@ -356,6 +351,9 @@ export interface WorkbenchSession {
   summary?: string;
   vm?: string;
 }
+export type WorkbenchError =
+  | { kind: 'unreadable-file'; path: string; reason: string }
+  | { kind: 'operation'; message: string };
 export interface WorkbenchWorkspace {
   directory: string;
   binding: WorkbenchBinding;
@@ -364,9 +362,11 @@ export interface WorkbenchWorkspace {
   sessions: WorkbenchSession[];
   affectedSessions?: WorkbenchSession[];
   baselineWarning?: string;
-  error?: string;
+  error?: string | WorkbenchError;
 }
 export interface WorkbenchHost {
+  /** Forget an opened reference only; never deletes project files. */
+  forget(directory: string): Promise<void>;
   list(): Promise<WorkbenchWorkspace[]>;
   open(directory: string): Promise<WorkbenchWorkspace>;
   read(directory: string): Promise<WorkbenchWorkspace>;
@@ -374,6 +374,11 @@ export interface WorkbenchHost {
   update(directory: string, binding: WorkbenchBinding): Promise<WorkbenchWorkspace>;
 }
 
+// Capabilities the surrounding shell (web PWA, future Tauri/Electron)
+// must provide to the shared app. Kept minimal: anything a browser
+// tab can do on its own isn't here. Desktop-only hooks (OS keychain,
+// system tray, native notifications, bootstrap driver) are optional
+// fields so the web host can omit them entirely.
 export interface ConsoleHost {
   /** Workbench bindings (desktop only). */
   workbench?: WorkbenchHost;

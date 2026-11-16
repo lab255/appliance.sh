@@ -25,7 +25,8 @@ selection is advisory, never an authorization lock. Unknown fields and unsupport
 versions are rejected; malformed files are reported rather than overwritten.
 No credentials, API copies, results, or build artifacts belong in this file.
 
-The CLI utility is `packages/cli/src/utils/workbench.ts`. Desktop binding I/O lives
+The CLI module `packages/cli/src/utils/workbench.ts` is format-parity code, currently
+exercised only by its spec; no CLI command calls it. Desktop binding I/O lives
 in `packages/desktop/src-tauri/src/workbench.rs`. Both use sibling temporary files
 and rename. Neither writes `link.json` or `agents.json`. Reads use their existing
 records only as observations; recorded sessions do not prove a VM is idle.
@@ -58,7 +59,9 @@ and warning records outside the mounted tree.
 
 ## UI and integration seams
 
-`ConsoleHost.workbench` exposes `list`, `open`, `read`, `create`, and `update`.
+`ConsoleHost.workbench` exposes `list`, `open`, `read`, `create`, `update`, and `forget`.
+`forget` removes only an opened-directory reference, even when the directory no
+longer exists; it never removes project files.
 `WorkbenchWorkspace.directory` is the canonical identity. `binding` is the small
 format above; `sessions` and `affectedSessions` are recorded metadata, with the
 latter read from the machine's actual mounted folder. No UI action remounts it.
@@ -79,3 +82,14 @@ The current shell deliberately leaves these unavailable with adjacent reasons:
 
 Ordinary `/projects/deploy` remains linked independently. No placeholder claims a
 successful package, deployment, launch, inspection, or readiness event.
+
+## Unreadable view files
+
+Native read/parse/format errors use `{kind: "unreadable-file", path, reason}`.
+The UI names the affected file and explains that fixing or deleting it resets
+view settings without touching the project or deploy link. This applies to both
+project `workbench.json` and app-data `workbench-directories.json`; neither is
+silently overwritten. Workbench list/detail queries disable automatic retries
+locally. The global query-client retry policy is unchanged. A failed row can be
+removed with **Remove from Workbench**; a malformed index must first be fixed or
+deleted at its displayed path, since its entries cannot safely be interpreted.
