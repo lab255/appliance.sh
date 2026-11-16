@@ -1,3 +1,4 @@
+import { createMockWorkbench } from './mock-workbench';
 // Use the pure host contract without bootstrapping the browser router.
 import { microVmNameFromClusterId } from '../../app/src/lib/host';
 import type {
@@ -160,7 +161,15 @@ export function mockHostEnabled(): boolean {
         sessionStorage.setItem(APP_MODE_KEY, 'user');
         configureWorkspaceScenario(scenario === 'user-mode-no-vm' ? 'user-mode-no-vm' : 'user-mode');
       }
-      if (scenario === 'developer-mode') sessionStorage.setItem(APP_MODE_KEY, 'developer');
+      if (scenario === 'developer-mode') {
+        sessionStorage.setItem(APP_MODE_KEY, 'developer');
+        if (new URLSearchParams(window.location.search).has('workbench-fixture')) {
+          configureWorkspaceScenario('user-mode');
+          const state = readState();
+          state.selectedClusterId = null;
+          writeState(state);
+        }
+      }
       if (scenario === 'banner-mv1-disabled' || scenario === 'banner-legacy-reboot') {
         sessionStorage.setItem(APP_MODE_KEY, 'developer');
         configureWorkspaceScenario('user-mode');
@@ -1110,6 +1119,7 @@ export function createMockHost(): ConsoleHost {
       },
     },
 
+    workbench: createMockWorkbench(),
     local: {
       async preflight() {
         return preflight();

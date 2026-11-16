@@ -119,7 +119,7 @@ export function ClusterSwitcher({ presentation = 'developer', onSetupWorkspace }
       // yanking the user off the page they were reading.
       const segments = window.location.pathname.split('/').filter(Boolean);
       const stayable = ['apps', 'catalogue', 'projects', 'machine', 'cloud', 'settings', 'agents', 'deployments'];
-      if (segments.length !== 1 || !stayable.includes(segments[0])) {
+      if (segments[0] !== 'workbench' && (segments.length !== 1 || !stayable.includes(segments[0]))) {
         navigate('/');
       }
       setOpen(false);

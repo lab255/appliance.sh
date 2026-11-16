@@ -1,3 +1,34 @@
+// ---- Workbench bindings (W1); sibling Inspection and Package blocks follow ----
+mod workbench;
+
+#[tauri::command]
+fn workbench_list(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    workbench::list(&app)
+}
+#[tauri::command]
+fn workbench_open(app: tauri::AppHandle, directory: String) -> Result<serde_json::Value, String> {
+    workbench::open(&app, &directory)
+}
+#[tauri::command]
+fn workbench_read(directory: String) -> Result<serde_json::Value, String> {
+    workbench::read(&directory)
+}
+#[tauri::command]
+fn workbench_create(
+    app: tauri::AppHandle,
+    parent: String,
+    name: String,
+) -> Result<serde_json::Value, String> {
+    workbench::create(&app, &parent, &name)
+}
+#[tauri::command]
+fn workbench_update(
+    directory: String,
+    binding: workbench::Binding,
+) -> Result<serde_json::Value, String> {
+    workbench::update(&directory, binding)
+}
+
 mod cluster_gc;
 mod profiles_lock;
 mod terminal;
@@ -7546,6 +7577,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            workbench_list,
+            workbench_open,
+            workbench_read,
+            workbench_create,
+            workbench_update,
             able_account,
             host_platform,
             get_config,

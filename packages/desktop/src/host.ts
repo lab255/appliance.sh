@@ -298,6 +298,14 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
     },
   },
 
+  // ---- Workbench bindings ----
+  workbench: {
+    list: () => invoke('workbench_list'),
+    open: (directory) => invoke('workbench_open', { directory }),
+    read: (directory) => invoke('workbench_read', { directory }),
+    create: (parent, name) => invoke('workbench_create', { parent, name }),
+    update: (directory, binding) => invoke('workbench_update', { directory, binding }),
+  },
   local: {
     async preflight(): Promise<LocalPreflightCheck[]> {
       return invoke<LocalPreflightCheck[]>('local_preflight');

@@ -1,0 +1,9 @@
+{
+  "userNavigationByteIdentical": true,
+  "packages/app/src/pages/agents/index.tsx byte identical": true,
+  "packages/app/src/pages/apps/deploy.tsx byte identical": true,
+  "packages/cli/src/utils/mcp-server.ts byte identical": true,
+  "existingRoutePathsUnchanged": true,
+  "mcpTools": ["overview", "deploy", "deployment_status", "health", "logs", "destroy", "doctor", "vm"],
+  "sdkDiff": ""
+}

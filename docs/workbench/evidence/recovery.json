@@ -1,0 +1,38 @@
+[
+  {
+    "motion": "no-preference",
+    "oldTargetRetained": true,
+    "globalTargetUnchanged": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false
+      },
+      {
+        "value": 0.0020133333333333336,
+        "input": false
+      }
+    ],
+    "keyboardTab": "true",
+    "zoomOverflow": false,
+    "narrowOverflow": false
+  },
+  {
+    "motion": "reduce",
+    "oldTargetRetained": true,
+    "globalTargetUnchanged": true,
+    "shifts": [
+      {
+        "value": 0.000019036458333333335,
+        "input": false
+      },
+      {
+        "value": 0.0020133333333333336,
+        "input": false
+      }
+    ],
+    "keyboardTab": "true",
+    "zoomOverflow": false,
+    "narrowOverflow": false
+  }
+]
