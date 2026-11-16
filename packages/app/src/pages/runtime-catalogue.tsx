@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import type { CatalogueEntry } from '@appliance.sh/sdk';
 import { Search, ShieldAlert } from 'lucide-react';
@@ -80,7 +81,7 @@ export function CataloguePage() {
 
   const acceptUnknown = async () => {
     if (!pending || !host.installedApps) return;
-    setInstalling(true);
+    await paintPending(() => setInstalling(true));
     try {
       await host.installedApps.installBundle(pending.entry.bundle.url, target, { acceptUnknownPublisher: true });
       setPending(null);
@@ -159,6 +160,7 @@ export function CatalogueContent({
   ];
   const [category, setCategory] = React.useState<Category>('All');
   const [installMessage, setInstallMessage] = React.useState<string | null>(null);
+  const [installingEntry, setInstallingEntry] = React.useState<string | null>(null);
   const categoryRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const entries = React.useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -350,22 +352,39 @@ export function CatalogueContent({
                     <Button
                       size="sm"
                       disabled={data.stale}
-                      aria-label={`Install ${entry.name}`}
-                      onClick={() => {
-                        setInstallMessage(null);
-                        void (onInstall
-                          ? onInstall(entry)
-                              .then(setInstallMessage)
-                              .catch((cause: unknown) => {
-                                console.error('[catalogue] install failed', cause);
-                                setInstallMessage(errorMessage(cause, 'Installation failed.'));
-                              })
-                          : Promise.resolve(
-                              setInstallMessage('Installation is available in the Appliance desktop app.')
-                            ));
+                      aria-disabled={data.stale || installingEntry !== null}
+                      aria-label={
+                        installingEntry === entry.appId ? `Installing ${entry.name}…` : `Install ${entry.name}`
+                      }
+                      aria-busy={installingEntry === entry.appId}
+                      onClick={async () => {
+                        if (installingEntry !== null) return;
+                        await paintPending(() => {
+                          setInstallingEntry(entry.appId);
+                          setInstallMessage(null);
+                        });
+                        try {
+                          setInstallMessage(
+                            onInstall
+                              ? await onInstall(entry)
+                              : 'Installation is available in the Appliance desktop app.'
+                          );
+                        } catch (cause) {
+                          console.error('[catalogue] install failed', cause);
+                          setInstallMessage(errorMessage(cause, 'Installation failed.'));
+                        } finally {
+                          setInstallingEntry(null);
+                        }
                       }}
                     >
-                      Install
+                      <span className="inline-grid">
+                        <span className="invisible col-start-1 row-start-1" aria-hidden>
+                          Installing…
+                        </span>
+                        <span className="col-start-1 row-start-1" role="status">
+                          {installingEntry === entry.appId ? 'Installing…' : 'Install'}
+                        </span>
+                      </span>
                     </Button>
                   </div>
                 </article>

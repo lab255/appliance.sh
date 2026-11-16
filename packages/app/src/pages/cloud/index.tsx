@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { Link } from 'react-router';
@@ -115,6 +116,7 @@ function CloudRow({ cluster, isSelected }: { cluster: Cluster; isSelected: boole
   const { toast } = useToast();
   const [selectionMessage, setSelectionMessage] = React.useState('');
   const selectMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async () => host.selectCluster(cluster.id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
@@ -122,6 +124,7 @@ function CloudRow({ cluster, isSelected }: { cluster: Cluster; isSelected: boole
     },
   });
   const removeMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async () => host.removeCluster(cluster.id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });

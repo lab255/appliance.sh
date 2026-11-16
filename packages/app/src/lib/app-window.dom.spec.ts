@@ -71,6 +71,18 @@ describe('app window document', () => {
     await vi.waitFor(() => expect(root.querySelector('[role="alert"]')?.textContent).toBe('boom'));
   });
 
+  it('does not start Reopen work if the wrapper is disposed during acknowledgment', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const reopen = vi.fn().mockResolvedValue(running);
+    const dispose = renderAppWindow(root, { ...running, state: 'exited' }, { reopen });
+    root.querySelector('button')!.click();
+    expect(reopen).not.toHaveBeenCalled();
+    dispose();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(reopen).not.toHaveBeenCalled();
+  });
+
   it('distinguishes normal stops, nonzero exits, and failures', () => {
     const copies = [
       [{ ...running, state: 'exited' as const, exitCode: 0 }, 'Journal has stopped.'],

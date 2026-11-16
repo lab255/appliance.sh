@@ -14,6 +14,9 @@ import { ClusterCompatBanner } from './cluster-compat-banner';
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const useClusterCompat = vi.hoisted(() => vi.fn<() => ClusterCompat>());
+// These tests exercise outcomes; paint ordering is covered in paint-pending.test.tsx.
+vi.mock('@/lib/paint-pending', () => ({ paintPending: async (update: () => void) => update() }));
+
 vi.mock('@/hooks/use-cluster-compat', () => ({ useClusterCompat }));
 
 function compat(capable: boolean, selfUpdateEnabled = true): ClusterCompat {

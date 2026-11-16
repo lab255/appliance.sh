@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@appliance.sh/ui';
 import * as React from 'react';
 import { Check, ExternalLink, Github, KeyRound, Loader2, Sparkles, TerminalSquare } from 'lucide-react';
@@ -165,8 +166,10 @@ export function AgentLoginPanel({
   // Shared by all three credential UXes — the only per-agent differences are
   // the input + validation that produce `(kind, value)`.
   const store = async (kind: AgentAuthKind, value: string, after?: () => void) => {
-    setBusy(true);
-    setErr(null);
+    await paintPending(() => {
+      setBusy(true);
+      setErr(null);
+    });
     try {
       await auth.login({ agentType: adapter.type, kind, value });
       after?.();
@@ -179,8 +182,10 @@ export function AgentLoginPanel({
   };
 
   const signOut = async () => {
-    setBusy(true);
-    setErr(null);
+    await paintPending(() => {
+      setBusy(true);
+      setErr(null);
+    });
     try {
       await auth.logout(adapter.type);
       setLastKind(null);

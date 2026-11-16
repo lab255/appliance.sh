@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -53,8 +54,10 @@ export function ConnectPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    setSubmitting(true);
-    setError(null);
+    await paintPending(() => {
+      setSubmitting(true);
+      setError(null);
+    });
     try {
       const normalizedUrl = url.trim().replace(/\/+$/, '');
       const trimmedKeyId = keyId.trim();

@@ -1,3 +1,4 @@
+import { paintPending, afterPendingPaint } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -102,6 +103,7 @@ function InviteComposer() {
   const [copyError, setCopyError] = React.useState('');
 
   const create = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async (inviteeName: string) => {
       const result = await client!.createInvite({ name: inviteeName });
       if (!result.success) throw result.error;
@@ -239,8 +241,10 @@ function PendingInvites() {
       confirmLabel: 'Cancel invite',
     });
     if (!ok) return;
-    setRevokingId(id);
-    setRevokeError(null);
+    await paintPending(() => {
+      setRevokingId(id);
+      setRevokeError(null);
+    });
     const result = await client!.deleteInvite(id);
     if (!result.success) {
       setRevokingId(null);
@@ -348,8 +352,10 @@ function MembersList() {
       confirmLabel: 'Remove access',
     });
     if (!ok) return;
-    setRevokingId(id);
-    setRevokeError(null);
+    await paintPending(() => {
+      setRevokingId(id);
+      setRevokeError(null);
+    });
     const result = await client!.deleteKey(id);
     if (!result.success) {
       setRevokingId(null);

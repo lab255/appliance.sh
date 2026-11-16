@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import { ScrollArea } from '@appliance.sh/ui/scroll-area';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { Switch } from '@appliance.sh/ui';
@@ -112,8 +113,10 @@ export function EgressPanel({
   }, [enforced, policy]);
 
   const act = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setErr(null);
+    await paintPending(() => {
+      setBusy(true);
+      setErr(null);
+    });
     try {
       await fn();
     } catch (e) {

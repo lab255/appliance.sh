@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import { useJourneyNavigate, JourneyReveal, JourneySwap } from '@/components/journey-motion';
 import * as React from 'react';
 import { useLocation, Navigate } from 'react-router';
@@ -161,7 +162,7 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
   );
 
   const runFrom = React.useCallback(
-    (fromPhase: BootstrapPhase) => {
+    async (fromPhase: BootstrapPhase, acknowledge = false) => {
       const input = inputRef.current;
       if (!input || !host.bootstrap) return;
       const startIdx = PHASE_ORDER.indexOf(fromPhase);
@@ -177,6 +178,7 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
       setError(null);
       setFailedPhase(null);
       setRetrying(true);
+      if (acknowledge) await afterPendingPaint();
 
       host.bootstrap
         .run(input, { phases: phasesToRun, prior: priorRef.current }, handleEvent)
@@ -320,7 +322,7 @@ function AwsProgress({ values }: { values: AwsWizardValues | undefined }) {
           failure={error ?? undefined}
           retry={
             failedPhase ? (
-              <Button size="sm" onClick={() => runFrom(failedPhase)} disabled={retrying}>
+              <Button size="sm" onClick={() => runFrom(failedPhase, true)} disabled={retrying}>
                 {retrying ? 'Retrying…' : `Retry ${phaseNames[failedPhase].toLowerCase()}`}
               </Button>
             ) : undefined
@@ -560,88 +562,95 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
     return () => clearInterval(t);
   }, [outcome]);
 
-  const start = React.useCallback(async () => {
-    if (!vmHost) {
-      setError('The Dev Machine is only available in the desktop app.');
-      setOutcome('failed');
-      return;
-    }
-    setError(null);
-    setOutcome('running');
-    setReached(-1);
-    setClusterDetail(null);
-    setLogs([]);
-    setRetrying(true);
-    lastActivityRef.current = Date.now();
-    setStalled(false);
-    const instance = vmHost.instance(name);
+  const start = React.useCallback(
+    async (acknowledge = false) => {
+      if (!vmHost) {
+        setError('The Dev Machine is only available in the desktop app.');
+        setOutcome('failed');
+        return;
+      }
+      setError(null);
+      setOutcome('running');
+      setReached(-1);
+      setClusterDetail(null);
+      setLogs([]);
+      setRetrying(true);
+      lastActivityRef.current = Date.now();
+      setStalled(false);
+      const instance = vmHost.instance(name);
 
-    // Poll the structured phase alongside the streamed log: the engine
-    // publishes media→…→ready via status().phase, so the ladder advances
-    // even though up() itself only yields free-text lines. Transient
-    // errors (binary installing, VM not up yet) are swallowed — the
-    // up() promise is the source of truth for success/failure.
-    //
-    // Liveness/handle live in refs so unmount cleanup can tear this down.
-    // Clear any prior interval first so a Retry can never leave two poll
-    // loops racing.
-    liveRef.current = true;
-    clearInterval(timerRef.current);
-    const poll = async () => {
-      try {
-        const s = await instance.status();
-        // Re-check liveness after the await: a poll already in flight when
-        // the run settles (or the page unmounts) must not apply a phase.
-        if (liveRef.current && s.phase) applyPhase(s.phase, s.phaseDetail);
-      } catch {
-        // keep polling
-      }
-    };
-    timerRef.current = setInterval(() => {
-      if (liveRef.current) void poll();
-    }, 1500);
-    void poll();
-
-    try {
-      appendLog('info', `Starting the "${name}" Sandbox…`);
-      // The express boot provisions the VM DEV-CAPABLE (devUp: dev
-      // toolchain + persistent workspace) so agents and dev shells work
-      // right after onboarding — no second detour through the Machine
-      // page. Falls back to a plain up() on hosts without devUp.
-      const onLog = (e: { message: string }) => appendLog('info', e.message);
-      // Streams the same lines the CLI prints and installs the engine
-      // binary if missing. Express setup stops at the core sandbox.
-      if (typeof instance.devUp === 'function') {
-        await instance.devUp(onLog);
-      } else {
-        await instance.up(onLog);
-      }
-      if (clusterRequested) {
-        setReached(ladder.findIndex((r) => r.phase === 'cluster'));
-        await instance.clusterUp(onLog);
-      }
-      appendLog(
-        'info',
-        clusterRequested
-          ? `The "${name}" Sandbox is ready with App hosting on.`
-          : `The "${name}" Sandbox is ready for agents and shells.`
-      );
-      setReached(ladder.length - 1);
-      setOutcome('ready');
-      await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
-      await queryClient.invalidateQueries({ queryKey: ['microvm'] });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      appendLog('error', message);
-      setError(message);
-      setOutcome('failed');
-    } finally {
-      liveRef.current = false;
+      // Poll the structured phase alongside the streamed log: the engine
+      // publishes media→…→ready via status().phase, so the ladder advances
+      // even though up() itself only yields free-text lines. Transient
+      // errors (binary installing, VM not up yet) are swallowed — the
+      // up() promise is the source of truth for success/failure.
+      //
+      // Liveness/handle live in refs so unmount cleanup can tear this down.
+      // Clear any prior interval first so a Retry can never leave two poll
+      // loops racing.
+      liveRef.current = true;
       clearInterval(timerRef.current);
-      timerRef.current = undefined;
-      setRetrying(false);
-    }
-  }, [vmHost, name, clusterRequested, ladder, appendLog, applyPhase, queryClient]);
+      const poll = async () => {
+        try {
+          const s = await instance.status();
+          // Re-check liveness after the await: a poll already in flight when
+          // the run settles (or the page unmounts) must not apply a phase.
+          if (liveRef.current && s.phase) applyPhase(s.phase, s.phaseDetail);
+        } catch {
+          // keep polling
+        }
+      };
+      if (acknowledge) {
+        await afterPendingPaint();
+        if (!liveRef.current) return;
+      }
+      timerRef.current = setInterval(() => {
+        if (liveRef.current) void poll();
+      }, 1500);
+      void poll();
+
+      try {
+        appendLog('info', `Starting the "${name}" Sandbox…`);
+        // The express boot provisions the VM DEV-CAPABLE (devUp: dev
+        // toolchain + persistent workspace) so agents and dev shells work
+        // right after onboarding — no second detour through the Machine
+        // page. Falls back to a plain up() on hosts without devUp.
+        const onLog = (e: { message: string }) => appendLog('info', e.message);
+        // Streams the same lines the CLI prints and installs the engine
+        // binary if missing. Express setup stops at the core sandbox.
+        if (typeof instance.devUp === 'function') {
+          await instance.devUp(onLog);
+        } else {
+          await instance.up(onLog);
+        }
+        if (clusterRequested) {
+          setReached(ladder.findIndex((r) => r.phase === 'cluster'));
+          await instance.clusterUp(onLog);
+        }
+        appendLog(
+          'info',
+          clusterRequested
+            ? `The "${name}" Sandbox is ready with App hosting on.`
+            : `The "${name}" Sandbox is ready for agents and shells.`
+        );
+        setReached(ladder.length - 1);
+        setOutcome('ready');
+        await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
+        await queryClient.invalidateQueries({ queryKey: ['microvm'] });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        appendLog('error', message);
+        setError(message);
+        setOutcome('failed');
+      } finally {
+        liveRef.current = false;
+        clearInterval(timerRef.current);
+        timerRef.current = undefined;
+        setRetrying(false);
+      }
+    },
+    [vmHost, name, clusterRequested, ladder, appendLog, applyPhase, queryClient]
+  );
 
   React.useEffect(() => {
     if (startedRef.current) return;
@@ -725,7 +734,7 @@ function MicroVmProgress({ values }: { values: MicroVmWizardValues }) {
           }
           failure={error ? (reached < 0 ? error : `${ladder[cur].label}: ${error}`) : undefined}
           retry={
-            <Button size="sm" onClick={() => void start()} disabled={retrying}>
+            <Button size="sm" onClick={() => void start(true)} disabled={retrying}>
               {retrying ? 'Retrying…' : 'Retry'}
             </Button>
           }

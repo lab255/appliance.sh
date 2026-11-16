@@ -1,0 +1,27 @@
+import json,time,subprocess
+from pathlib import Path
+command=Path('/tmp/gla337-native-command.json')
+def send(id,action,**args):command.write_text(json.dumps(dict(id=id,action=action,**args)));time.sleep(.5)
+def events():
+ return [json.loads(x) for x in Path('/tmp/gla337-native-events.jsonl').read_text().splitlines()]
+def apple(lines):
+ args=['osascript']
+ for l in ['tell application "System Events" to tell process "appliance-desktop"','set frontmost to true']+lines+['end tell']:args+=['-e',l]
+ subprocess.run(args,check=True)
+for reduced in [False,True]:
+ send('final-motion-'+str(reduced),'reduce',value=reduced);time.sleep(2)
+ for i in range(10):
+  id=f'final-native-{reduced}-{i}'
+  send(id,'focus')
+  apple(['key code 49','delay 0.4','keystroke "g" using {command down, shift down}','delay 0.3','keystroke "/tmp/gla337-journal.appliance.zip"','key code 36','delay 0.3','key code 36'])
+  deadline=time.time()+15
+  while time.time()<deadline:
+   result=[x for x in events() if x.get('runId')==id and x.get('stage')=='publisher']
+   if result:break
+   time.sleep(.1)
+  if not result:raise Exception('No publisher review for '+id)
+  print(id,result[-1]['ack'],'ms',result[-1]['dialog'],'ms to review',flush=True)
+  if i==0:subprocess.run(['screencapture','-x','-R0,62,1440,1000',f'docs/evidence/gla-337/native-{reduced}-review.png'],check=True)
+  send('cancel-'+id,'cancel');time.sleep(.3)
+selected=[x for x in events() if x.get('runId','').startswith('final-native-')]
+Path('docs/evidence/gla-337/native-samples.json').write_text(json.dumps(selected,indent=2))

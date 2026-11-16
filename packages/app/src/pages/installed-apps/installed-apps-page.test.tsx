@@ -12,6 +12,9 @@ import { HostProvider } from '@/providers/host-provider';
 import { GrantDialog, InstalledAppCard, InstalledAppsEmptyState, InstalledAppsPage } from './index';
 import { UnknownPublisherDialog } from './unknown-publisher-dialog';
 
+// These tests exercise outcomes; paint ordering is covered in paint-pending.test.tsx.
+vi.mock('@/lib/paint-pending', () => ({ paintPending: async (update: () => void) => update() }));
+
 vi.mock('@/components/layout/workspace-switcher', () => ({
   useCurrentWorkspace: () => ({ cluster: null, kind: 'local', isLoading: false }),
 }));

@@ -1,3 +1,4 @@
+import { afterPendingPaint } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { HoverGlide } from '@appliance.sh/ui';
 import * as React from 'react';
@@ -88,6 +89,7 @@ function Overview({
   });
 
   const createMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async (input: { name: string; description?: string }) => {
       const r = await client!.createProject(input);
       if (!r.success) throw r.error;
@@ -105,6 +107,7 @@ function Overview({
   });
 
   const deleteMutation = useMutation({
+    onMutate: () => afterPendingPaint(),
     mutationFn: async (p: Project) => {
       const r = await client!.deleteProject(p.id);
       if (!r.success) throw r.error;

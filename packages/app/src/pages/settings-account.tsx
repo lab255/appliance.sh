@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Banner } from '@/components/ui/banner';
@@ -38,9 +39,11 @@ export function AccountSection() {
   }, [account, readAttempt]);
   async function run(action: 'signIn' | 'signOut') {
     if (!account) return;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
+    await paintPending(() => {
+      setBusy(true);
+      setError(null);
+      setNotice(null);
+    });
     try {
       const next = await account[action]();
       setStatus(next);

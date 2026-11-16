@@ -1,3 +1,4 @@
+import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { RefreshCw, Download, ArrowUpCircle, ShieldCheck } from 'lucide-react';
@@ -91,7 +92,7 @@ function EntitlementsSection() {
 
   const revoke = async (suggestion: EntitlementSuggestion) => {
     if (!host.entitlements) return;
-    setBusy(`${suggestion.appId}:${suggestion.grant.id}`);
+    await paintPending(() => setBusy(`${suggestion.appId}:${suggestion.grant.id}`));
     try {
       await host.entitlements.revoke(suggestion.appId, suggestion.grant.id);
       setConfirming(null);
@@ -112,7 +113,15 @@ function EntitlementsSection() {
       {error ? (
         <p className="mb-3 text-xs text-[var(--color-destructive-foreground)]" role="alert">
           {error}
-          <Button size="sm" variant="outline" disabled={loading} onClick={() => void refresh()}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading}
+            onClick={async () => {
+              await paintPending(() => setLoading(true));
+              await refresh();
+            }}
+          >
             Retry
           </Button>
         </p>
@@ -318,10 +327,12 @@ function UpdatesSection() {
 
   const onCheck = async () => {
     if (!host.updater) return;
-    setPhase('checking');
-    setError(null);
-    setErrorStep(null);
-    setProgress(null);
+    await paintPending(() => {
+      setPhase('checking');
+      setError(null);
+      setErrorStep(null);
+      setProgress(null);
+    });
     try {
       const found = await host.updater.check();
       if (found) {
@@ -340,10 +351,12 @@ function UpdatesSection() {
 
   const onInstall = async () => {
     if (!host.updater) return;
-    setPhase('downloading');
-    setError(null);
-    setErrorStep(null);
-    setProgress({ downloaded: 0 });
+    await paintPending(() => {
+      setPhase('downloading');
+      setError(null);
+      setErrorStep(null);
+      setProgress({ downloaded: 0 });
+    });
     try {
       await host.updater.downloadAndInstall((p) => setProgress(p));
       setPhase('ready');
