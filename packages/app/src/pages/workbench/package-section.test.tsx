@@ -93,6 +93,12 @@ it('readiness/result updates make zero calls; only one click crosses the bridge 
     expect(calls).toEqual(['package']);
     expect(container.querySelector('a[href="/projects/deploy"]')).not.toBeNull();
     expect(container.querySelector('a[href="/apps"]')).not.toBeNull();
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+    await act(async () => disclosure.click());
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => disclosure.click());
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(calls).toEqual(['package']);
   } finally {
     await act(async () => root.unmount());
     container.remove();

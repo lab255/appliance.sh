@@ -28,6 +28,7 @@ export function PackageSection({
   const [error, setError] = React.useState('');
   const [copyLabel, setCopyLabel] = React.useState('Copy file path');
   const [logs, setLogs] = React.useState<string[]>([]);
+  const [logOpen, setLogOpen] = React.useState(true);
   const [stage, setStage] = React.useState('');
   const [startedAt, setStartedAt] = React.useState(0);
   const [lastActivityAt, setLastActivityAt] = React.useState(0);
@@ -51,6 +52,7 @@ export function PackageSection({
       setError('');
       setCopyLabel('Copy file path');
       setLogs([]);
+      setLogOpen(true);
       setStage('Starting packaging…');
       setStartedAt(Date.now());
       setLastActivityAt(Date.now());
@@ -124,7 +126,13 @@ export function PackageSection({
             lastActivityAt={lastActivityAt}
             failure={error || undefined}
             log={<pre className="whitespace-pre-wrap break-all font-mono text-xs">{logs.join('\n')}</pre>}
-            logProps={{ open: true, height: 'compact', copyText: logs.join('\n'), live: 'off' }}
+            logProps={{
+              open: logOpen,
+              onOpenChange: setLogOpen,
+              height: 'compact',
+              copyText: logs.join('\n'),
+              live: 'off',
+            }}
           />
         )}
       </div>
