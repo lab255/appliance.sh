@@ -1,0 +1,30 @@
+Headless validation before W1 integration (macOS arm64; Node 24.14.1; Rust 1.96.0)
+
+Real CLI protocol tests: 6 passed
+- original v2 image fixture
+- original v1 source error
+- unsigned stages, artifact path and verified content digest
+- signed Ed25519 artifact, key ID and independent public-key verification
+- v1 error without result or output file
+- configured invalid key fails without unsigned fallback
+
+Package UI action tests: 3 passed
+- readiness updates: zero calls; click: one call after busy DOM and paint opportunity
+- duplicate click suppressed; success causes zero install/publish/deploy calls
+- focus retained through result; exact unsigned label
+- engine error retained with no successful File result; explicit retry
+- files-changing state ineligible despite readiness proposal
+
+Existing installed-app UI tests: 19 passed
+- unknown publisher and grants retain their existing accept/cancel handlers
+- retained exiting dialogs cannot accept or grant
+- added assertion for Publisher (unverified) and the existing publisher name
+
+Standalone native bridge compilation/key-policy test: 1 passed
+(The temporary crate imports the sibling Rust module and uses pinned desktop dependencies;
+no W1 spine edit was required.)
+
+Full repository check:
+==> verify: GREEN
+
+This file records headless checks. It is not a live UI packaging/installation claim.
