@@ -60,7 +60,7 @@ export function AppShell() {
   // their apps and Settings. Machine / Cloud / Agents / Setup are operator
   // tools — the API 403s a member on them anyway, so showing the nav
   // items would only manufacture dead ends.
-  const { role, isLoading: isRoleLoading } = useKeyRole();
+  const { role } = useKeyRole();
   const isOperator = role === 'admin';
   const { mode, isLoading: isModeLoading, savingMode, error: modeError, setMode } = useAppMode();
 
@@ -83,11 +83,22 @@ export function AppShell() {
     isLoading,
   });
   const isChoosingMode = !isModeLoading && mode === null;
-  // The sidebar already reserves the full navigation area. Do not paint a
-  // provisional short list: resolving mode/cluster/role can insert any number
-  // of rows above Settings. Reveal the settled list in that reserved area,
-  // without placeholder links or a reservation tied to today's row count.
-  const isNavLoading = isModeLoading || isLoading || isRoleLoading;
+  // Reserve only the first mode/config resolution. Role keeps its documented
+  // admin default while resolving; a remote whoami must never blank the nav.
+  // Once revealed, cluster switches/refetches cannot hide it again.
+  const isColdNavPending = isModeLoading || isLoading;
+  const [hasRevealedNav, setHasRevealedNav] = React.useState(!isColdNavPending);
+  React.useEffect(() => {
+    if (!isColdNavPending) setHasRevealedNav(true);
+  }, [isColdNavPending]);
+  React.useEffect(() => {
+    if (hasRevealedNav) return;
+    // Prefer usable navigation over indefinite reservation if local host data
+    // stalls. Late rows can shift after this one-second cold-only deadline.
+    const timer = setTimeout(() => setHasRevealedNav(true), 1_000);
+    return () => clearTimeout(timer);
+  }, [hasRevealedNav]);
+  const isNavLoading = !hasRevealedNav && isColdNavPending;
 
   return (
     // Below `sm` the sidebar collapses to an icon rail so narrow
@@ -175,15 +186,11 @@ export function AppShell() {
             );
           })}
         </HoverGlide>
-        {/* Keep the footer's dimensions while mode resolves, too. */}
-        <div
-          className={cn(
-            'hidden shrink-0 border-t border-[var(--color-border)] p-3 sm:block',
-            mode !== 'developer' && 'invisible'
-          )}
-        >
-          <StatusPill tone="info" dot={false} label="Developer mode" />
-        </div>
+        {mode === 'developer' ? (
+          <div className="hidden border-t border-[var(--color-border)] p-3 sm:block">
+            <StatusPill tone="info" dot={false} label="Developer mode" />
+          </div>
+        ) : null}
       </aside>
 
       {/* The switcher uses text-sm (1lh), py-1.5 (3 spacing units), and
