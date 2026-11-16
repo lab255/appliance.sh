@@ -1,0 +1,114 @@
+[
+  {
+    "scenario": "developer-apps",
+    "motion": "no-preference",
+    "before": "before-developer-apps-no-preference.png",
+    "after": "after-developer-apps-no-preference.png",
+    "beforeSha256": "af0f4a610cc3c8e2f7c8c515a9c42a79f6f23740a4717025296ad3bd92d60963",
+    "afterSha256": "af0f4a610cc3c8e2f7c8c515a9c42a79f6f23740a4717025296ad3bd92d60963"
+  },
+  {
+    "scenario": "developer-apps",
+    "motion": "reduce",
+    "before": "before-developer-apps-reduce.png",
+    "after": "after-developer-apps-reduce.png",
+    "beforeSha256": "7ce047c39ad452b72edd5e620c5760673d836c61c651554066af6cfa3e46ff40",
+    "afterSha256": "af0f4a610cc3c8e2f7c8c515a9c42a79f6f23740a4717025296ad3bd92d60963"
+  },
+  {
+    "scenario": "developer-settings",
+    "motion": "no-preference",
+    "before": "before-developer-settings-no-preference.png",
+    "after": "after-developer-settings-no-preference.png",
+    "beforeSha256": "26fed06355c18f5e88e9b2a84b1300cc8674355a60b23ab4a799ddb0927d9006",
+    "afterSha256": "26fed06355c18f5e88e9b2a84b1300cc8674355a60b23ab4a799ddb0927d9006"
+  },
+  {
+    "scenario": "developer-settings",
+    "motion": "reduce",
+    "before": "before-developer-settings-reduce.png",
+    "after": "after-developer-settings-reduce.png",
+    "beforeSha256": "26fed06355c18f5e88e9b2a84b1300cc8674355a60b23ab4a799ddb0927d9006",
+    "afterSha256": "26fed06355c18f5e88e9b2a84b1300cc8674355a60b23ab4a799ddb0927d9006"
+  },
+  {
+    "scenario": "machine-daemon-down",
+    "motion": "no-preference",
+    "before": "before-machine-daemon-down-no-preference.png",
+    "after": "after-machine-daemon-down-no-preference.png",
+    "beforeSha256": "0ba4df784ed9dda5ab2665ebba86ad9fc4713373398ccb6152de3519cd97d244",
+    "afterSha256": "0ba4df784ed9dda5ab2665ebba86ad9fc4713373398ccb6152de3519cd97d244"
+  },
+  {
+    "scenario": "machine-daemon-down",
+    "motion": "reduce",
+    "before": "before-machine-daemon-down-reduce.png",
+    "after": "after-machine-daemon-down-reduce.png",
+    "beforeSha256": "0ba4df784ed9dda5ab2665ebba86ad9fc4713373398ccb6152de3519cd97d244",
+    "afterSha256": "0ba4df784ed9dda5ab2665ebba86ad9fc4713373398ccb6152de3519cd97d244"
+  },
+  {
+    "scenario": "stale-catalogue",
+    "motion": "no-preference",
+    "before": "before-stale-catalogue-no-preference.png",
+    "after": "after-stale-catalogue-no-preference.png",
+    "beforeSha256": "1537ea60e1bea911184efe68870916d5345174ad40bdf1945c841eec21cdbcfd",
+    "afterSha256": "a6840fecb21c18877609aca6fe7a838b3307c99f64299c02d55d3d8a0f304e03"
+  },
+  {
+    "scenario": "stale-catalogue",
+    "motion": "reduce",
+    "before": "before-stale-catalogue-reduce.png",
+    "after": "after-stale-catalogue-reduce.png",
+    "beforeSha256": "1537ea60e1bea911184efe68870916d5345174ad40bdf1945c841eec21cdbcfd",
+    "afterSha256": "a6840fecb21c18877609aca6fe7a838b3307c99f64299c02d55d3d8a0f304e03"
+  },
+  {
+    "scenario": "unverified-catalogue",
+    "motion": "no-preference",
+    "before": "before-unverified-catalogue-no-preference.png",
+    "after": "after-unverified-catalogue-no-preference.png",
+    "beforeSha256": "2cf0f18b230e764a98d730f96e9c62da7c05ec7ee3ff167b72091fcb75526164",
+    "afterSha256": "2cf0f18b230e764a98d730f96e9c62da7c05ec7ee3ff167b72091fcb75526164"
+  },
+  {
+    "scenario": "unverified-catalogue",
+    "motion": "reduce",
+    "before": "before-unverified-catalogue-reduce.png",
+    "after": "after-unverified-catalogue-reduce.png",
+    "beforeSha256": "2cf0f18b230e764a98d730f96e9c62da7c05ec7ee3ff167b72091fcb75526164",
+    "afterSha256": "2cf0f18b230e764a98d730f96e9c62da7c05ec7ee3ff167b72091fcb75526164"
+  },
+  {
+    "scenario": "user-ipc",
+    "motion": "no-preference",
+    "before": "before-user-ipc-no-preference.png",
+    "after": "after-user-ipc-no-preference.png",
+    "beforeSha256": "558b1766cac888cb2623bb0b7ca8c84fbfce9f81b43c182d1ad2919e62f59506",
+    "afterSha256": "558b1766cac888cb2623bb0b7ca8c84fbfce9f81b43c182d1ad2919e62f59506"
+  },
+  {
+    "scenario": "user-ipc",
+    "motion": "reduce",
+    "before": "before-user-ipc-reduce.png",
+    "after": "after-user-ipc-reduce.png",
+    "beforeSha256": "558b1766cac888cb2623bb0b7ca8c84fbfce9f81b43c182d1ad2919e62f59506",
+    "afterSha256": "558b1766cac888cb2623bb0b7ca8c84fbfce9f81b43c182d1ad2919e62f59506"
+  },
+  {
+    "scenario": "vm-lost-ipc",
+    "motion": "no-preference",
+    "before": "before-vm-lost-ipc-no-preference.png",
+    "after": "after-vm-lost-ipc-no-preference.png",
+    "beforeSha256": "82150c33acdff9db2c27d21196a5ec347686022e4c0840c89597becb80ae917e",
+    "afterSha256": "82150c33acdff9db2c27d21196a5ec347686022e4c0840c89597becb80ae917e"
+  },
+  {
+    "scenario": "vm-lost-ipc",
+    "motion": "reduce",
+    "before": "before-vm-lost-ipc-reduce.png",
+    "after": "after-vm-lost-ipc-reduce.png",
+    "beforeSha256": "82150c33acdff9db2c27d21196a5ec347686022e4c0840c89597becb80ae917e",
+    "afterSha256": "82150c33acdff9db2c27d21196a5ec347686022e4c0840c89597becb80ae917e"
+  }
+]

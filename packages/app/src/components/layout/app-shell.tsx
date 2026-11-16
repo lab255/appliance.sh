@@ -83,6 +83,22 @@ export function AppShell() {
     isLoading,
   });
   const isChoosingMode = !isModeLoading && mode === null;
+  // Reserve only the first mode/config resolution. Role keeps its documented
+  // admin default while resolving; a remote whoami must never blank the nav.
+  // Once revealed, cluster switches/refetches cannot hide it again.
+  const isColdNavPending = isModeLoading || isLoading;
+  const [hasRevealedNav, setHasRevealedNav] = React.useState(!isColdNavPending);
+  React.useEffect(() => {
+    if (!isColdNavPending) setHasRevealedNav(true);
+  }, [isColdNavPending]);
+  React.useEffect(() => {
+    if (hasRevealedNav) return;
+    // Prefer usable navigation over indefinite reservation if local host data
+    // stalls. Late rows can shift after this one-second cold-only deadline.
+    const timer = setTimeout(() => setHasRevealedNav(true), 1_000);
+    return () => clearTimeout(timer);
+  }, [hasRevealedNav]);
+  const isNavLoading = !hasRevealedNav && isColdNavPending;
 
   return (
     // Below `sm` the sidebar collapses to an icon rail so narrow
@@ -98,7 +114,7 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <aside className="row-span-3 flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+      <aside className="row-span-3 flex min-h-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Brand — height + divider align with the content header so the
             top-left corner reads as one clean grid, not two strips. */}
         <div className="flex h-[57px] shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
@@ -108,7 +124,11 @@ export function AppShell() {
           <span className="hidden text-sm font-semibold tracking-tight sm:block">Appliance</span>
         </div>
 
-        <HoverGlide as="nav" className="flex flex-1 flex-col gap-0.5 px-2 py-3">
+        <HoverGlide
+          as="nav"
+          aria-busy={isNavLoading}
+          className={cn('flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3', isNavLoading && 'invisible')}
+        >
           {nav.map((item) => {
             const Icon = navIcons[item.key];
             return (
@@ -173,7 +193,11 @@ export function AppShell() {
         ) : null}
       </aside>
 
-      <header className="col-start-2 flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+      {/* The switcher uses text-sm (1lh), py-1.5 (3 spacing units), and
+          two 1px borders. Header py-3 adds 6 spacing units plus its divider.
+          Derive the reserve from those same font/spacing tokens, not a pixel
+          snapshot: at the default scale this is 20 + 12 + 2 + 24 + 1 = 59px. */}
+      <header className="col-start-2 flex min-h-[calc(1lh+var(--spacing)*9+3px)] items-center justify-between border-b border-[var(--color-border)] px-4 py-3 text-sm">
         {mode === 'user' ? (
           <WorkspaceSwitcher
             onSetup={() => {

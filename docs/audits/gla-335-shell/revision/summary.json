@@ -1,0 +1,268 @@
+[
+  {
+    "file": "after.json",
+    "name": "developer-apps",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "developer-settings",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "machine-daemon-down",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 0.010028506944444442,
+    "maxCls": 0.010028506944444442,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "developer-apps",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "developer-settings",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "machine-daemon-down",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 0.010028506944444442,
+    "maxCls": 0.010028506944444442,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "stale-catalogue",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 2.9809027777777778e-5,
+    "maxCls": 2.9809027777777778e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "unverified-catalogue",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 2.9809027777777778e-5,
+    "maxCls": 2.9809027777777778e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "user-ipc",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 0.0,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "vm-lost-ipc",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "stale-catalogue",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 2.9809027777777778e-5,
+    "maxCls": 2.9809027777777778e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "unverified-catalogue",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 2.9809027777777778e-5,
+    "maxCls": 2.9809027777777778e-5,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "user-ipc",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 0.0,
+    "maxCls": 0,
+    "errors": 0
+  },
+  {
+    "file": "after.json",
+    "name": "vm-lost-ipc",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after-extra1.json",
+    "name": "developer-apps",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after-extra1.json",
+    "name": "developer-apps",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after-extra20.json",
+    "name": "developer-apps",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "after-extra20.json",
+    "name": "developer-apps",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.9036458333333335e-5,
+    "maxCls": 1.9036458333333335e-5,
+    "errors": 0
+  },
+  {
+    "file": "reveal.json",
+    "name": "cluster-switch",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.5642361111111113e-5,
+    "maxCls": 1.5642361111111113e-5,
+    "errors": 0,
+    "medianHideMs": 113.29999999701977,
+    "maxHideMs": 115.90000000596046,
+    "hiddenAgain": false,
+    "medianActionCls": 0.0
+  },
+  {
+    "file": "reveal.json",
+    "name": "cold-role-pending",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.5642361111111113e-5,
+    "maxCls": 1.5642361111111113e-5,
+    "errors": 0,
+    "medianHideMs": 112.45000000298023,
+    "maxHideMs": 117.30000001192093,
+    "hiddenAgain": false,
+    "medianActionCls": 1.5642361111111113e-5
+  },
+  {
+    "file": "reveal.json",
+    "name": "cluster-switch",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.5642361111111113e-5,
+    "maxCls": 1.5642361111111113e-5,
+    "errors": 0,
+    "medianHideMs": 113.3500000089407,
+    "maxHideMs": 117.09999999403954,
+    "hiddenAgain": false,
+    "medianActionCls": 0.0
+  },
+  {
+    "file": "reveal.json",
+    "name": "cold-role-pending",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.5642361111111113e-5,
+    "maxCls": 1.5642361111111113e-5,
+    "errors": 0,
+    "medianHideMs": 111.95000000298023,
+    "maxHideMs": 114.30000001192093,
+    "hiddenAgain": false,
+    "medianActionCls": 1.5642361111111113e-5
+  },
+  {
+    "file": "reveal.json",
+    "name": "cold-host-stall",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 1.3690863715277777e-5,
+    "maxCls": 1.3690863715277777e-5,
+    "errors": 0,
+    "medianHideMs": 1002.9000000059605,
+    "maxHideMs": 1012,
+    "hiddenAgain": false,
+    "medianActionCls": 1.3690863715277777e-5
+  },
+  {
+    "file": "reveal.json",
+    "name": "footer-arrival",
+    "motion": "no-preference",
+    "count": 10,
+    "medianCls": 0.0,
+    "maxCls": 0,
+    "errors": 0,
+    "medianHideMs": 24.799999997019768,
+    "maxHideMs": 29,
+    "hiddenAgain": false,
+    "medianActionCls": 0.0
+  },
+  {
+    "file": "reveal.json",
+    "name": "cold-host-stall",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 1.3690863715277777e-5,
+    "maxCls": 1.3690863715277777e-5,
+    "errors": 0,
+    "medianHideMs": 1005.25,
+    "maxHideMs": 1011.6999999880791,
+    "hiddenAgain": false,
+    "medianActionCls": 1.3690863715277777e-5
+  },
+  {
+    "file": "reveal.json",
+    "name": "footer-arrival",
+    "motion": "reduce",
+    "count": 10,
+    "medianCls": 0.0,
+    "maxCls": 0,
+    "errors": 0,
+    "medianHideMs": 26.600000023841858,
+    "maxHideMs": 31.099999994039536,
+    "hiddenAgain": false,
+    "medianActionCls": 0.0
+  }
+]
