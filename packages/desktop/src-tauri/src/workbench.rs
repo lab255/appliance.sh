@@ -169,10 +169,10 @@ pub fn read(directory: &str) -> Result<serde_json::Value, WorkbenchError> {
         serde_json::json!({ "directory": root.to_string_lossy(), "binding": binding, "machine": machine, "mount": mount, "sessions": sessions, "affectedSessions": affected }),
     )
 }
-// W3 integration seam: replace body with inspection::capture(app, directory).
+// W3 host capture completes (or records its failure) before open/create returns.
 // Capture owns durable attempt/failure state; never retry silently on read.
-fn capture_workbench_baseline(_app: &tauri::AppHandle, _directory: &str) -> Result<(), String> {
-    Err("No baseline captured — change comparison will be unavailable".into())
+fn capture_workbench_baseline(app: &tauri::AppHandle, directory: &str) -> Result<(), String> {
+    super::inspection::capture(app, directory)
 }
 pub fn open(app: &tauri::AppHandle, directory: &str) -> Result<serde_json::Value, WorkbenchError> {
     let _lock = IO.lock().map_err(|e| e.to_string())?;

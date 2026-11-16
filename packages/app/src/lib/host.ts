@@ -1,3 +1,4 @@
+import type { InspectionHost } from './inspection';
 import type {
   ApiServerUpdateInput,
   ApiServerUpdateOptions,
@@ -379,7 +380,7 @@ export interface WorkbenchHost {
 // tab can do on its own isn't here. Desktop-only hooks (OS keychain,
 // system tray, native notifications, bootstrap driver) are optional
 // fields so the web host can omit them entirely.
-export interface ConsoleHost {
+export interface ConsoleHost extends InspectionHost {
   /** Workbench bindings (desktop only). */
   workbench?: WorkbenchHost;
   /** Resolved once when the host is constructed so render-time copy stays synchronous. */

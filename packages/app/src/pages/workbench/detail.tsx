@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@appliance.sh/ui/tabs';
+import { WorkspaceInspector } from './workspace-inspector';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
 import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
@@ -70,7 +70,7 @@ export function WorkbenchDetailPage() {
         ...workspace.binding,
         selectedTarget: { kind: workspaceKind(cluster), ref },
       });
-      cache.setQueryData(['workbench', workspaceId], { ...updated, baselineWarning: workspace.baselineWarning });
+      cache.setQueryData(['workbench', workspaceId], updated);
       void cache.invalidateQueries({ queryKey: ['workbench'], exact: true });
     } catch (e) {
       setError(workbenchErrorMessage(e));
@@ -150,23 +150,7 @@ export function WorkbenchDetailPage() {
           <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">No agent is launched from this shell.</p>
         </section>
         <section className="min-w-0 rounded-lg border border-[var(--color-border)] p-4">
-          <Tabs defaultValue="changes">
-            <TabsList aria-label="Workspace inspection">
-              {['Changes', 'Files', 'Logs'].map((tab) => (
-                <TabsTrigger key={tab} value={tab.toLowerCase()}>
-                  {tab}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {['Changes', 'Files', 'Logs'].map((tab) => (
-              <TabsContent key={tab} value={tab.toLowerCase()} className="min-h-40 py-4">
-                <p>{tab} inspection is not available yet.</p>
-              </TabsContent>
-            ))}
-          </Tabs>
-          <p className="text-sm text-[var(--color-muted-foreground)]">
-            {workspace.baselineWarning || 'No baseline captured — change comparison will be unavailable'}
-          </p>
+          <WorkspaceInspector directory={workspace.directory} />
           {/* Persistent action section: W2 Package / wave 2b Deploy integration seam. */}
           <div className="mt-4 space-y-4 border-t border-[var(--color-border)] pt-4">
             <div>

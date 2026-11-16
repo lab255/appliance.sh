@@ -1,37 +1,49 @@
 // ---- Workbench bindings (W1); sibling Inspection and Package blocks follow ----
 mod workbench;
 
+// Capture and workspace I/O run off the event loop. Baseline status is read by
+// inspection refresh, not unused enrichment on every workspace listing.
 #[tauri::command]
-fn workbench_list(
+async fn workbench_list(
     app: tauri::AppHandle,
 ) -> Result<Vec<serde_json::Value>, workbench::WorkbenchError> {
-    workbench::list(&app)
+    tauri::async_runtime::spawn_blocking(move || workbench::list(&app))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-fn workbench_open(
+async fn workbench_open(
     app: tauri::AppHandle,
     directory: String,
 ) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    workbench::open(&app, &directory)
+    tauri::async_runtime::spawn_blocking(move || workbench::open(&app, &directory))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-fn workbench_read(directory: String) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    workbench::read(&directory)
+async fn workbench_read(directory: String) -> Result<serde_json::Value, workbench::WorkbenchError> {
+    tauri::async_runtime::spawn_blocking(move || workbench::read(&directory))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-fn workbench_create(
+async fn workbench_create(
     app: tauri::AppHandle,
     parent: String,
     name: String,
 ) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    workbench::create(&app, &parent, &name)
+    tauri::async_runtime::spawn_blocking(move || workbench::create(&app, &parent, &name))
+        .await
+        .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-fn workbench_update(
+async fn workbench_update(
     directory: String,
     binding: workbench::Binding,
 ) -> Result<serde_json::Value, workbench::WorkbenchError> {
-    workbench::update(&directory, binding)
+    tauri::async_runtime::spawn_blocking(move || workbench::update(&directory, binding))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -43,6 +55,8 @@ fn workbench_forget(
 }
 
 mod cluster_gc;
+// ---- Inspection (W3): host-only baseline and read-only snapshot API ----
+mod inspection;
 mod profiles_lock;
 mod terminal;
 
@@ -5090,6 +5104,13 @@ async fn run_microvm_up(
     mount: Option<String>,
     on_event: Channel<serde_json::Value>,
 ) -> Result<(), String> {
+    // Inspection trust boundary: a later ancestor mount must not expose any
+    // previously captured baseline. This does not gate launch on baseline I/O.
+    if let Some(directory) = mount.as_deref().filter(|value| !value.trim().is_empty()) {
+        inspection::validate_mount(&app, directory)?;
+    } else if let Some(directory) = vm_dev_mount(&name) {
+        inspection::validate_mount(&app, &directory)?;
+    }
     // Self-heal: refresh the managed engine binary the bundled CLI below
     // resolves (~/.appliance/bin) when it's missing OR stale, so a freshly
     // bundled engine always wins over a leftover older install.
@@ -7596,6 +7617,9 @@ pub fn run() {
             workbench_read,
             workbench_create,
             workbench_update,
+            // Inspection — read-only host snapshot commands (W3).
+            inspection::inspection_refresh,
+            inspection::inspection_read,
             able_account,
             host_platform,
             get_config,
