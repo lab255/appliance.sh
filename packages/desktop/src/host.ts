@@ -1,3 +1,4 @@
+import type { Inspection, InspectionPreview } from '@appliance.sh/app';
 import { fetchDesktopCatalogue } from './catalogue';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { open as openShell } from '@tauri-apps/plugin-shell';
@@ -77,6 +78,14 @@ export const tauriHost: Omit<ConsoleHost, 'platform'> = {
     refresh: () => invoke('able_account', { action: 'refresh', switchAccount: false }),
   },
   desktop: true,
+  // Inspection — read-only host snapshot bridge (W3).
+  inspectionRefresh(directory: string) {
+    return invoke<Inspection>('inspection_refresh', { directory });
+  },
+  inspectionRead(directory: string, path: string, large: boolean, snapshotId: string) {
+    return invoke<InspectionPreview>('inspection_read', { directory, path, large, snapshotId });
+  },
+
   async getConfig(): Promise<HostConfig> {
     // Native get_config removes missing-VM records before returning signing keys.
     return invoke<HostConfig>('get_config');

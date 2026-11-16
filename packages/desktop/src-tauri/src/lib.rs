@@ -43,6 +43,7 @@ fn workbench_forget(
 }
 
 mod cluster_gc;
+mod inspection;
 mod profiles_lock;
 mod terminal;
 
@@ -5090,6 +5091,13 @@ async fn run_microvm_up(
     mount: Option<String>,
     on_event: Channel<serde_json::Value>,
 ) -> Result<(), String> {
+    // Inspection trust boundary: a later ancestor mount must not expose any
+    // previously captured baseline. This does not gate launch on baseline I/O.
+    if let Some(directory) = mount.as_deref().filter(|value| !value.trim().is_empty()) {
+        inspection::validate_mount(&app, directory)?;
+    } else if let Some(directory) = vm_dev_mount(&name) {
+        inspection::validate_mount(&app, &directory)?;
+    }
     // Self-heal: refresh the managed engine binary the bundled CLI below
     // resolves (~/.appliance/bin) when it's missing OR stale, so a freshly
     // bundled engine always wins over a leftover older install.
@@ -7596,6 +7604,9 @@ pub fn run() {
             workbench_read,
             workbench_create,
             workbench_update,
+            // Inspection — read-only host snapshot commands (W3).
+            inspection::inspection_refresh,
+            inspection::inspection_read,
             able_account,
             host_platform,
             get_config,

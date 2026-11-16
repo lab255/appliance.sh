@@ -1,0 +1,120 @@
+# W3 host inspection evidence
+
+This is the dedicated M3 trust-boundary change. It must receive its own review gate.
+The initial draft awaits W1 merge and final open-hook/detail-shell integration.
+
+## Trust boundary and adversarial check
+
+`packages/desktop/src-tauri/src/inspection.rs` names the claim at `location`:
+
+> The agent cannot rewrite the baseline; a human comparing changes against it sees host-side truth.
+
+The host resolves the directory, uses collision-free encoded directory keys under desktop app data,
+and creates an attempt marker before capture. A failed or corrupted capture cannot be silently
+replaced by later agent output. There is no reset/rebaseline command. Snapshot content/hash/mode
+comparison never depends on the mutable workspace `.git` or `.appliance` records. Initial Git
+status is a separate informational observation, obtained through libgit2 without external
+filter/hook callbacks; it does not authorize any action or supply the comparison baseline.
+
+An agent would try to:
+
+- Rewrite `.git/HEAD`, the index, `.appliance/agents.json`, or a fake project-local baseline.
+  These change only workspace inputs; the host baseline remains in a separate store.
+- Guess the host store path and traverse a symlink or `..`. The VM only receives its project
+  mount. Host traversal uses cap-std directory capabilities; symlinks are recorded without
+  following their targets. Preview paths are exact keys into a captured snapshot, never filesystem
+  paths to open. Snapshot IDs reject reading a different refresh than the displayed header.
+- Configure a Git clean/process/fsmonitor command to execute on the host. No Git subprocess
+  is invoked; a regression fixture checks these malicious settings do not create a sentinel.
+- Cause a later broad mount to expose an existing baseline. Desktop VM bring-up rejects both
+  ancestors and descendants of app data; inspection also checks existing VM mounts. The rejection
+  names the rejected directory and app-data directory and recommends a narrower project folder.
+- Change only the tail of a large file, after the retained preview. Full-file SHA-256 detects the
+  change; the reader explicitly labels the displayed diff as truncated.
+
+The code comment and UI both state that the guarantee weakens on a host the user does not control.
+Out-of-band host-CLI remounts remain host-operator authority, not something this app can prevent;
+inspection fails closed when an overlapping mount is detected. A host operator can deliberately
+expose or alter app data. No live hostile-VM containment certification is claimed by these tests.
+
+## Approved mount-containment extension
+
+Fable 5 PM authorized the guard as part of W3, with PM²'s requirement for concrete rejection copy
+and independently reviewable audit evidence. This is a mount-containment guard, **not** a
+baseline-I/O launch gate. Failed baseline capture still permits launch with the warning.
+
+Audit of existing flows:
+
+- `packages/app/src/pages/machine/runtime-detail.tsx`: `mountPath` initializes to `null`;
+  the native directory picker supplies a selected mount. Bring-up passes
+  `{ mount: mountPath ?? undefined }`; there is no automatic home/root mount.
+- `packages/cli/src/appliance-vm.ts`: `.option('--mount <path>', ...)` has no default;
+  `mount: opts.mount` is forwarded unchanged.
+- `packages/cli/src/utils/sandbox.ts`: `ensureSandboxVm` mounts the resolved `projectDir`.
+- Local VM configuration audit: `appliance: devMount = None`;
+  `appliance-runtime: devMount = None`.
+
+No built-in or observed flow mounts an app-data ancestor. Explicitly selecting home/root now
+produces the concrete rejection; choosing a narrower project directory preserves the workflow.
+
+## Validation
+
+Host command (desktop bundle resources are irrelevant to these library tests):
+
+```sh
+TAURI_CONFIG='{"bundle":{"resources":[],"externalBin":[]}}' cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml inspection::tests --lib
+```
+
+Result: **9 passed, 0 failed**. Cases cover immutable capture, corrupt/missing baseline,
+failed-attempt persistence, dirty initial contents, mutable Git/agent metadata, external symlinks,
+malicious Git filters, empty/non-Git directories, large-file tail changes, and text/deleted/binary/
+large/missing-baseline preview semantics.
+
+`pnpm verify`: **GREEN** before final W1 integration; rerun required on the final rebased revision.
+The full run needed normal host permissions because existing VM tests create fixtures under
+`~/.appliance/vm`. An earlier sandbox run failed those fixture writes. An infra timeout under
+concurrent builds passed on rerun (44 tests); the UI token check caught and fixed shorthand
+hover syntax. No thresholds or tests were weakened.
+
+## Six-property polish evidence
+
+Actual `WorkspaceInspector` component with an explicitly simulated host (200 ms response delay),
+Chromium 1248, macOS arm64, 1440×1000, dark mode. This is **fixture UI evidence**, not VM evidence.
+Individual observations and raw input-associated layout shifts are in [measurements.json](./measurements.json).
+
+| Property    | Evidence / result                                                                                                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Immediacy   | 10 observations each for tab, file, diff, binary, and large selection in each motion preference. Medians below; all under 100 ms. Async selection/refresh paint pending state before host work.                                       |
+| Continuity  | Standard CLS and raw shift sum both **0** for delayed text, binary, and large arrivals. Fixed header/preview/tab-body space. Refresh kept reader scroll at **1150 → 1150** in both configurations.                                    |
+| Restraint   | Standard DS Tabs only; no stream animation, forced tail-follow, launch, reset, revert, or write controls.                                                                                                                             |
+| Precision   | Host tests cover baseline tampering and degraded comparisons. Generated registry/results hidden by a visible overridable filter. Initial dirty Git status shown separately. Workspace-wide labels, no invented per-agent attribution. |
+| Legibility  | Keyboard tab arrows, tree arrows/Enter, and focused diff PageDown passed. Full paths and textual +/- lines. Large-file withheld/load/truncation labels checked. Narrow layout screenshots attached.                                   |
+| Forgiveness | Failed refresh retains previous diff and marks snapshot stale; missing baseline never renders “No changes”. Retry is deliberate, preview text supports native selection/copy.                                                         |
+
+| Selection | Normal motion median ms | Reduced motion median ms | n per column |
+| --------- | ----------------------: | -----------------------: | -----------: |
+| Tab       |                   14.90 |                    16.00 |           10 |
+| File      |                   14.30 |                    14.10 |           10 |
+| Diff      |                   14.75 |                    15.30 |           10 |
+| Binary    |                   14.85 |                    14.80 |           10 |
+| Large     |                   15.85 |                    13.95 |           10 |
+
+Screenshots: [reader](./inspector-no-preference.png), [reduced motion](./inspector-reduce.png),
+[large withheld](./large-no-preference.png), [narrow](./narrow-no-preference.png).
+
+Reproduce: run `pnpm --filter @appliance.sh/app exec vite --host 127.0.0.1 --port 1443`,
+then run `node docs/evidence/w3/measure.mjs` with `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE`
+pointing to the installed browser tooling. The harness entry is `packages/app/inspection-audit.html`;
+it is not imported by the application entry point. It exercises the actual reader component.
+
+## Limits / deferrals
+
+- Logs remains an explicit integration stub. No result parsing or agent attribution is invented.
+- Captures are bounded scans, not atomic filesystem transactions. The UI says “Live files may change”.
+  The host retains up to 1 MiB per file, hashes the full content, and labels truncated textual diffs.
+- More than 128 MiB retained previews, 50,000 entries, or depth 128 fails the scan explicitly;
+  previous data remains stale. Files exceeding the 4 GiB scan limit are explicitly unreadable.
+  A larger streaming/blob-backed store is deferred; no files are silently excluded by a Git ignore rule.
+- Baseline retention/garbage collection and human rebaseline UX are deferred; no automatic moving baseline.
+- Browser evidence uses fixtures, not a native VM session. Windows/Linux host builds and live hostile-VM
+  testing are not claimed. Remote-host/operator authority remains the stated residual.

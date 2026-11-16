@@ -97,3 +97,5 @@ export type {
   AvailableUpdate,
   UpdateProgress,
 } from './lib/host';
+
+export type { Inspection, InspectionEntry, InspectionPreview } from './lib/inspection';
