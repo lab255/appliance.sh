@@ -174,17 +174,21 @@ fn walk(
         let path = format!("{prefix}{name}");
         let meta = dir.symlink_metadata(&name).map_err(err)?;
         if meta.is_symlink() {
+            let target = dir.read_link_contents(&name).map_err(err)?;
+            let bytes = target
+                .to_str()
+                .ok_or("Non-UTF-8 symbolic link target; comparison unavailable")?
+                .as_bytes()
+                .to_vec();
+            *total += bytes.len();
+            if *total > preview_budget {
+                return Err(format!("Comparison unavailable: {total} retained preview bytes exceed the {preview_budget}-byte budget at symbolic link {path}. Inspect a narrower project folder; previous snapshot was not refreshed."));
+            }
             files.insert(
                 path,
                 File {
-                    bytes: dir
-                        .read_link_contents(&name)
-                        .map_err(err)?
-                        .to_str()
-                        .ok_or("Non-UTF-8 symbolic link target; comparison unavailable")?
-                        .as_bytes()
-                        .to_vec(),
-                    size: 0,
+                    size: bytes.len() as u64,
+                    bytes,
                     digest: String::new(),
                     mode: file_mode(&meta),
                     binary: false,
