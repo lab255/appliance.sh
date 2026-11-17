@@ -22,6 +22,10 @@ step() {
   printf '\n\033[1;34m==> %s\033[0m\n' "$1"
 }
 
+step "handler audit anchor drift guard"
+node --test scripts/check-handler-anchors.test.mjs
+node scripts/check-handler-anchors.mjs
+
 # --- TypeScript / Nx green bar -------------------------------------------------
 
 step "1/5 build (nx run-many --target=build --all)"

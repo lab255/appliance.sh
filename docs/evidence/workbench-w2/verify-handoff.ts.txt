@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { verifyBundle } from '/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_zuucqw5twu-1/appliance.sh/packages/cli/src/utils/bundle-read.ts';
+import { verifyBundle } from '<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/cli/src/utils/bundle-read.ts';
 const [produced, consumed, publicKeyFile] = process.argv.slice(2);
 const publicKey = publicKeyFile ? readFileSync(publicKeyFile,'utf8').trim() : undefined;
 const verify = (file:string) => {

@@ -6,6 +6,10 @@
       "events": [],
       "displayed": "Fixture-only agent output. Select and copy this text.PROGRAMMATIC OUTPUTHOST OUTPUT STILL LIVE "
     },
+    "autoReplies": {
+      "trace": ["attach"],
+      "events": ["\u001b[5;1R", "\u001b[?1;2c"]
+    },
     "refusedRoutes": [
       {
         "route": "focus-then-type",
@@ -180,6 +184,10 @@
       "trace": ["attach"],
       "events": [],
       "displayed": "Fixture-only agent output. Select and copy this text.PROGRAMMATIC OUTPUTHOST OUTPUT STILL LIVE "
+    },
+    "autoReplies": {
+      "trace": ["attach"],
+      "events": ["\u001b[5;1R", "\u001b[?1;2c"]
     },
     "refusedRoutes": [
       {

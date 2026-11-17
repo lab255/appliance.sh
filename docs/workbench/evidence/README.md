@@ -125,7 +125,7 @@ For a file containing `{`, the exact before/after text is:
 
 All four project-file surfaces now render exactly:
 
-> /Users/dev/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected.
+> <home>/projects/demo-node-container/.appliance/workbench.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected.
 
 The opened-folder index renders exactly (fixture path; native uses the actual
 app-data path):

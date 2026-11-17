@@ -1,0 +1,1162 @@
+[
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 137,
+    "source": "onSubmit={(e) => {"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 165,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => name.trim() && create.mutate(name.trim())}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 184,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={copyLink}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 229,
+    "source": "onRefetch={() => invitesQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 278,
+    "source": "onClick={() => revoke(invite.id, invite.name)}"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 294,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => void revoke(revokeError.id, revokeError.name)}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 345,
+    "source": "onRefetch={() => keysQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 395,
+    "source": "onClick={() => revoke(key.id, key.name)}"
+  },
+  {
+    "file": "packages/app/src/pages/settings-team.tsx",
+    "line": 412,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => void revoke(revokeError.id, revokeError.name)}>"
+  },
+  {
+    "file": "packages/app/src/pages/deployments/detail.tsx",
+    "line": 85,
+    "source": "onRefetch={() => deploymentQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/deployments/list.tsx",
+    "line": 105,
+    "source": "onRefetch={() => deploymentsQuery.refetch()}"
+  },
+  {
+    "file": "packages/ui/src/components/toast.tsx",
+    "line": 95,
+    "source": "onClick={() => dismiss(t.id)}"
+  },
+  {
+    "file": "packages/ui/src/components/command-snippet.tsx",
+    "line": 57,
+    "source": "onClick={onCopy}"
+  },
+  {
+    "file": "packages/ui/src/components/combobox.tsx",
+    "line": 78,
+    "source": "onClick={() => setOpen(true)}"
+  },
+  {
+    "file": "packages/ui/src/components/combobox.tsx",
+    "line": 135,
+    "source": "onClick={() => select(option)}"
+  },
+  {
+    "file": "packages/ui/src/components/live-url.tsx",
+    "line": 39,
+    "source": "onClick={(e) => e.stopPropagation()}"
+  },
+  {
+    "file": "packages/ui/src/components/live-url.tsx",
+    "line": 48,
+    "source": "onClick={onCopy}"
+  },
+  {
+    "file": "packages/ui/src/components/log-pane.tsx",
+    "line": 85,
+    "source": "onClick={() => setOpen(!open)}"
+  },
+  {
+    "file": "packages/ui/src/components/log-pane.tsx",
+    "line": 98,
+    "source": "onClick={() => void onCopy()}"
+  },
+  {
+    "file": "packages/ui/src/components/confirm-dialog.tsx",
+    "line": 96,
+    "source": "<Button ref={cancelRef} variant=\"outline\" size=\"sm\" onClick={() => settle(false)}>"
+  },
+  {
+    "file": "packages/ui/src/components/confirm-dialog.tsx",
+    "line": 102,
+    "source": "onClick={() => settle(true)}"
+  },
+  {
+    "file": "packages/ui/src/components/banner.tsx",
+    "line": 88,
+    "source": "onClick={onDismiss}"
+  },
+  {
+    "file": "packages/ui/src/components/long-operation.tsx",
+    "line": 159,
+    "source": "onClick={() => setLogForcedOpen(true)}"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/unknown-publisher-dialog.tsx",
+    "line": 146,
+    "source": "<Button ref={cancelRef} variant=\"outline\" size=\"sm\" disabled={busy} onClick={onCancel}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/unknown-publisher-dialog.tsx",
+    "line": 149,
+    "source": "<Button size=\"sm\" disabled={busy} onClick={onAccept}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/unknown-publisher-dialog.tsx",
+    "line": 153,
+    "source": "<Button variant=\"outline\" size=\"sm\" disabled={busy} onClick={onRemember}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/grant-dialog.tsx",
+    "line": 178,
+    "source": "<Button ref={cancelRef} variant=\"outline\" size=\"sm\" disabled={busy} onClick={onCancel}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/grant-dialog.tsx",
+    "line": 181,
+    "source": "<Button size=\"sm\" disabled={busy} onClick={() => onGrant([...selected])}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 147,
+    "source": "onClick={onOpen}"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 167,
+    "source": "onClick={onStop}"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 180,
+    "source": "<Button variant=\"ghost\" size=\"sm\" disabled={busy} onClick={onLogs} aria-label={`Logs for ${app.name}`}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 194,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 236,
+    "source": "action={!filtered && onInstall ? <InstallFromFileButton onClick={onInstall} busy={busy} /> : undefined}"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 446,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => navigate('/catalogue')}>"
+  },
+  {
+    "file": "packages/app/src/pages/installed-apps/index.tsx",
+    "line": 449,
+    "source": "<InstallFromFileButton onClick={() => void pickAndInstall()} busy={busy} />"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 614,
+    "source": "<button type=\"button\" className=\"underline\" onClick={() => setPhase('target')}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 967,
+    "source": "<Button size=\"sm\" onClick={() => void startRuntime()} disabled={starting || targetLoading}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1067,
+    "source": "onClick={() => aws.setEnv(e)}"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1082,
+    "source": "<Button size=\"sm\" onClick={aws.onConfirm}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1086,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={aws.onCancel}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1099,
+    "source": "<Button size=\"sm\" onClick={aws.onPickFolder} disabled={aws.busy || baseProbeLoading}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1137,
+    "source": "onClick={onNext}"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1176,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={onSelect}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1280,
+    "source": "<Button onClick={onPick} disabled={pickBusy}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1298,
+    "source": "onClick={() => onPickRecent(entry)}"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1310,
+    "source": "onClick={(event) => {"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1343,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1387,
+    "source": "<Button onClick={onNext} disabled={!canNext}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1468,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={addEnv}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1495,
+    "source": "<Button variant=\"ghost\" size=\"icon\" onClick={() => removeEnv(idx)}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1546,
+    "source": "<Button variant=\"outline\" onClick={onBack}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1549,
+    "source": "<Button onClick={onNext} disabled={!canNext}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1599,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={onRetry}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1630,
+    "source": "<Button onClick={onDone}>Back to Apps</Button>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/deploy.tsx",
+    "line": 1635,
+    "source": "<Button variant=\"outline\" onClick={onDone}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 205,
+    "source": "onClick={() => setFilter('')}"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 224,
+    "source": "<Button variant=\"ghost\" onClick={() => setCreating(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 236,
+    "source": "<form onSubmit={onCreate} className=\"space-y-3\">"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 264,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 296,
+    "source": "onRefetch={() =>"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 416,
+    "source": "onClick={() => onDelete(project)}"
+  },
+  {
+    "file": "packages/app/src/pages/apps/index.tsx",
+    "line": 515,
+    "source": "<Button size=\"lg\" onClick={() => navigate('/projects/deploy')}>"
+  },
+  {
+    "file": "packages/app/src/pages/runtime-catalogue.tsx",
+    "line": 290,
+    "source": "onClick={() => setCategory(item)}"
+  },
+  {
+    "file": "packages/app/src/pages/runtime-catalogue.tsx",
+    "line": 360,
+    "source": "onClick={async () => {"
+  },
+  {
+    "file": "packages/app/src/pages/projects/detail.tsx",
+    "line": 133,
+    "source": "onRefetch={() => projectQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/projects/detail.tsx",
+    "line": 203,
+    "source": "onRefetch={() => environmentsQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/projects/detail.tsx",
+    "line": 268,
+    "source": "onRefetch={() => deploymentsQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/projects/detail.tsx",
+    "line": 323,
+    "source": "<Button variant=\"destructive\" onClick={onDelete} disabled={deleteMutation.isPending}>"
+  },
+  {
+    "file": "packages/app/src/pages/mode-choice.tsx",
+    "line": 70,
+    "source": "onClick={() => onSelect(choice.mode)}"
+  },
+  {
+    "file": "packages/app/src/pages/environments/detail.tsx",
+    "line": 170,
+    "source": "onRefetch={() => envQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/environments/detail.tsx",
+    "line": 234,
+    "source": "<Button onClick={() => deployMutation.mutate()} disabled={busy}>"
+  },
+  {
+    "file": "packages/app/src/pages/environments/detail.tsx",
+    "line": 327,
+    "source": "onRefetch={() => deploymentsQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/environments/detail.tsx",
+    "line": 380,
+    "source": "<Button variant=\"destructive\" onClick={onDestroy} disabled={busy}>"
+  },
+  {
+    "file": "packages/app/src/pages/environments/detail.tsx",
+    "line": 429,
+    "source": "<RefetchButton size=\"sm\" variant=\"outline\" onRefetch={retry} disabled={fetching}>"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 92,
+    "source": "onRefetch={() => workloadsQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 110,
+    "source": "onClick={async () => {"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 266,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => onShell(p)}>"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 270,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => onLogs(p)}>"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 457,
+    "source": "onClick={onClose}"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 463,
+    "source": "onClick={(e) => e.stopPropagation()}"
+  },
+  {
+    "file": "packages/app/src/pages/environments/workloads-panel.tsx",
+    "line": 480,
+    "source": "<Button ref={closeRef} variant=\"ghost\" size=\"sm\" onClick={onClose}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 109,
+    "source": "<Button onClick={() => void deployHere()} disabled={busy}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 173,
+    "source": "onClick={() => selectMutation.mutate(cluster.id)}"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 276,
+    "source": "<Button size=\"sm\" onClick={onUpdate} disabled={busy || !canUpdate}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 481,
+    "source": "<Button size=\"sm\" onClick={onRun} disabled={status === 'running' || !canUpdate}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 790,
+    "source": "onClick={() => void onRun()}"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 873,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={onRetry}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 1073,
+    "source": "<Button size=\"sm\" onClick={onRun} disabled={status === 'running' || !stateBackendUrlValid}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/panels.tsx",
+    "line": 1238,
+    "source": "<Button variant=\"destructive\" size=\"sm\" onClick={onRun} disabled={status === 'running' || !nameConfirmed}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/index.tsx",
+    "line": 174,
+    "source": "onClick={() => selectMutation.mutate()}"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/index.tsx",
+    "line": 190,
+    "source": "<Button variant=\"ghost\" size=\"icon\" onClick={() => void remove()} disabled={removeMutation.isPending}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/index.tsx",
+    "line": 207,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => selectMutation.mutate()}>"
+  },
+  {
+    "file": "packages/app/src/pages/cloud/index.tsx",
+    "line": 220,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => removeMutation.mutate()}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 126,
+    "source": "onSubmit={(values) => navigate('/cloud/bootstrap/run', { state: values })}"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 131,
+    "source": "onSubmit={(values) => {"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 181,
+    "source": "onClick={() => onPick('local')}"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 189,
+    "source": "onClick={() => onPick('aws')}"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 193,
+    "source": "<Button variant=\"ghost\" onClick={onCancel}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 218,
+    "source": "onClick={available ? onClick : undefined}"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 279,
+    "source": "<Button variant=\"ghost\" size=\"sm\" className=\"-ml-2\" onClick={onBack}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 292,
+    "source": "<form className=\"space-y-5\" onSubmit={handleSubmit}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 395,
+    "source": "<Button variant=\"ghost\" size=\"sm\" className=\"-ml-2\" onClick={onBack}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/wizard.tsx",
+    "line": 412,
+    "source": "<form className=\"space-y-4\" onSubmit={handleSubmit}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/progress.tsx",
+    "line": 335,
+    "source": "<Button size=\"sm\" onClick={() => runFrom(failedPhase, true)} disabled={retrying}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/progress.tsx",
+    "line": 342,
+    "source": "<Button onClick={() => navigate('/projects')} disabled={handoff === 'saving'}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/progress.tsx",
+    "line": 747,
+    "source": "<Button size=\"sm\" onClick={() => void start(true)} disabled={retrying}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/progress.tsx",
+    "line": 753,
+    "source": "<Button onClick={() => navigate(clusterRequested ? '/projects/deploy' : '/agents')}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/progress.tsx",
+    "line": 761,
+    "source": "<Button variant=\"outline\" onClick={() => navigate('/agents')}>"
+  },
+  {
+    "file": "packages/app/src/pages/bootstrap/progress.tsx",
+    "line": 765,
+    "source": "<Button variant=\"outline\" onClick={openShell}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings-account.tsx",
+    "line": 89,
+    "source": "<Button disabled={busy || !status} onClick={() => void run('signIn')}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings-account.tsx",
+    "line": 94,
+    "source": "<Button variant=\"outline\" onClick={() => void run('signOut')}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings-account.tsx",
+    "line": 104,
+    "source": "<RefetchButton size=\"sm\" variant=\"outline\" onRefetch={() => retryRead.current()}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 120,
+    "source": "onClick={async () => {"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 212,
+    "source": "<Button size=\"sm\" disabled={busy} onClick={onRevoke}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 215,
+    "source": "<Button variant=\"outline\" size=\"sm\" disabled={busy} onClick={onKeep}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 224,
+    "source": "onClick={onReview}"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 286,
+    "source": "onClick={() => void setMode(option.mode).catch(() => undefined)}"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 446,
+    "source": "<Button size=\"sm\" onClick={onInstall}>"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 452,
+    "source": "onClick={onRelaunch}"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 468,
+    "source": "onClick={onCheck}"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 530,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/settings.tsx",
+    "line": 539,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={onReplay}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 232,
+    "source": "onClick={() => wslMode !== mode && void act(() => egress.setWslMode(mode))}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 305,
+    "source": "onClick={() => policy.default !== value && void act(() => egress.setDefault(value))}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 335,
+    "source": "<Button variant=\"outline\" size=\"sm\" disabled={busy || !host_.trim()} onClick={() => addRule('allow')}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 338,
+    "source": "<Button variant=\"outline\" size=\"sm\" disabled={busy || !host_.trim()} onClick={() => addRule('deny')}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 366,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 373,
+    "source": "<Button size=\"sm\" variant=\"ghost\" onClick={() => setResetConfirm(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 384,
+    "source": "<Button variant=\"ghost\" size=\"sm\" disabled={busy} onClick={() => setResetConfirm(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 398,
+    "source": "<Button size=\"sm\" variant=\"ghost\" onClick={scheduleClear}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 411,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={undoClear}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 427,
+    "source": "onRefetch={() => trafficQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 455,
+    "source": "<RefetchButton size=\"sm\" variant=\"outline\" onRefetch={() => refresh()}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 597,
+    "source": "onClick={() => onAllow(d.host)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 649,
+    "source": "onClick={onClear}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 684,
+    "source": "onClick={() => onBlock(e.host)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 694,
+    "source": "onClick={() => onAllow(e.host)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 705,
+    "source": "onClick={() => onAllow(e.host)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 714,
+    "source": "onClick={() => onBlock(e.host)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/egress-panel.tsx",
+    "line": 787,
+    "source": "onClick={() => onRemove(h)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credential-helper-editor.tsx",
+    "line": 159,
+    "source": "onClick={() => void pickProgram()}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credential-helper-editor.tsx",
+    "line": 178,
+    "source": "<Button id=\"credential-helper-add-arg\" type=\"button\" size=\"sm\" variant=\"ghost\" onClick={() => addArg()}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credential-helper-editor.tsx",
+    "line": 216,
+    "source": "onClick={() => removeArg(index)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 326,
+    "source": "onRefetch={() => statusQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 357,
+    "source": "onClick={() =>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 370,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => setHostingConfirm(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 407,
+    "source": "<Button size=\"sm\" onClick={() => void setUpHosting()}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 452,
+    "source": "<Button onClick={() => run('install', () => host.vm!.install())} disabled={busy !== null}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 464,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 484,
+    "source": "onClick={() => run('stop', () => vm.stop())}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 489,
+    "source": "<Button variant=\"destructive\" onClick={onDelete} disabled={busy !== null || !status?.exists}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 514,
+    "source": "onClick={async () => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 550,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 573,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 618,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 655,
+    "source": "onClick={() =>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 689,
+    "source": "onClick={() => void deployHere()}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 854,
+    "source": "<Button size=\"sm\" onClick={onConfirm}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 857,
+    "source": "<Button size=\"sm\" variant=\"ghost\" onClick={onCancel}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 863,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={onStart}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 886,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setOpen(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/runtime-detail.tsx",
+    "line": 897,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setOpen(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 168,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={() => setFormOpen(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 187,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={undoRemoval}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 199,
+    "source": "onSubmit={(event) => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 261,
+    "source": "<Button type=\"button\" variant=\"ghost\" size=\"sm\" onClick={closeForm}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 280,
+    "source": "onRefetch={() => credsQuery.refetch()}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 308,
+    "source": "onClick={() => scheduleRemoval(r.host)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 321,
+    "source": "<Button size=\"sm\" variant=\"outline\" onClick={() => convertLegacyRule(r)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 371,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 378,
+    "source": "<Button size=\"sm\" variant=\"ghost\" onClick={() => setForgetConfirm(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/credentials-panel.tsx",
+    "line": 386,
+    "source": "onClick={() => setForgetConfirm(true)}"
+  },
+  {
+    "file": "packages/app/src/pages/machine/index.tsx",
+    "line": 139,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => setOpen(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/index.tsx",
+    "line": 168,
+    "source": "<Button size=\"sm\" disabled={!name.trim()} onClick={submit}>"
+  },
+  {
+    "file": "packages/app/src/pages/machine/index.tsx",
+    "line": 171,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setOpen(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "line": 226,
+    "source": "onClick={() => setOpen(true)}"
+  },
+  {
+    "file": "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "line": 272,
+    "source": "onClick={() => onAgentTypeChange(a.type)}"
+  },
+  {
+    "file": "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "line": 310,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setOpen(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "line": 352,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setOpen(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "line": 384,
+    "source": "<Button size=\"sm\" onClick={() => void launch()} disabled={busy} aria-describedby=\"agent-launch-status\">"
+  },
+  {
+    "file": "packages/app/src/pages/agents/launch-agent-button.tsx",
+    "line": 387,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setOpen(false)}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 169,
+    "source": "onClick={() => onAgentTypeChange(a.type)}"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 187,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => setManageSignIn(true)}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 268,
+    "source": "<RefetchButton variant=\"outline\" onRefetch={() => vmListQuery.refetch()}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 327,
+    "source": "onClick={() => onSelect(v.name)}"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 405,
+    "source": "<RefetchButton variant=\"outline\" size=\"sm\" onRefetch={() => statusQuery.refetch()}>"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 499,
+    "source": "onRefetch={() => Promise.all([vmListQuery.refetch(), runsQuery.refetch()])}"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 584,
+    "source": "onClick={onObserve}"
+  },
+  {
+    "file": "packages/app/src/pages/agents/index.tsx",
+    "line": 593,
+    "source": "onClick={() => stopMutation.mutate()}"
+  },
+  {
+    "file": "packages/app/src/pages/setup/doctor.tsx",
+    "line": 158,
+    "source": "onRefetch={onRefresh}"
+  },
+  {
+    "file": "packages/app/src/pages/setup/doctor.tsx",
+    "line": 183,
+    "source": "<RefetchButton pendingLabel=\"Refreshing\u2026\" variant=\"ghost\" size=\"sm\" onRefetch={onRefresh} disabled={loading}>"
+  },
+  {
+    "file": "packages/app/src/pages/setup/doctor.tsx",
+    "line": 294,
+    "source": "<Button onClick={onClickStart} disabled={starting} size=\"sm\">"
+  },
+  {
+    "file": "packages/app/src/pages/setup/doctor.tsx",
+    "line": 311,
+    "source": "<Button onClick={onClickInstall} disabled={installing} size=\"sm\">"
+  },
+  {
+    "file": "packages/app/src/pages/setup/doctor.tsx",
+    "line": 334,
+    "source": "onClick={onCopy}"
+  },
+  {
+    "file": "packages/app/src/pages/setup/index.tsx",
+    "line": 103,
+    "source": "onClick={() => getStarted('agent')}"
+  },
+  {
+    "file": "packages/app/src/pages/setup/index.tsx",
+    "line": 111,
+    "source": "onClick={() => getStarted('host')}"
+  },
+  {
+    "file": "packages/app/src/pages/setup/index.tsx",
+    "line": 119,
+    "source": "<Button variant=\"ghost\" onClick={onLater}>"
+  },
+  {
+    "file": "packages/app/src/pages/setup/index.tsx",
+    "line": 125,
+    "source": "<Button variant=\"ghost\" onClick={onMore}>"
+  },
+  {
+    "file": "packages/app/src/pages/setup/index.tsx",
+    "line": 160,
+    "source": "<Button className=\"mt-4 w-full\" onClick={onClick}>"
+  },
+  {
+    "file": "packages/app/src/pages/setup/index.tsx",
+    "line": 265,
+    "source": "onClick={() =>"
+  },
+  {
+    "file": "packages/app/src/pages/local-runtime/terminal-drawer.tsx",
+    "line": 97,
+    "source": "onClick={dismiss}"
+  },
+  {
+    "file": "packages/app/src/pages/local-runtime/terminal-drawer.tsx",
+    "line": 103,
+    "source": "onClick={(e) => e.stopPropagation()}"
+  },
+  {
+    "file": "packages/app/src/pages/local-runtime/terminal-drawer.tsx",
+    "line": 168,
+    "source": "<Button size=\"sm\" onClick={dismiss}>"
+  },
+  {
+    "file": "packages/app/src/pages/local-runtime/terminal-drawer.tsx",
+    "line": 172,
+    "source": "<Button variant=\"destructive\" size=\"sm\" onClick={() => void end()}>"
+  },
+  {
+    "file": "packages/app/src/pages/invite.tsx",
+    "line": 148,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/pages/connect.tsx",
+    "line": 152,
+    "source": "<form onSubmit={onSubmit} className=\"mt-3 space-y-4\">"
+  },
+  {
+    "file": "packages/app/src/components/cluster-compat-banner.tsx",
+    "line": 64,
+    "source": "onClick={async () => {"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 217,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => setShowForm((value) => !value)} disabled={busy}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 220,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setConfirmSignOut(true)} disabled={busy}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 233,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => setConfirmSignOut(false)}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 236,
+    "source": "<Button variant=\"destructive\" size=\"sm\" onClick={() => void signOut()} disabled={busy}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 423,
+    "source": "<Button variant=\"outline\" size=\"sm\" onClick={() => setMode('api-key')}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 438,
+    "source": "onClick={() => void openTerminal()}"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 499,
+    "source": "<Button size=\"sm\" onClick={saveOauth} disabled={busy || !paste.trim()}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 535,
+    "source": "<Button size=\"sm\" onClick={saveApiKey} disabled={busy || !apiKey.trim()}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 645,
+    "source": "<Button size=\"sm\" onClick={save} disabled={busy || !trimmed || isClassic}>"
+  },
+  {
+    "file": "packages/app/src/components/agent-login.tsx",
+    "line": 715,
+    "source": "<Button size=\"sm\" onClick={save} disabled={busy || !trimmed}>"
+  },
+  {
+    "file": "packages/app/src/components/layout/app-shell.tsx",
+    "line": 291,
+    "source": "<Button variant=\"ghost\" size=\"sm\" onClick={() => setHidden(true)}>"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 205,
+    "source": "onClick={() => (isSelected ? setOpen(false) : selectMutation.mutate(c.id))}"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 232,
+    "source": "onClick={onSetupWorkspace}"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 262,
+    "source": "onClick={() => (isSelected ? setOpen(false) : selectMutation.mutate(c.id))}"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 296,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 319,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 361,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 408,
+    "source": "onClick={() => {"
+  },
+  {
+    "file": "packages/app/src/components/layout/cluster-switcher.tsx",
+    "line": 442,
+    "source": "onClick={() => setOpen(false)}"
+  },
+  {
+    "file": "packages/app/src/components/layout/terminal-tab-bar.tsx",
+    "line": 171,
+    "source": "onClick={onSelect}"
+  },
+  {
+    "file": "packages/app/src/components/layout/terminal-tab-bar.tsx",
+    "line": 212,
+    "source": "onClick={(e) => {"
+  },
+  {
+    "file": "packages/app/src/components/layout/terminal-tab-bar.tsx",
+    "line": 317,
+    "source": "onClick={handleNew}"
+  },
+  {
+    "file": "packages/app/src/components/start-machine-recovery.tsx",
+    "line": 144,
+    "source": "<Button onClick={installEngine} disabled={busy !== null}>"
+  },
+  {
+    "file": "packages/app/src/components/start-machine-recovery.tsx",
+    "line": 148,
+    "source": "<Button onClick={startMachine} disabled={busy !== null || running || cannotStart}>"
+  },
+  {
+    "file": "packages/app/src/lib/app-window.ts",
+    "line": 174,
+    "source": "reopen.addEventListener('click', async () => {"
+  }
+]

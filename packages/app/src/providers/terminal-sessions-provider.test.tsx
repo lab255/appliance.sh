@@ -15,6 +15,7 @@ const terminals = vi.hoisted(
       input: (data: string) => void;
       options: { disableStdin?: boolean; cursorBlink?: boolean };
       focusCalls: number;
+      element: HTMLElement;
     }[]
 );
 vi.mock('@xterm/xterm', () => ({
@@ -30,7 +31,10 @@ vi.mock('@xterm/xterm', () => ({
     }
     loadAddon() {}
     attachCustomKeyEventHandler() {}
-    open() {}
+    element!: HTMLElement;
+    open(element: HTMLElement) {
+      this.element = element;
+    }
     focusCalls = 0;
     focus() {
       this.focusCalls++;
@@ -108,6 +112,10 @@ it('guards every onData write, preserves shared mode, and Hide keeps the PTY ali
 
     vi.useFakeTimers();
     const refusal = 'Input not sent — observing read-only. Choose Interact with agent.';
+    await act(async () => terminals[0].input('\u001b[1;1R'));
+    expect(container.textContent).not.toContain(refusal);
+    expect(write).not.toHaveBeenCalled();
+    terminals[0].element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
     await act(async () => {
       for (const data of [
         'typing',
@@ -127,6 +135,9 @@ it('guards every onData write, preserves shared mode, and Hide keeps the PTY ali
       await vi.advanceTimersByTimeAsync(3000);
     });
     expect(container.textContent).not.toContain(refusal);
+    await act(async () => terminals[0].input('\u001b[?1;2c'));
+    expect(container.textContent).not.toContain(refusal);
+    terminals[0].element.dispatchEvent(new Event('paste', { bubbles: true }));
     await act(async () => terminals[0].input('another refused write'));
     expect(container.textContent).toContain(refusal);
     vi.useRealTimers();

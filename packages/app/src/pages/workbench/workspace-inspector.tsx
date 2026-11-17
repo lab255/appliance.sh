@@ -205,7 +205,7 @@ function Inspector({ directory, onSnapshot }: InspectorProps) {
               ? 'Comparison unavailable'
               : tab === 'changes'
                 ? hiddenChanges
-                  ? `No changes to tracked files. ${hiddenChanges} generated paths changed and are not shown (.appliance/agents.json, .appliance/agent-results/*, .appliance/.agents.*). Enable the generated filter to inspect them.`
+                  ? `No changes to tracked files. ${hiddenChanges} generated ${hiddenChanges === 1 ? 'path changed and is' : 'paths changed and are'} not shown (.appliance/agents.json, .appliance/agent-results/*, .appliance/.agents.*). Enable the generated filter to inspect them.`
                   : 'No changes since workspace baseline'
                 : 'Empty directory'}
           </p>

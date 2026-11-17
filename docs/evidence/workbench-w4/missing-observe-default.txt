@@ -1,5 +1,5 @@
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 
  ❯ src/providers/terminal-sessions-provider.test.tsx (3 tests | 1 failed) 116ms
    ✓ guards every onData write, preserves shared mode, and Hide keeps the PTY alive 39ms
@@ -25,7 +25,7 @@ Number of calls: 1
    Duration  515ms (transform 54ms, setup 0ms, collect 126ms, tests 116ms, environment 133ms, prepare 29ms)
 
 undefined
-/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app:
  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/providers/terminal-sessions-provider.test.tsx
 
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯

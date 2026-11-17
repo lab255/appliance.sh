@@ -1,4 +1,4 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-export default defineConfig({root:import.meta.dirname,plugins:[react(),tailwindcss()],resolve:{alias:{'@':'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_zuucqw5twu-1/appliance.sh'+'/packages/app/src'}},server:{fs:{allow:['/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_zuucqw5twu-1/appliance.sh','/private/tmp/w2-browser-fixture']}}});
+export default defineConfig({root:import.meta.dirname,plugins:[react(),tailwindcss()],resolve:{alias:{'@':'<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh'+'/packages/app/src'}},server:{fs:{allow:['<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh','/private/tmp/w2-browser-fixture']}}});

@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Button } from '@appliance.sh/ui/button';
 import { MotionProvider } from '@appliance.sh/ui';
 import { ConfirmProvider, useConfirm } from '@/components/ui/confirm-dialog';
 import { HostProvider } from '@/providers/host-provider';
@@ -78,7 +79,7 @@ const host = {
 function ConfirmOnly() {
   const confirm = useConfirm();
   return (
-    <button
+    <Button
       onClick={() =>
         void confirm({ title: 'Standalone confirmation', confirmLabel: 'Confirm probe' }).then((ok) =>
           trace.push(`confirmed:${ok}`)
@@ -86,7 +87,7 @@ function ConfirmOnly() {
       }
     >
       Open standalone confirmation
-    </button>
+    </Button>
   );
 }
 function Audit() {

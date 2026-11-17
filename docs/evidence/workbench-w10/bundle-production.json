@@ -1,0 +1,12 @@
+{
+  "app-library": {
+    "javascriptMapsAudited": 4,
+    "sourceEntriesAudited": 596,
+    "harnessTestOrFixtureSources": []
+  },
+  "desktop-product": {
+    "javascriptMapsAudited": 4,
+    "sourceEntriesAudited": 80,
+    "harnessTestOrFixtureSources": []
+  }
+}

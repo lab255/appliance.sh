@@ -1,11 +1,11 @@
 
-> appliance.sh@1.62.0 verify /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh
+> appliance.sh@1.62.0 verify <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh
 > bash scripts/verify.sh
 
 
 [1;34m==> 1/5 build (nx run-many --target=build --all)[0m
 
-> appliance.sh@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh
+> appliance.sh@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh
 > nx run-many --target=build --all
 
 
@@ -32,7 +32,7 @@
 (node:21560) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/helper@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/helper
+> @appliance.sh/helper@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/helper
 > tsc
 
 
@@ -43,7 +43,7 @@
 (node:21561) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/ui@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/ui
+> @appliance.sh/ui@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/ui
 > node scripts/generate-motion.mjs && vite build && tsc --emitDeclarationOnly
 
 (node:21623) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
@@ -124,20 +124,20 @@ dist/index.js                           5.42 kB │ gzip: 1.56 kB
 (node:21559) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/sdk@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/sdk
+> @appliance.sh/sdk@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/sdk
 > tsc --module commonjs --outDir dist/cjs && tsc --module esnext --moduleResolution bundler --outDir dist/esm && pnpm run postbuild
 
 (node:21684) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/sdk@1.62.0 postbuild /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/sdk
+> @appliance.sh/sdk@1.62.0 postbuild <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/sdk
 > pnpm exec ts-node scripts/postbuild.ts
 
 (node:21704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 Version updated to v1.62.0 in files: [
-  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/sdk/dist/cjs/version.js'[39m,
-  [32m'/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/sdk/dist/esm/version.js'[39m
+  [32m'<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/sdk/dist/cjs/version.js'[39m,
+  [32m'<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/sdk/dist/esm/version.js'[39m
 ]
 (node:21717) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -149,7 +149,7 @@ Version updated to v1.62.0 in files: [
 (node:21758) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/install-aws@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/install-aws
+> @appliance.sh/install-aws@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/install-aws
 > tsc
 
 
@@ -160,7 +160,7 @@ Version updated to v1.62.0 in files: [
 (node:21757) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/infra@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/infra
+> @appliance.sh/infra@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/infra
 > tsc
 
 
@@ -171,7 +171,7 @@ Version updated to v1.62.0 in files: [
 (node:21802) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/bootstrap@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/bootstrap
+> @appliance.sh/bootstrap@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/bootstrap
 > tsc
 
 
@@ -182,7 +182,7 @@ Version updated to v1.62.0 in files: [
 (node:21801) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/api-server@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server
+> @appliance.sh/api-server@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server
 > tsc -p tsconfig.build.json
 
 
@@ -193,13 +193,13 @@ Version updated to v1.62.0 in files: [
 (node:21880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/cli@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/cli
+> @appliance.sh/cli@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/cli
 > tsc && pnpm run compile
 
 (node:21988) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/cli@1.62.0 compile /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/cli
+> @appliance.sh/cli@1.62.0 compile <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/cli
 > bun build src/appliance.ts --compile --outfile=dist/appliance
 
  [0m[2m[[1m795ms[0m[2m][0m  [32mbundle[0m  9226 modules
@@ -212,7 +212,7 @@ Version updated to v1.62.0 in files: [
 (node:21879) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/app@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+> @appliance.sh/app@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 > vite build && tsc --emitDeclarationOnly
 
 (node:21897) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
@@ -236,7 +236,7 @@ dist/index-ULpmXlE5.js     1,981.21 kB │ gzip: 473.51 kB │ map: 5,246.16 kB
 (node:22023) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/console@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/console
+> @appliance.sh/console@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/console
 > vite build
 
 (node:22055) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
@@ -265,13 +265,13 @@ dist/assets/index-BPHfohOs.js              1,562.69 kB │ gzip: 446.78 kB │ m
 (node:22019) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > pnpm run sidecar:build && pnpm run cli:bundle && pnpm run vm:build && pnpm run vm:bundle && vite build
 
 (node:22069) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 sidecar:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 sidecar:build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > tsc -p sidecar/tsconfig.json --noEmit && bun build sidecar/src/main.ts --target=node --outfile=sidecar/dist/main.mjs
 
 [32mBundled 8114 modules in 641ms[0m
@@ -281,7 +281,7 @@ dist/assets/index-BPHfohOs.js              1,562.69 kB │ gzip: 446.78 kB │ m
 (node:22113) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 cli:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 cli:bundle <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > node scripts/copy-cli.mjs
 
     Finished `release` profile [optimized] target(s) in 0.24s
@@ -290,7 +290,7 @@ copy-cli: packages/credhelper/target/aarch64-apple-darwin/release/appliance-cred
 (node:22204) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 vm:build /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 vm:build <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > node scripts/build-vm.mjs
 
     Finished `release` profile [optimized] target(s) in 0.13s
@@ -299,7 +299,7 @@ signed target/release/appliance-vm with com.apple.security.virtualization
 (node:22292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 vm:bundle /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 vm:bundle <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > node scripts/copy-vm.mjs
 
 copy-vm: packages/vm/target/release/appliance-vm → packages/desktop/src-tauri/vm-bin/appliance-vm
@@ -349,7 +349,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 (node:22353) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/install-aws@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/install-aws
+> @appliance.sh/install-aws@1.62.0 typecheck <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/install-aws
 > tsc --noEmit
 
 
@@ -360,7 +360,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 (node:22352) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/ui@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/ui
+> @appliance.sh/ui@1.62.0 typecheck <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/ui
 > tsc --noEmit
 
 
@@ -371,7 +371,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 (node:22439) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 typecheck <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > tsc --noEmit
 
 
@@ -382,7 +382,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 (node:22354) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/bootstrap@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/bootstrap
+> @appliance.sh/bootstrap@1.62.0 typecheck <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/bootstrap
 > tsc --noEmit
 
 
@@ -393,7 +393,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 (node:22508) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/console@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/console
+> @appliance.sh/console@1.62.0 typecheck <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/console
 > tsc --noEmit
 
 
@@ -404,7 +404,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 (node:22437) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/app@1.62.0 typecheck /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+> @appliance.sh/app@1.62.0 typecheck <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 > tsc --noEmit
 
 
@@ -416,7 +416,7 @@ dist/assets/index-CCF2NcKa.js              1,711.30 kB │ gzip: 491.63 kB │ m
 
 [1;34m==> 3/5 lint:check (eslint + prettier --check)[0m
 
-> appliance.sh@1.62.0 lint:check /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh
+> appliance.sh@1.62.0 lint:check <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh
 > node scripts/check-design-tokens.mjs && pnpm exec eslint . && prettier . --check
 
 Design tokens: zero raw hue, hex literal, or arbitrary text-size violations.
@@ -447,13 +447,13 @@ All matched files use Prettier code style!
 (node:22676) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/bootstrap@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/bootstrap
+> @appliance.sh/bootstrap@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/bootstrap
 > vitest run
 
 (node:22716) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/bootstrap
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/bootstrap
 
 (node:22740) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -493,13 +493,13 @@ All matched files use Prettier code style!
 (node:22675) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/sdk@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/sdk
+> @appliance.sh/sdk@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/sdk
 > vitest run
 
 (node:22719) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/sdk
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/sdk
 
 (node:22761) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -557,13 +557,13 @@ All matched files use Prettier code style!
 (node:22821) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/install-aws@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/install-aws
+> @appliance.sh/install-aws@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/install-aws
 > vitest run
 
 (node:22855) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/install-aws
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/install-aws
 
 (node:22873) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -609,13 +609,13 @@ All matched files use Prettier code style!
 (node:22914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/helper@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/helper
+> @appliance.sh/helper@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/helper
 > vitest run
 
 (node:22932) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/helper
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/helper
 
 (node:22944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -658,13 +658,13 @@ All matched files use Prettier code style!
 (node:22819) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/ui@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/ui
+> @appliance.sh/ui@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/ui
 > vitest run
 
 (node:22836) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/ui
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/ui
 
 (node:22874) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -770,13 +770,13 @@ stdout | src/font-axes.test.ts > offline Inter full-axis font files > ./files/in
 (node:22677) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/infra@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/infra
+> @appliance.sh/infra@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/infra
 > vitest run
 
 (node:22691) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/infra
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/infra
 
 (node:22758) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -831,13 +831,13 @@ info: [runtime] ApplianceStack sample: timeout=30s memory=512MB storage=default
 (node:23010) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/app@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+> @appliance.sh/app@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 > vitest run
 
 (node:23043) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 
 (node:23106) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1368,45 +1368,45 @@ The current testing environment is not configured to support act(...)
 (Use `node --trace-warnings ...` to show where the warning was created)
 stderr | src/lib/app-window.dom.spec.ts > app window document > shows an inline error and restores Reopen after a rejected attempt
 [app-window] reopen failed Error: restart failed
-    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app/src/lib/app-window.dom.spec.ts:52:43
-    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
-    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
-    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app/src/lib/app-window.dom.spec.ts:52:43
+    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
     at new Promise (<anonymous>)
-    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
-    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runWithTimeout (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
     at processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
-    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
 
 stderr | src/pages/bootstrap/progress.test.tsx
 Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
-    at module.exports (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
-    at HTMLCanvasElementImpl.getContext (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
-    at HTMLCanvasElement.getContext (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
-    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
-    at Object.call (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
-    at i (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
-    at Object.call (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
-    at i (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
-    at Object.call (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
-    at i (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
+    at module.exports (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
+    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
 
  ✓ src/lib/app-window.dom.spec.ts (8 tests) 358ms
 (node:23479) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 stderr | src/pages/workbench/recovery.test.tsx
 Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
-    at module.exports (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
-    at HTMLCanvasElementImpl.getContext (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
-    at HTMLCanvasElement.getContext (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
-    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
-    at Object.call (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
-    at i (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
-    at Object.call (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
-    at i (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
-    at Object.call (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
-    at i (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
+    at module.exports (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
+    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
 
  ✓ src/pages/bootstrap/progress.test.tsx (2 tests) 317ms
 (node:23493) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
@@ -1537,13 +1537,13 @@ The current testing environment is not configured to support act(...)
 (node:23650) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/desktop@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > vitest run
 
 (node:23682) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/desktop
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 
 (node:23700) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1597,13 +1597,13 @@ The current testing environment is not configured to support act(...)
 (node:23503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/api-server@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server
+> @appliance.sh/api-server@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server
 > vitest run
 
 (node:23559) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server
 
 (node:23609) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1626,12 +1626,12 @@ The current testing environment is not configured to support act(...)
 {"timestamp":"2026-11-17T00:54:44.280Z","level":"info","message":"environment created","projectId":"proj-1","environmentId":"env-1","environmentName":"production"}
 {"timestamp":"2026-11-17T00:54:44.284Z","level":"info","message":"project created","projectId":"proj-1","projectName":"my-project"}
 {"timestamp":"2026-11-17T00:54:44.289Z","level":"warn","message":"auth failed: missing signature headers","path":"/api/v1/test"}
-{"timestamp":"2026-11-17T00:54:44.289Z","level":"error","message":"create project failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/projects/index.ts:10:32\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-17T00:54:44.289Z","level":"error","message":"create project failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/projects/index.ts:10:32\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
 {"timestamp":"2026-11-17T00:54:44.290Z","level":"info","message":"api key rotated","previousKeyId":"apikey_old","newKeyId":"apikey_new"}
 {"timestamp":"2026-11-17T00:54:44.297Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature verification failed","cause":"unknown_key","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://127.0.0.1:51228/api/v1/test","protocol":"http","trustProxy":false,"host":"127.0.0.1:51228","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","host","signature","signature-input"]}}
-{"timestamp":"2026-11-17T00:54:44.292Z","level":"error","message":"create environment failed","error":"Cannot read properties of undefined (reading 'id')","stack":"TypeError: Cannot read properties of undefined (reading 'id')\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/environments/index.ts:32:34\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)","projectId":"proj-1"}
+{"timestamp":"2026-11-17T00:54:44.292Z","level":"error","message":"create environment failed","error":"Cannot read properties of undefined (reading 'id')","stack":"TypeError: Cannot read properties of undefined (reading 'id')\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/environments/index.ts:32:34\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)","projectId":"proj-1"}
 {"timestamp":"2026-11-17T00:54:44.303Z","level":"info","message":"project deleted","projectId":"proj-1"}
-{"timestamp":"2026-11-17T00:54:44.301Z","level":"error","message":"rotate key failed","error":"storage down","stack":"Error: storage down\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/keys/keys.spec.ts:79:50\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)"}
+{"timestamp":"2026-11-17T00:54:44.301Z","level":"error","message":"rotate key failed","error":"storage down","stack":"Error: storage down\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/keys/keys.spec.ts:79:50\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)"}
 {"timestamp":"2026-11-17T00:54:44.313Z","level":"info","message":"environment deleted","projectId":"proj-1","environmentId":"env-1"}
  ✓ src/routes/projects/projects.spec.ts (7 tests) 33ms
 {"timestamp":"2026-11-17T00:54:44.314Z","level":"warn","message":"auth failed: content-digest mismatch","path":"/api/v1/test"}
@@ -1641,7 +1641,7 @@ The current testing environment is not configured to support act(...)
 {"timestamp":"2026-11-17T00:54:44.321Z","level":"info","message":"env vars set","environmentId":"env-1","keys":["API_KEY"]}
 {"timestamp":"2026-11-17T00:54:44.319Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/keys","keyId":"apikey_b","role":"member"}
 {"timestamp":"2026-11-17T00:54:44.322Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature verification failed","cause":"signature_mismatch","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
-{"timestamp":"2026-11-17T00:54:44.326Z","level":"error","message":"set env vars failed","error":"[\n  {\n    \"code\": \"invalid_key\",\n    \"origin\": \"record\",\n    \"issues\": [\n      {\n        \"origin\": \"string\",\n        \"code\": \"invalid_format\",\n        \"format\": \"regex\",\n        \"pattern\": \"/^[A-Za-z_][A-Za-z0-9_]*$/\",\n        \"path\": [],\n        \"message\": \"env var names must match [A-Za-z_][A-Za-z0-9_]*\"\n      }\n    ],\n    \"path\": [\n      \"variables\",\n      \"1bad-name\"\n    ],\n    \"message\": \"Invalid key in record\"\n  }\n]","stack":"ZodError: [\n  {\n    \"code\": \"invalid_key\",\n    \"origin\": \"record\",\n    \"issues\": [\n      {\n        \"origin\": \"string\",\n        \"code\": \"invalid_format\",\n        \"format\": \"regex\",\n        \"pattern\": \"/^[A-Za-z_][A-Za-z0-9_]*$/\",\n        \"path\": [],\n        \"message\": \"env var names must match [A-Za-z_][A-Za-z0-9_]*\"\n      }\n    ],\n    \"path\": [\n      \"variables\",\n      \"1bad-name\"\n    ],\n    \"message\": \"Invalid key in record\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/environments/index.ts:175:32\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"}
+{"timestamp":"2026-11-17T00:54:44.326Z","level":"error","message":"set env vars failed","error":"[\n  {\n    \"code\": \"invalid_key\",\n    \"origin\": \"record\",\n    \"issues\": [\n      {\n        \"origin\": \"string\",\n        \"code\": \"invalid_format\",\n        \"format\": \"regex\",\n        \"pattern\": \"/^[A-Za-z_][A-Za-z0-9_]*$/\",\n        \"path\": [],\n        \"message\": \"env var names must match [A-Za-z_][A-Za-z0-9_]*\"\n      }\n    ],\n    \"path\": [\n      \"variables\",\n      \"1bad-name\"\n    ],\n    \"message\": \"Invalid key in record\"\n  }\n]","stack":"ZodError: [\n  {\n    \"code\": \"invalid_key\",\n    \"origin\": \"record\",\n    \"issues\": [\n      {\n        \"origin\": \"string\",\n        \"code\": \"invalid_format\",\n        \"format\": \"regex\",\n        \"pattern\": \"/^[A-Za-z_][A-Za-z0-9_]*$/\",\n        \"path\": [],\n        \"message\": \"env var names must match [A-Za-z_][A-Za-z0-9_]*\"\n      }\n    ],\n    \"path\": [\n      \"variables\",\n      \"1bad-name\"\n    ],\n    \"message\": \"Invalid key in record\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/environments/index.ts:175:32\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"}
 {"timestamp":"2026-11-17T00:54:44.327Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"Signature is too old","cause":"clock_skew","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
 {"timestamp":"2026-11-17T00:54:44.328Z","level":"info","message":"env var unset","environmentId":"env-1","key":"API_KEY"}
 {"timestamp":"2026-11-17T00:54:44.330Z","level":"warn","message":"auth failed: invalid signature","path":"/api/v1/test","error":"No corresponding signature for input","cause":"malformed_signature","diag":{"method":"GET","originalUrl":"/api/v1/test","reconstructedUrl":"http://test.local/api/v1/test","protocol":"http","trustProxy":false,"host":"test.local","signatureInputPresent":true,"signaturePresent":true,"contentDigestPresent":false,"headerNames":["accept-encoding","connection","content-type","host","signature","signature-input"]}}
@@ -1660,9 +1660,9 @@ The current testing environment is not configured to support act(...)
 (Use `node --trace-warnings ...` to show where the warning was created)
 (node:23649) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-{"timestamp":"2026-11-17T00:54:44.495Z","level":"error","message":"get pod logs failed","error":"pods \"nope\" not found","stack":"Error: pods \"nope\" not found\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/workloads/workloads.spec.ts:190:54\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)","podName":"nope"}
+{"timestamp":"2026-11-17T00:54:44.495Z","level":"error","message":"get pod logs failed","error":"pods \"nope\" not found","stack":"Error: pods \"nope\" not found\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/workloads/workloads.spec.ts:190:54\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)","podName":"nope"}
 {"timestamp":"2026-11-17T00:54:44.525Z","level":"info","message":"invite created","byKeyId":"apikey_admin","inviteId":"invite_1","inviteName":"teammate","role":"member","expiresAt":"2025-01-08T00:00:00.000Z"}
-{"timestamp":"2026-11-17T00:54:44.538Z","level":"error","message":"create invite failed","error":"[\n  {\n    \"origin\": \"string\",\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"inclusive\": true,\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Too small: expected string to have >=1 characters\"\n  }\n]","stack":"ZodError: [\n  {\n    \"origin\": \"string\",\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"inclusive\": true,\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Too small: expected string to have >=1 characters\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/invites/index.ts:16:31\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at requireAdmin (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/middleware/auth.ts:143:3)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15"}
+{"timestamp":"2026-11-17T00:54:44.538Z","level":"error","message":"create invite failed","error":"[\n  {\n    \"origin\": \"string\",\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"inclusive\": true,\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Too small: expected string to have >=1 characters\"\n  }\n]","stack":"ZodError: [\n  {\n    \"origin\": \"string\",\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"inclusive\": true,\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Too small: expected string to have >=1 characters\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/invites/index.ts:16:31\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at requireAdmin (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/middleware/auth.ts:143:3)\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15"}
 {"timestamp":"2026-11-17T00:54:44.546Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/invites","keyId":"apikey_member","role":"member"}
 {"timestamp":"2026-11-17T00:54:44.553Z","level":"warn","message":"authz failed: admin role required","path":"/api/v1/invites","keyId":"apikey_member","role":"member"}
 {"timestamp":"2026-11-17T00:54:44.559Z","level":"info","message":"invite revoked","byKeyId":"apikey_admin","inviteId":"invite_1"}
@@ -1684,9 +1684,9 @@ The current testing environment is not configured to support act(...)
 {"timestamp":"2026-11-17T00:54:44.693Z","level":"warn","message":"bootstrap auth failed"}
 {"timestamp":"2026-11-17T00:54:44.696Z","level":"warn","message":"worker event rejected: invalid fixed payload","issueCount":2}
  ✓ src/routes/events/events.spec.ts (6 tests) 50ms
-{"timestamp":"2026-11-17T00:54:44.700Z","level":"error","message":"create key failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/bootstrap/index.ts:39:31\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"}
+{"timestamp":"2026-11-17T00:54:44.700Z","level":"error","message":"create key failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"name\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/bootstrap/index.ts:39:31\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)"}
 {"timestamp":"2026-11-17T00:54:44.706Z","level":"info","message":"invite redeemed","newKeyId":"apikey_new","keyName":"teammate"}
-{"timestamp":"2026-11-17T00:54:44.721Z","level":"error","message":"redeem invite failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"token\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"token\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/bootstrap/index.ts:58:37\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-17T00:54:44.721Z","level":"error","message":"redeem invite failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"token\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"token\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/bootstrap/index.ts:58:37\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
  ✓ src/routes/bootstrap/bootstrap.spec.ts (16 tests) 146ms
 (node:23669) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1702,12 +1702,12 @@ The current testing environment is not configured to support act(...)
 {"timestamp":"2026-11-17T00:54:45.047Z","level":"info","message":"self-update-check scheduled job","policy":"auto","jobId":"one","reused":true,"version":"1.58.0","generation":8}
 {"timestamp":"2026-11-17T00:54:45.048Z","level":"info","message":"self-update-check skipped: live self-update lease","policy":"auto","jobId":"selfupdate_live"}
  ✓ src/middleware/cors.spec.ts (3 tests) 25ms
-{"timestamp":"2026-11-17T00:54:45.080Z","level":"error","message":"self-update-check failed","error":"release signature envelope is malformed","stack":"Error: release signature envelope is malformed\n    at redactSelfUpdateError (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-redaction.ts:17:10)\n    at SelfUpdateSchedulerService.checkOwnerTenant (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-scheduler.service.ts:263:48)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-scheduler.service.spec.ts:259:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","policy":"notify"}
+{"timestamp":"2026-11-17T00:54:45.080Z","level":"error","message":"self-update-check failed","error":"release signature envelope is malformed","stack":"Error: release signature envelope is malformed\n    at redactSelfUpdateError (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-redaction.ts:17:10)\n    at SelfUpdateSchedulerService.checkOwnerTenant (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-scheduler.service.ts:263:48)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-scheduler.service.spec.ts:259:5\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","policy":"notify"}
  ✓ src/services/self-update-scheduler.service.spec.ts (13 tests) 55ms
 {"timestamp":"2026-11-17T00:54:45.120Z","level":"info","message":"self-update completed","jobId":"selfupdate_ef342a69-0b2f-4f28-b75b-08a73e82e101","digestPrefix":"sha256:aaaaaaaaaaaa","phase":"complete","result":"succeeded"}
  ✓ src/services/deployment-executor.edge.spec.ts (5 tests) 74ms
-{"timestamp":"2026-11-17T00:54:45.143Z","level":"error","message":"self-update recovery exhausted","error":"target health/version probe failed; recovery submission failed: recovery submission rejected","stack":"Error: target health/version probe failed; recovery submission failed: recovery submission rejected\n    at SelfUpdateExecutor.exhaust (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateExecutor.recover (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:579:9)\n    at SelfUpdateExecutor.executeWithLease (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:433:16)\n    at SelfUpdateExecutor.execute (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:309:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_d6d24df9-ef4b-40f1-85a5-c47c20747557","phase":"complete","result":"failed"}
-{"timestamp":"2026-11-17T00:54:45.168Z","level":"error","message":"self-update recovery exhausted","error":"target health/version probe failed; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]","stack":"Error: target health/version probe failed; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]\n    at SelfUpdateExecutor.exhaust (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateExecutor.recover (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:588:7)\n    at SelfUpdateExecutor.executeWithLease (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:433:16)\n    at SelfUpdateExecutor.execute (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:359:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_2dfe9042-cca2-4c78-a4e2-0003c90c162d","phase":"complete","result":"failed"}
+{"timestamp":"2026-11-17T00:54:45.143Z","level":"error","message":"self-update recovery exhausted","error":"target health/version probe failed; recovery submission failed: recovery submission rejected","stack":"Error: target health/version probe failed; recovery submission failed: recovery submission rejected\n    at SelfUpdateExecutor.exhaust (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateExecutor.recover (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:579:9)\n    at SelfUpdateExecutor.executeWithLease (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:433:16)\n    at SelfUpdateExecutor.execute (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:309:5\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_d6d24df9-ef4b-40f1-85a5-c47c20747557","phase":"complete","result":"failed"}
+{"timestamp":"2026-11-17T00:54:45.168Z","level":"error","message":"self-update recovery exhausted","error":"target health/version probe failed; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]","stack":"Error: target health/version probe failed; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]\n    at SelfUpdateExecutor.exhaust (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateExecutor.recover (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:588:7)\n    at SelfUpdateExecutor.executeWithLease (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:433:16)\n    at SelfUpdateExecutor.execute (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:359:5\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_2dfe9042-cca2-4c78-a4e2-0003c90c162d","phase":"complete","result":"failed"}
 (node:23693) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 {"timestamp":"2026-11-17T00:54:45.186Z","level":"warn","message":"self-update completed but availability marker cleanup failed","jobId":"selfupdate_1e17414b-641e-4ac7-a5ae-9f3a02cec168","error":"APPLIANCE_BASE_CONFIG environment variable is required"}
@@ -1716,7 +1716,7 @@ The current testing environment is not configured to support act(...)
 (Use `node --trace-warnings ...` to show where the warning was created)
 (node:23704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-{"timestamp":"2026-11-17T00:54:45.358Z","level":"error","message":"self-update recovery exhausted","error":"CloudFormation reached UPDATE_ROLLBACK_FAILED; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]","stack":"Error: CloudFormation reached UPDATE_ROLLBACK_FAILED; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]\n    at SelfUpdateExecutor.exhaust (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at SelfUpdateExecutor.recover (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:543:7)\n    at SelfUpdateExecutor.executeWithLease (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:413:16)\n    at SelfUpdateExecutor.execute (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:535:5\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_b3366dbf-8cd9-4dac-b08e-72579b788e0c","phase":"complete","result":"failed"}
+{"timestamp":"2026-11-17T00:54:45.358Z","level":"error","message":"self-update recovery exhausted","error":"CloudFormation reached UPDATE_ROLLBACK_FAILED; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]","stack":"Error: CloudFormation reached UPDATE_ROLLBACK_FAILED; ApiServerFunction UPDATE_FAILED [REDACTED_ARN]\n    at SelfUpdateExecutor.exhaust (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:669:52)\n    at SelfUpdateExecutor.recover (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:543:7)\n    at SelfUpdateExecutor.executeWithLease (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:413:16)\n    at SelfUpdateExecutor.execute (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.ts:274:14)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-executor.service.spec.ts:535:5\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_b3366dbf-8cd9-4dac-b08e-72579b788e0c","phase":"complete","result":"failed"}
  ✓ src/services/self-update-executor.service.spec.ts (22 tests) 249ms
 (node:23726) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1724,20 +1724,20 @@ The current testing environment is not configured to support act(...)
 {"timestamp":"2026-11-17T00:54:45.649Z","level":"info","message":"deployment dispatched","deploymentId":"deploy-1","status":"succeeded"}
 {"timestamp":"2026-11-17T00:54:45.658Z","level":"info","message":"deployment started","environmentId":"env-1","action":"destroy"}
 {"timestamp":"2026-11-17T00:54:45.658Z","level":"info","message":"deployment dispatched","deploymentId":"deploy-2","status":"succeeded"}
-{"timestamp":"2026-11-17T00:54:45.718Z","level":"error","message":"execute deployment failed","error":"[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"deploy\",\n      \"destroy\",\n      \"refresh\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"deploy\\\"|\\\"destroy\\\"|\\\"refresh\\\"\"\n  }\n]","stack":"ZodError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"deploy\",\n      \"destroy\",\n      \"refresh\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"deploy\\\"|\\\"destroy\\\"|\\\"refresh\\\"\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/deployments/index.ts:11:35\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
-{"timestamp":"2026-11-17T00:54:45.739Z","level":"error","message":"execute deployment failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"environmentId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"environmentId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/deployments/index.ts:11:35\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-17T00:54:45.718Z","level":"error","message":"execute deployment failed","error":"[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"deploy\",\n      \"destroy\",\n      \"refresh\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"deploy\\\"|\\\"destroy\\\"|\\\"refresh\\\"\"\n  }\n]","stack":"ZodError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"deploy\",\n      \"destroy\",\n      \"refresh\"\n    ],\n    \"path\": [\n      \"action\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"deploy\\\"|\\\"destroy\\\"|\\\"refresh\\\"\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/deployments/index.ts:11:35\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
+{"timestamp":"2026-11-17T00:54:45.739Z","level":"error","message":"execute deployment failed","error":"[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"environmentId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]","stack":"ZodError: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"environmentId\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/deployments/index.ts:11:35\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at router.handle (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:186:3)"}
 {"timestamp":"2026-11-17T00:54:45.747Z","level":"info","message":"deployment started","environmentId":"env-edge","action":"deploy"}
 {"timestamp":"2026-11-17T00:54:45.747Z","level":"info","message":"deployment dispatched","deploymentId":"deploy-edge","status":"pending"}
  ✓ src/routes/deployments/deployments.spec.ts (8 tests) 153ms
-{"timestamp":"2026-11-17T00:54:45.792Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-iD6D3k","mode":"full"}
-{"timestamp":"2026-11-17T00:54:45.809Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-iD6D3k","mode":"full"}
-{"timestamp":"2026-11-17T00:54:45.812Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-iD6D3k","mode":"full"}
-{"timestamp":"2026-11-17T00:54:45.816Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-iD6D3k","mode":"full"}
-{"timestamp":"2026-11-17T00:54:45.822Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-iD6D3k","mode":"full"}
+{"timestamp":"2026-11-17T00:54:45.792Z","level":"info","message":"web console mounted","consoleDir":"<temp>","mode":"full"}
+{"timestamp":"2026-11-17T00:54:45.809Z","level":"info","message":"web console mounted","consoleDir":"<temp>","mode":"full"}
+{"timestamp":"2026-11-17T00:54:45.812Z","level":"info","message":"web console mounted","consoleDir":"<temp>","mode":"full"}
+{"timestamp":"2026-11-17T00:54:45.816Z","level":"info","message":"web console mounted","consoleDir":"<temp>","mode":"full"}
+{"timestamp":"2026-11-17T00:54:45.822Z","level":"info","message":"web console mounted","consoleDir":"<temp>","mode":"full"}
  ✓ src/services/filesystem-object-store.spec.ts (7 tests) 49ms
 {"timestamp":"2026-11-17T00:54:45.825Z","level":"info","message":"web console bundle not found — serving API only","hint":"set APPLIANCE_CONSOLE_DIR or stage console-dist next to the api-server package"}
 {"timestamp":"2026-11-17T00:54:45.828Z","level":"info","message":"web console disabled (APPLIANCE_CONSOLE_MODE=off) — serving API only"}
-{"timestamp":"2026-11-17T00:54:45.829Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-iD6D3k","mode":"bootstrap"}
+{"timestamp":"2026-11-17T00:54:45.829Z","level":"info","message":"web console mounted","consoleDir":"<temp>","mode":"bootstrap"}
  ✓ src/console-static.spec.ts (8 tests) 46ms
 (node:23736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -1758,7 +1758,7 @@ The current testing environment is not configured to support act(...)
 (Use `node --trace-warnings ...` to show where the warning was created)
 (node:23743) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-{"timestamp":"2026-11-17T00:54:46.223Z","level":"error","message":"self-update worker resume dispatch failed; job remains resumable","error":"worker unavailable","stack":"Error: worker unavailable\n    at redactSelfUpdateError (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update-redaction.ts:17:10)\n    at SelfUpdateService.dispatchForResume (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update.service.ts:473:88)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateService.getAndResume (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update.service.ts:298:7)\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/services/self-update.service.spec.ts:186:21\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_760b4353-011e-48f7-b712-425687be60d6","phase":"verifying"}
+{"timestamp":"2026-11-17T00:54:46.223Z","level":"error","message":"self-update worker resume dispatch failed; job remains resumable","error":"worker unavailable","stack":"Error: worker unavailable\n    at redactSelfUpdateError (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update-redaction.ts:17:10)\n    at SelfUpdateService.dispatchForResume (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update.service.ts:473:88)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at SelfUpdateService.getAndResume (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update.service.ts:298:7)\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/services/self-update.service.spec.ts:186:21\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20","jobId":"selfupdate_760b4353-011e-48f7-b712-425687be60d6","phase":"verifying"}
  ✓ src/services/self-update.service.spec.ts (25 tests) 48ms
 {"timestamp":"2026-11-17T00:54:46.285Z","level":"info","message":"generated framework Dockerfile","framework":"node"}
  ✓ src/services/image-build.service.spec.ts (17 tests) 22ms
@@ -1816,7 +1816,7 @@ The current testing environment is not configured to support act(...)
 {"timestamp":"2026-11-17T00:54:47.922Z","level":"info","message":"request","requestId":"9d7cfa44-c172-49b1-8c32-2bbf583fddc6","method":"POST","path":"/api/v1/builds","statusCode":201,"durationMs":10,"ip":"::ffff:127.0.0.1","contentLength":17}
 {"timestamp":"2026-11-17T00:54:47.928Z","level":"warn","message":"build rejected: no builder on this base","requestId":"req-test-1234","error":"Upload-flow builds need a builder, and this base has none configured (kubernetes.buildkit.addr). Use a remote-image build referencing a container image instead."}
 {"timestamp":"2026-11-17T00:54:47.929Z","level":"warn","message":"request","requestId":"req-test-1234","method":"POST","path":"/api/v1/builds","statusCode":409,"durationMs":1,"ip":"::ffff:127.0.0.1","contentLength":17}
-{"timestamp":"2026-11-17T00:54:47.931Z","level":"error","message":"create build failed","error":"s3://internal-bucket/path exploded","stack":"Error: s3://internal-bucket/path exploded\n    at /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/api-server/src/routes/builds/builds.spec.ts:73:59\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)","requestId":"req-test-1234"}
+{"timestamp":"2026-11-17T00:54:47.931Z","level":"error","message":"create build failed","error":"s3://internal-bucket/path exploded","stack":"Error: s3://internal-bucket/path exploded\n    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/api-server/src/routes/builds/builds.spec.ts:73:59\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26\n    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)\n    at runTest (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)\n    at runSuite (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@vitest+runner@3.2.4/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)","requestId":"req-test-1234"}
 {"timestamp":"2026-11-17T00:54:47.936Z","level":"error","message":"request","requestId":"req-test-1234","method":"POST","path":"/api/v1/builds","statusCode":500,"durationMs":5,"ip":"::ffff:127.0.0.1","contentLength":17}
  ✓ src/routes/builds/builds.spec.ts (3 tests) 38ms
 (node:23805) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
@@ -1852,13 +1852,13 @@ The current testing environment is not configured to support act(...)
 (node:22982) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
-> @appliance.sh/cli@1.62.0 test /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/cli
+> @appliance.sh/cli@1.62.0 test <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/cli
 > vitest run
 
 (node:23004) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/cli
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/cli
 
 (node:23019) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -2604,7 +2604,7 @@ test result: ok. 330 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fi
     Checking filetime v0.2.29
     Checking managed v0.8.0
     Checking tar v0.4.46
-    Checking appliance-credential-store v0.1.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/credential-store)
+    Checking appliance-credential-store v0.1.0 (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/credential-store)
     Checking idna_adapter v1.2.2
     Checking idna v1.1.0
     Checking smoltcp v0.13.1
@@ -2624,7 +2624,7 @@ test result: ok. 330 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fi
     Checking rcgen v0.13.2
     Checking objc2-app-kit v0.3.2
     Checking objc2-virtualization v0.3.2
-    Checking appliance-vm v0.1.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/vm)
+    Checking appliance-vm v0.1.0 (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/vm)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.52s
 
 [1;32m==> verify: GREEN[0m

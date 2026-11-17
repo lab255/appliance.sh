@@ -5,6 +5,10 @@ import path from 'node:path';
 // Only source identifiers are inspected, never sourcesContent or declarations.
 const forbidden =
   /(?:\.(?:test|spec)\.[^/]+$|(?:^|\/)(?:__tests__|__fixtures__|fixtures|harnesses)(?:\/|$)|(?:^|\/)mock-[^/]+$|(?:^|\/)[^/]*-audit\.[^/]+$|docs\/.*(?:evidence|audits)\/)/i;
+class AuditFailure extends Error {}
+const fail = (message) => {
+  throw new AuditFailure(message);
+};
 async function audit(directory, inject = false) {
   const result = { javascriptMapsAudited: 0, sourceEntriesAudited: 0, harnessTestOrFixtureSources: [] };
   async function walk(dir) {
@@ -41,22 +45,24 @@ async function audit(directory, inject = false) {
 }
 
 try {
-  const roots = { 'app-library': process.env.APP_BUNDLE_DIR, 'desktop-product': process.env.DESKTOP_BUNDLE_DIR };
-  assert.ok(process.env.BUNDLE_AUDIT_OUTPUT, 'Set BUNDLE_AUDIT_OUTPUT');
+  const roots = { 'app-library': 'APP_BUNDLE_DIR', 'desktop-product': 'DESKTOP_BUNDLE_DIR' };
+  for (const name of [...Object.values(roots), 'BUNDLE_AUDIT_OUTPUT'])
+    if (!process.env[name]) fail(`Missing required environment variable: ${name}`);
   const results = {};
-  for (const [name, directory] of Object.entries(roots)) {
-    assert.ok(directory, `Set bundle directory for ${name}`);
+  for (const [name, variable] of Object.entries(roots)) {
+    const directory = process.env[variable];
     const control = await audit(directory, true);
-    assert.ok(control.harnessTestOrFixtureSources.length > 0, `${name}: negative control failed`);
+    if (!control.harnessTestOrFixtureSources.length) fail(`${name}: injected negative control was not detected`);
     results[name] = await audit(directory);
-    assert.equal(results[name].harnessTestOrFixtureSources.length, 0, `${name}: forbidden sources found`);
+    if (results[name].harnessTestOrFixtureSources.length)
+      fail(`${name}: forbidden sources found: ${JSON.stringify(results[name].harnessTestOrFixtureSources)}`);
   }
   await writeFile(process.env.BUNDLE_AUDIT_OUTPUT, JSON.stringify(results, null, 2) + '\n');
   console.log(JSON.stringify({ results, negativeControls: 'Injected test source rejected on both surfaces' }, null, 2));
-} catch {
-  // Deliberately avoid raw filesystem/JSON errors, which can disclose local paths.
+} catch (error) {
+  // Raw filesystem/JSON errors may contain local paths. Only our safe diagnostics escape.
   console.error(
-    'Bundle audit failed: check configured build directories, sourcemap validity, and test/fixture imports. No evidence written.'
+    `Bundle audit failed: ${error instanceof AuditFailure ? error.message : 'invalid/unreadable build directory or JavaScript sourcemap'}. No evidence written.`
   );
   process.exitCode = 1;
 }

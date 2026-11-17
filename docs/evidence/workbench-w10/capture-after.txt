@@ -1,0 +1,9 @@
+   Compiling appliance-desktop v1.48.0 (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.04s
+     Running unittests src/lib.rs (/tmp/w10-rust-target/debug/deps/appliance_desktop_lib-776ef623fb919259)
+
+running 1 test
+test inspection::tests::capture_key_failure_retains_cause_on_later_reads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 85 filtered out; finished in 0.03s
+

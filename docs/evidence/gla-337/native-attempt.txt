@@ -2,7 +2,7 @@
      Running DevCommand (`cargo  run --no-default-features --color always --`)
 [1m[92m    Updating[0m crates.io index
 
-> @appliance.sh/desktop@1.62.0 dev /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop
+> @appliance.sh/desktop@1.62.0 dev <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop
 > vite
 
        Error Found version mismatched Tauri packages. Make sure the NPM package and Rust crate versions are on the same major/minor releases:
@@ -14,12 +14,12 @@ tauri-plugin-shell (v2.6.0) : @tauri-apps/plugin-shell (v2.3.5)
 tauri-plugin-notification (v2.8.1) : @tauri-apps/plugin-notification (v2.3.3)
 error when starting dev server:
 Error: Port 1420 is already in use
-    at Server.onError (file:///Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/node_modules/.pnpm/vite@6.4.2_@types+node@24.12.2_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.3/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:25023:18)
+    at Server.onError (file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/vite@6.4.2_@types+node@24.12.2_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0_yaml@2.8.3/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:25023:18)
     at Server.emit (node:events:508:28)
     at emitErrorNT (node:net:1984:8)
     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
  ELIFECYCLE  Command failed with exit code 1.
        Error The "beforeDevCommand" terminated with a non-zero status code.
 undefined
-/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop:
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop:
  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tauri dev --no-watch

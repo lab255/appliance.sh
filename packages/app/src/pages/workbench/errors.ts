@@ -10,7 +10,10 @@ export function isUnreadableWorkbenchFile(
 
 export function workbenchErrorMessage(error: unknown): string {
   if (isUnreadableWorkbenchFile(error)) {
-    return `${error.path} is unreadable (${error.reason}). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected.`;
+    const reset = /(?:^|[/\\])workbench-directories\.json$/.test(error.path)
+      ? 'clear the entire opened-folders list'
+      : "reset this workspace's view settings";
+    return `${error.path} is unreadable (${error.reason}). Fix or delete it to ${reset}. Your project and deploy link are not affected.`;
   }
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string')
     return error.message;

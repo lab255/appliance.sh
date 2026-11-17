@@ -1,0 +1,72 @@
+[
+  {
+    "name": "clean graph plus injected test negative control",
+    "exit": 0,
+    "diagnostic": ""
+  },
+  {
+    "name": "app plant fixture.test.ts",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: app-library: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"fixture.test.ts\"}]. No evidence written."
+  },
+  {
+    "name": "app plant mock-host.ts",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: app-library: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"mock-host.ts\"}]. No evidence written."
+  },
+  {
+    "name": "app plant sessions-audit.tsx",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: app-library: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"sessions-audit.tsx\"}]. No evidence written."
+  },
+  {
+    "name": "app plant docs/evidence/probe.mjs",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: app-library: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"probe.mjs\"}]. No evidence written."
+  },
+  {
+    "name": "app plant __fixtures__/sample.ts",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: app-library: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"sample.ts\"}]. No evidence written."
+  },
+  {
+    "name": "desktop plant fixture.test.ts",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: desktop-product: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"fixture.test.ts\"}]. No evidence written."
+  },
+  {
+    "name": "desktop plant mock-host.ts",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: desktop-product: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"mock-host.ts\"}]. No evidence written."
+  },
+  {
+    "name": "desktop plant sessions-audit.tsx",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: desktop-product: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"sessions-audit.tsx\"}]. No evidence written."
+  },
+  {
+    "name": "desktop plant docs/evidence/probe.mjs",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: desktop-product: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"probe.mjs\"}]. No evidence written."
+  },
+  {
+    "name": "desktop plant __fixtures__/sample.ts",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: desktop-product: forbidden sources found: [{\"map\":\"runtime.js.map\",\"source\":\"sample.ts\"}]. No evidence written."
+  },
+  {
+    "name": "missing env",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: Missing required environment variable: APP_BUNDLE_DIR. No evidence written."
+  },
+  {
+    "name": "bad map",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: invalid/unreadable build directory or JavaScript sourcemap. No evidence written."
+  },
+  {
+    "name": "failed negative control",
+    "exit": 1,
+    "diagnostic": "Bundle audit failed: app-library: injected negative control was not detected. No evidence written."
+  }
+]

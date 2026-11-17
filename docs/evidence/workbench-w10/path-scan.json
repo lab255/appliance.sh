@@ -1,0 +1,1502 @@
+{
+  "scope": "All tracked and untracked repository files (including binary bytes); git-ignored dependency/build/cache trees excluded. Report file excluded to avoid recursive self-counting.",
+  "patterns": [
+    "macOS home prefix",
+    "Unix home prefix",
+    "macOS temp prefix",
+    "private var prefix",
+    "Claude temp prefix",
+    "runtime username",
+    "historical temp directory IDs",
+    "worktree thread IDs"
+  ],
+  "historicalTempIdsChecked": 2,
+  "matchesRemaining": 292,
+  "pngCompressedByteMatches": 87,
+  "imageLimit": "PNG bytes are scanned, not OCR of rendered pixels",
+  "positiveControls": "all detectors passed",
+  "remaining": [
+    {
+      "file": ".github/workflows/release.yml",
+      "line": 59,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": ".github/workflows/release.yml",
+      "line": 60,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 26,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 36,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 46,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 57,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 67,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 78,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 103,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 117,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 175,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 209,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 223,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 234,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 249,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 259,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 269,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 304,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 314,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 324,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 335,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 366,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 393,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 403,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 417,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 439,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 453,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 483,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 502,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 535,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 545,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 555,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 565,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 575,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 586,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 597,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 615,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 625,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 637,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 648,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 665,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 679,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 689,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 700,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 710,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 720,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 730,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 744,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 754,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 764,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 774,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 784,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 794,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 804,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 824,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 839,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 855,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 865,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 875,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 887,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 897,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 907,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 918,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 928,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 942,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 954,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 965,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 980,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 991,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1001,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1011,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1021,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1031,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1041,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1051,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1061,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1072,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1082,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1092,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1102,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1112,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1122,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1132,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1142,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1152,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1162,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1172,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1182,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1192,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1202,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1212,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1222,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1232,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1258,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1268,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1278,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 1301,
+      "pattern": "runtime username",
+      "matches": 2
+    },
+    {
+      "file": "docs/audits/gla-335-shell/after-developer-apps-no-preference.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/after-developer-apps-reduce.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/after-stale-catalogue-no-preference.png",
+      "line": 2130,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/after-stale-catalogue-reduce.png",
+      "line": 2130,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/before-developer-apps-no-preference.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/before-stale-catalogue-no-preference.png",
+      "line": 2129,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/before-stale-catalogue-reduce.png",
+      "line": 2129,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/revision/after-revision-a-developer-apps-no-preference.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/revision/after-revision-a-developer-apps-reduce.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/revision/after-revision-b-stale-catalogue-no-preference.png",
+      "line": 2130,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/revision/after-revision-b-stale-catalogue-reduce.png",
+      "line": 2130,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/revision/footer-arrival-no-preference.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/audits/gla-335-shell/revision/footer-arrival-reduce.png",
+      "line": 1619,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-337/native-after-picker.png",
+      "line": 7267,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-337/native-after-picker.png",
+      "line": 7769,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/folder-no-preference-pending.png",
+      "line": 677,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/folder-reduce-pending.png",
+      "line": 677,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/switch-no-preference-idle.png",
+      "line": 391,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/switch-reduce-idle.png",
+      "line": 391,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-339/zoom-reduce.png",
+      "line": 672,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 6,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 8,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 10,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 12,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 21,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 23,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 25,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 27,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 36,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 38,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 40,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 44,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 51,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 53,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 55,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/proxy-listeners.txt",
+      "line": 57,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/run.py",
+      "line": 14,
+      "pattern": "macOS temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/w3/large-no-preference.png",
+      "line": 1686,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/w3/large-reduce.png",
+      "line": 1686,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/w3/narrow-390.png",
+      "line": 1073,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 14,
+      "pattern": "macOS temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 15,
+      "pattern": "macOS temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 18,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 19,
+      "pattern": "Unix home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 20,
+      "pattern": "macOS temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 21,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 22,
+      "pattern": "Claude temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/path-scan.py",
+      "line": 59,
+      "pattern": "worktree thread IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/scrub.py",
+      "line": 10,
+      "pattern": "macOS temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w10/scrub.py",
+      "line": 12,
+      "pattern": "Claude temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-narrow-no-preference.png",
+      "line": 715,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-narrow-no-preference.png",
+      "line": 1151,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-narrow-reduce.png",
+      "line": 715,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-narrow-reduce.png",
+      "line": 1151,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-result-no-preference.png",
+      "line": 1135,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-result-reduce.png",
+      "line": 1135,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-slow-61s.png",
+      "line": 385,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/browser-fixture-zoom-no-preference.png",
+      "line": 1956,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-grants.png",
+      "line": 1541,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-grants.png",
+      "line": 6258,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-grants.png",
+      "line": 7252,
+      "pattern": "historical temp directory IDs",
+      "matches": 2
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-package.png",
+      "line": 377,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-package.png",
+      "line": 7899,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 1541,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 4021,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 4519,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 4631,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 5677,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 5855,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 6023,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 8174,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 8438,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 10442,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 10783,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 11879,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-signed-publisher.png",
+      "line": 12038,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-grants.png",
+      "line": 1541,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-grants.png",
+      "line": 3845,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-grants.png",
+      "line": 4408,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-grants.png",
+      "line": 7291,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-grants.png",
+      "line": 8615,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-grants.png",
+      "line": 10858,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-package.png",
+      "line": 377,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-package.png",
+      "line": 2495,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-package.png",
+      "line": 9581,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-publisher.png",
+      "line": 1541,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-unsigned-publisher.png",
+      "line": 4975,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 1250,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 1729,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 3472,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 3631,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 3717,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 4318,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 5295,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 5312,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 5461,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 6697,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 8641,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 9815,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w2/native-v1-rejection.png",
+      "line": 13958,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/acceptance-no-preference.png",
+      "line": 879,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/acceptance-reduce.png",
+      "line": 879,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/narrow-no-preference.png",
+      "line": 321,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/refusal-no-preference.png",
+      "line": 1143,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/refusal-reduce.png",
+      "line": 1572,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/zoom-no-preference.png",
+      "line": 175,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/zoom-reduce.png",
+      "line": 175,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w4/zoom-reduce.png",
+      "line": 2055,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w5/stale-no-preference.png",
+      "line": 1552,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/workbench-w8/run-probes.py",
+      "line": 36,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/images/desktop-terminal.png",
+      "line": 1008,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/workbench/evidence/delta-save-error-no-preference.png",
+      "line": 1195,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/workbench/evidence/delta.mjs",
+      "line": 7,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/workbench/evidence/recovery.mjs",
+      "line": 18,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/workbench/evidence/s2-zoom-reduce.png",
+      "line": 275,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/workbench/evidence/s2-zoom-reduce.png",
+      "line": 5081,
+      "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/workbench/evidence/surface.mjs",
+      "line": 59,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "package.json",
+      "line": 14,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/api-server/package.json",
+      "line": 6,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/api-server/src/routes/keys/keys.spec.ts",
+      "line": 92,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/api-server/src/routes/keys/keys.spec.ts",
+      "line": 104,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/app/package.json",
+      "line": 7,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/app/src/pages/workbench/inspection-audit.tsx",
+      "line": 11,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/appliance.sh/package.json",
+      "line": 11,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/bootstrap/package.json",
+      "line": 7,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/cli/package.json",
+      "line": 11,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/cli/src/utils/runtime-doctor.spec.ts",
+      "line": 361,
+      "pattern": "Unix home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/cli/src/utils/sandbox.spec.ts",
+      "line": 13,
+      "pattern": "Unix home prefix",
+      "matches": 2
+    },
+    {
+      "file": "packages/cli/src/utils/upgrade-channel.spec.ts",
+      "line": 22,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/console/package.json",
+      "line": 7,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/credential-store/Cargo.toml",
+      "line": 5,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/credhelper/Cargo.toml",
+      "line": 5,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/package.json",
+      "line": 7,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src-tauri/Cargo.toml",
+      "line": 5,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src-tauri/src/inspection.rs",
+      "line": 1423,
+      "pattern": "Unix home prefix",
+      "matches": 2
+    },
+    {
+      "file": "packages/desktop/src-tauri/src/inspection.rs",
+      "line": 1425,
+      "pattern": "Unix home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src-tauri/src/inspection.rs",
+      "line": 1426,
+      "pattern": "Unix home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src-tauri/src/inspection.rs",
+      "line": 1429,
+      "pattern": "Unix home prefix",
+      "matches": 2
+    },
+    {
+      "file": "packages/desktop/src/mock-host.ts",
+      "line": 594,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src/mock-host.ts",
+      "line": 1154,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src/mock-host.ts",
+      "line": 1252,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src/mock-workbench.ts",
+      "line": 9,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/desktop/src/mock-workbench.ts",
+      "line": 23,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/helper/package.json",
+      "line": 12,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/infra/package.json",
+      "line": 12,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/install-aws/package.json",
+      "line": 21,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/sdk/package.json",
+      "line": 11,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/sdk/src/models/appliance-v2.spec.ts",
+      "line": 303,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "packages/ui/package.json",
+      "line": 6,
+      "pattern": "runtime username",
+      "matches": 1
+    },
+    {
+      "file": "packages/vm/Cargo.toml",
+      "line": 5,
+      "pattern": "runtime username",
+      "matches": 1
+    }
+  ]
+}

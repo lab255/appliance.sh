@@ -1,0 +1,36 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "pointerError": null,
+    "pointerTrace": {
+      "trace": ["confirmed:true"],
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "text": "Confirm probe"
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "text": "Confirm probe"
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "text": "Confirm probe"
+        }
+      ]
+    },
+    "finalTrace": ["confirmed:true"]
+  },
+  {
+    "reducedMotion": "reduce",
+    "pointerError": "TimeoutError: locator.click: Timeout 3000ms exceeded.\n",
+    "pointerTrace": {
+      "trace": [],
+      "events": []
+    },
+    "finalTrace": ["confirmed:true"]
+  }
+]

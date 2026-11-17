@@ -117,6 +117,7 @@ it.each([false, true])('discloses generated-only changes and reveals rows (real 
   try {
     expect(refresh).toHaveBeenCalledWith('/project');
     expect(container.textContent).toContain('0 files · 1 generated changes hidden');
+    expect(container.textContent).toContain('1 generated path changed and is not shown');
     for (const pattern of ['.appliance/agents.json', '.appliance/agent-results/*', '.appliance/.agents.*'])
       expect(container.textContent).toContain(pattern);
     expect(container.textContent).not.toContain('No changes since workspace baseline');

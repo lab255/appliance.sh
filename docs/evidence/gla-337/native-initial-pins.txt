@@ -71,4 +71,4 @@ candidate versions found which didn't match: 2.11.0
 location searched: crates.io index
 required by package `tauri-plugin-fs v2.7.1`
     ... which satisfies dependency `tauri-plugin-fs = "^2.5.1"` (locked to 2.7.1) of package `tauri-plugin-dialog v2.7.1`
-    ... which satisfies dependency `tauri-plugin-dialog = "^2"` (locked to 2.7.1) of package `appliance-desktop v1.48.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop/src-tauri)`
+    ... which satisfies dependency `tauri-plugin-dialog = "^2"` (locked to 2.7.1) of package `appliance-desktop v1.48.0 (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop/src-tauri)`

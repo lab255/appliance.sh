@@ -1,5 +1,5 @@
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 
  ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 2 failed) 315ms
    × discloses generated-only changes and reveals rows (real detail route=false) 76ms
@@ -17,7 +17,7 @@
    Duration  911ms (transform 103ms, setup 0ms, collect 321ms, tests 315ms, environment 134ms, prepare 34ms)
 
 undefined
-/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app:
  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/workbench/workspace-inspector.test.tsx
 
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯

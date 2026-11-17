@@ -1,0 +1,22 @@
+{
+  "header": {
+    "x": 220,
+    "y": 0,
+    "width": 1220,
+    "height": 59,
+    "top": 0,
+    "right": 1440,
+    "bottom": 59,
+    "left": 220
+  },
+  "brand": {
+    "x": 0,
+    "y": 0,
+    "width": 219,
+    "height": 59,
+    "top": 0,
+    "right": 219,
+    "bottom": 59,
+    "left": 0
+  }
+}

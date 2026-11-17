@@ -1,0 +1,36 @@
+
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx (3 tests | 1 failed) 111ms
+   × guards every onData write, preserves shared mode, and Hide keeps the PTY alive 34ms
+     → expected 'Observing · read-onlyInput not sent —…' not to contain 'Input not sent — observing read-only.…'
+   ✓ keeps Interact focusable but guards activation while connecting 6ms
+   ✓ Workbench Observe defaults to read-only through the real component and provider 71ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/providers/terminal-sessions-provider.test.tsx > guards every onData write, preserves shared mode, and Hide keeps the PTY alive
+AssertionError: expected 'Observing · read-onlyInput not sent —…' not to contain 'Input not sent — observing read-only.…'
+
+Expected: "Input not sent — observing read-only. Choose Interact with agent."
+Received: "Observing · read-onlyInput not sent — observing read-only. Choose Interact with agent.Interact with agentMode is shared with the global terminal tab.Development VMThe microVM is the isolation boundary. The sandbox is not a jail for hostile code. Your OpenAI key stays on this computer; the VM only sees a placeholder. Development-VM egress is cooperative and bypassable. Approve, deny and stop steer the agent; they do not provide containment. An agent can read anything in this folder and send it out over the network.Observing · read-onlyInput not sent — observing read-only. Choose Interact with agent.Interact with agentMode is shared with the global terminal tab.Development VMThe microVM is the isolation boundary. The sandbox is not a jail for hostile code. Your OpenAI key stays on this computer; the VM only sees a placeholder. Development-VM egress is cooperative and bypassable. Approve, deny and stop steer the agent; they do not provide containment. An agent can read anything in this folder and send it out over the network."
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx:114:39
+    112|     const refusal = 'Input not sent — observing read-only. Choose Inte…
+    113|     await act(async () => terminals[0].input('\u001b[1;1R'));
+    114|     expect(container.textContent).not.toContain(refusal);
+       |                                       ^
+    115|     expect(write).not.toHaveBeenCalled();
+    116|     terminals[0].element.dispatchEvent(new KeyboardEvent('keydown', { …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  13:00:20
+   Duration  656ms (transform 60ms, setup 0ms, collect 147ms, tests 111ms, environment 244ms, prepare 35ms)
+
+undefined
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/providers/terminal-sessions-provider.test.tsx

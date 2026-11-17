@@ -413,6 +413,11 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
       // Open while parked in the holder so xterm has a laid-out element to
       // bind to; the view fits it to real dimensions on attach.
       if (holderRef.current) holderRef.current.appendChild(container);
+      let lastUserInput = -Infinity;
+      const markUserInput = () => {
+        lastUserInput = performance.now();
+      };
+      for (const type of ['keydown', 'paste', 'pointerdown']) container.addEventListener(type, markUserInput, true);
       term.open(container);
 
       const live: LiveSession = {
@@ -464,7 +469,8 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
           // Read the mutable mode at delivery time, never the opening render's mode.
           const sub = term.onData((d) => {
             if (live.inputMode === 'interactive') void live.session?.write(d);
-            else patchMeta(id, { inputRefusal: ++refusalSequence.current });
+            else if (performance.now() - lastUserInput <= 500)
+              patchMeta(id, { inputRefusal: ++refusalSequence.current });
           });
           live.disposeInput = () => sub.dispose();
           patchMeta(id, { status: 'open' });

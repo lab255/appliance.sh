@@ -3,7 +3,7 @@
   "commandId": "unsigned-grant",
   "result": {
     "appId": "workbench-w2-unsigned-review",
-    "bundlePath": "/Users/eliot/.appliance/runtime/bundles/sha256-c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f.appliance.zip",
+    "bundlePath": "<home>/.appliance/runtime/bundles/sha256-c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f.appliance.zip",
     "controlsSummary": {
       "egressHosts": ["example.com"],
       "mounts": [],

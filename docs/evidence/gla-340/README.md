@@ -25,12 +25,12 @@ Surfaces: CLI install/uninstall, entitlement revoke and runtime usage stamps acq
 
 ## Credhelper cancellation
 
-The deadline starts before metadata/browser work. The test's one-second wall-clock allowance includes ACL/file work and callback setup. Once elapsed, the receive loop checks timeout before cancellation. Production timeout precedence is unchanged; the cancellation test now freezes an injected monotonic clock, and a separate controlled-boundary test verifies real timeout behavior. The port mutex protects exclusivity rather than data, so tests recover its guard after poisoning instead of cascading a prior assertion failure.
+The deadline starts before metadata/browser work. The test's one-second wall-clock allowance includes ACL/file work and callback setup. Once elapsed, the receive loop checks timeout before cancellation. Production timeout precedence is unchanged; the cancellation test now freezes an injected monotonic clock, and a separate boundary test verifies real timeout behavior; the cancellation test proves the injected clock keeps the deadline controlled. The port mutex protects exclusivity rather than data, so tests recover its guard after poisoning instead of cascading a prior assertion failure.
 
 - `cancellation-wall.txt`: restore the original wall clock and inject 1100 ms signout delay; the exact original assertion fails with `Sign-in timed out; retry` versus `Sign-in cancelled`.
 - `cancellation-frozen.txt`: the identical delay with the frozen clock passes. `cancellation-control.py` reproduces both and restores the fixture in `finally`.
 - `poison-before.txt`: restoring `PORTS.lock().unwrap()` fails the intentional failed-test recovery regression with `PoisonError`.
-- `credhelper-after.txt` plus full verification: cancellation, controlled timeout, poison recovery and existing auth tests pass. This is a faithful local scheduling reproduction, not a Windows ACL performance measurement.
+- `credhelper-after.txt` plus full verification: cancellation with a controlled deadline, real timeout, poison recovery and existing auth tests pass. This is a faithful local scheduling reproduction, not a Windows ACL performance measurement.
 
 ## API-server investigation (no mitigation)
 
@@ -52,7 +52,7 @@ Compute SHA256 over the original response-body bytes before any decoding, reseri
 
 ## Verification scope
 
-`run.py` scrubs workspace/home/temp paths before writing subprocess output. Probe output excludes usernames, response bodies and environment credentials. `verify.txt` is the uncached default-sandbox run: TS build/typecheck/lint/tests and credential-store/helper Rust pass, VM tests fail on sandbox EPERM under the runtime home (and dependent missing-file/traffic assertions). The authorized full elevated rerun uses `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`; `verify-elevated.txt` records GREEN (exit 0), including all 330 VM tests. Draft Windows CI remains a separate platform check.
+`run.py` scrubs workspace<home> paths before writing subprocess output. Probe output excludes usernames, response bodies and environment credentials. `verify.txt` is the uncached default-sandbox run: TS build/typecheck/lint/tests and credential-store/helper Rust pass, VM tests fail on sandbox EPERM under the runtime home (and dependent missing-file/traffic assertions). The authorized full elevated rerun uses `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`; `verify-elevated.txt` records GREEN (exit 0), including all 330 VM tests. Draft Windows CI remains a separate platform check.
 
 ## Canonical Windows helper pin
 

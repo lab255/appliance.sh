@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import type { Inspection } from '@/lib/inspection';
 import { SessionsObservation } from './sessions-observation';
 import { PackageSection } from './package-section';
@@ -6,7 +7,6 @@ import * as React from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader, PageShell } from '@/components/ui/page-shell';
-import { Button } from '@/components/ui/button';
 import { WorkspaceInspector } from './workspace-inspector';
 import { useHost } from '@/providers/host-provider';
 import { useSelectedCluster } from '@/hooks/use-selected-cluster';
@@ -34,7 +34,7 @@ export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: Rea
     enabled: !!host.workbench,
     initialData: initial?.directory === workspaceId ? initial : undefined,
     staleTime: Infinity,
-    retry: false,
+    retry: (failureCount, error) => !isUnreadableWorkbenchFile(error) && failureCount < 3,
   });
   const workspace = query.data;
   if (!host.workbench)
@@ -52,7 +52,9 @@ export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: Rea
           {query.isError ? (
             <p role="alert">
               {workbenchErrorMessage(query.error)}{' '}
-              {!isUnreadableWorkbenchFile(query.error) && <Button onClick={() => query.refetch()}>Retry</Button>}
+              {!isUnreadableWorkbenchFile(query.error) && (
+                <RefetchButton onRefetch={() => query.refetch()}>Retry</RefetchButton>
+              )}
               <Link to="/workbench" className="underline">
                 Back to Workbench
               </Link>
