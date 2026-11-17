@@ -32,6 +32,8 @@ const navIcons: Record<AppNavKey, React.ComponentType<{ className?: string }>> =
   settings: Cog,
 };
 
+const shellHeaderHeight = 'min-h-[calc(1lh+var(--spacing)*9+3px)]';
+
 export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -118,7 +120,9 @@ export function AppShell() {
       <aside className="row-span-3 flex min-h-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Brand — height + divider align with the content header so the
             top-left corner reads as one clean grid, not two strips. */}
-        <div className="flex h-[57px] shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4">
+        <div
+          className={`${shellHeaderHeight} flex text-sm shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] px-4`}
+        >
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--color-foreground)] text-[var(--color-background)]">
             <Server className="h-3.5 w-3.5" aria-hidden />
           </div>
@@ -198,7 +202,9 @@ export function AppShell() {
           two 1px borders. Header py-3 adds 6 spacing units plus its divider.
           Derive the reserve from those same font/spacing tokens, not a pixel
           snapshot: at the default scale this is 20 + 12 + 2 + 24 + 1 = 59px. */}
-      <header className="col-start-2 flex min-h-[calc(1lh+var(--spacing)*9+3px)] items-center justify-between border-b border-[var(--color-border)] px-4 py-3 text-sm">
+      <header
+        className={`${shellHeaderHeight} col-start-2 flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3 text-sm`}
+      >
         {mode === 'user' ? (
           <WorkspaceSwitcher
             onSetup={() => {

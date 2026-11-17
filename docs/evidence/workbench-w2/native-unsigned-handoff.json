@@ -1,6 +1,6 @@
 {
   "source": {
-    "path": "/Users/eliot/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip",
+    "path": "<home>/Library/Application Support/sh.appliance.desktop/workbench-packages/7c17b8b4-972e-42f0-b4a9-323684e98827/review.appliance.zip",
     "exists": true,
     "bytes": 717,
     "zipSha256": "891d7f2cae042e194507e5e9b75bcb5e80fc9264f0d42d3f64987a43a1f3cf21",
@@ -38,7 +38,7 @@
     }
   },
   "installed": {
-    "path": "/Users/eliot/.appliance/runtime/bundles/sha256-c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f.appliance.zip",
+    "path": "<home>/.appliance/runtime/bundles/sha256-c1f2f6b5cd80f8e7ae17026b812f15cec490ff61b3cc9a8caed21ce34475750f.appliance.zip",
     "exists": true,
     "bytes": 717,
     "zipSha256": "891d7f2cae042e194507e5e9b75bcb5e80fc9264f0d42d3f64987a43a1f3cf21",

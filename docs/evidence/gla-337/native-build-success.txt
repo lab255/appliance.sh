@@ -29,7 +29,7 @@
    Compiling tauri-plugin-updater v2.10.1
    Compiling tauri-plugin-process v2.3.1
    Compiling tauri-plugin-dialog v2.7.1
-   Compiling appliance-desktop v1.48.0 (/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_45sjzbuqtf-1/appliance.sh/packages/desktop/src-tauri)
+   Compiling appliance-desktop v1.48.0 (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/desktop/src-tauri)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 31.75s
      Running `target/debug/appliance-desktop`
 warn: appliance ["runtime", "install", "/private/tmp/gla337-journal.appliance.zip", "--target", "microvm", "--json", "--desktop"] failed: Warning: no verified unsafe-app blacklist is available; local operation continues.

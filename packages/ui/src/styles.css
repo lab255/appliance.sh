@@ -21,7 +21,8 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
-  .appliance-ui:active {
+  /* Dialog centering is layout, not a press offset: :active includes ancestors. */
+  .appliance-ui:not(.ui-dialog-content):active {
     translate: none !important;
   }
 }

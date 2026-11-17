@@ -8,7 +8,7 @@ Scope: Workbench session observation using the existing VM agent registry and gl
 
 ## Authorized shared seam
 
-Manager thr_zgc56nj9b2 explicitly approved the provider/drawer extension: a Workbench-only guard would be decoration if the shared tab could still write. Bounds honored: ordinary callers retain interactive input; drawer mount/dismiss remains immediate with no animation/lifecycle changes; labels agree; only the detail Sessions region changed. W5 confirmed its actual detail changes are readiness prop/hook, inspection anchor and PackageSection props, with no overlapping Sessions edit. The manager commissions the independent Opus review and exclusively controls merge.
+Manager <thread> explicitly approved the provider/drawer extension: a Workbench-only guard would be decoration if the shared tab could still write. Bounds honored: ordinary callers retain interactive input; drawer mount/dismiss remains immediate with no animation/lifecycle changes; labels agree; only the detail Sessions region changed. W5 confirmed its actual detail changes are readiness prop/hook, inspection anchor and PackageSection props, with no overlapping Sessions edit. The manager commissions the independent Opus review and exclusively controls merge.
 
 ## Verify-time regression probes
 

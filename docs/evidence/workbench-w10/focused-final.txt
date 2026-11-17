@@ -1,0 +1,274 @@
+
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
+
+stderr | src/pages/workbench/recovery.test.tsx
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
+    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
+
+ ✓ src/providers/terminal-sessions-provider.test.tsx (3 tests) 141ms
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["click"]
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > does not start a queued refetch after unmount
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > does not start a queued refetch after unmount
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > does not start a queued refetch after unmount
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps unavailable controls idle and focusable without starting work
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps unavailable controls idle and focusable without starting work
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/components/refetch-button.test.tsx (7 tests) 92ms
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a corrupt row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a corrupt row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a corrupt row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a corrupt row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a corrupt row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a corrupt row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a deleted row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a deleted row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a deleted row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a deleted row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a deleted row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a deleted row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+ ✓ src/pages/workbench/recovery.test.tsx (7 tests) 551ms
+ ✓ src/pages/workbench/workspace-inspector.test.tsx (8 tests) 627ms
+
+ Test Files  4 passed (4)
+      Tests  25 passed (25)
+   Start at  13:15:35
+   Duration  1.44s (transform 301ms, setup 0ms, collect 1.54s, tests 1.41s, environment 726ms, prepare 158ms)
+

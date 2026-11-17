@@ -1,0 +1,174 @@
+
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
+
+stderr | src/pages/workbench/recovery.test.tsx
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
+    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+ ❯ src/pages/workbench/recovery.test.tsx (6 tests | 1 failed) 460ms
+   × Workbench file recovery > formats the same actionable error for read, open and save surfaces 3ms
+     → expected '/app-data/workbench-directories.json …' to contain 'clear the entire opened-folders list'
+   ✓ Workbench file recovery > shows list errors immediately without inheriting global retries 99ms
+   ✓ Workbench file recovery > shows detail errors immediately without inheriting global retries 89ms
+   ✓ Workbench file recovery > automatically retries transient list errors 94ms
+   ✓ Workbench file recovery > automatically retries transient detail errors 85ms
+   ✓ Workbench file recovery > removes a failed row through the reference-only host capability 89ms
+ ❯ src/pages/workbench/workspace-inspector.test.tsx (8 tests | 2 failed) 619ms
+   × discloses generated-only changes and reveals rows (real detail route=false) 79ms
+     → expected 'Baseline: host-side snapshot · /proje…' to contain '1 generated path changed and is not s…'
+   × discloses generated-only changes and reveals rows (real detail route=true) 41ms
+     → expected 'Workbenchproject/projectAgent machine…' to contain '1 generated path changed and is not s…'
+   ✓ negative control: genuinely unchanged shows No changes (route=false) 41ms
+   ✓ negative control: genuinely unchanged shows No changes (route=true) 35ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=false) 70ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=true) 63ms
+   ✓ real detail reconciles host session and inspection refresh evidence before presenting a proposal 217ms
+   ✓ real detail invalidates readiness after a rejected refresh following success 72ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/workbench/recovery.test.tsx > Workbench file recovery > formats the same actionable error for read, open and save surfaces
+AssertionError: expected '/app-data/workbench-directories.json …' to contain 'clear the entire opened-folders list'
+
+Expected: "clear the entire opened-folders list"
+Received: "/app-data/workbench-directories.json is unreadable (EOF while parsing an object at line 1 column 1). Fix or delete it to reset this workspace's view settings. Your project and deploy link are not affected."
+
+ ❯ src/pages/workbench/recovery.test.tsx:30:97
+     28|   it('formats the same actionable error for read, open and save surfac…
+     29|     expect(workbenchErrorMessage(failure)).toBe(message);
+     30|     expect(workbenchErrorMessage({ ...failure, path: '/app-data/workbe…
+       |                                                                                                 ^
+     31|     expect(workbenchErrorMessage({ kind: 'operation', message: 'Folder…
+     32|       'Folder is not writable'
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/pages/workbench/workspace-inspector.test.tsx > discloses generated-only changes and reveals rows (real detail route=false)
+AssertionError: expected 'Baseline: host-side snapshot · /proje…' to contain '1 generated path changed and is not s…'
+
+Expected: "1 generated path changed and is not shown"
+Received: "Baseline: host-side snapshot · /project · captured 2026-11-17T01:00:00ZOn a host you do not control, the host-side baseline guarantee weakens.Refreshed 2026-11-17T02:00:00Z · Live files may changeRead-only · workspace-wideRefresh inspectionInclude generated registry/results (results belong to Logs)ChangesFilesLogsChanged since workspace baseline · 0 files · 1 generated changes hiddenNo changes to tracked files. 1 generated paths changed and are not shown (.appliance/agents.json, .appliance/agent-results/*, .appliance/.agents.*). Enable the generated filter to inspect them.Select a fileRead-only snapshot previewSelect a file to read its snapshot.Initial state at workspace open (separate from since-baseline changes)Git reported a clean working tree at capture."
+
+ ❯ src/pages/workbench/workspace-inspector.test.tsx:120:35
+    118|     expect(refresh).toHaveBeenCalledWith('/project');
+    119|     expect(container.textContent).toContain('0 files · 1 generated cha…
+    120|     expect(container.textContent).toContain('1 generated path changed …
+       |                                   ^
+    121|     for (const pattern of ['.appliance/agents.json', '.appliance/agent…
+    122|       expect(container.textContent).toContain(pattern);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/pages/workbench/workspace-inspector.test.tsx > discloses generated-only changes and reveals rows (real detail route=true)
+AssertionError: expected 'Workbenchproject/projectAgent machine…' to contain '1 generated path changed and is not s…'
+
+Expected: "1 generated path changed and is not shown"
+Received: "Workbenchproject/projectAgent machineNot assignedNo mounted folder reportedDeployment targetChoose a deployment targetApplies to this workspace only.Baseline: host-side snapshot · /project · captured 2026-11-17T01:00:00ZOn a host you do not control, the host-side baseline guarantee weakens.Refreshed 2026-11-17T02:00:00Z · Live files may changeRead-only · workspace-wideRefresh inspectionInclude generated registry/results (results belong to Logs)ChangesFilesLogsChanged since workspace baseline · 0 files · 1 generated changes hiddenNo changes to tracked files. 1 generated paths changed and are not shown (.appliance/agents.json, .appliance/agent-results/*, .appliance/.agents.*). Enable the generated filter to inspect them.Select a fileRead-only snapshot previewSelect a file to read its snapshot.Initial state at workspace open (separate from since-baseline changes)Git reported a clean working tree at capture.Package for reviewPackaging creates an artifact; it does not install, publish or deploy it. You authorize each next step./projectNo structured readiness proposal. The readiness bridge is fixture-only; live agent statements remain in the session terminal. Review the changes before packaging. You can package without an agent proposal.Packaging requires the desktop host.PackagePackaging reads the current folder; it does not pin the inspected snapshot.Package output and logs will appear here.FileNo hand-off file from this attempt.Catalogue — coming laterDeploy sourceDeploy is a separate action. Package promotion is not available yet."
+
+ ❯ src/pages/workbench/workspace-inspector.test.tsx:120:35
+    118|     expect(refresh).toHaveBeenCalledWith('/project');
+    119|     expect(container.textContent).toContain('0 files · 1 generated cha…
+    120|     expect(container.textContent).toContain('1 generated path changed …
+       |                                   ^
+    121|     for (const pattern of ['.appliance/agents.json', '.appliance/agent…
+    122|       expect(container.textContent).toContain(pattern);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 11 passed (14)
+   Start at  13:07:42
+   Duration  1.47s (transform 266ms, setup 0ms, collect 1.01s, tests 1.08s, environment 320ms, prepare 78ms)
+
+undefined
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/workbench/recovery.test.tsx src/pages/workbench/workspace-inspector.test.tsx

@@ -27,6 +27,14 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
   assert.deepEqual(output.trace, ['attach']);
   assert.deepEqual(output.events, []);
   assert(output.displayed.includes('PROGRAMMATIC OUTPUT') && output.displayed.includes('HOST OUTPUT STILL LIVE'));
+  // Cursor-position/device-attributes queries generate input without a user gesture.
+  await page.evaluate(() => new Promise((resolve) => window.w4Xterm.write('\x1b[6n\x1b[c', resolve)));
+  await page.waitForFunction(() => window.w4InputEvents.length >= 2);
+  await page.waitForTimeout(100);
+  const autoReplies = await page.evaluate(() => ({ trace: window.w4Trace, events: window.w4InputEvents }));
+  assert(autoReplies.events.length >= 2, 'both queries must actually emit replies');
+  assert.deepEqual(autoReplies.trace, ['attach'], 'auto-replies must not write');
+  assert.equal(await drawer.getByText(notice, { exact: true }).count(), 0, 'auto-replies must not show refusal');
   // Enable bracketed paste through the output API, exactly as an agent TUI does.
   await page.evaluate(() => new Promise((resolve) => window.w4Xterm.write('\x1b[?2004h', resolve)));
   async function routes(interactive) {
@@ -105,6 +113,7 @@ for (const reducedMotion of ['no-preference', 'reduce']) {
   results.push({
     reducedMotion,
     output,
+    autoReplies,
     refusedRoutes,
     refused,
     notice,

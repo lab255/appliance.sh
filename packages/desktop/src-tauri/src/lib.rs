@@ -1407,6 +1407,8 @@ fn mirror_to_shared_profiles(cfg: &PersistedConfig) -> Result<(), HostError> {
 /// seed. Pure data so the decision can be unit-tested without touching
 /// the real keychain.
 #[derive(Debug, PartialEq)]
+// Preserve the existing value representation; boxing changes types beyond this sweep.
+#[allow(clippy::large_enum_variant)]
 enum SeedDecision {
     /// profiles.json already holds a non-empty secret for this id (it
     /// is authoritative) — leave it untouched.
@@ -3958,7 +3960,7 @@ fn vm_binary() -> Option<PathBuf> {
 /// or — in dev builds — the repo checkout's cargo output.
 fn vm_install_source(app: &AppHandle) -> Option<PathBuf> {
     if let Ok(resource) = app.path().resolve(
-        &format!("vm-bin/{VM_BIN_NAME}"),
+        format!("vm-bin/{VM_BIN_NAME}"),
         tauri::path::BaseDirectory::Resource,
     ) {
         if resource.is_file() {

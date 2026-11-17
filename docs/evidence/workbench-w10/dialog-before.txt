@@ -1,0 +1,14 @@
+[
+  {
+    reducedMotion: 'no-preference',
+    pointerError: null,
+    pointerTrace: { trace: [Array], events: [Array] },
+    finalTrace: [ 'confirmed:true' ]
+  },
+  {
+    reducedMotion: 'reduce',
+    pointerError: 'TimeoutError: locator.click: Timeout 3000ms exceeded.\n',
+    pointerTrace: { trace: [], events: [] },
+    finalTrace: [ 'confirmed:true' ]
+  }
+]

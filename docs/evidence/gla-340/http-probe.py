@@ -1,5 +1,6 @@
 """Compare direct HTTP fingerprints with a held loopback listener and curl."""
 import hashlib
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import socket
@@ -21,7 +22,10 @@ def fingerprint(raw):
     allowed = ('server:', 'content-type:', 'proxy-authenticate:', 'content-length:')
     return {'status': lines[0], 'headers': [line for line in lines[1:] if line.lower().startswith(allowed)], 'body_sha256': hashlib.sha256(body).hexdigest()}
 
-for port in (58994, 58999, 59159, 62219):
+ports = os.environ.get('HTTP_PROBE_PORTS')
+if not ports:
+    raise SystemExit('Set HTTP_PROBE_PORTS to comma-separated candidate listener ports')
+for port in map(int, ports.split(',')):
     try:
         with socket.create_connection(('127.0.0.1', port), timeout=1) as client:
             client.sendall(b'GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n')

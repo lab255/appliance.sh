@@ -22,15 +22,33 @@
         }
       ]
     },
+    "pressedTranslate": "0px 1px",
     "finalTrace": ["confirmed:true"]
   },
   {
     "reducedMotion": "reduce",
-    "pointerError": "TimeoutError: locator.click: Timeout 3000ms exceeded.\n",
+    "pointerError": null,
     "pointerTrace": {
-      "trace": [],
-      "events": []
+      "trace": ["confirmed:true"],
+      "events": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "text": "Confirm probe"
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "text": "Confirm probe"
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "text": "Confirm probe"
+        }
+      ]
     },
+    "pressedTranslate": "none",
     "finalTrace": ["confirmed:true"]
   }
 ]

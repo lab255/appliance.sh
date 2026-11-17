@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending } from '@/lib/paint-pending';
 import { isUnreadableWorkbenchFile, workbenchErrorMessage } from './errors';
 import * as React from 'react';
@@ -30,7 +31,7 @@ export function WorkbenchPage() {
     queryKey: ['workbench'],
     queryFn: () => host.workbench!.list(),
     enabled: !!host.workbench,
-    retry: false,
+    retry: (failureCount, error) => !isUnreadableWorkbenchFile(error) && failureCount < 3,
   });
   async function existing() {
     setError('');
@@ -165,9 +166,9 @@ export function WorkbenchPage() {
             <div role="alert">
               {workbenchErrorMessage(query.error)}
               {!isUnreadableWorkbenchFile(query.error) && (
-                <Button variant="outline" onClick={() => query.refetch()}>
+                <RefetchButton variant="outline" onRefetch={() => query.refetch()}>
                   Retry
-                </Button>
+                </RefetchButton>
               )}
             </div>
           )}
@@ -198,6 +199,7 @@ export function WorkbenchPage() {
           )}
           {removeError && <p role="alert">{removeError}</p>}
           {query.data?.map((workspace) => {
+            const errorMessage = workspace.error ? workbenchErrorMessage(workspace.error) : '';
             const latest = [...workspace.sessions].sort((a, b) =>
               (b.endedAt || b.launchedAt || '').localeCompare(a.endedAt || a.launchedAt || '')
             )[0];
@@ -231,7 +233,9 @@ export function WorkbenchPage() {
                 {workspace.error && (
                   <>
                     <p role="alert" className="break-words">
-                      {workbenchErrorMessage(workspace.error)}
+                      {errorMessage.includes(workspace.directory)
+                        ? errorMessage
+                        : `${workspace.directory}: ${errorMessage}`}
                     </p>
                     <Button
                       variant="outline"

@@ -1,0 +1,18 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: brand/header dividers must align
+
+57 !== 59
+
+    at file://<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/docs/evidence/workbench-w10/header-check.mjs:28:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 57,
+  expected: 59,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

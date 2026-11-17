@@ -523,7 +523,12 @@ fn authenticate(path: &Path, bytes: &[u8]) -> Result<Vec<u8>, String> {
 fn load(path: &Path) -> Result<Arc<Snapshot>, String> {
     let bytes = fs::read(path).map_err(|error| {
         match fs::read_to_string(path.with_extension("attempt")) {
-            Ok(reason) => format!("Comparison unavailable: baseline capture failed ({reason})"),
+            Ok(reason) => format!(
+                "Comparison unavailable: baseline capture failed ({})",
+                reason
+                    .strip_prefix("Comparison unavailable: ")
+                    .unwrap_or(&reason)
+            ),
             Err(_) => {
                 format!("No baseline captured — change comparison will be unavailable ({error})")
             }
@@ -1008,6 +1013,7 @@ mod tests {
         // Key access has recovered: these reads must still report the actual
         // failed capture, without promoting a retry or mislabelling it as legacy.
         let load_error = load(&path).err().unwrap();
+        assert_eq!(load_error.matches("Comparison unavailable").count(), 1);
         assert!(
             load_error.contains("keychain access was denied"),
             "{load_error}"

@@ -1,0 +1,127 @@
+
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
+
+stderr | src/pages/workbench/recovery.test.tsx
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/nodes/HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/HTMLCanvasElement.js:131:58)
+    at <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:127:24
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/common/Color.ts:118:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRendererRowFactory.ts:11:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32)
+    at Object.call (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/src/browser/renderer/dom/DomRenderer.ts:6:1)
+    at i (<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/node_modules/.pnpm/@xterm+xterm@6.0.0/node_modules/@xterm/xterm/lib/webpack:/@xterm/xterm/webpack/bootstrap:19:32) undefined
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows list errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > shows detail errors immediately without inheriting global retries
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+stderr | src/pages/workbench/recovery.test.tsx > Workbench file recovery > removes a failed row through the reference-only host capability
+The current testing environment is not configured to support act(...)
+
+ ❯ src/pages/workbench/recovery.test.tsx (6 tests | 2 failed) 463ms
+   ✓ Workbench file recovery > formats the same actionable error for read, open and save surfaces 1ms
+   ✓ Workbench file recovery > shows list errors immediately without inheriting global retries 102ms
+   ✓ Workbench file recovery > shows detail errors immediately without inheriting global retries 87ms
+   × Workbench file recovery > automatically retries transient list errors 94ms
+     → expected null to be 'true' // Object.is equality
+   × Workbench file recovery > automatically retries transient detail errors 88ms
+     → expected null to be 'true' // Object.is equality
+   ✓ Workbench file recovery > removes a failed row through the reference-only host capability 91ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient list errors
+ FAIL  src/pages/workbench/recovery.test.tsx > Workbench file recovery > automatically retries transient detail errors
+AssertionError: expected null to be 'true' // Object.is equality
+
+- Expected: 
+"true"
+
++ Received: 
+null
+
+ ❯ src/pages/workbench/recovery.test.tsx:102:49
+    100|       try {
+    101|         await act(async () => retry.click());
+    102|         expect(retry.getAttribute('aria-busy')).toBe('true');
+       |                                                 ^
+    103|         expect(retry.disabled).toBe(false);
+    104|         expect(read).toHaveBeenCalledTimes(4);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  13:07:40
+   Duration  1.34s (transform 192ms, setup 0ms, collect 526ms, tests 463ms, environment 155ms, prepare 33ms)
+
+undefined
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/workbench/recovery.test.tsx

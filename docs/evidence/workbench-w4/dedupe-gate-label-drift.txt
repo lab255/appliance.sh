@@ -1,5 +1,5 @@
 
- RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+ RUN  v3.2.4 <home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app
 
  ❯ src/providers/terminal-sessions-provider.test.tsx (3 tests | 1 failed) 112ms
    × guards every onData write, preserves shared mode, and Hide keeps the PTY alive 36ms
@@ -13,7 +13,7 @@
    Duration  510ms (transform 54ms, setup 0ms, collect 125ms, tests 112ms, environment 135ms, prepare 32ms)
 
 undefined
-/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+<home>/.bb/plugins/environment-git-worktree/host-data/worktrees/<thread>/appliance.sh/packages/app:
  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/providers/terminal-sessions-provider.test.tsx
 stderr | src/providers/terminal-sessions-provider.test.tsx > guards every onData write, preserves shared mode, and Hide keeps the PTY alive
 An update to TerminalSessionsProvider inside a test was not wrapped in act(...).

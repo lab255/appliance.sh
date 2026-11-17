@@ -1,0 +1,16 @@
+[
+  {
+    reducedMotion: 'no-preference',
+    pointerError: null,
+    pointerTrace: { trace: [Array], events: [Array] },
+    pressedTranslate: '0px 1px',
+    finalTrace: [ 'confirmed:true' ]
+  },
+  {
+    reducedMotion: 'reduce',
+    pointerError: null,
+    pointerTrace: { trace: [Array], events: [Array] },
+    pressedTranslate: 'none',
+    finalTrace: [ 'confirmed:true' ]
+  }
+]

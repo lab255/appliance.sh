@@ -27,6 +27,9 @@ async function flush() {
 describe('Workbench file recovery', () => {
   it('formats the same actionable error for read, open and save surfaces', () => {
     expect(workbenchErrorMessage(failure)).toBe(message);
+    expect(workbenchErrorMessage({ ...failure, path: '/app-data/workbench-directories.json' })).toContain(
+      'clear the entire opened-folders list'
+    );
     expect(workbenchErrorMessage({ kind: 'operation', message: 'Folder is not writable' })).toBe(
       'Folder is not writable'
     );
@@ -65,8 +68,66 @@ describe('Workbench file recovery', () => {
       client.clear();
     }
   });
-  it('removes a failed row through the reference-only host capability', async () => {
-    const row = { directory: '/project', binding: { version: 1 }, sessions: [], error: failure };
+  it.each(['list', 'detail'])('automatically retries transient %s errors', async (surface) => {
+    const error = new Error('Temporary read failure');
+    const read = vi.fn().mockRejectedValue(error);
+    const host = { platform: 'macos', workbench: { list: read, open: read } } as unknown as ConsoleHost;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: 3, retryDelay: 1 } } });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          <HostProvider host={host}>
+            <QueryClientProvider client={client}>
+              <MemoryRouter initialEntries={[surface === 'list' ? '/workbench' : '/workbench/project']}>
+                <Routes>
+                  <Route path="/workbench" element={<WorkbenchPage />} />
+                  <Route path="/workbench/:workspaceId" element={<WorkbenchDetailPage />} />
+                </Routes>
+              </MemoryRouter>
+            </QueryClientProvider>
+          </HostProvider>
+        )
+      );
+      await flush();
+      await flush();
+      expect(container.textContent).toContain(workbenchErrorMessage(error));
+      expect(container.textContent).toContain('Retry');
+      expect(container.textContent).not.toContain('Opening workspace…');
+      expect(read).toHaveBeenCalledTimes(4);
+      const retry = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Retry'))!;
+      const frames: FrameRequestCallback[] = [];
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      try {
+        await act(async () => retry.click());
+        expect(retry.getAttribute('aria-busy')).toBe('true');
+        expect(retry.disabled).toBe(false);
+        expect(read).toHaveBeenCalledTimes(4);
+        await act(async () => frames.splice(0).forEach((callback) => callback(0)));
+        expect(read).toHaveBeenCalledTimes(4);
+        await act(async () => frames.splice(0).forEach((callback) => callback(16)));
+        expect(read.mock.calls.length).toBeGreaterThan(4);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+
+      expect(client.getDefaultOptions().queries?.retry).toBe(3);
+    } finally {
+      await act(async () => root.unmount());
+      client.clear();
+    }
+  });
+  it.each(['corrupt', 'deleted'])('removes a %s row through the reference-only host capability', async (kind) => {
+    const row = {
+      directory: '/project',
+      binding: { version: 1 },
+      sessions: [],
+      error: kind === 'corrupt' ? failure : { kind: 'operation', message: 'No such file or directory (os error 2)' },
+    };
     const list = vi.fn().mockResolvedValueOnce([row]).mockResolvedValue([]);
     const forget = vi.fn().mockResolvedValue(undefined);
     const host = { platform: 'macos', workbench: { list, forget } } as unknown as ConsoleHost;
@@ -86,7 +147,9 @@ describe('Workbench file recovery', () => {
         )
       );
       await flush();
-      expect(container.textContent).toContain(message);
+      expect(container.querySelector('[role=alert]')?.textContent).toBe(
+        kind === 'corrupt' ? message : '/project: No such file or directory (os error 2)'
+      );
       const remove = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Remove from Workbench')!;
       expect(remove.closest('a')).toBeNull();
       await act(async () => remove.click());

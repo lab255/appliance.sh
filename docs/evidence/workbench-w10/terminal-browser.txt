@@ -1,0 +1,18 @@
+[
+  {
+    mode: 'no-preference',
+    refusedRoutes: 12,
+    interactiveControls: 12,
+    hostOutputDisplayed: true,
+    programmaticOutputDisplayed: true,
+    observeWrites: 0
+  },
+  {
+    mode: 'reduce',
+    refusedRoutes: 12,
+    interactiveControls: 12,
+    hostOutputDisplayed: true,
+    programmaticOutputDisplayed: true,
+    observeWrites: 0
+  }
+]

@@ -1,7 +1,7 @@
-import {chromium} from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import {chromium} from '<home>/.bb/plugins/environment-personal-workspace/host-data/workspaces/<thread>/node_modules/playwright/index.mjs';
 import fs from 'node:fs';
 const output=process.cwd()+'/docs/evidence/gla-337';
-const browser=await chromium.launch({headless:true,executablePath:'/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'});
+const browser=await chromium.launch({headless:true,executablePath:'<home>/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'});
 const results=[];
 for(const surface of ['installed','catalogue']) for(const reducedMotion of ['no-preference','reduce']) for(const before of [true,false]) {
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion});page.on('pageerror',e=>console.log('ERROR',e.message));
