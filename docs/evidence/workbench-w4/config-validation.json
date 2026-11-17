@@ -1,0 +1,122 @@
+[
+  {
+    "script": "measure",
+    "unset": ["PLAYWRIGHT_MODULE", "CHROMIUM_PATH", "W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE, CHROMIUM_PATH, W4_BASE_URL"
+  },
+  {
+    "script": "measure",
+    "unset": ["PLAYWRIGHT_MODULE"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE"
+  },
+  {
+    "script": "measure",
+    "unset": ["CHROMIUM_PATH"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: CHROMIUM_PATH"
+  },
+  {
+    "script": "measure",
+    "unset": ["W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: W4_BASE_URL"
+  },
+  {
+    "script": "interactions",
+    "unset": ["PLAYWRIGHT_MODULE", "CHROMIUM_PATH", "W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE, CHROMIUM_PATH, W4_BASE_URL"
+  },
+  {
+    "script": "interactions",
+    "unset": ["PLAYWRIGHT_MODULE"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE"
+  },
+  {
+    "script": "interactions",
+    "unset": ["CHROMIUM_PATH"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: CHROMIUM_PATH"
+  },
+  {
+    "script": "interactions",
+    "unset": ["W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: W4_BASE_URL"
+  },
+  {
+    "script": "extra-checks",
+    "unset": ["PLAYWRIGHT_MODULE", "CHROMIUM_PATH", "W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE, CHROMIUM_PATH, W4_BASE_URL"
+  },
+  {
+    "script": "extra-checks",
+    "unset": ["PLAYWRIGHT_MODULE"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE"
+  },
+  {
+    "script": "extra-checks",
+    "unset": ["CHROMIUM_PATH"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: CHROMIUM_PATH"
+  },
+  {
+    "script": "extra-checks",
+    "unset": ["W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: W4_BASE_URL"
+  },
+  {
+    "script": "confirm-repro",
+    "unset": ["PLAYWRIGHT_MODULE", "CHROMIUM_PATH", "W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE, CHROMIUM_PATH, W4_BASE_URL"
+  },
+  {
+    "script": "confirm-repro",
+    "unset": ["PLAYWRIGHT_MODULE"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE"
+  },
+  {
+    "script": "confirm-repro",
+    "unset": ["CHROMIUM_PATH"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: CHROMIUM_PATH"
+  },
+  {
+    "script": "confirm-repro",
+    "unset": ["W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: W4_BASE_URL"
+  },
+  {
+    "script": "refusal",
+    "unset": ["PLAYWRIGHT_MODULE", "CHROMIUM_PATH", "W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE, CHROMIUM_PATH, W4_BASE_URL"
+  },
+  {
+    "script": "refusal",
+    "unset": ["PLAYWRIGHT_MODULE"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: PLAYWRIGHT_MODULE"
+  },
+  {
+    "script": "refusal",
+    "unset": ["CHROMIUM_PATH"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: CHROMIUM_PATH"
+  },
+  {
+    "script": "refusal",
+    "unset": ["W4_BASE_URL"],
+    "exit": 1,
+    "message": "Missing required evidence configuration: W4_BASE_URL"
+  }
+]

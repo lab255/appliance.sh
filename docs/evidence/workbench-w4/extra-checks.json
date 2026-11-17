@@ -1,0 +1,42 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "gated": {
+      "trace": [],
+      "focus": "Interact with agent"
+    },
+    "cancelled": {
+      "trace": [],
+      "focus": "Stop agent"
+    },
+    "hidden": {
+      "trace": ["attach"],
+      "focus": "Observe"
+    },
+    "narrow": {
+      "horizontalOverflow": false,
+      "terminalHeight": 84
+    },
+    "zoom": "CSS zoom 2; not native browser zoom"
+  },
+  {
+    "reducedMotion": "reduce",
+    "gated": {
+      "trace": [],
+      "focus": "Interact with agent"
+    },
+    "cancelled": {
+      "trace": [],
+      "focus": "Stop agent"
+    },
+    "hidden": {
+      "trace": ["attach"],
+      "focus": "Observe"
+    },
+    "narrow": {
+      "horizontalOverflow": false,
+      "terminalHeight": 84
+    },
+    "zoom": "CSS zoom 2; not native browser zoom"
+  }
+]

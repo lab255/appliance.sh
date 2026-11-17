@@ -1,0 +1,352 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "output": {
+      "trace": ["attach"],
+      "events": [],
+      "displayed": "Fixture-only agent output. Select and copy this text.PROGRAMMATIC OUTPUTHOST OUTPUT STILL LIVE "
+    },
+    "refusedRoutes": [
+      {
+        "route": "focus-then-type",
+        "calls": [],
+        "events": ["t", "y", "p", "e", "d", "-", "i", "n", "p", "u", "t"],
+        "focused": true
+      },
+      {
+        "route": "Enter",
+        "calls": [],
+        "events": ["\r"],
+        "focused": true
+      },
+      {
+        "route": "Control+c",
+        "calls": [],
+        "events": ["\u0003"],
+        "focused": true
+      },
+      {
+        "route": "Control+d",
+        "calls": [],
+        "events": ["\u0004"],
+        "focused": true
+      },
+      {
+        "route": "ArrowUp",
+        "calls": [],
+        "events": ["\u001b[A"],
+        "focused": true
+      },
+      {
+        "route": "ArrowDown",
+        "calls": [],
+        "events": ["\u001b[B"],
+        "focused": true
+      },
+      {
+        "route": "ArrowLeft",
+        "calls": [],
+        "events": ["\u001b[D"],
+        "focused": true
+      },
+      {
+        "route": "ArrowRight",
+        "calls": [],
+        "events": ["\u001b[C"],
+        "focused": true
+      },
+      {
+        "route": "clipboard-paste",
+        "calls": [],
+        "events": ["\u001b[200~clipboard-input\u001b[201~"],
+        "focused": true
+      },
+      {
+        "route": "xterm.input",
+        "calls": [],
+        "events": ["api-input"],
+        "focused": true
+      },
+      {
+        "route": "xterm.write-response-query",
+        "calls": [],
+        "events": ["\u001b[5;1R"],
+        "focused": true
+      },
+      {
+        "route": "xterm.paste-bracketed",
+        "calls": [],
+        "events": ["\u001b[200~api-paste\u001b[201~"],
+        "focused": true
+      }
+    ],
+    "refused": {
+      "trace": ["attach"],
+      "blinkingCursor": false
+    },
+    "notice": "Input not sent — observing read-only. Choose Interact with agent.",
+    "expiry": "hidden within 5s (3s timer)",
+    "interactiveRoutes": [
+      {
+        "route": "focus-then-type",
+        "calls": [
+          "write:t",
+          "write:y",
+          "write:p",
+          "write:e",
+          "write:d",
+          "write:-",
+          "write:i",
+          "write:n",
+          "write:p",
+          "write:u",
+          "write:t"
+        ],
+        "events": ["t", "y", "p", "e", "d", "-", "i", "n", "p", "u", "t"],
+        "focused": true
+      },
+      {
+        "route": "Enter",
+        "calls": ["write:\r"],
+        "events": ["\r"],
+        "focused": true
+      },
+      {
+        "route": "Control+c",
+        "calls": ["write:\u0003"],
+        "events": ["\u0003"],
+        "focused": true
+      },
+      {
+        "route": "Control+d",
+        "calls": ["write:\u0004"],
+        "events": ["\u0004"],
+        "focused": true
+      },
+      {
+        "route": "ArrowUp",
+        "calls": ["write:\u001b[A"],
+        "events": ["\u001b[A"],
+        "focused": true
+      },
+      {
+        "route": "ArrowDown",
+        "calls": ["write:\u001b[B"],
+        "events": ["\u001b[B"],
+        "focused": true
+      },
+      {
+        "route": "ArrowLeft",
+        "calls": ["write:\u001b[D"],
+        "events": ["\u001b[D"],
+        "focused": true
+      },
+      {
+        "route": "ArrowRight",
+        "calls": ["write:\u001b[C"],
+        "events": ["\u001b[C"],
+        "focused": true
+      },
+      {
+        "route": "clipboard-paste",
+        "calls": ["write:\u001b[200~clipboard-input\u001b[201~"],
+        "events": ["\u001b[200~clipboard-input\u001b[201~"],
+        "focused": true
+      },
+      {
+        "route": "xterm.input",
+        "calls": ["write:api-input"],
+        "events": ["api-input"],
+        "focused": true
+      },
+      {
+        "route": "xterm.write-response-query",
+        "calls": ["write:\u001b[5;1R"],
+        "events": ["\u001b[5;1R"],
+        "focused": true
+      },
+      {
+        "route": "xterm.paste-bracketed",
+        "calls": ["write:\u001b[200~api-paste\u001b[201~"],
+        "events": ["\u001b[200~api-paste\u001b[201~"],
+        "focused": true
+      }
+    ],
+    "blinkingInteractive": true
+  },
+  {
+    "reducedMotion": "reduce",
+    "output": {
+      "trace": ["attach"],
+      "events": [],
+      "displayed": "Fixture-only agent output. Select and copy this text.PROGRAMMATIC OUTPUTHOST OUTPUT STILL LIVE "
+    },
+    "refusedRoutes": [
+      {
+        "route": "focus-then-type",
+        "calls": [],
+        "events": ["t", "y", "p", "e", "d", "-", "i", "n", "p", "u", "t"],
+        "focused": true
+      },
+      {
+        "route": "Enter",
+        "calls": [],
+        "events": ["\r"],
+        "focused": true
+      },
+      {
+        "route": "Control+c",
+        "calls": [],
+        "events": ["\u0003"],
+        "focused": true
+      },
+      {
+        "route": "Control+d",
+        "calls": [],
+        "events": ["\u0004"],
+        "focused": true
+      },
+      {
+        "route": "ArrowUp",
+        "calls": [],
+        "events": ["\u001b[A"],
+        "focused": true
+      },
+      {
+        "route": "ArrowDown",
+        "calls": [],
+        "events": ["\u001b[B"],
+        "focused": true
+      },
+      {
+        "route": "ArrowLeft",
+        "calls": [],
+        "events": ["\u001b[D"],
+        "focused": true
+      },
+      {
+        "route": "ArrowRight",
+        "calls": [],
+        "events": ["\u001b[C"],
+        "focused": true
+      },
+      {
+        "route": "clipboard-paste",
+        "calls": [],
+        "events": ["\u001b[200~clipboard-input\u001b[201~"],
+        "focused": true
+      },
+      {
+        "route": "xterm.input",
+        "calls": [],
+        "events": ["api-input"],
+        "focused": true
+      },
+      {
+        "route": "xterm.write-response-query",
+        "calls": [],
+        "events": ["\u001b[5;1R"],
+        "focused": true
+      },
+      {
+        "route": "xterm.paste-bracketed",
+        "calls": [],
+        "events": ["\u001b[200~api-paste\u001b[201~"],
+        "focused": true
+      }
+    ],
+    "refused": {
+      "trace": ["attach"],
+      "blinkingCursor": false
+    },
+    "notice": "Input not sent — observing read-only. Choose Interact with agent.",
+    "expiry": "hidden within 5s (3s timer)",
+    "interactiveRoutes": [
+      {
+        "route": "focus-then-type",
+        "calls": [
+          "write:t",
+          "write:y",
+          "write:p",
+          "write:e",
+          "write:d",
+          "write:-",
+          "write:i",
+          "write:n",
+          "write:p",
+          "write:u",
+          "write:t"
+        ],
+        "events": ["t", "y", "p", "e", "d", "-", "i", "n", "p", "u", "t"],
+        "focused": true
+      },
+      {
+        "route": "Enter",
+        "calls": ["write:\r"],
+        "events": ["\r"],
+        "focused": true
+      },
+      {
+        "route": "Control+c",
+        "calls": ["write:\u0003"],
+        "events": ["\u0003"],
+        "focused": true
+      },
+      {
+        "route": "Control+d",
+        "calls": ["write:\u0004"],
+        "events": ["\u0004"],
+        "focused": true
+      },
+      {
+        "route": "ArrowUp",
+        "calls": ["write:\u001b[A"],
+        "events": ["\u001b[A"],
+        "focused": true
+      },
+      {
+        "route": "ArrowDown",
+        "calls": ["write:\u001b[B"],
+        "events": ["\u001b[B"],
+        "focused": true
+      },
+      {
+        "route": "ArrowLeft",
+        "calls": ["write:\u001b[D"],
+        "events": ["\u001b[D"],
+        "focused": true
+      },
+      {
+        "route": "ArrowRight",
+        "calls": ["write:\u001b[C"],
+        "events": ["\u001b[C"],
+        "focused": true
+      },
+      {
+        "route": "clipboard-paste",
+        "calls": ["write:\u001b[200~clipboard-input\u001b[201~"],
+        "events": ["\u001b[200~clipboard-input\u001b[201~"],
+        "focused": true
+      },
+      {
+        "route": "xterm.input",
+        "calls": ["write:api-input"],
+        "events": ["api-input"],
+        "focused": true
+      },
+      {
+        "route": "xterm.write-response-query",
+        "calls": ["write:\u001b[5;1R"],
+        "events": ["\u001b[5;1R"],
+        "focused": true
+      },
+      {
+        "route": "xterm.paste-bracketed",
+        "calls": ["write:\u001b[200~api-paste\u001b[201~"],
+        "events": ["\u001b[200~api-paste\u001b[201~"],
+        "focused": true
+      }
+    ],
+    "blinkingInteractive": true
+  }
+]

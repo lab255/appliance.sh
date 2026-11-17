@@ -1,0 +1,42 @@
+[
+  {
+    "mutation": "missing-refusal-notice",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "missing-observe-default",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "dedupe-gate-label-drift",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "premature-observation-focus",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "provider-write-gate",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "generated-hidden-count",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "stale-clean-comparison",
+    "exit": 1,
+    "detected": true
+  },
+  {
+    "mutation": "dropped-directory-prop",
+    "exit": 1,
+    "detected": true
+  }
+]

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AgentInputMode } from '@/pages/workbench/agent-input-mode';
 import { useLocation } from 'react-router';
 import { useTerminalSessions, statusLabel, type TerminalSessionMeta } from '@/providers/terminal-sessions-provider';
 import { AlertCircle, Circle, Radio } from 'lucide-react';
@@ -174,6 +175,12 @@ function TerminalDrawerView({ session }: { session: TerminalSessionMeta }) {
             </span>
           </div>
         </header>
+
+        {session.agent && (
+          <div className="max-h-[40vh] shrink-0 overflow-auto">
+            <AgentInputMode session={session} />
+          </div>
+        )}
 
         {session.error ? (
           <Banner tone="error" className="rounded-none border-x-0 border-t-0 font-mono text-xs">

@@ -1,0 +1,212 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "run": 5,
+    "negativeControl": false,
+    "elapsed": 64320,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "negativeControl": false,
+    "elapsed": 64234.69999998808,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 2,
+    "negativeControl": false,
+    "elapsed": 64507,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 1,
+    "negativeControl": false,
+    "elapsed": 64605.30000001192,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 3,
+    "negativeControl": false,
+    "elapsed": 64535.30000001192,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 1,
+    "negativeControl": false,
+    "elapsed": 64632.79999998212,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 10,
+    "negativeControl": true,
+    "elapsed": 64637.79999998212,
+    "shifts": [
+      {
+        "value": 0.003162962962962963,
+        "recentInput": false,
+        "time": 67288.5
+      }
+    ],
+    "raw": 0.003162962962962963,
+    "cls": 0.003162962962962963
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 6,
+    "negativeControl": false,
+    "elapsed": 64740.5,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 8,
+    "negativeControl": false,
+    "elapsed": 64656.20000001788,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 7,
+    "negativeControl": false,
+    "elapsed": 64668.69999998808,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 0,
+    "negativeControl": false,
+    "elapsed": 64633.19999998808,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 3,
+    "negativeControl": false,
+    "elapsed": 64626.90000000596,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 5,
+    "negativeControl": false,
+    "elapsed": 64623.80000001192,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 4,
+    "negativeControl": false,
+    "elapsed": 64624,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 4,
+    "negativeControl": false,
+    "elapsed": 64668.09999999404,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "no-preference",
+    "run": 9,
+    "negativeControl": false,
+    "elapsed": 64641.20000001788,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 2,
+    "negativeControl": false,
+    "elapsed": 64630.79999998212,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 9,
+    "negativeControl": false,
+    "elapsed": 65125.69999998808,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 7,
+    "negativeControl": false,
+    "elapsed": 65147.5,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 6,
+    "negativeControl": false,
+    "elapsed": 65147.5,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 8,
+    "negativeControl": false,
+    "elapsed": 65145.20000001788,
+    "shifts": [],
+    "raw": 0,
+    "cls": 0
+  },
+  {
+    "reducedMotion": "reduce",
+    "run": 10,
+    "negativeControl": true,
+    "elapsed": 65145,
+    "shifts": [
+      {
+        "value": 0.003162962962962963,
+        "recentInput": false,
+        "time": 67304
+      }
+    ],
+    "raw": 0.003162962962962963,
+    "cls": 0.003162962962962963
+  }
+]

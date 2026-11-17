@@ -1,3 +1,4 @@
+import { SessionsObservation } from './sessions-observation';
 import { PackageSection } from './package-section';
 import { isUnreadableWorkbenchFile, workbenchErrorMessage } from './errors';
 import * as React from 'react';
@@ -147,11 +148,7 @@ export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: Rea
         </section>
       )}
       <div className="grid gap-6 md:grid-cols-2">
-        <section className="min-h-64 rounded-lg border border-[var(--color-border)] p-4">
-          <h2 className="mb-3 font-semibold">Sessions</h2>
-          <p>{workspace.sessions.length} recorded sessions. Live session controls are not available yet.</p>
-          <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">No agent is launched from this shell.</p>
-        </section>
+        <SessionsObservation key={workspace.directory} workspace={workspace} />
         <section className="min-w-0 rounded-lg border border-[var(--color-border)] p-4">
           <div id="workbench-inspection" tabIndex={-1}>
             <WorkspaceInspector directory={workspace.directory} />

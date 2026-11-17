@@ -1,0 +1,39 @@
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx (3 tests | 1 failed) 109ms
+   × guards every onData write, preserves shared mode, and Hide keeps the PTY alive 31ms
+     → expected 1 to be +0 // Object.is equality
+   ✓ keeps Interact focusable but guards activation while connecting 6ms
+   ✓ Workbench Observe defaults to read-only through the real component and provider 71ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  09:21:04
+   Duration  515ms (transform 54ms, setup 0ms, collect 125ms, tests 109ms, environment 134ms, prepare 28ms)
+
+undefined
+/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/providers/terminal-sessions-provider.test.tsx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/providers/terminal-sessions-provider.test.tsx > guards every onData write, preserves shared mode, and Hide keeps the PTY alive
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx:107:37
+    105|     expect(terminals[0].options.disableStdin).toBe(false); // input mu…
+    106|     expect(terminals[0].options.cursorBlink).toBe(false);
+    107|     expect(terminals[0].focusCalls).toBe(0); // drawer must capture op…
+       |                                     ^
+    108|
+    109|     vi.useFakeTimers();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

@@ -1,0 +1,56 @@
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+
+ ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 2 failed) 315ms
+   × discloses generated-only changes and reveals rows (real detail route=false) 76ms
+     → expected 'Baseline: host-side snapshot · /proje…' to contain '0 files · 1 generated changes hidden'
+   × discloses generated-only changes and reveals rows (real detail route=true) 38ms
+     → expected 'Workbenchproject/projectAgent machine…' to contain '0 files · 1 generated changes hidden'
+   ✓ negative control: genuinely unchanged shows No changes (route=false) 40ms
+   ✓ negative control: genuinely unchanged shows No changes (route=true) 35ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=false) 66ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=true) 61ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  09:21:05
+   Duration  911ms (transform 103ms, setup 0ms, collect 321ms, tests 315ms, environment 134ms, prepare 34ms)
+
+undefined
+/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/workbench/workspace-inspector.test.tsx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/workbench/workspace-inspector.test.tsx > discloses generated-only changes and reveals rows (real detail route=false)
+AssertionError: expected 'Baseline: host-side snapshot · /proje…' to contain '0 files · 1 generated changes hidden'
+
+Expected: "0 files · 1 generated changes hidden"
+Received: "Baseline: host-side snapshot · /project · captured 2026-11-17T01:00:00ZOn a host you do not control, the host-side baseline guarantee weakens.Refreshed 2026-11-17T02:00:00Z · Live files may changeRead-only · workspace-wideRefresh inspectionInclude generated registry/results (results belong to Logs)ChangesFilesLogsChanged since workspace baseline · 0 filesNo changes since workspace baselineSelect a fileRead-only snapshot previewSelect a file to read its snapshot.Initial state at workspace open (separate from since-baseline changes)Git reported a clean working tree at capture."
+
+ ❯ src/pages/workbench/workspace-inspector.test.tsx:88:35
+     86|   try {
+     87|     expect(refresh).toHaveBeenCalledWith('/project');
+     88|     expect(container.textContent).toContain('0 files · 1 generated cha…
+       |                                   ^
+     89|     for (const pattern of ['.appliance/agents.json', '.appliance/agent…
+     90|       expect(container.textContent).toContain(pattern);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/pages/workbench/workspace-inspector.test.tsx > discloses generated-only changes and reveals rows (real detail route=true)
+AssertionError: expected 'Workbenchproject/projectAgent machine…' to contain '0 files · 1 generated changes hidden'
+
+Expected: "0 files · 1 generated changes hidden"
+Received: "Workbenchproject/projectAgent machineNot assignedNo mounted folder reportedDeployment targetChoose a deployment targetApplies to this workspace only.Baseline: host-side snapshot · /project · captured 2026-11-17T01:00:00ZOn a host you do not control, the host-side baseline guarantee weakens.Refreshed 2026-11-17T02:00:00Z · Live files may changeRead-only · workspace-wideRefresh inspectionInclude generated registry/results (results belong to Logs)ChangesFilesLogsChanged since workspace baseline · 0 filesNo changes since workspace baselineSelect a fileRead-only snapshot previewSelect a file to read its snapshot.Initial state at workspace open (separate from since-baseline changes)Git reported a clean working tree at capture.Package for reviewPackaging creates an artifact; it does not install, publish or deploy it. You authorize each next step./projectReview the changes before packaging. You can package without an agent proposal.Packaging requires the desktop host.PackagePackaging reads the current folder; it does not pin the inspected snapshot.Package output and logs will appear here.FileNo hand-off file from this attempt.Catalogue — coming laterDeploy sourceDeploy is a separate action. Package promotion is not available yet."
+
+ ❯ src/pages/workbench/workspace-inspector.test.tsx:88:35
+     86|   try {
+     87|     expect(refresh).toHaveBeenCalledWith('/project');
+     88|     expect(container.textContent).toContain('0 files · 1 generated cha…
+       |                                   ^
+     89|     for (const pattern of ['.appliance/agents.json', '.appliance/agent…
+     90|       expect(container.textContent).toContain(pattern);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
