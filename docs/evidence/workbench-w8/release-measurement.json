@@ -18,5 +18,6 @@
   "cacheHit": {
     "loadMedianMs": 199.940625,
     "samplesMs": [196.630042, 199.940625, 222.241625]
-  }
+  },
+  "storedByteCountScope": "Host-path-dependent: snapshot embeds workspace path; approximately 3x size ratio is stable for this corpus, not exact byte totals."
 }

@@ -46,6 +46,15 @@ try:
             pathlib.Path(file).write_bytes(subprocess.check_output(["git", "show", "5172323b:" + file]))
         command = ["pnpm", "--filter", "@appliance.sh/app", "exec", "vitest", "run", "src/pages/workbench/package-section.test.tsx", "src/pages/workbench/workspace-inspector.test.tsx"]
         negative = True
+    elif MODE == "capture-order-defect":
+        replace(source, "        let key = signing_key(true)?;\n", "")
+        replace(source, "        output.sync_all().map_err(err)?;", "        output.sync_all().map_err(err)?;\n        let key = signing_key(true)?;")
+        command = cargo + ["capture_key_failure_retains_cause", "--lib"]
+        negative = True
+    elif MODE == "refresh-invalidation-defect":
+        replace("packages/app/src/pages/workbench/workspace-inspector.tsx", "      setBusy('Refreshing…');\n      onSnapshot?.(undefined);", "      setBusy('Refreshing…');")
+        command = ["pnpm", "--filter", "@appliance.sh/app", "exec", "vitest", "run", "src/pages/workbench/workspace-inspector.test.tsx"]
+        negative = True
     elif MODE == "hmac-defect":
         replace(source, "let tag = authenticate(path, &bytes)?;", 'let tag = fs::read(path.with_extension("hmac")).unwrap_or_default();')
         command = cargo + ["hmac_rejects", "--lib"]
@@ -108,7 +117,7 @@ try:
     result = "".join(lines)
     if negative:
         # Compilation failures are NOT a demonstrated regression control.
-        assert code != 0 and ("test result: FAILED" in result or "Test Files  2 failed" in result), "Expected a failing test, not a build error"
+        assert code != 0 and ("test result: FAILED" in result or ("AssertionError" in result and re.search(r"Test Files\s+\d+ failed", result))), "Expected a failing test, not a build error"
     else:
         assert code == 0, "Probe failed; inspect scrubbed log"
     print(MODE + ": expected result confirmed")

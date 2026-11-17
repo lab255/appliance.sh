@@ -151,10 +151,15 @@ fn location(app: &AppHandle, directory: &str) -> Result<(PathBuf, PathBuf), Stri
     // mounts are rejected at mount time; inspection fails closed only while an
     // overlapping devMount is recorded. Every baseline read now verifies an
     // HMAC over its bytes and host storage location using an OS-keychain key.
-    // Edits made through a previously overlapping mount fail authentication even
-    // after the mount narrows. Unsigned old captures fail visibly, never recapture.
-    // This does not protect against a host operator with keychain access, deletion,
-    // or replay of an identical authentic capture at its original location.
+    // Changes to retained baseline bytes through a previously overlapping mount
+    // fail authentication after it narrows. Unsigned old captures fail visibly.
+    // DELETION RESIDUAL: deleting baseline.json, .hmac and .attempt makes the
+    // next Workbench open recapture the CURRENT tree and sign it as authentic.
+    // An agent able to write through an overlapping mount can delete through it;
+    // after that mount narrows, this enables silent baseline replacement. HMAC
+    // does not close that path; a keychain-side capture record is not implemented.
+    // Host operators with keychain access and replay of an identical authentic
+    // capture at its original location also remain outside this guarantee.
     // A future mount/API change MUST preserve this separation for every VM.
     disjoint(&data, &root)?;
     if let Some(home) = crate::home_dir() {
@@ -362,7 +367,9 @@ fn snapshot_with_budget(root: &Path, preview_budget: usize) -> Result<Snapshot, 
 }
 /// Called on first Workbench open/create before that operation returns. Agents-page
 /// launches are independent: first capture may include prior agent output. A failed attempt is
-/// permanent for this binding: refreshing must NEVER silently move the baseline.
+/// permanent while its attempt marker remains: refreshing must NEVER silently move
+/// the baseline. Deleting all capture files permits a later open to recapture; see
+/// the deletion residual at location().
 pub fn capture(app: &AppHandle, directory: &str) -> Result<(), String> {
     let _lock = CAPTURE_LOCK.lock().map_err(err)?;
     let (root, path) = location(app, directory)?;
@@ -382,6 +389,7 @@ fn capture_into(root: &Path, path: &Path) -> Result<(), String> {
         .map_err(err)?;
     marker.sync_all().map_err(err)?;
     let result = (|| -> Result<(), String> {
+        let key = signing_key(true)?;
         let mut baseline = snapshot(root)?;
         // Informational initial Git state only, never comparison authority. Do NOT
         // shell out to `git status`: untrusted .git config can define executable clean
@@ -395,7 +403,6 @@ fn capture_into(root: &Path, path: &Path) -> Result<(), String> {
             .map_err(err)?;
         output.write_all(&bytes).map_err(err)?;
         output.sync_all().map_err(err)?;
-        let key = signing_key(true)?;
         let tag = baseline_mac(&key, path, &bytes)?.finalize().into_bytes();
         let mut signature = fs::OpenOptions::new()
             .write(true)
@@ -474,9 +481,15 @@ fn signing_key(create: bool) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 thread_local! {
     static TEST_KEYCHAIN_ACCOUNT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    static TEST_KEYCHAIN_DENIED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 #[cfg(test)]
 fn signing_key(create: bool) -> Result<Vec<u8>, String> {
+    if TEST_KEYCHAIN_DENIED.with(|denied| denied.get()) {
+        return Err(authentication_error(
+            "OS keychain access was denied or unavailable",
+        ));
+    }
     TEST_KEYCHAIN_ACCOUNT.with(|account| match account.borrow().as_deref() {
         Some(account) => keychain_key(
             &keyring::Entry::new(KEYCHAIN_SERVICE, account).unwrap(),
@@ -976,6 +989,47 @@ mod tests {
     #[test]
     fn storage_old_or_unknown_versions_preview() {
         assert_old_version_visible("preview");
+    }
+    #[test]
+    fn capture_key_failure_retains_cause_on_later_reads() {
+        let root = fixture();
+        let tree = root.join("workspace");
+        fs::write(tree.join("app.txt"), "original").unwrap();
+        let control = root.join("host-store/control.json");
+        capture_into(&tree, &control).unwrap();
+        assert!(load(&control).is_ok());
+        let path = root.join("host-store/baseline.json");
+        TEST_KEYCHAIN_DENIED.with(|denied| denied.set(true));
+        let capture_error = capture_into(&tree, &path);
+        TEST_KEYCHAIN_DENIED.with(|denied| denied.set(false));
+        assert!(capture_error
+            .unwrap_err()
+            .contains("keychain access was denied"));
+        // Key access has recovered: these reads must still report the actual
+        // failed capture, without promoting a retry or mislabelling it as legacy.
+        let load_error = load(&path).err().unwrap();
+        assert!(
+            load_error.contains("keychain access was denied"),
+            "{load_error}"
+        );
+        assert!(!load_error.contains("unsigned legacy"));
+        assert!(capture_into(&tree, &path)
+            .unwrap_err()
+            .contains("keychain access was denied"));
+        assert!(refresh_from(&tree, &path, TREE_LIMIT)
+            .unwrap()
+            .comparison_error
+            .unwrap()
+            .contains("keychain access was denied"));
+        let preview =
+            preview_from(&path, &snapshot(&tree).unwrap(), "app.txt".into(), false).unwrap();
+        assert!(preview
+            .notice
+            .unwrap()
+            .contains("keychain access was denied"));
+        assert!(path.with_extension("attempt").exists());
+        assert!(!path.exists());
+        fs::remove_dir_all(root).unwrap();
     }
     fn tampered_baseline() -> (PathBuf, PathBuf, PathBuf) {
         let root = fixture();

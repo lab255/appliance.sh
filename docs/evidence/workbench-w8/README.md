@@ -167,3 +167,39 @@ still includes current-file read and HMAC verification. The missing-file negativ
 control failed at the expected 60-file assertion (59 observed); it emitted no
 successful measurement. Product code and migration behavior are unchanged by this
 evidence-only rider delta.
+
+## Scoped gate corrections
+
+**Deletion is not merely denial of service.** Deleting `baseline.json`, its `.hmac`
+sidecar and its `.attempt` marker causes the next Workbench open to re-capture the
+current tree and sign it as authentic. An agent with write access through an
+overlapping mount can delete those files through the same mount. After that mount
+narrows, the next open can therefore silently replace the baseline. This remains
+an open residual of the same class closed here for byte tampering; no keychain-side
+capture record is implemented in this PR.
+
+Stored byte counts are **host-path-dependent** because the snapshot embeds its
+workspace path (including the generated temporary directory). The gate reproduced
+a ±33-byte difference. The reported absolute counts describe these runs; the
+approximately 3× size ratio is the stable claim for this corpus.
+
+Capture now obtains its signing key before writing `baseline.json`. A forced
+keychain-denial test first verifies a successful control capture, then restores
+key access before subsequent reads: load, reopen, refresh and preview must still
+report the original keychain-denial cause from the attempt marker. Against the old
+write order it fails because load instead reports “unsigned legacy baselines”.
+The restored native inspection suite passes **23 tests** (two opt-ins excluded).
+
+The new real-detail test starts with a current proposal and successful inspection,
+then rejects refresh. It requires both the inspector error and Stale/unknown
+readiness, with no current proposal beside the error. Removing only the pending
+`onSnapshot?.(undefined)` call fails this assertion: **1 failed / 7 passed**.
+Reproduce with `WORKBENCH_PROBE=capture-order-defect` and
+`WORKBENCH_PROBE=refresh-invalidation-defect` using the existing runner.
+
+Correction validation: **16 targeted TS tests passed**; desktop library/tests
+Clippy passed with only the two previously disclosed existing lints allowed.
+`NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify` is **GREEN**, including all
+330 VM tests. This correction run used elevation directly because prior runs
+established the VM tests' host-filesystem sandbox EPERM restriction. Final
+validation-only README wording was formatted afterward; runtime code was unchanged.

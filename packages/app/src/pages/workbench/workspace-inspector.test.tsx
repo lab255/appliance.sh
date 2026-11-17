@@ -202,3 +202,21 @@ it('real detail reconciles host session and inspection refresh evidence before p
     await cleanup();
   }
 });
+
+it('real detail invalidates readiness after a rejected refresh following success', async () => {
+  const { container, refresh, cleanup } = await mount(false, true, true);
+  try {
+    expect(container.textContent).toContain('Agent-proposed · not approved');
+    refresh.mockRejectedValue(new Error('host unavailable after successful inspection'));
+    await act(async () => {
+      [...container.querySelectorAll('button')].find((button) => button.textContent === 'Refresh inspection')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(container.textContent).toContain('host unavailable after successful inspection');
+    expect(container.textContent).toContain('Comparison unavailable');
+    expect(container.textContent).toContain('Stale proposal — Freshness unknown');
+    expect(container.textContent).not.toContain('Agent-proposed · not approved');
+  } finally {
+    await cleanup();
+  }
+});
