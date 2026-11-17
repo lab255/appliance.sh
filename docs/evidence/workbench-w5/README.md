@@ -1,5 +1,11 @@
 # F3 readiness bridge evidence
 
+The measurements, captures, six-property rubric and original reproduction harness
+below are historical evidence for #180 (`0dd4d714`). Run that harness at that commit:
+its unversioned proposals intentionally no longer qualify as current after W8.
+The **Fixture vs contract** section describes today's boundary; current regression
+controls and verification are in [W8 evidence](../workbench-w8/README.md).
+
 The real Workbench detail page receives a typed **fixture-only** readiness source
 and passes a scoped proposal to PackageSection. Production routing supplies no
 source: it explains that live statements remain in the session terminal. Neither
@@ -118,7 +124,7 @@ proposal arrival. W4 and W5 compared actual detail diffs: W4 replaces the Sessio
 placeholder; W5 adds source wiring and inspection anchor/Package prop. Neither
 changes the other's region.
 
-## Six-property rubric
+## Historical #180 six-property rubric
 
 | Property    | Verdict and checkable evidence                                                                                                                                                                                                                                                                                                   |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -129,7 +135,7 @@ changes the other's region.
 | Legibility  | PASS, fixture: named tokens and text status; 390px and 200% zoom have no horizontal overflow; scrollable region exposes controls via keyboard; Inspect changes focuses the inspector. See acceptance.json and viewport captures.                                                                                                 |
 | Forgiveness | PARTIAL, fixture only: local dismissal retains context/focus and self-reported stopped/error/exited status renders Stale; Package and explicit retry remain available. Host-session disagreement, absent sessions and content drift are not reconciled, so stale coverage is limited to embedded lifecycle plus local dismissal. |
 
-## Regression teeth
+## Historical #180 regression teeth
 
 [teeth.py](teeth.py) temporarily restores six defects, runs the integration test,
 and restores files in `finally`. Run only without concurrent dev server/verify.
@@ -148,7 +154,7 @@ different directory, and proposal events without a click. Keyboard/stop/zoom
 browser assertions are retained in [acceptance.mjs](acceptance.mjs) and
 [acceptance.json](acceptance.json).
 
-## Reproduction
+## Historical #180 reproduction
 
 From the repo root, install locked dependencies and build app dependencies. Run
 `node docs/evidence/workbench-w5/server.mjs` (fixture source is materialized outside
