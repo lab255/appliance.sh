@@ -1,0 +1,80 @@
+Command: pnpm --filter @appliance.sh/cli exec vitest run src/utils/entitlement-lock.spec.ts
+
+ RUN  v3.2.4 <repo>/packages/cli
+
+ ❯ src/utils/entitlement-lock.spec.ts (12 tests | 7 failed) 204ms
+   ✓ retries Windows EPERM before acquiring exclusive ownership 47ms
+   ✓ retries Windows EACCES before acquiring exclusive ownership 21ms
+   ✓ retries Windows EBUSY before acquiring exclusive ownership 21ms
+   ✓ fails closed at the deadline without unlinking an inaccessible lock 1ms
+   ✓ does not retry Unix permission failures 1ms
+   × preserves a successor after 'missing' lock observation on 'win32' 19ms
+     → expected [Function] to throw an error
+   × preserves a successor after 'old' lock observation on 'win32' 14ms
+     → expected [Function] to throw an error
+   × preserves a successor after 'missing' lock observation on 'linux' 19ms
+     → expected [Function] to throw an error
+   × preserves a successor after 'old' lock observation on 'linux' 29ms
+     → expected [Function] to throw an error
+   × preserves a successor after 'missing' lock observation on 'darwin' 13ms
+     → expected [Function] to throw an error
+   × preserves a successor after 'old' lock observation on 'darwin' 12ms
+     → expected [Function] to throw an error
+   × does not evict a live owner merely because its timestamp is old 7ms
+     → expected [Function] to throw an error
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/utils/entitlement-lock.spec.ts > preserves a successor after 'missing' lock observation on 'win32'
+ FAIL  src/utils/entitlement-lock.spec.ts > preserves a successor after 'old' lock observation on 'win32'
+ FAIL  src/utils/entitlement-lock.spec.ts > preserves a successor after 'missing' lock observation on 'linux'
+ FAIL  src/utils/entitlement-lock.spec.ts > preserves a successor after 'old' lock observation on 'linux'
+ FAIL  src/utils/entitlement-lock.spec.ts > preserves a successor after 'missing' lock observation on 'darwin'
+ FAIL  src/utils/entitlement-lock.spec.ts > preserves a successor after 'old' lock observation on 'darwin'
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ src/utils/entitlement-lock.spec.ts:91:38
+     89|   // With no automatic reaping, stat is never needed. Install the succ…
+     90|   // after the failed acquisition in that case to check the same owner…
+     91|   expect(() => acquireLock(file, 0)).toThrow('No mutation was attempte…
+       |                                      ^
+     92|   if (!successor) {
+     93|     releaseLock(first);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/utils/entitlement-lock.spec.ts > does not evict a live owner merely because its timestamp is old
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ src/utils/entitlement-lock.spec.ts:105:38
+    103|   const old = new Date(Date.now() - 61_000);
+    104|   fs.utimesSync(file, old, old);
+    105|   expect(() => acquireLock(file, 0)).toThrow('No mutation was attempte…
+       |                                      ^
+    106|   expect(JSON.parse(fs.readFileSync(file, 'utf8')).token).toBe(owner.t…
+    107|   releaseLock(owner);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 5 passed (12)
+   Start at  11:41:19
+   Duration  616ms (transform 65ms, setup 0ms, collect 68ms, tests 204ms, environment 0ms, prepare 114ms)
+
+undefined
+<repo>/packages/cli:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/utils/entitlement-lock.spec.ts
+Exit: 1

@@ -270,6 +270,16 @@ impl Account {
         timeout: Duration,
         open: impl FnOnce(&str) -> Result<()>,
     ) -> Result<Status> {
+        self.login_with_clock(port, switch_account, timeout, open, Instant::now)
+    }
+    fn login_with_clock(
+        &self,
+        port: Port,
+        switch_account: bool,
+        timeout: Duration,
+        open: impl FnOnce(&str) -> Result<()>,
+        clock: impl Fn() -> Instant,
+    ) -> Result<Status> {
         let generation = self.generation()?;
         // RAII drops the first listener if the second bind fails. Never bind a hostname.
         let listeners = [
@@ -282,7 +292,7 @@ impl Account {
             l.set_nonblocking(true)
                 .map_err(|_| "Cannot prepare sign-in listener")?;
         }
-        let deadline = Instant::now() + timeout;
+        let deadline = clock() + timeout;
         let http = http()?;
         let metadata = metadata(&http)?;
         let client =
@@ -303,12 +313,12 @@ impl Account {
             .add_scope(Scope::new("offline_access".into()))
             .set_pkce_challenge(challenge)
             .url();
-        if Instant::now() >= deadline {
+        if clock() >= deadline {
             return Err("Sign-in timed out; retry");
         }
         open(url.as_str())?;
         let code = 'receive: loop {
-            if Instant::now() >= deadline {
+            if clock() >= deadline {
                 return Err("Sign-in timed out; retry");
             }
             if self.generation()? != generation {

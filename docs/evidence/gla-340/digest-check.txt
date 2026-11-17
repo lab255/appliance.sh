@@ -1,0 +1,7 @@
+Command: pnpm --filter @appliance.sh/cli credhelper:digest -- --check
+
+> @appliance.sh/cli@1.62.0 credhelper:digest <repo>/packages/cli
+> node scripts/credential-helper-digest.mjs -- --check
+
+Verified <temp> 90315483cf47724358fcf8a6326939eb4f1dda65a5ea11fd16f2d5995df41798
+Exit: 0

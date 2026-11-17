@@ -20,6 +20,22 @@ struct Server {
 }
 thread_local! { static SERVER: RefCell<Server> = RefCell::new(Server::default()); }
 static PORTS: Mutex<()> = Mutex::new(());
+fn ports() -> std::sync::MutexGuard<'static, ()> {
+    // This mutex guards port exclusivity, not mutable state. Unwinding drops
+    // listeners before releasing it; a failed test must not poison later tests.
+    PORTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[test]
+fn port_serialization_survives_a_failed_test() {
+    let failure = std::panic::catch_unwind(|| {
+        let _ports = ports();
+        panic!("simulated assertion failure while holding the port guard");
+    });
+    assert!(failure.is_err());
+    let _ports = ports();
+}
+
 fn reply(status: u16, value: Value) -> openidconnect::HttpResponse {
     openidconnect::http::Response::builder()
         .status(status)
@@ -205,7 +221,7 @@ fn expire(account: &Account) {
 }
 #[test]
 fn both_ports_pkce_signed_jwt_and_private_storage() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     for port in [Port::Cli, Port::Desktop] {
         let (_home, account) = account();
         let status = login(&account, port, "").unwrap();
@@ -221,7 +237,7 @@ fn both_ports_pkce_signed_jwt_and_private_storage() {
 }
 #[test]
 fn tampering_denial_missing_tokens_and_timeout_fail_closed() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     for tamper in [
         "state",
         "pkce",
@@ -252,7 +268,7 @@ fn tampering_denial_missing_tokens_and_timeout_fail_closed() {
 }
 #[test]
 fn busy_ipv4_or_ipv6_rolls_back_and_can_retry() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     for port in [Port::Cli, Port::Desktop] {
         for ipv6 in [false, true] {
             let (_home, account) = account();
@@ -281,7 +297,7 @@ fn busy_ipv4_or_ipv6_rolls_back_and_can_retry() {
 }
 #[test]
 fn rotation_reuse_invalidates_family_and_invalid_grant_erases() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     let (_home, account) = account();
     login(&account, Port::Cli, "").unwrap();
     expire(&account);
@@ -307,7 +323,7 @@ fn rotation_reuse_invalidates_family_and_invalid_grant_erases() {
 }
 #[test]
 fn revoke_failure_erases_and_preserves_cloud_credentials() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     let (_home, account) = account();
     {
         let _lock = account.lock().unwrap();
@@ -324,13 +340,43 @@ fn revoke_failure_erases_and_preserves_cloud_credentials() {
 }
 #[test]
 fn signout_cancels_pending_login_before_callback_commit() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     let (_home, account) = account();
-    let result = account.login(Port::Cli, false, Duration::from_secs(1), |url| {
-        account.sign_out().unwrap();
-        browser(url, "", false)
-    });
+    // Freeze the deadline clock while filesystem ACL work and callback setup
+    // run. This tests cancellation, independent of host scheduling/IO speed.
+    let start = Instant::now();
+    let result = account.login_with_clock(
+        Port::Cli,
+        false,
+        Duration::from_secs(1),
+        |url| {
+            account.sign_out().unwrap();
+            browser(url, "", false)
+        },
+        || start,
+    );
     assert_eq!(result.err(), Some("Sign-in cancelled"));
+    assert!(!account.status().unwrap().signed_in);
+    SERVER.with(|s| assert!(!s.borrow().calls.iter().any(|p| p.ends_with("/token"))));
+}
+
+#[test]
+fn login_deadline_expires_at_the_controlled_boundary() {
+    let _ports = ports();
+    let (_home, account) = account();
+    let start = Instant::now();
+    let clock = std::cell::Cell::new(start);
+    let result = account.login_with_clock(
+        Port::Cli,
+        false,
+        Duration::from_secs(1),
+        |_| {
+            clock.set(start + Duration::from_secs(1));
+            Ok(())
+        },
+        || clock.get(),
+    );
+    assert_eq!(result.err(), Some("Sign-in timed out; retry"));
     assert!(!account.status().unwrap().signed_in);
 }
 #[cfg(unix)]
@@ -350,7 +396,7 @@ fn refuses_symlinks_and_unsafe_permissions() {
 
 #[test]
 fn concurrent_refresh_rereads_rotation_and_signout_stays_signed_out() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     let (_home, account) = account();
     login(&account, Port::Cli, "").unwrap();
     expire(&account);
@@ -377,7 +423,7 @@ fn concurrent_refresh_rereads_rotation_and_signout_stays_signed_out() {
 }
 #[test]
 fn account_switch_requires_explicit_confirmation_and_transient_refresh_retains() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     let (_home, account) = account();
     login(&account, Port::Cli, "").unwrap();
     assert!(login(&account, Port::Desktop, "subject")
@@ -403,7 +449,7 @@ fn account_switch_requires_explicit_confirmation_and_transient_refresh_retains()
 
 #[test]
 fn callback_failure_copy_is_static_and_success_copy_stays_distinct() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     for tamper in ["", "state", "denied"] {
         let (_home, account) = account();
         let mut callback = None;
@@ -431,7 +477,7 @@ fn callback_failure_copy_is_static_and_success_copy_stays_distinct() {
 }
 #[test]
 fn refresh_retains_previous_token_when_replacement_is_missing_or_empty() {
-    let _ports = PORTS.lock().unwrap();
+    let _ports = ports();
     for tamper in ["missing-refresh", "empty-refresh"] {
         let (_home, account) = account();
         login(&account, Port::Cli, "").unwrap();

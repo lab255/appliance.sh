@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 
-const STALE_LOCK_MS = 60_000;
-
 interface EntitlementLock {
   descriptor: number;
   file: string;
@@ -23,25 +21,21 @@ export function acquireLock(file: string, timeoutMs: number): EntitlementLock {
       const windowsContention =
         process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY');
       if (code !== 'EEXIST' && !windowsContention) throw cause;
-      if (code === 'EEXIST' && staleLock(file)) {
-        try {
-          fs.unlinkSync(file);
-        } catch (unlinkCause) {
-          if ((unlinkCause as NodeJS.ErrnoException).code !== 'ENOENT') throw unlinkCause;
-        }
-        continue;
-      }
+      // A stale observation cannot authorize unlink: another contender may
+      // have acquired this pathname since that observation. Never reap locks.
       if (Date.now() >= deadline) {
-        throw new Error(
-          'Another live process still owns the entitlement store lock; wait for that operation to finish. No mutation was attempted unlocked.'
-        );
+        throw new Error(lockTimeoutMessage(file, code === 'EEXIST'));
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
       continue;
     }
     const token = randomUUID();
     try {
-      fs.writeFileSync(descriptor, `${JSON.stringify({ pid: process.pid, token })}\n`, 'utf8');
+      fs.writeFileSync(
+        descriptor,
+        `${JSON.stringify({ pid: process.pid, token, startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString() })}\n`,
+        'utf8'
+      );
       fs.fsyncSync(descriptor);
       return { descriptor, file, token };
     } catch (cause) {
@@ -52,21 +46,28 @@ export function acquireLock(file: string, timeoutMs: number): EntitlementLock {
   }
 }
 
-function staleLock(file: string): boolean {
-  try {
-    const stat = fs.statSync(file);
-    if (Date.now() - stat.mtimeMs > STALE_LOCK_MS) return true;
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as { pid?: unknown };
-    if (!Number.isSafeInteger(parsed.pid) || Number(parsed.pid) < 1) return false;
+function lockTimeoutMessage(file: string, inspect: boolean): string {
+  let age = 'unknown';
+  let owner = 'owner unavailable';
+  if (inspect) {
     try {
-      process.kill(Number(parsed.pid), 0);
-      return false;
-    } catch (cause) {
-      return (cause as NodeJS.ErrnoException).code === 'ESRCH';
+      age = `${Math.max(0, Math.floor((Date.now() - fs.statSync(file).mtimeMs) / 1000))} seconds`;
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as { pid?: unknown; startedAt?: unknown };
+      if (Number.isSafeInteger(parsed.pid) && Number(parsed.pid) > 0) {
+        let observation = 'currently running';
+        try {
+          process.kill(Number(parsed.pid), 0);
+        } catch (cause) {
+          observation = (cause as NodeJS.ErrnoException).code === 'ESRCH' ? 'no longer running' : 'liveness unknown';
+        }
+        const start = typeof parsed.startedAt === 'string' ? parsed.startedAt : 'unknown';
+        owner = `PID ${parsed.pid} (${observation}; process start hint ${start})`;
+      }
+    } catch {
+      // Diagnostics are best effort, never evidence that unlinking is safe.
     }
-  } catch (cause) {
-    return (cause as NodeJS.ErrnoException).code === 'ENOENT';
   }
+  return `Entitlement store lock ${file}: age ${age}, ${owner}. These are observations, not proof of ownership (PIDs can be reused). Wait for active operations to finish. If no appliance process is active, remove ${file} and retry. No mutation was attempted unlocked.`;
 }
 
 export function releaseLock(lock: EntitlementLock): void {

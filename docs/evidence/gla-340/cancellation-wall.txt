@@ -1,0 +1,35 @@
+Command: cargo test --manifest-path packages/credhelper/Cargo.toml signout_cancels_pending_login_before_callback_commit
+   Compiling appliance-credhelper v0.1.0 (<repo>/packages/credhelper)
+warning: unused variable: `start`
+   --> src/able/tests.rs:347:9
+    |
+347 |     let start = Instant::now();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `appliance-credhelper` (lib test) generated 1 warning (run `cargo fix --lib -p appliance-credhelper --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.26s
+     Running unittests src/lib.rs (packages/credhelper/target/debug/deps/appliance_credhelper-b9663d351bde212f)
+
+running 1 test
+test able::tests::signout_cancels_pending_login_before_callback_commit ... FAILED
+
+failures:
+
+---- able::tests::signout_cancels_pending_login_before_callback_commit stdout ----
+
+thread 'able::tests::signout_cancels_pending_login_before_callback_commit' (4050116) panicked at src/able/tests.rs:359:5:
+assertion `left == right` failed
+  left: Some("Sign-in timed out; retry")
+ right: Some("Sign-in cancelled")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    able::tests::signout_cancels_pending_login_before_callback_commit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 23 filtered out; finished in 1.14s
+
+error: test failed, to rerun pass `--lib`
+Exit: 101

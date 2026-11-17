@@ -1,0 +1,13 @@
+Command: pnpm --filter @appliance.sh/cli exec vitest run src/utils/entitlement-lock.spec.ts src/utils/entitlements.spec.ts
+
+ RUN  v3.2.4 <repo>/packages/cli
+
+ ✓ src/utils/entitlement-lock.spec.ts (15 tests) 156ms
+ ✓ src/utils/entitlements.spec.ts (11 tests) 524ms
+
+ Test Files  2 passed (2)
+      Tests  26 passed (26)
+   Start at  11:44:32
+   Duration  1.54s (transform 369ms, setup 0ms, collect 805ms, tests 680ms, environment 0ms, prepare 136ms)
+
+Exit: 0

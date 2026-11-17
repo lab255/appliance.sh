@@ -198,7 +198,7 @@ grantManifestEntitlements({manifest:'v2',kind:'runnable',type:'container',name:'
     ).toEqual(Array.from({ length: 6 }, (_, index) => `app-${index}`));
   }, 20_000);
 
-  it('breaks a lock whose mtime is older than 60 seconds', () => {
+  it('refuses a lock whose mtime is older than 60 seconds', () => {
     const directory = home();
     fs.writeFileSync(entitlementLockFile(directory), `${JSON.stringify({ pid: process.pid, token: 'stale' })}\n`, {
       mode: 0o600,
@@ -206,9 +206,9 @@ grantManifestEntitlements({manifest:'v2',kind:'runnable',type:'container',name:'
     const old = new Date(Date.now() - 61_000);
     fs.utimesSync(entitlementLockFile(directory), old, old);
     expect(() =>
-      grantManifestEntitlements(manifest(), 'cli', allGrantIds(manifest()), { home: directory })
-    ).not.toThrow();
-    expect(fs.existsSync(entitlementLockFile(directory))).toBe(false);
+      grantManifestEntitlements(manifest(), 'cli', allGrantIds(manifest()), { home: directory, lockTimeoutMs: 0 })
+    ).toThrow('No mutation was attempted unlocked');
+    expect(fs.existsSync(entitlementLockFile(directory))).toBe(true);
   });
 
   it('validates --days as a present positive whole number', async () => {

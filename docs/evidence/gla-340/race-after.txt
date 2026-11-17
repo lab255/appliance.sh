@@ -1,0 +1,12 @@
+Command: pnpm --filter @appliance.sh/cli exec vitest run src/utils/entitlement-race.spec.ts
+
+ RUN  v3.2.4 <repo>/packages/cli
+
+ ✓ src/utils/entitlement-race.spec.ts (1 test) 52ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  11:47:58
+   Duration  602ms (transform 161ms, setup 0ms, collect 386ms, tests 52ms, environment 0ms, prepare 42ms)
+
+Exit: 0
