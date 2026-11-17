@@ -68,6 +68,8 @@ export interface AgentTabMeta {
 
 /** Args to open or focus a terminal session. */
 export interface OpenTerminalOptions {
+  /** Workbench observation starts read-only; deduplication preserves an existing tab mode. */
+  inputMode?: 'observe' | 'interactive';
   /** kubectl/shell target — a pod name, or the VM name for a host shell. */
   target: string;
   /** 'microvm' routes through the microVM's kubeconfig / vsock shell. */
@@ -104,6 +106,9 @@ export interface OpenTerminalOptions {
 
 /** Light, render-safe projection of a session for the chrome. */
 export interface TerminalSessionMeta {
+  inputMode?: 'observe' | 'interactive';
+  sessionId?: string;
+  clusterName?: string;
   id: string;
   status: TerminalStatus;
   error: string | null;
@@ -120,6 +125,7 @@ export interface TerminalSessionMeta {
 // The heavy, route-independent objects. Held in a ref Map, never in React
 // state, so renders never recreate xterm instances or reopen PTYs.
 interface LiveSession {
+  inputMode: 'observe' | 'interactive';
   id: string;
   key: string;
   term: Terminal;
@@ -149,6 +155,7 @@ interface LiveSession {
 
 interface TerminalSessionsContextValue {
   sessions: TerminalSessionMeta[];
+  setInputMode(id: string, mode: 'observe' | 'interactive'): void;
   /** The session whose view is currently shown, or null when hidden. */
   activeId: string | null;
   /** Open a new session, or focus an existing one with the same key.
@@ -294,6 +301,17 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
     [patchMeta]
   );
 
+  const setInputMode = React.useCallback(
+    (id: string, mode: 'observe' | 'interactive') => {
+      const live = liveRef.current.get(id);
+      if (!live || !live.agent) return;
+      live.inputMode = mode;
+      live.term.options.disableStdin = mode === 'observe';
+      patchMeta(id, { inputMode: mode });
+    },
+    [patchMeta]
+  );
+
   const hide = React.useCallback(() => setActiveId(null), []);
 
   // xterm's custom key handler (set per-term in openSession) reaches for the
@@ -319,7 +337,9 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
       // derived/explicit host-side key (so clicking "Open shell" twice
       // reuses the one tab).
       for (const [id, live] of liveRef.current) {
-        const match = opts.sessionId ? live.sessionId === opts.sessionId : live.key === key;
+        const match = opts.sessionId
+          ? live.sessionId === opts.sessionId && live.clusterName === opts.clusterName
+          : live.key === key;
         if (match) {
           if (!opts.background) setActiveId(id);
           return id;
@@ -336,6 +356,8 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
       const subtitle = opts.target;
       const meta: TerminalSessionMeta = {
         id,
+        sessionId,
+        clusterName: opts.clusterName,
         status: 'connecting',
         error: null,
         title: deriveTitle(opts),
@@ -343,6 +365,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
         mode: opts.mode,
         engine: opts.engine,
         agent: opts.agent,
+        inputMode: opts.inputMode ?? 'interactive',
       };
       setSessions((prev) => [...prev, meta]);
       if (!opts.background) setActiveId(id);
@@ -356,6 +379,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
       }
 
       const term = new Terminal({
+        disableStdin: opts.inputMode === 'observe',
         cursorBlink: true,
         fontSize: 12,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
@@ -399,6 +423,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
         mode: opts.mode,
         sessionId,
         agent: opts.agent,
+        inputMode: opts.inputMode ?? 'interactive',
       };
       liveRef.current.set(id, live);
 
@@ -430,13 +455,19 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
             return;
           }
           live.session = s;
-          const sub = term.onData((d) => void live.session?.write(d));
+          // Central write boundary covers typing, paste and xterm-generated input.
+          // Read the mutable mode at delivery time, never the opening render's mode.
+          const sub = term.onData((d) => {
+            if (live.inputMode === 'interactive') void live.session?.write(d);
+          });
           live.disposeInput = () => sub.dispose();
           patchMeta(id, { status: 'open' });
           // A background (rehydrated) session is parked off-screen — don't
           // pull keyboard focus into an invisible terminal on launch. The
           // user's click → attachView focuses it when they open the tab.
-          if (!opts.background) term.focus();
+          // Observation lets attachView focus after the drawer captures its opener.
+          // A fast host promise otherwise focuses the parked xterm before that capture.
+          if (!opts.background && opts.inputMode !== 'observe') term.focus();
         })
         .catch((e) => {
           patchMeta(id, { status: 'error', error: e instanceof Error ? e.message : String(e) });
@@ -716,6 +747,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
   const value = React.useMemo<TerminalSessionsContextValue>(
     () => ({
       sessions,
+      setInputMode,
       activeId,
       openSession,
       duplicateSession,
@@ -728,6 +760,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
     }),
     [
       sessions,
+      setInputMode,
       activeId,
       openSession,
       duplicateSession,

@@ -1,0 +1,105 @@
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx (2 tests | 1 failed) 56ms
+   × guards every onData write, preserves shared mode, and Hide keeps the PTY alive 44ms
+     → expected "spy" to not be called at all, but actually been called 5 times
+
+Received: 
+
+  1st spy call:
+
+    Array [
+      "typing",
+    ]
+
+  2nd spy call:
+
+    Array [
+      "[200~pasted[201~",
+    ]
+
+  3rd spy call:
+
+    Array [
+      "
+",
+    ]
+
+  4th spy call:
+
+    Array [
+      "",
+    ]
+
+  5th spy call:
+
+    Array [
+      "[A",
+    ]
+
+
+Number of calls: 5
+
+   ✓ keeps Interact focusable but guards activation while connecting 11ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  08:52:03
+   Duration  682ms (transform 91ms, setup 0ms, collect 185ms, tests 56ms, environment 192ms, prepare 65ms)
+
+undefined
+/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/providers/terminal-sessions-provider.test.tsx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/providers/terminal-sessions-provider.test.tsx > guards every onData write, preserves shared mode, and Hide keeps the PTY alive
+AssertionError: expected "spy" to not be called at all, but actually been called 5 times
+
+Received: 
+
+  1st spy call:
+
+    Array [
+      "typing",
+    ]
+
+  2nd spy call:
+
+    Array [
+      "[200~pasted[201~",
+    ]
+
+  3rd spy call:
+
+    Array [
+      "
+",
+    ]
+
+  4th spy call:
+
+    Array [
+      "",
+    ]
+
+  5th spy call:
+
+    Array [
+      "[A",
+    ]
+
+
+Number of calls: 5
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx:97:23
+     95| 
+     96|     for (const data of ['typing', '\u001b[200~pasted\u001b[201~', '\r'…
+     97|     expect(write).not.toHaveBeenCalled();
+       |                       ^
+     98|     await act(async () => api.setInputMode(id, 'interactive'));
+     99|     terminals[0].input('negative control: deliberate input');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

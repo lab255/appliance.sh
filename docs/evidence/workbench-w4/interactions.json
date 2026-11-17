@@ -1,0 +1,768 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 0,
+    "start": 318.7999999821186,
+    "ms": 78,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 1,
+    "start": 599.5999999940395,
+    "ms": 29.799999982118607,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 2,
+    "start": 939.5999999940395,
+    "ms": 6.0999999940395355,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 3,
+    "start": 1166.7999999821186,
+    "ms": 29.5,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 4,
+    "start": 1383.5,
+    "ms": 29.5,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 5,
+    "start": 1615.199999988079,
+    "ms": 31,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 6,
+    "start": 1833.0999999940395,
+    "ms": 27.900000005960464,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 7,
+    "start": 2049,
+    "ms": 30.299999982118607,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 8,
+    "start": 2283.2999999821186,
+    "ms": 29.700000017881393,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "observe",
+    "run": 9,
+    "start": 2549.5,
+    "ms": 30.099999994039536,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 0,
+    "start": 2766.0999999940395,
+    "ms": 29.900000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 1,
+    "start": 2983.7999999821186,
+    "ms": 29.099999994039536,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 2,
+    "start": 3264,
+    "ms": 32.19999998807907,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 3,
+    "start": 3500.2999999821186,
+    "ms": 29.30000001192093,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 4,
+    "start": 3699.0999999940395,
+    "ms": 30.400000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 5,
+    "start": 3882.5999999940395,
+    "ms": 30.299999982118607,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 6,
+    "start": 4064,
+    "ms": 32.19999998807907,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 7,
+    "start": 4252,
+    "ms": 27.299999982118607,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 8,
+    "start": 4481.299999982119,
+    "ms": 31.400000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "interact",
+    "run": 9,
+    "start": 4683.0999999940395,
+    "ms": 29.299999982118607,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 0,
+    "start": 5165.199999988079,
+    "ms": 31.19999998807907,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 1,
+    "start": 5721.699999988079,
+    "ms": 24.900000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 2,
+    "start": 6204.299999982119,
+    "ms": 25.400000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 3,
+    "start": 6665.0999999940395,
+    "ms": 31.299999982118607,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 4,
+    "start": 7151.399999976158,
+    "ms": 28.30000001192093,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 5,
+    "start": 7610,
+    "ms": 19.599999994039536,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 6,
+    "start": 8058.0999999940395,
+    "ms": 21.5,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 7,
+    "start": 8505.899999976158,
+    "ms": 23.5,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 8,
+    "start": 8957.399999976158,
+    "ms": 22.100000023841858,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "stop",
+    "run": 9,
+    "start": 9404.699999988079,
+    "ms": 23,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "no-preference",
+    "kind": "trace",
+    "before": ["attach"],
+    "after": [
+      "attach",
+      "write:p",
+      "write:o",
+      "write:s",
+      "write:i",
+      "write:t",
+      "write:i",
+      "write:v",
+      "write:e",
+      "write:-",
+      "write:c",
+      "write:o",
+      "write:n",
+      "write:t",
+      "write:r",
+      "write:o",
+      "write:l"
+    ],
+    "final": [
+      "attach",
+      "write:p",
+      "write:o",
+      "write:s",
+      "write:i",
+      "write:t",
+      "write:i",
+      "write:v",
+      "write:e",
+      "write:-",
+      "write:c",
+      "write:o",
+      "write:n",
+      "write:t",
+      "write:r",
+      "write:o",
+      "write:l",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop"
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 0,
+    "start": 265.40000000596046,
+    "ms": 79.5,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 1,
+    "start": 530.8000000119209,
+    "ms": 30,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 2,
+    "start": 729,
+    "ms": 31.80000001192093,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 3,
+    "start": 929.5999999940395,
+    "ms": 31.30000001192093,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 4,
+    "start": 1145.9000000059605,
+    "ms": 31.599999994039536,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 5,
+    "start": 1346.199999988079,
+    "ms": 31.5,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 6,
+    "start": 1545.5999999940395,
+    "ms": 32,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 7,
+    "start": 1745.5999999940395,
+    "ms": 31.900000005960464,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 8,
+    "start": 1945.800000011921,
+    "ms": 31.799999982118607,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "observe",
+    "run": 9,
+    "start": 2145.9000000059605,
+    "ms": 31.69999998807907,
+    "shifts": [
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      },
+      {
+        "value": 0.0003831799768518519,
+        "recent": true
+      }
+    ]
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 0,
+    "start": 2350.9000000059605,
+    "ms": 26.599999994039536,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 1,
+    "start": 2529,
+    "ms": 31.900000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 2,
+    "start": 2712.199999988079,
+    "ms": 32,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 3,
+    "start": 2895.5999999940395,
+    "ms": 31.900000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 4,
+    "start": 3078.9000000059605,
+    "ms": 32,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 5,
+    "start": 3262.5999999940395,
+    "ms": 31.599999994039536,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 6,
+    "start": 3445.800000011921,
+    "ms": 31.69999998807907,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 7,
+    "start": 3629.199999988079,
+    "ms": 31.700000017881393,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 8,
+    "start": 3812.699999988079,
+    "ms": 31.5,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "interact",
+    "run": 9,
+    "start": 3996.5,
+    "ms": 31.099999994039536,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 0,
+    "start": 4442.0999999940395,
+    "ms": 18.80000001192093,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 1,
+    "start": 4871.5,
+    "ms": 22.69999998807907,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 2,
+    "start": 5303.5999999940395,
+    "ms": 23.900000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 3,
+    "start": 5736.699999988079,
+    "ms": 24.30000001192093,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 4,
+    "start": 6171.5999999940395,
+    "ms": 22.700000017881393,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 5,
+    "start": 6606.4000000059605,
+    "ms": 21.299999982118607,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 6,
+    "start": 7039,
+    "ms": 21.900000005960464,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 7,
+    "start": 7485.9000000059605,
+    "ms": 25,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 8,
+    "start": 7941.300000011921,
+    "ms": 19.69999998807907,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "stop",
+    "run": 9,
+    "start": 8374.199999988079,
+    "ms": 20.200000017881393,
+    "shifts": []
+  },
+  {
+    "reducedMotion": "reduce",
+    "kind": "trace",
+    "before": ["attach"],
+    "after": [
+      "attach",
+      "write:p",
+      "write:o",
+      "write:s",
+      "write:i",
+      "write:t",
+      "write:i",
+      "write:v",
+      "write:e",
+      "write:-",
+      "write:c",
+      "write:o",
+      "write:n",
+      "write:t",
+      "write:r",
+      "write:o",
+      "write:l"
+    ],
+    "final": [
+      "attach",
+      "write:p",
+      "write:o",
+      "write:s",
+      "write:i",
+      "write:t",
+      "write:i",
+      "write:v",
+      "write:e",
+      "write:-",
+      "write:c",
+      "write:o",
+      "write:n",
+      "write:t",
+      "write:r",
+      "write:o",
+      "write:l",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop",
+      "stop"
+    ]
+  }
+]
