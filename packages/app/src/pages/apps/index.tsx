@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { afterPendingPaint } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { HoverGlide } from '@appliance.sh/ui';
@@ -284,7 +285,7 @@ function Overview({
             error={error}
             fallbackHeadline="Couldn't load your apps"
             actions={
-              <Button
+              <RefetchButton
                 variant="outline"
                 size="sm"
                 disabled={
@@ -292,14 +293,16 @@ function Overview({
                   deploymentsQuery.isFetching ||
                   environmentQueries.some((q) => q.isFetching)
                 }
-                onClick={() => {
-                  void projectsQuery.refetch();
-                  void deploymentsQuery.refetch();
-                  environmentQueries.forEach((q) => void q.refetch());
-                }}
+                onRefetch={() =>
+                  Promise.all([
+                    projectsQuery.refetch(),
+                    deploymentsQuery.refetch(),
+                    ...environmentQueries.map((q) => q.refetch()),
+                  ])
+                }
               >
                 Retry
-              </Button>
+              </RefetchButton>
             }
           />
         )

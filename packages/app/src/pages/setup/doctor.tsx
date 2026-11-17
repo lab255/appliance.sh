@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending } from '@/lib/paint-pending';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@appliance.sh/ui/accordion';
 import { IconTooltip } from '@/components/ui/tooltip';
@@ -115,7 +116,7 @@ function PreflightPanel({
 }: {
   checks: LocalPreflightCheck[];
   loading: boolean;
-  onRefresh: () => void;
+  onRefresh: () => Promise<unknown>;
   canInstall: boolean;
   onInstall: (tool: string) => Promise<void>;
   canStartRuntime: boolean;
@@ -150,9 +151,15 @@ function PreflightPanel({
           {loading ? 'Re-checking this computer…' : `${checks.length} checks complete. This computer is ready.`}
         </span>
         <IconTooltip label="Re-check this computer">
-          <Button variant="ghost" size="icon" onClick={onRefresh} disabled={loading}>
+          <RefetchButton
+            pendingLabel="Refreshing…"
+            variant="ghost"
+            size="icon"
+            onRefetch={onRefresh}
+            disabled={loading}
+          >
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-          </Button>
+          </RefetchButton>
         </IconTooltip>
       </SectionCard>
     );
@@ -173,9 +180,9 @@ function PreflightPanel({
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+        <RefetchButton pendingLabel="Refreshing…" variant="ghost" size="sm" onRefetch={onRefresh} disabled={loading}>
           <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} /> Re-check
-        </Button>
+        </RefetchButton>
       </header>
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {loading

@@ -1,0 +1,10 @@
+[
+  {
+    "mutation": "no-paint-barrier",
+    "exit": 1
+  },
+  {
+    "mutation": "native-disabled",
+    "exit": 1
+  }
+]

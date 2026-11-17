@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending } from '@/lib/paint-pending';
 import { ScrollArea } from '@appliance.sh/ui/scroll-area';
 import { IconTooltip } from '@/components/ui/tooltip';
@@ -419,14 +420,14 @@ export function EgressPanel({
               <Banner
                 tone="error"
                 action={
-                  <Button
+                  <RefetchButton
                     size="sm"
                     variant="outline"
                     disabled={trafficQuery.isFetching}
-                    onClick={() => void trafficQuery.refetch()}
+                    onRefetch={() => trafficQuery.refetch()}
                   >
                     Retry
-                  </Button>
+                  </RefetchButton>
                 }
               >
                 Failed to load traffic: {errMessage(trafficQuery.error)}
@@ -451,9 +452,9 @@ export function EgressPanel({
           headline="Couldn't load the egress policy"
           className="mt-2 text-xs"
           actions={
-            <Button size="sm" variant="outline" onClick={() => void refresh()}>
+            <RefetchButton size="sm" variant="outline" onRefetch={() => refresh()}>
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : (

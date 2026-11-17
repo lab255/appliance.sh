@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
@@ -14,7 +15,7 @@ export function AccountSection() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [readError, setReadError] = React.useState<string | null>(null);
-  const [readAttempt, setReadAttempt] = React.useState(0);
+  const retryRead = React.useRef<() => Promise<unknown>>(() => Promise.resolve());
   React.useEffect(() => {
     let active = true;
     const read = () =>
@@ -29,6 +30,7 @@ export function AccountSection() {
         .catch(() => {
           if (active) setReadError('Could not read your account. Please retry.');
         });
+    retryRead.current = async () => read();
     void read();
     // Reflect CLI sign-out without persisting identity or tokens in webview storage.
     const timer = setInterval(() => void read(), 2000);
@@ -36,7 +38,7 @@ export function AccountSection() {
       active = false;
       clearInterval(timer);
     };
-  }, [account, readAttempt]);
+  }, [account]);
   async function run(action: 'signIn' | 'signOut') {
     if (!account) return;
     await paintPending(() => {
@@ -99,9 +101,9 @@ export function AccountSection() {
           <Banner
             tone="error"
             action={
-              <Button size="sm" variant="outline" onClick={() => setReadAttempt((n) => n + 1)}>
+              <RefetchButton size="sm" variant="outline" onRefetch={() => retryRead.current()}>
                 Retry account status
-              </Button>
+              </RefetchButton>
             }
           >
             {readError}

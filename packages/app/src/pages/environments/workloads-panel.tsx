@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@appliance.sh/ui/table';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
@@ -80,14 +81,15 @@ export function WorkloadsPanel({
             ) : null}
           </div>
           <IconTooltip label="Refresh workloads">
-            <Button
+            <RefetchButton
+              pendingLabel="Refreshing…"
               variant="ghost"
               size="icon"
-              onClick={() => workloadsQuery.refetch()}
+              onRefetch={() => workloadsQuery.refetch()}
               disabled={workloadsQuery.isFetching || !isActive}
             >
               <RefreshCw className={cn('h-4 w-4', workloadsQuery.isFetching && 'animate-spin')} />
-            </Button>
+            </RefetchButton>
           </IconTooltip>
         </div>
 

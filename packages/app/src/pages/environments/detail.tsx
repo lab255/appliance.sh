@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { afterPendingPaint } from '@/lib/paint-pending';
 import * as React from 'react';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
@@ -162,9 +163,14 @@ export function EnvironmentDetailPage() {
           error={envQuery.error}
           fallbackHeadline="Couldn't load this environment"
           actions={
-            <Button variant="outline" size="sm" disabled={envQuery.isFetching} onClick={() => void envQuery.refetch()}>
+            <RefetchButton
+              variant="outline"
+              size="sm"
+              disabled={envQuery.isFetching}
+              onRefetch={() => envQuery.refetch()}
+            >
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}
@@ -287,7 +293,7 @@ export function EnvironmentDetailPage() {
                 health={healthQuery.data}
                 loading={healthQuery.isLoading}
                 error={healthQuery.error}
-                retry={() => void healthQuery.refetch()}
+                retry={() => healthQuery.refetch()}
                 fetching={healthQuery.isFetching}
               />
             ) : null}
@@ -314,14 +320,14 @@ export function EnvironmentDetailPage() {
                 <FriendlyError
                   error={deploymentsQuery.error}
                   actions={
-                    <Button
+                    <RefetchButton
                       size="sm"
                       variant="outline"
                       disabled={deploymentsQuery.isFetching}
-                      onClick={() => void deploymentsQuery.refetch()}
+                      onRefetch={() => deploymentsQuery.refetch()}
                     >
                       Retry
-                    </Button>
+                    </RefetchButton>
                   }
                 />
               ) : null}
@@ -401,7 +407,7 @@ function HealthSection({
   health: EnvironmentHealth | undefined;
   loading: boolean;
   error: unknown;
-  retry: () => void;
+  retry: () => Promise<unknown>;
   fetching: boolean;
 }) {
   return (
@@ -420,9 +426,9 @@ function HealthSection({
           error={error}
           headline="Couldn't load health"
           actions={
-            <Button size="sm" variant="outline" onClick={retry} disabled={fetching}>
+            <RefetchButton size="sm" variant="outline" onRefetch={retry} disabled={fetching}>
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}

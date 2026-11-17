@@ -87,10 +87,16 @@ describe('async read recovery', () => {
             resolveRead = resolve;
           })
       );
-      const retry = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Retry')!;
+      const retry = [...container.querySelectorAll('button')].find((button) =>
+        button.textContent?.startsWith('Retry')
+      )!;
       await act(async () => retry.click());
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
       await flush();
-      expect(retry.disabled).toBe(true);
+      expect(retry.disabled).toBe(false);
+      expect(retry.getAttribute('aria-disabled')).toBe('true');
       expect(container.querySelector('a[href="/deployments/d1"]')).toBe(link);
       await act(async () => resolveRead({ success: true, data: [deployment] }));
       await flush();
@@ -125,12 +131,16 @@ describe('async read recovery', () => {
         )
       );
       expect(container.textContent).not.toContain('Signed out');
-      const retry = [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Retry account status'
+      const retry = [...container.querySelectorAll('button')].find((button) =>
+        button.textContent?.startsWith('Retry account status')
       )!;
       expect(retry).toBeDefined();
       await act(async () => retry.click());
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
       expect(container.textContent).toContain('Could not read your account');
+      await flush();
       await act(async () => resolveStatus({ signedIn: true, email: 'avery@example.com' }));
       expect(container.textContent).toContain('Signed in with able as avery@example.com');
       expect(container.textContent).not.toContain('Could not read your account');

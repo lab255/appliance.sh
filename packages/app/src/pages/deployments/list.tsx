@@ -1,7 +1,7 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@appliance.sh/ui';
 import * as React from 'react';
 import { HoverGlide, SkeletonSwap } from '@appliance.sh/ui';
-import { Button } from '@/components/ui/button';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { resolveStatusDot } from '@/components/ui/status-dot';
@@ -98,14 +98,14 @@ export function DeploymentsPage() {
           error={deploymentsQuery.error}
           fallbackHeadline="Couldn't load deployments"
           actions={
-            <Button
+            <RefetchButton
               variant="outline"
               size="sm"
               disabled={deploymentsQuery.isFetching}
-              onClick={() => void deploymentsQuery.refetch()}
+              onRefetch={() => deploymentsQuery.refetch()}
             >
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}

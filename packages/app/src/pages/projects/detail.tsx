@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { afterPendingPaint } from '@/lib/paint-pending';
 import * as React from 'react';
 import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
@@ -125,14 +126,14 @@ export function ProjectDetailPage() {
           error={projectQuery.error}
           fallbackHeadline="Couldn't load this app"
           actions={
-            <Button
+            <RefetchButton
               variant="outline"
               size="sm"
               disabled={projectQuery.isFetching}
-              onClick={() => void projectQuery.refetch()}
+              onRefetch={() => projectQuery.refetch()}
             >
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}
@@ -195,14 +196,14 @@ export function ProjectDetailPage() {
                 <FriendlyError
                   error={environmentsQuery.error}
                   actions={
-                    <Button
+                    <RefetchButton
                       size="sm"
                       variant="outline"
                       disabled={environmentsQuery.isFetching}
-                      onClick={() => void environmentsQuery.refetch()}
+                      onRefetch={() => environmentsQuery.refetch()}
                     >
                       Retry
-                    </Button>
+                    </RefetchButton>
                   }
                 />
               ) : null}
@@ -260,14 +261,14 @@ export function ProjectDetailPage() {
                 <FriendlyError
                   error={deploymentsQuery.error}
                   actions={
-                    <Button
+                    <RefetchButton
                       size="sm"
                       variant="outline"
                       disabled={deploymentsQuery.isFetching}
-                      onClick={() => void deploymentsQuery.refetch()}
+                      onRefetch={() => deploymentsQuery.refetch()}
                     >
                       Retry
-                    </Button>
+                    </RefetchButton>
                   }
                 />
               ) : null}

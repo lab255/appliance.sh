@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending, afterPendingPaint } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
@@ -221,14 +222,14 @@ function PendingInvites() {
         error={invitesQuery.error}
         headline="Couldn't load pending invites"
         actions={
-          <Button
+          <RefetchButton
             size="sm"
             variant="outline"
             disabled={invitesQuery.isFetching}
-            onClick={() => void invitesQuery.refetch()}
+            onRefetch={() => invitesQuery.refetch()}
           >
             Retry
-          </Button>
+          </RefetchButton>
         }
       />
     );
@@ -337,9 +338,14 @@ function MembersList() {
         error={keysQuery.error}
         headline="Couldn't load people with access"
         actions={
-          <Button size="sm" variant="outline" disabled={keysQuery.isFetching} onClick={() => void keysQuery.refetch()}>
+          <RefetchButton
+            size="sm"
+            variant="outline"
+            disabled={keysQuery.isFetching}
+            onRefetch={() => keysQuery.refetch()}
+          >
             Retry
-          </Button>
+          </RefetchButton>
         }
       />
     );
