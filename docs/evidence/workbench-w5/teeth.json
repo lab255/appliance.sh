@@ -1,0 +1,68 @@
+[
+  {
+    "mutant": "disconnected-detail",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed | 1 passed (2)",
+      "      Tests  1 failed | 6 passed (7)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'Workbenchworkspace/workspaceAgent mac\u2026' to contain 'Agent-proposed \u00b7 not approved'"
+    ]
+  },
+  {
+    "mutant": "lost-stale-semantics",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  2 failed (2)",
+      "      Tests  2 failed | 5 passed (7)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'false' to be 'true' // Object.is equality",
+      "AssertionError: expected 'Workbenchworkspace/workspaceAgent mac\u2026' to contain 'Stale proposal \u2014'"
+    ]
+  },
+  {
+    "mutant": "auto-package-on-proposal",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed | 1 passed (2)",
+      "      Tests  1 failed | 6 passed (7)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected \"spy\" to not be called at all, but actually been called 1 times"
+    ]
+  },
+  {
+    "mutant": "source-directory-guard",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed | 1 passed (2)",
+      "      Tests  1 failed | 6 passed (7)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'ready-1' to be 'No scoped proposal' // Object.is equality"
+    ]
+  },
+  {
+    "mutant": "package-directory-guard",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed | 1 passed (2)",
+      "      Tests  1 failed | 6 passed (7)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'Package for reviewPackaging creates a\u2026' to contain 'No structured readiness proposal.'"
+    ]
+  },
+  {
+    "mutant": "dismiss-stale-guard",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed | 1 passed (2)",
+      "      Tests  1 failed | 6 passed (7)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'Package for reviewPackaging creates a\u2026' to contain 'Stale proposal \u2014 The source session w\u2026'"
+    ]
+  },
+  {
+    "mutant": "restored-final-source",
+    "exitCode": 0,
+    "evidence": [" Test Files  2 passed (2)", "      Tests  7 passed (7)"]
+  }
+]

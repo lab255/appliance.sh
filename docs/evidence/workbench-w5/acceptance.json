@@ -1,0 +1,24 @@
+[
+  {
+    "motion": "no-preference",
+    "wrongDirectoryRejected": true,
+    "keyboardDismissRetainsFocus": true,
+    "keyboardInspectionFocus": true,
+    "stoppedIsStale": true,
+    "staleDismissEnterPreservesReason": true,
+    "packageEnabled": true,
+    "automaticCalls": 0,
+    "zoom200HorizontalOverflow": false
+  },
+  {
+    "motion": "reduce",
+    "wrongDirectoryRejected": true,
+    "keyboardDismissRetainsFocus": true,
+    "keyboardInspectionFocus": true,
+    "stoppedIsStale": true,
+    "staleDismissEnterPreservesReason": true,
+    "packageEnabled": true,
+    "automaticCalls": 0,
+    "zoom200HorizontalOverflow": false
+  }
+]

@@ -12,9 +12,11 @@ import { useDevMachineTargets } from '@/hooks/use-dev-machine-targets';
 import { workspaceKind } from '@/components/layout/cluster-switcher';
 import type { WorkbenchWorkspace } from '@/lib/host';
 import { workspaceName } from './index';
+import { useReadinessFixture, type ReadinessFixtureSource } from '@/lib/workbench-readiness';
 
-export function WorkbenchDetailPage() {
+export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: ReadinessFixtureSource } = {}) {
   const { workspaceId = '' } = useParams();
+  const readinessProposal = useReadinessFixture(workspaceId, readinessSource);
   const host = useHost();
   const location = useLocation();
   const cache = useQueryClient();
@@ -151,13 +153,16 @@ export function WorkbenchDetailPage() {
           <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">No agent is launched from this shell.</p>
         </section>
         <section className="min-w-0 rounded-lg border border-[var(--color-border)] p-4">
-          <WorkspaceInspector directory={workspace.directory} />
+          <div id="workbench-inspection" tabIndex={-1}>
+            <WorkspaceInspector directory={workspace.directory} />
+          </div>
           {/* Workbench Package: sibling action; registry reads never invoke it. */}
           <div className="mt-4 border-t border-[var(--color-border)] pt-4">
             <PackageSection
               key={workspace.directory}
               directory={workspace.directory}
               packageHost={host.workbenchPackage}
+              readinessProposal={readinessProposal}
               filesChanging={workspace.sessions.some((session) => ['running', 'spawning'].includes(session.status))}
             />
           </div>
