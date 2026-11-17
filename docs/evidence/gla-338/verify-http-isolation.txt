@@ -1,0 +1,31 @@
+Command: pnpm --filter @appliance.sh/api-server exec vitest run src/routes/environments/environments.spec.ts src/routes/events/events.spec.ts
+Elevated isolation attempt; exit 1. Original failures passed; a different request got HTTP 407.
+
+ FAIL  src/routes/environments/environments.spec.ts > Environment routes > per-environment variables > unsets a variable
+AssertionError: expected 407 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 407
+
+ ❯ src/routes/environments/environments.spec.ts:281:26
+    279|       const res = await request(app).delete('/api/v1/projects/proj-1/e…
+    280|
+    281|       expect(res.status).toBe(200);
+       |                          ^
+    282|       expect(mockEnvVarService.unset).toHaveBeenCalledWith('env-1', ['…
+    283|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 22 passed (23)
+   Start at  09:58:36
+   Duration  470ms (transform 119ms, setup 0ms, collect 482ms, tests 49ms, environment 0ms, prepare 70ms)
+
+undefined
+<repo>/packages/api-server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/routes/environments/environments.spec.ts src/routes/events/events.spec.ts

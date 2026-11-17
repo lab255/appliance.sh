@@ -1,0 +1,49 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MotionProvider } from '@appliance.sh/ui/motion-provider';
+import { ToastProvider } from '@/components/ui/toast';
+import { ConfirmProvider } from '@/components/ui/confirm-dialog';
+import { TerminalSessionsProvider } from '@/providers/terminal-sessions-provider';
+import { HostProvider } from '@/providers/host-provider';
+import { WorkloadsPanel } from '@/pages/environments/workloads-panel';
+import { CredentialHelperEditor } from '@/pages/machine/credential-helper-editor';
+import { RuntimeDetail } from '@/pages/machine/runtime-detail';
+import { AgentLoginPanel } from '@/components/agent-login';
+import { SettingsPage } from '@/pages/settings';
+import '@/styles.css';
+const kind = new URLSearchParams(location.search).get('kind');
+window.__calls = 0;
+const work = () => {
+  window.__calls++;
+  window.__workStart = performance.now();
+  const end = performance.now() + 120;
+  while (performance.now() < end) {}
+  return new Promise(resolve => { window.__finish = resolve; });
+};
+const cfg = { clusters: [], selectedClusterId: null };
+const status = { available: true, exists: true, running: kind === 'deploy', dev: kind === 'folder', clusterProvisioned: true, kubeconfigReady: false };
+const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+client.setQueryData(['host', 'config'], cfg);
+client.setQueryData(['microvm', 'appliance', 'status'], status);
+client.setQueryData(['microvm', 'list'], []);
+client.setQueryData(['microvm', 'appliance', 'egress'], { rules: [] });
+const host = {
+  platform: 'macos', desktop: true,
+  getConfig: kind === 'deploy' ? work : async () => cfg,
+  selectCluster: work, local: { pickDirectory: work },
+  agentAuth: { status: async () => ({ configured: false, kind: null }), hasHostClaude: async () => true, runSetupToken: work },
+  updater: { check: async () => ({ version: '9.0.0' }), downloadAndInstall: async () => {}, relaunch: work },
+  vm: { instance: () => ({ status: async () => status, egress: { get: async () => ({ rules: [] }) } }), list: async () => [] },
+};
+const view = kind === 'switch' ? <WorkloadsPanel clusterId="target" />
+  : kind === 'program' ? <CredentialHelperEditor program="" args={[]} platform="macos" showErrors={false} onProgramChange={() => {}} onArgsChange={() => {}} onPickProgram={work} />
+  : kind === 'terminal' ? <AgentLoginPanel />
+  : kind === 'relaunch' ? <SettingsPage />
+  : <RuntimeDetail name="appliance" clusterId="target" />;
+createRoot(document.getElementById('root')!).render(
+  <MemoryRouter><QueryClientProvider client={client}><HostProvider host={host}><MotionProvider><ToastProvider><ConfirmProvider><TerminalSessionsProvider>
+    <main style={{ padding: 32, maxWidth: 1100 }}><div data-probe-shift />{view}<p data-footer>App window measurement boundary</p></main>
+  </TerminalSessionsProvider></ConfirmProvider></ToastProvider></MotionProvider></HostProvider></QueryClientProvider></MemoryRouter>
+);

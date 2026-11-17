@@ -1,0 +1,46 @@
+
+ RUN  v3.2.4 <repo>/packages/app
+
+ ❯ src/pages/pending-handlers.test.tsx (7 tests | 6 failed | 1 skipped) 112ms
+   × switch paints before host work, avoids native disabled, guards duplicates and recovers 29ms
+     → expected "spy" to be called 1 times, but got 2 times
+   × program paints before host work, avoids native disabled, guards duplicates and recovers 11ms
+     → expected "spy" to be called 1 times, but got 2 times
+   × terminal paints before host work, avoids native disabled, guards duplicates and recovers 32ms
+     → expected "spy" to be called 1 times, but got 2 times
+   × relaunch paints before host work, avoids native disabled, guards duplicates and recovers 16ms
+     → expected "spy" to be called 1 times, but got 2 times
+   × folder paints before host work, avoids native disabled, guards duplicates and recovers 13ms
+     → expected "spy" to be called 1 times, but got 2 times
+   × deploy paints before host work, avoids native disabled, guards duplicates and recovers 11ms
+     → expected "spy" to be called 1 times, but got 2 times
+   ↓ provision paints before host work, avoids native disabled, guards duplicates and recovers
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 skipped (7)
+   Start at  10:22:39
+   Duration  837ms (transform 198ms, setup 0ms, collect 449ms, tests 112ms, environment 134ms, prepare 30ms)
+
+undefined
+<repo>/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/pending-handlers.test.tsx -t ^(switch|program|terminal|relaunch|folder|deploy)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/pending-handlers.test.tsx > switch paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > program paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > terminal paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > relaunch paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > folder paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > deploy paints before host work, avoids native disabled, guards duplicates and recovers
+AssertionError: expected "spy" to be called 1 times, but got 2 times
+ ❯ src/pages/pending-handlers.test.tsx:171:22
+    169|           expect(control.getAttribute('aria-label')).toBe('Provisionin…
+    170|         }
+    171|         expect(work).toHaveBeenCalledTimes(1);
+       |                      ^
+    172|         await act(async () => control.click());
+    173|         expect(work).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+

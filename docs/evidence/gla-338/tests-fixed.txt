@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 <repo>/packages/app
+
+ ✓ src/pages/pending-handlers.test.tsx (7 tests) 220ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  10:22:44
+   Duration  948ms (transform 200ms, setup 0ms, collect 453ms, tests 220ms, environment 134ms, prepare 29ms)
+

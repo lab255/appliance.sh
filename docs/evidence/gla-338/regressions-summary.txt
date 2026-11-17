@@ -1,0 +1,6 @@
+baseline: 6 expected FAIL (exit 1)
+unguarded: 6 expected FAIL (exit 1)
+no-paint: 6 expected FAIL (exit 1)
+native-disabled: 6 expected FAIL (exit 1)
+provisioning-label: 1 expected FAIL (exit 1)
+fixed: 7 PASS (exit 0)

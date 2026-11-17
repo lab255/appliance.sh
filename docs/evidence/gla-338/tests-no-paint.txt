@@ -1,0 +1,141 @@
+
+ RUN  v3.2.4 <repo>/packages/app
+
+ ❯ src/pages/pending-handlers.test.tsx (7 tests | 6 failed | 1 skipped) 111ms
+   × switch paints before host work, avoids native disabled, guards duplicates and recovers 28ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array [
+      "target",
+    ]
+
+
+Number of calls: 1
+
+   × program paints before host work, avoids native disabled, guards duplicates and recovers 5ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × terminal paints before host work, avoids native disabled, guards duplicates and recovers 34ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × relaunch paints before host work, avoids native disabled, guards duplicates and recovers 20ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × folder paints before host work, avoids native disabled, guards duplicates and recovers 13ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × deploy paints before host work, avoids native disabled, guards duplicates and recovers 10ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+   ↓ provision paints before host work, avoids native disabled, guards duplicates and recovers
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 skipped (7)
+   Start at  10:22:40
+   Duration  839ms (transform 201ms, setup 0ms, collect 454ms, tests 111ms, environment 133ms, prepare 28ms)
+
+undefined
+<repo>/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/pending-handlers.test.tsx -t ^(switch|program|terminal|relaunch|folder|deploy)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/pending-handlers.test.tsx > switch paints before host work, avoids native disabled, guards duplicates and recovers
+AssertionError: expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array [
+      "target",
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/pages/pending-handlers.test.tsx:160:26
+    158|         expect(document.activeElement).toBe(control);
+    159|         expect(control.getAttribute('aria-disabled')).toBe('true');
+    160|         expect(work).not.toHaveBeenCalled();
+       |                          ^
+    161|         await act(async () => control.click());
+    162|         await frame();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/pages/pending-handlers.test.tsx > program paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > terminal paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > relaunch paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > folder paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > deploy paints before host work, avoids native disabled, guards duplicates and recovers
+AssertionError: expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ src/pages/pending-handlers.test.tsx:160:26
+    158|         expect(document.activeElement).toBe(control);
+    159|         expect(control.getAttribute('aria-disabled')).toBe('true');
+    160|         expect(work).not.toHaveBeenCalled();
+       |                          ^
+    161|         await act(async () => control.click());
+    162|         await frame();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+

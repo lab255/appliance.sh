@@ -1,0 +1,18 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'node:path';
+export default defineConfig({
+  root: import.meta.dirname,
+  plugins: [react(), tailwindcss(), {
+    name: 'pending-timing-control',
+    transform(source, id) {
+      if (process.env.PAINT_CONTROL === '1' && id.endsWith('/lib/paint-pending.ts')) {
+        return source.replace('return afterPendingPaint();', 'return Promise.resolve();');
+      }
+    },
+  }],
+  resolve: { alias: { '@': path.resolve(import.meta.dirname, '../src') } },
+  define: { __APPLIANCE_VERSION__: '"fixture"', __APPLIANCE_BUILD_TIME__: '"2026-11-17T00:00:00Z"' },
+  server: { fs: { allow: [path.resolve(import.meta.dirname, '../../..')] } },
+});

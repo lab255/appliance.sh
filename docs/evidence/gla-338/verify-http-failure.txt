@@ -1,0 +1,68 @@
+Command: NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify
+Elevated attempt; exit 1. Concurrent verification elsewhere on the same host was reported by manager.
+Hypothesis only: HTTP interference; these specs use Supertest app.listen(0), not fixed ports.
+
+ FAIL  src/routes/environments/environments.spec.ts > Environment routes > GET /api/v1/projects/:projectId/environments/:id/health > returns health for an environment in the project
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ src/routes/environments/environments.spec.ts:172:26
+    170|       const res = await request(app).get('/api/v1/projects/proj-1/envi…
+    171|
+    172|       expect(res.status).toBe(200);
+       |                          ^
+    173|       expect(res.body.status).toBe('healthy');
+    174|       expect(res.body.usage.cpuMillicores).toBe(12);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/routes/events/events.spec.ts > Lambda pass-through self-update events > rejects injected target controls: {"kind":"self-update-check","targetDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+AssertionError: expected 407 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 407
+
+ ❯ src/routes/events/events.spec.ts:61:29
+     59|     const response = await request(app()).post('/events').send(body);
+     60|
+     61|     expect(response.status).toBe(400);
+       |                             ^
+     62|     expect(check).not.toHaveBeenCalled();
+     63|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 35 passed (37)
+      Tests  2 failed | 344 passed (346)
+   Start at  09:58:03
+   Duration  4.56s (transform 1.05s, setup 0ms, collect 25.14s, tests 1.80s, environment 4ms, prepare 2.32s)
+
+(node:47395) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ELIFECYCLE  Test failed. See above for more details.
+
+
+
+ NX   Running target test for 10 projects failed
+
+Failed tasks:
+
+- @appliance.sh/api-server:test
+
+
+ NX   Nx detected a flaky task
+
+  @appliance.sh/api-server:test
+
+Flaky tasks can disrupt your CI pipeline. Automatically retry them with Nx Cloud. Learn more at https://nx.dev/ci/features/flaky-tasks
+
+ ELIFECYCLE  Command failed with exit code 1.

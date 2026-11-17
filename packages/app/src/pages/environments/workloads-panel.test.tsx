@@ -1,3 +1,5 @@
+import { ToastProvider } from '@/components/ui/toast';
+import { MotionProvider } from '@appliance.sh/ui/motion-provider';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
@@ -14,7 +16,11 @@ function markup(data?: object) {
   try {
     return renderToStaticMarkup(
       <QueryClientProvider client={client}>
-        <WorkloadsPanel clusterId="microvm" />
+        <MotionProvider>
+          <ToastProvider>
+            <WorkloadsPanel clusterId="microvm" />
+          </ToastProvider>
+        </MotionProvider>
       </QueryClientProvider>
     );
   } finally {

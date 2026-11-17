@@ -1,0 +1,40 @@
+
+ RUN  v3.2.4 <repo>/packages/app
+
+ ❯ src/pages/pending-handlers.test.tsx (7 tests | 1 failed | 6 skipped) 62ms
+   ↓ switch paints before host work, avoids native disabled, guards duplicates and recovers
+   ↓ program paints before host work, avoids native disabled, guards duplicates and recovers
+   ↓ terminal paints before host work, avoids native disabled, guards duplicates and recovers
+   ↓ relaunch paints before host work, avoids native disabled, guards duplicates and recovers
+   ↓ folder paints before host work, avoids native disabled, guards duplicates and recovers
+   ↓ deploy paints before host work, avoids native disabled, guards duplicates and recovers
+   × provision paints before host work, avoids native disabled, guards duplicates and recovers 62ms
+     → expected 'Opening deploy…' to be 'Provisioning cluster…' // Object.is equality
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  10:22:43
+   Duration  791ms (transform 198ms, setup 0ms, collect 450ms, tests 62ms, environment 134ms, prepare 29ms)
+
+undefined
+<repo>/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/pending-handlers.test.tsx -t ^provision
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/pending-handlers.test.tsx > provision paints before host work, avoids native disabled, guards duplicates and recovers
+AssertionError: expected 'Opening deploy…' to be 'Provisioning cluster…' // Object.is equality
+
+Expected: "Provisioning cluster…"
+Received: "Opening deploy…"
+
+ ❯ src/pages/pending-handlers.test.tsx:157:52
+    155|         expect(control.getAttribute('aria-busy')).toBe('true');
+    156|         expect(control.hasAttribute('disabled')).toBe(false);
+    157|         expect(control.getAttribute('aria-label')).toBe(pending);
+       |                                                    ^
+    158|         expect(document.activeElement).toBe(control);
+    159|         expect(control.getAttribute('aria-disabled')).toBe('true');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

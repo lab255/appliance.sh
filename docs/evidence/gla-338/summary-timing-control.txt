@@ -1,0 +1,6 @@
+switch no-preference: n=1 ack median=125.30ms; max CLS=0.000000; max raw shift=0.000007; negative-control CLS min=0.062192; width delta=0.000px; calibration detected; focus observation only
+program no-preference: n=1 ack median=123.60ms; max CLS=0.000000; max raw shift=0.000025; negative-control CLS min=0.025925; width delta=0.000px; calibration detected; focus observation only
+terminal no-preference: n=1 ack median=127.40ms; max CLS=0.000000; max raw shift=0.000015; negative-control CLS min=0.020971; width delta=0.000px; calibration detected; focus observation only
+relaunch no-preference: n=1 ack median=122.90ms; max CLS=0.000000; max raw shift=0.000010; negative-control CLS min=0.040933; width delta=0.000px; calibration detected; focus observation only
+folder no-preference: n=1 ack median=129.60ms; max CLS=0.000000; max raw shift=0.000000; negative-control CLS min=0.044490; width delta=0.000px; calibration detected; focus observation only
+deploy no-preference: n=1 ack median=129.40ms; max CLS=0.000000; max raw shift=0.000016; negative-control CLS min=0.043706; width delta=0.000px; calibration detected; focus observation only
