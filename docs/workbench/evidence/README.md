@@ -167,3 +167,27 @@ TypeScript may emit declaration-only test files into the internal app library's
 build directory, but those are not runtime JavaScript or included in the desktop
 product's `dist` assets. Browser host fixtures are development-only and are also
 absent from both production JavaScript graphs.
+
+## Reproduce the production source audit
+
+From a clean checkout, run `pnpm install --frozen-lockfile`, then
+`NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm exec nx run @appliance.sh/app:build`
+and `pnpm --filter @appliance.sh/desktop exec vite build`. Run:
+
+```sh
+APP_BUNDLE_DIR=packages/app/dist DESKTOP_BUNDLE_DIR=packages/desktop/dist \
+BUNDLE_AUDIT_OUTPUT=docs/workbench/evidence/bundle-audit-fresh.json \
+node docs/workbench/evidence/bundle-audit.mjs
+```
+
+The reconstructed audit scans every `.js.map`, `.mjs.map`, and `.cjs.map` below
+both configured directories, requires matching JavaScript artifacts, v3 source lists, and a nonempty
+source graph on each surface, and counts source entries (including duplicates across maps).
+It rejects test/spec files, fixture/test directories, mock modules, audit harness
+modules, and evidence/audit source paths. Before reporting zero matches it injects
+a test source into each surface's first map in memory and requires detection.
+It does not inspect declarations, native binaries, unmapped JavaScript, or prove
+absence of inline test code in otherwise production-named sources. Counts can
+change as production code evolves; the reproducible conclusion is zero matching
+source identifiers in the audited production sourcemaps. The original JSON is
+historical evidence, not an exact-count assertion for newer commits.
