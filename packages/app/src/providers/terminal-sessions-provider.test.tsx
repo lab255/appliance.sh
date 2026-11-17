@@ -109,7 +109,17 @@ it('guards every onData write, preserves shared mode, and Hide keeps the PTY ali
     vi.useFakeTimers();
     const refusal = 'Input not sent — observing read-only. Choose Interact with agent.';
     await act(async () => {
-      for (const data of ['typing', '\u001b[200~pasted\u001b[201~', '\r', '\u0003', '\u001b[A'])
+      for (const data of [
+        'typing',
+        '\u001b[200~pasted\u001b[201~',
+        '\r',
+        '\u0003',
+        '\u0004',
+        '\u001b[A',
+        '\u001b[B',
+        '\u001b[C',
+        '\u001b[D',
+      ])
         terminals[0].input(data);
     });
     expect([...container.querySelectorAll('[role=status]')].some((node) => node.textContent === refusal)).toBe(true);

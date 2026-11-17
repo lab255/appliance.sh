@@ -105,8 +105,42 @@ Delta uncached verification evidence:
 
 ```text
 NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify
-✓ src/pages/workbench/workspace-inspector.test.tsx (6 tests) 807ms
-✓ src/providers/terminal-sessions-provider.test.tsx (3 tests) 625ms
+✓ src/pages/workbench/workspace-inspector.test.tsx (6 tests) 759ms
+✓ src/providers/terminal-sessions-provider.test.tsx (3 tests) 431ms
 ==> verify: GREEN
 exit=0
 ```
+
+## Director addendum — every input route
+
+**`disableStdin: false` is DELIBERATE: otherwise the refusal is invisible because the terminal swallows the event upstream.** The `onData` branch is the sole PTY-write enforcement point, not defence-in-depth behind disabled stdin. The claim is no input route can write to the agent while read-only is displayed; output, selection, scrolling, and the explicitly separate Hide/Stop actions remain functional.
+
+A programmatic `write()` containing `ESC[6n` also generates an xterm status reply: this reply is refused in Observe and delivered in Interact, proving output-generated input cannot bypass the guard.
+
+The development-only harness exposes the real xterm instance and host-output callback to this probe, never to the library/product entry. `refusal.mjs` now records each route individually and asserts actual xterm event emission (avoiding a vacuous zero-write pass). Each route is repeated in Interact as its own negative control:
+
+| Route                                   | Observe, both motion settings                                    | Interact negative control, both settings |
+| --------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+| Focus elsewhere → focus terminal → type | Events emitted; zero writes; status refusal                      | Writes emitted                           |
+| Enter                                   | Events emitted; zero writes; status refusal                      | Writes emitted                           |
+| Ctrl-C                                  | Events emitted; zero writes; status refusal                      | Writes emitted                           |
+| Ctrl-D                                  | Events emitted; zero writes; status refusal                      | Writes emitted                           |
+| Up / Down / Left / Right arrows         | Each emits events; zero writes; status refusal                   | Each writes                              |
+| Clipboard paste                         | Events emitted; zero writes; status refusal                      | Writes emitted                           |
+| xterm `input()`                         | Events emitted; zero writes; status refusal                      | Writes emitted                           |
+| xterm `paste()` in bracketed-paste mode | Actual `ESC[200~…ESC[201~` observed; zero writes; status refusal | Writes emitted                           |
+
+```text
+no-preference: 12 refused input routes / 12 writing interactive controls; observe writes=0
+reduce:        12 refused input routes / 12 writing interactive controls; observe writes=0
+Plain-text xterm.write(): PROGRAMMATIC OUTPUT visibly rendered; zero input events and zero PTY writes
+Live host output: HOST OUTPUT STILL LIVE visibly rendered while Observing · read-only; zero PTY writes
+Observe: cursor not blinking; notice visible then expires. Interact: cursor blinking.
+```
+
+Structural boundary citations (repository paths, unchanged product source in this addendum):
+
+- `packages/app/src/providers/terminal-sessions-provider.tsx:448`: host data goes to xterm `term.write`, the display API. It is intentionally not gated. Plain-text programmatic `write()` is likewise output, not a call to the agent's PTY write handle; both paths are exercised above. A status-query write can generate an input reply, which converges on the same `onData` guard and is separately exercised.
+- `packages/app/src/providers/terminal-sessions-provider.tsx:465`: the only xterm-to-PTY forwarding subscription is `onData`, with the mutable-mode check at line 466. Keystrokes, paste and xterm `input()` converge here; there is no `onBinary` forwarding subscription. Binary events therefore cannot reach the agent from this surface.
+- `packages/app/src/providers/terminal-sessions-provider.tsx:158`: the context exposes controls and metadata, not the private `LiveSession`/PTY handle or a raw write method. Workbench and drawer callers cannot bypass the guard through that context. The fixture's xterm hook exists only to probe the real public xterm API.
+- Resize remains the manager-accepted separate sizing path; it is not input forwarding. Esc-in-alternate-screen is unchanged and still reaches the same guarded `onData` path.

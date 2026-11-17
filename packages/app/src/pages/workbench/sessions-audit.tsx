@@ -1,5 +1,6 @@
 /** Development-only fixture. Not imported by the application entry point. */
 import * as React from 'react';
+import { Terminal } from '@xterm/xterm';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,11 +15,20 @@ import '@/styles.css';
 const params = new URLSearchParams(location.search);
 const trace: string[] = [];
 Object.assign(window, { w4Trace: trace });
+// Dev-only probe access to the real xterm API, never imported by the library entry.
+const openTerminal = Terminal.prototype.open;
+Terminal.prototype.open = function (parent) {
+  const inputEvents: string[] = [];
+  this.onData((data) => inputEvents.push(data));
+  Object.assign(window, { w4Xterm: this, w4InputEvents: inputEvents });
+  return openTerminal.call(this, parent);
+};
 let stopped = false;
 const host = {
   terminal: {
     async open(_opts: unknown, event: (event: { type: string; data: string }) => void) {
       trace.push('attach');
+      Object.assign(window, { w4Output: (data: string) => event({ type: 'data', data }) });
       event({ type: 'data', data: 'Fixture-only agent output. Select and copy this text.\r\n' });
       return {
         write(data: string) {
