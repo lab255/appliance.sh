@@ -5,11 +5,15 @@ import { useHost } from '@/providers/host-provider';
 import { paintPending } from '@/lib/paint-pending';
 import type { Inspection, InspectionPreview } from '@/lib/inspection';
 
-/** Workspace-wide, read-only inspection; no inferred per-agent attribution. */
-export function WorkspaceInspector({ directory }: { directory: string }) {
-  return <Inspector key={directory} directory={directory} />;
+interface InspectorProps {
+  directory: string;
+  onSnapshot?: (snapshot: Inspection | undefined) => void;
 }
-function Inspector({ directory }: { directory: string }) {
+/** Workspace-wide, read-only inspection; no inferred per-agent attribution. */
+export function WorkspaceInspector({ directory, onSnapshot }: InspectorProps) {
+  return <Inspector key={directory} directory={directory} onSnapshot={onSnapshot} />;
+}
+function Inspector({ directory, onSnapshot }: InspectorProps) {
   const host = useHost();
   const [snapshot, setSnapshot] = React.useState<Inspection>();
   const [preview, setPreview] = React.useState<InspectionPreview>();
@@ -29,11 +33,13 @@ function Inspector({ directory }: { directory: string }) {
   React.useEffect(() => {
     let active = true;
     setBusy('Loading inspection…');
+    onSnapshot?.(undefined);
     host
       .inspectionRefresh?.(directory)
       .then((value) => {
         if (active) {
           setSnapshot(value);
+          onSnapshot?.(value);
           setBusy('');
         }
       })
@@ -51,7 +57,7 @@ function Inspector({ directory }: { directory: string }) {
       active = false;
       request.current++;
     };
-  }, [directory, host]);
+  }, [directory, host, onSnapshot]);
 
   function savePosition() {
     if (reader.current)
@@ -96,7 +102,10 @@ function Inspector({ directory }: { directory: string }) {
     busyRef.current = true;
     const id = ++request.current;
     savePosition();
-    await paintPending(() => setBusy('Refreshing…'));
+    await paintPending(() => {
+      setBusy('Refreshing…');
+      onSnapshot?.(undefined);
+    });
     try {
       if (!host.inspectionRefresh) throw new Error('Host inspection is unavailable');
       const value = await host.inspectionRefresh(directory);
@@ -106,6 +115,7 @@ function Inspector({ directory }: { directory: string }) {
           : undefined;
       if (id === request.current) {
         setSnapshot(value);
+        onSnapshot?.(value);
         setPreview(next);
         setError('');
       }

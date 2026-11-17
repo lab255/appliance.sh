@@ -1,5 +1,6 @@
 //! Read-only workspace inspection. No rebaseline, restore, or workspace-write command.
 use cap_std::{ambient_authority, fs::Dir};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -7,16 +8,55 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 use tauri::{AppHandle, Manager};
 
 const CONTENT_LIMIT: usize = 1024 * 1024;
 const TREE_LIMIT: usize = 128 * 1024 * 1024;
 const PREVIEW_LIMIT: usize = 64 * 1024;
+// v2 encodes retained content as base64, never JSON number arrays.
+mod base64_bytes {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use serde::{Deserialize, Deserializer, Serializer};
+    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&STANDARD.encode(bytes))
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+        STANDARD
+            .decode(String::deserialize(deserializer)?)
+            .map_err(serde::de::Error::custom)
+    }
+}
+const BASELINE_VERSION: u32 = 2;
+#[derive(Serialize, Deserialize)]
+struct StoredBaseline {
+    version: u32,
+    snapshot: Snapshot,
+}
+fn encode_baseline(snapshot: Snapshot) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(&StoredBaseline {
+        version: BASELINE_VERSION,
+        snapshot,
+    })
+    .map_err(err)
+}
+#[derive(Default)]
+struct BaselineCache {
+    entries: BTreeMap<PathBuf, (Vec<u8>, Arc<Snapshot>)>,
+    retained_bytes: usize,
+}
+static BASELINES: OnceLock<Mutex<BaselineCache>> = OnceLock::new();
+fn baselines() -> &'static Mutex<BaselineCache> {
+    BASELINES.get_or_init(Default::default)
+}
+fn format_error() -> String {
+    "Comparison unavailable: stored baseline format is unsupported or invalid (expected version 2). This version does not migrate older baseline formats. Rebaseline is unavailable; automatic recapture is disabled.".into()
+}
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct File {
+    #[serde(with = "base64_bytes")]
     bytes: Vec<u8>,
     size: u64,
     digest: String,
@@ -46,6 +86,7 @@ pub struct Entry {
 #[serde(rename_all = "camelCase")]
 pub struct Inspection {
     snapshot_id: String,
+    baseline_id: Option<String>,
     directory: String,
     captured_at: Option<String>,
     refreshed_at: String,
@@ -108,10 +149,17 @@ fn location(app: &AppHandle, directory: &str) -> Result<(PathBuf, PathBuf), Stri
     // host's operator can alter app data. This is not protection from hostile hosts.
     // Out-of-band host CLI remounts remain host-operator authority. Overlapping
     // mounts are rejected at mount time; inspection fails closed only while an
-    // overlapping devMount is recorded. Baselines exposed during such a window
-    // cannot be trusted afterwards; this is not detected. A baseline written
-    // while an overlapping mount was active is trusted after it narrows — see
-    // follow-up card: keychain-HMAC baseline authentication.
+    // overlapping devMount is recorded. Every baseline read now verifies an
+    // HMAC over its bytes and host storage location using an OS-keychain key.
+    // Changes to retained baseline bytes through a previously overlapping mount
+    // fail authentication after it narrows. Unsigned old captures fail visibly.
+    // DELETION RESIDUAL: deleting baseline.json, .hmac and .attempt makes the
+    // next Workbench open recapture the CURRENT tree and sign it as authentic.
+    // An agent able to write through an overlapping mount can delete through it;
+    // after that mount narrows, this enables silent baseline replacement. HMAC
+    // does not close that path; a keychain-side capture record is not implemented.
+    // Host operators with keychain access and replay of an identical authentic
+    // capture at its original location also remain outside this guarantee.
     // A future mount/API change MUST preserve this separation for every VM.
     disjoint(&data, &root)?;
     if let Some(home) = crate::home_dir() {
@@ -319,7 +367,9 @@ fn snapshot_with_budget(root: &Path, preview_budget: usize) -> Result<Snapshot, 
 }
 /// Called on first Workbench open/create before that operation returns. Agents-page
 /// launches are independent: first capture may include prior agent output. A failed attempt is
-/// permanent for this binding: refreshing must NEVER silently move the baseline.
+/// permanent while its attempt marker remains: refreshing must NEVER silently move
+/// the baseline. Deleting all capture files permits a later open to recapture; see
+/// the deletion residual at location().
 pub fn capture(app: &AppHandle, directory: &str) -> Result<(), String> {
     let _lock = CAPTURE_LOCK.lock().map_err(err)?;
     let (root, path) = location(app, directory)?;
@@ -339,19 +389,28 @@ fn capture_into(root: &Path, path: &Path) -> Result<(), String> {
         .map_err(err)?;
     marker.sync_all().map_err(err)?;
     let result = (|| -> Result<(), String> {
+        let key = signing_key(true)?;
         let mut baseline = snapshot(root)?;
         // Informational initial Git state only, never comparison authority. Do NOT
         // shell out to `git status`: untrusted .git config can define executable clean
         // filters. libgit2 has no registered external filter/hook callbacks here.
         baseline.initial_git_status = initial_git_status(root).unwrap_or_else(|_| "Git status unavailable (including non-Git directories); initial files are captured independently.".into());
-        let bytes = serde_json::to_vec(&baseline).map_err(err)?;
+        let bytes = encode_baseline(baseline)?;
         let mut output = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(path)
             .map_err(err)?;
         output.write_all(&bytes).map_err(err)?;
-        output.sync_all().map_err(err)
+        output.sync_all().map_err(err)?;
+        let tag = baseline_mac(&key, path, &bytes)?.finalize().into_bytes();
+        let mut signature = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path.with_extension("hmac"))
+            .map_err(err)?;
+        signature.write_all(&tag).map_err(err)?;
+        signature.sync_all().map_err(err)
     })();
     if let Err(message) = &result {
         // Host-side failure metadata is not a replacement baseline. Preserve the
@@ -379,7 +438,89 @@ fn initial_git_status(root: &Path) -> Result<String, git2::Error> {
     }
     Ok(lines.join("\n"))
 }
-fn load(path: &Path) -> Result<Snapshot, String> {
+const KEYCHAIN_SERVICE: &str = "sh.appliance.workbench.baseline";
+const KEYCHAIN_ACCOUNT: &str = "hmac-sha256-v1";
+static KEY_LOCK: Mutex<()> = Mutex::new(());
+fn authentication_error(reason: &str) -> String {
+    format!("Comparison unavailable: baseline authentication failed ({reason}). Restore the original baseline and keychain access. Rebaseline is unavailable; automatic recapture is disabled.")
+}
+fn keychain_key(entry: &keyring::Entry, create: bool) -> Result<Vec<u8>, String> {
+    let _lock = KEY_LOCK
+        .lock()
+        .map_err(|_| authentication_error("keychain lock unavailable"))?;
+    match entry.get_secret() {
+        Ok(key) if key.len() == 32 => Ok(key),
+        Ok(_) => Err(authentication_error(
+            "keychain signing key has an invalid length",
+        )),
+        Err(keyring::Error::NoEntry) if create => {
+            let mut key = vec![0; 32];
+            getrandom::fill(&mut key)
+                .map_err(|_| authentication_error("OS randomness unavailable"))?;
+            entry.set_secret(&key).map_err(|_| {
+                authentication_error("could not store signing key in the OS keychain")
+            })?;
+            Ok(key)
+        }
+        Err(keyring::Error::NoEntry) => Err(authentication_error(
+            "signing key is missing from the OS keychain",
+        )),
+        Err(_) => Err(authentication_error(
+            "OS keychain access was denied or unavailable",
+        )),
+    }
+}
+#[cfg(not(test))]
+fn signing_key(create: bool) -> Result<Vec<u8>, String> {
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .map_err(|_| authentication_error("OS keychain entry unavailable"))?;
+    keychain_key(&entry, create)
+}
+// Filesystem regressions use an isolated key; the opt-in native keychain test below
+// exercises real OS storage through the same keychain_key function.
+#[cfg(test)]
+thread_local! {
+    static TEST_KEYCHAIN_ACCOUNT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    static TEST_KEYCHAIN_DENIED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+fn signing_key(create: bool) -> Result<Vec<u8>, String> {
+    if TEST_KEYCHAIN_DENIED.with(|denied| denied.get()) {
+        return Err(authentication_error(
+            "OS keychain access was denied or unavailable",
+        ));
+    }
+    TEST_KEYCHAIN_ACCOUNT.with(|account| match account.borrow().as_deref() {
+        Some(account) => keychain_key(
+            &keyring::Entry::new(KEYCHAIN_SERVICE, account).unwrap(),
+            create,
+        ),
+        None => Ok(vec![0x42; 32]),
+    })
+}
+fn baseline_mac(key: &[u8], path: &Path, bytes: &[u8]) -> Result<Hmac<Sha256>, String> {
+    let mut mac = Hmac::<Sha256>::new_from_slice(key)
+        .map_err(|_| authentication_error("invalid signing key"))?;
+    mac.update(b"appliance-workbench-baseline-v1\0");
+    // Bind the tag to its host-owned storage location as well as every stored byte.
+    mac.update(path.as_os_str().as_encoded_bytes());
+    mac.update(&[0]);
+    mac.update(bytes);
+    Ok(mac)
+}
+fn authenticate(path: &Path, bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let tag = fs::read(path.with_extension("hmac")).map_err(|_| {
+        authentication_error(
+            "authentication tag missing or unreadable; unsigned legacy baselines cannot be trusted",
+        )
+    })?;
+    let key = signing_key(false)?;
+    baseline_mac(&key, path, bytes)?
+        .verify_slice(&tag)
+        .map_err(|_| authentication_error("stored bytes or authentication tag changed"))?;
+    Ok(tag)
+}
+fn load(path: &Path) -> Result<Arc<Snapshot>, String> {
     let bytes = fs::read(path).map_err(|error| {
         match fs::read_to_string(path.with_extension("attempt")) {
             Ok(reason) => format!("Comparison unavailable: baseline capture failed ({reason})"),
@@ -388,9 +529,43 @@ fn load(path: &Path) -> Result<Snapshot, String> {
             }
         }
     })?;
-    serde_json::from_slice(&bytes).map_err(|_| {
-        "Comparison unavailable: stored baseline is invalid; automatic recapture is disabled".into()
-    })
+    let tag = authenticate(path, &bytes)?;
+    // Never use metadata/mtime as authentication. Re-read and authenticate bytes
+    // with the current key on EVERY call, including cache hits.
+    let mut cache = baselines().lock().map_err(err)?;
+    if let Some((cached_tag, value)) = cache.entries.get(path) {
+        if cached_tag == &tag {
+            return Ok(Arc::clone(value));
+        }
+    }
+    let stored: StoredBaseline = serde_json::from_slice(&bytes).map_err(|_| format_error())?;
+    if stored.version != BASELINE_VERSION {
+        return Err(format_error());
+    }
+    let value = Arc::new(stored.snapshot);
+    let retained = value
+        .files
+        .values()
+        .map(|file| file.bytes.len())
+        .sum::<usize>();
+    if let Some((_, previous)) = cache.entries.remove(path) {
+        cache.retained_bytes -= previous
+            .files
+            .values()
+            .map(|file| file.bytes.len())
+            .sum::<usize>();
+    }
+    if cache.retained_bytes + retained > TREE_LIMIT || cache.entries.len() >= 64 {
+        cache.entries.clear();
+        cache.retained_bytes = 0;
+    }
+    if retained <= TREE_LIMIT {
+        cache.retained_bytes += retained;
+        cache
+            .entries
+            .insert(path.to_path_buf(), (tag, Arc::clone(&value)));
+    }
+    Ok(value)
 }
 fn size_label(size: u64) -> String {
     if size >= 1024 * 1024 {
@@ -468,12 +643,13 @@ fn refresh_from(root: &Path, path: &Path, preview_budget: usize) -> Result<Inspe
         );
     }
     let result = Inspection {
+        baseline_id: baseline.as_ref().ok().map(|b| b.snapshot_id.clone()),
         snapshot_id: live.snapshot_id.clone(),
         directory: live.directory.clone(),
         captured_at: baseline.as_ref().ok().map(|b| b.captured_at.clone()),
         refreshed_at: live.captured_at.clone(),
         comparison_error: baseline.as_ref().err().cloned(),
-        initial_git_status: baseline.ok().map(|b| b.initial_git_status),
+        initial_git_status: baseline.ok().map(|b| b.initial_git_status.clone()),
         entries: entries.into_values().collect(),
     };
     current()
@@ -500,11 +676,32 @@ pub async fn inspection_read(
                 "Snapshot changed in another reader; refresh inspection before reading".into(),
             );
         }
-        let base = load(&location).ok();
-        preview(base.as_ref(), live, path, large)
+        preview_from(&location, live, path, large)
     })
     .await
     .map_err(err)?
+}
+
+fn preview_from(
+    location: &Path,
+    live: &Snapshot,
+    path: String,
+    large: bool,
+) -> Result<Preview, String> {
+    let base = load(location);
+    let mut result =
+        preview(base.as_deref().ok(), live, path, large).map_err(|error| match &base {
+            Err(reason) => format!("{reason} {error}"),
+            Ok(_) => error,
+        })?;
+    if let Err(reason) = base {
+        result.diff = None;
+        result.notice = Some(match result.notice {
+            Some(notice) => format!("{reason} {notice}"),
+            None => reason,
+        });
+    }
+    Ok(result)
 }
 
 fn preview(
@@ -635,6 +832,364 @@ mod tests {
         root
     }
     #[test]
+    #[ignore = "requires WORKBENCH_STORAGE_MEASURE=1; writes deterministic 60 MiB corpus"]
+    fn storage_measurement() {
+        assert_eq!(
+            std::env::var("WORKBENCH_STORAGE_MEASURE").as_deref(),
+            Ok("1")
+        );
+        let root = fixture();
+        let tree = root.join("workspace");
+        let path = root.join("host-store/baseline.json");
+        for index in 0..60 {
+            fs::write(
+                tree.join(format!("file-{index:02}.txt")),
+                vec![b'x'; 1024 * 1024],
+            )
+            .unwrap();
+        }
+        capture_into(&tree, &path).unwrap();
+        let mut samples = Vec::new();
+        for _ in 0..3 {
+            *baselines().lock().unwrap() = BaselineCache::default();
+            let start = std::time::Instant::now();
+            let value = load(&path).unwrap();
+            samples.push(start.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(value.files.len(), 60);
+            assert_eq!(
+                value
+                    .files
+                    .values()
+                    .map(|file| file.bytes.len())
+                    .sum::<usize>(),
+                60 * 1024 * 1024
+            );
+            assert!(value
+                .files
+                .values()
+                .all(|file| file.bytes.iter().all(|byte| *byte == b'x')));
+        }
+        let mut cached = Vec::new();
+        for _ in 0..3 {
+            let start = std::time::Instant::now();
+            let value = load(&path).unwrap();
+            cached.push(start.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(value.files.len(), 60);
+        }
+        cached.sort_by(f64::total_cmp);
+        println!(
+            "STORAGE_CACHE {{\"loadMedianMs\":{},\"samplesMs\":{:?}}}",
+            cached[1], cached
+        );
+        samples.sort_by(f64::total_cmp);
+        println!("STORAGE_MEASUREMENT {{\"corpusBytes\":62914560,\"storedBytes\":{},\"loadMedianMs\":{},\"samplesMs\":{:?}}}", fs::metadata(&path).unwrap().len(), samples[1], samples);
+        fs::remove_dir_all(root).unwrap();
+    }
+    fn write_authenticated(path: &Path, bytes: &[u8]) {
+        fs::write(path, bytes).unwrap();
+        let tag = baseline_mac(&signing_key(true).unwrap(), path, bytes)
+            .unwrap()
+            .finalize()
+            .into_bytes();
+        fs::write(path.with_extension("hmac"), tag).unwrap();
+    }
+    #[test]
+    fn storage_v2_roundtrips_binary_bytes_compactly_and_caches_parsing() {
+        let root = fixture();
+        let tree = root.join("workspace");
+        let path = root.join("host-store/baseline.json");
+        let bytes: Vec<u8> = (0..1024 * 1024).map(|index| (index % 256) as u8).collect();
+        fs::write(tree.join("all-bytes.bin"), &bytes).unwrap();
+        capture_into(&tree, &path).unwrap();
+        let first = load(&path).unwrap();
+        let second = load(&path).unwrap();
+        assert_eq!(first.files["all-bytes.bin"].bytes, bytes);
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "unchanged authenticated payload must reuse parsed snapshot"
+        );
+        let json: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(json["version"], 2);
+        assert!(json["snapshot"]["files"]["all-bytes.bin"]["bytes"].is_string());
+        assert!(fs::metadata(&path).unwrap().len() < (bytes.len() * 2) as u64);
+        // A newly authenticated payload at the same path must replace the cache.
+        let mut next = (*first).clone();
+        next.snapshot_id = "changed-snapshot".into();
+        write_authenticated(&path, &encode_baseline(next).unwrap());
+        let third = load(&path).unwrap();
+        assert!(!Arc::ptr_eq(&first, &third));
+        assert_eq!(third.snapshot_id, "changed-snapshot");
+        // Removing authentication after a cache hit still fails closed.
+        fs::remove_file(path.with_extension("hmac")).unwrap();
+        assert!(load(&path).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+    fn assert_old_version_visible(surface: &str) {
+        let root = fixture();
+        let tree = root.join("workspace");
+        let path = root.join("host-store/baseline.json");
+        fs::write(tree.join("app.txt"), "original").unwrap();
+        capture_into(&tree, &path).unwrap();
+        let live = snapshot(&tree).unwrap();
+        let valid = fs::read(&path).unwrap();
+        let mut old = serde_json::to_value(&live).unwrap();
+        old["files"]["app.txt"]["bytes"] =
+            serde_json::json!([111, 114, 105, 103, 105, 110, 97, 108]);
+        let mut unknown: serde_json::Value = serde_json::from_slice(&valid).unwrap();
+        unknown["version"] = serde_json::json!(999);
+        for bytes in [
+            serde_json::to_vec(&old).unwrap(),
+            serde_json::to_vec(&unknown).unwrap(),
+        ] {
+            write_authenticated(&path, &valid);
+            assert!(load(&path).is_ok());
+            write_authenticated(&path, &bytes);
+            match surface {
+                "load" => assert!(load(&path).err().unwrap().contains("expected version 2")),
+                "reopen" => assert!(capture_into(&tree, &path)
+                    .unwrap_err()
+                    .contains("Rebaseline is unavailable")),
+                "refresh" => {
+                    let refresh = refresh_from(&tree, &path, TREE_LIMIT).unwrap();
+                    assert!(refresh
+                        .comparison_error
+                        .unwrap()
+                        .contains("expected version 2"));
+                }
+                "preview" => {
+                    let preview = preview_from(&path, &live, "app.txt".into(), false).unwrap();
+                    assert!(preview.diff.is_none());
+                    assert!(preview
+                        .notice
+                        .unwrap()
+                        .contains("Rebaseline is unavailable"));
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                fs::read(&path).unwrap(),
+                bytes,
+                "never silently rewrite old capture"
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn storage_old_or_unknown_versions_load() {
+        assert_old_version_visible("load");
+    }
+    #[test]
+    fn storage_old_or_unknown_versions_reopen() {
+        assert_old_version_visible("reopen");
+    }
+    #[test]
+    fn storage_old_or_unknown_versions_refresh() {
+        assert_old_version_visible("refresh");
+    }
+    #[test]
+    fn storage_old_or_unknown_versions_preview() {
+        assert_old_version_visible("preview");
+    }
+    #[test]
+    fn capture_key_failure_retains_cause_on_later_reads() {
+        let root = fixture();
+        let tree = root.join("workspace");
+        fs::write(tree.join("app.txt"), "original").unwrap();
+        let control = root.join("host-store/control.json");
+        capture_into(&tree, &control).unwrap();
+        assert!(load(&control).is_ok());
+        let path = root.join("host-store/baseline.json");
+        TEST_KEYCHAIN_DENIED.with(|denied| denied.set(true));
+        let capture_error = capture_into(&tree, &path);
+        TEST_KEYCHAIN_DENIED.with(|denied| denied.set(false));
+        assert!(capture_error
+            .unwrap_err()
+            .contains("keychain access was denied"));
+        // Key access has recovered: these reads must still report the actual
+        // failed capture, without promoting a retry or mislabelling it as legacy.
+        let load_error = load(&path).err().unwrap();
+        assert!(
+            load_error.contains("keychain access was denied"),
+            "{load_error}"
+        );
+        assert!(!load_error.contains("unsigned legacy"));
+        assert!(capture_into(&tree, &path)
+            .unwrap_err()
+            .contains("keychain access was denied"));
+        assert!(refresh_from(&tree, &path, TREE_LIMIT)
+            .unwrap()
+            .comparison_error
+            .unwrap()
+            .contains("keychain access was denied"));
+        let preview =
+            preview_from(&path, &snapshot(&tree).unwrap(), "app.txt".into(), false).unwrap();
+        assert!(preview
+            .notice
+            .unwrap()
+            .contains("keychain access was denied"));
+        assert!(path.with_extension("attempt").exists());
+        assert!(!path.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+    fn tampered_baseline() -> (PathBuf, PathBuf, PathBuf) {
+        let root = fixture();
+        let tree = root.join("workspace");
+        let path = root.join("host-store/baseline.json");
+        fs::write(tree.join("app.txt"), "original").unwrap();
+        capture_into(&tree, &path).unwrap();
+        // Positive control: authentic capture passes on every host read surface.
+        let live = snapshot(&tree).unwrap();
+        assert!(load(&path).is_ok());
+        assert!(capture_into(&tree, &path).is_ok());
+        assert!(refresh_from(&tree, &path, TREE_LIMIT)
+            .unwrap()
+            .comparison_error
+            .is_none());
+        assert!(preview_from(&path, &live, "app.txt".into(), false)
+            .unwrap()
+            .diff
+            .is_some());
+        let mut forged = (*load(&path).unwrap()).clone();
+        forged.files.get_mut("app.txt").unwrap().bytes = b"agent rewrite".to_vec();
+        fs::write(&path, encode_baseline(forged).unwrap()).unwrap();
+        (root, tree, path)
+    }
+    #[test]
+    fn hmac_rejects_valid_json_tamper_on_load() {
+        let (root, _, path) = tampered_baseline();
+        assert!(load(&path)
+            .err()
+            .unwrap()
+            .contains("baseline authentication failed"));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn hmac_rejects_valid_json_tamper_on_reopen() {
+        let (root, tree, path) = tampered_baseline();
+        let bytes = fs::read(&path).unwrap();
+        assert!(capture_into(&tree, &path)
+            .unwrap_err()
+            .contains("baseline authentication failed"));
+        assert_eq!(fs::read(path).unwrap(), bytes);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn hmac_rejects_valid_json_tamper_on_refresh() {
+        let (root, tree, path) = tampered_baseline();
+        let result = refresh_from(&tree, &path, TREE_LIMIT).unwrap();
+        assert!(result
+            .comparison_error
+            .unwrap()
+            .contains("baseline authentication failed"));
+        assert!(result.baseline_id.is_none());
+        assert!(result
+            .entries
+            .iter()
+            .all(|entry| entry.state == "unavailable"));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn hmac_rejects_valid_json_tamper_on_preview() {
+        let (root, tree, path) = tampered_baseline();
+        let live = snapshot(&tree).unwrap();
+        let result = preview_from(&path, &live, "app.txt".into(), false).unwrap();
+        assert!(result.diff.is_none());
+        assert_eq!(result.text.as_deref(), Some("original"));
+        assert!(result
+            .notice
+            .unwrap()
+            .contains("baseline authentication failed"));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn hmac_rejects_deleted_file_preview_with_actionable_reason() {
+        let (root, tree, path) = tampered_baseline();
+        fs::remove_file(tree.join("app.txt")).unwrap();
+        let live = snapshot(&tree).unwrap();
+        let error = preview_from(&path, &live, "app.txt".into(), false)
+            .err()
+            .unwrap();
+        assert!(error.contains("baseline authentication failed"));
+        assert!(error.contains("Rebaseline is unavailable"));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn hmac_rejects_unsigned_and_relocated_baselines() {
+        let root = fixture();
+        let tree = root.join("workspace");
+        let path = root.join("host-store/baseline.json");
+        capture_into(&tree, &path).unwrap();
+        let other = root.join("host-store/other.json");
+        fs::copy(&path, &other).unwrap();
+        fs::copy(path.with_extension("hmac"), other.with_extension("hmac")).unwrap();
+        assert!(load(&other).is_err());
+        fs::remove_file(path.with_extension("hmac")).unwrap();
+        assert!(load(&path).err().unwrap().contains("unsigned legacy"));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires WORKBENCH_KEYCHAIN_TEST=1 and an unlocked macOS login keychain"]
+    fn hmac_native_keychain_roundtrip_and_negative_controls() {
+        assert_eq!(std::env::var("WORKBENCH_KEYCHAIN_TEST").as_deref(), Ok("1"));
+        let account = format!("{KEYCHAIN_ACCOUNT}-test-{}", uuid::Uuid::new_v4());
+        struct TestKey(keyring::Entry);
+        impl Drop for TestKey {
+            fn drop(&mut self) {
+                let _ = self.0.delete_credential();
+                TEST_KEYCHAIN_ACCOUNT.with(|account| *account.borrow_mut() = None);
+            }
+        }
+        let test_key = TestKey(keyring::Entry::new(KEYCHAIN_SERVICE, &account).unwrap());
+        let entry = &test_key.0;
+        TEST_KEYCHAIN_ACCOUNT.with(|slot| *slot.borrow_mut() = Some(account));
+        // Missing reads must never generate a replacement key.
+        assert!(matches!(keychain_key(entry, false), Err(reason) if reason.contains("missing")));
+        let key = keychain_key(entry, true).unwrap();
+        assert!(keychain_key(entry, false).is_ok_and(|stored| stored == key));
+        let path = Path::new("host-store/baseline.json");
+        let bytes = b"authentic baseline";
+        let tag = baseline_mac(&key, path, bytes)
+            .unwrap()
+            .finalize()
+            .into_bytes();
+        assert!(
+            baseline_mac(&keychain_key(entry, false).unwrap(), path, bytes)
+                .unwrap()
+                .verify_slice(&tag)
+                .is_ok()
+        );
+        assert!(baseline_mac(&key, path, b"tampered baseline")
+            .unwrap()
+            .verify_slice(&tag)
+            .is_err());
+        let root = fixture();
+        let tree = root.join("workspace");
+        let stored = root.join("host-store/baseline.json");
+        fs::write(tree.join("app.txt"), "authentic").unwrap();
+        capture_into(&tree, &stored).unwrap();
+        let first = load(&stored).unwrap();
+        assert!(Arc::ptr_eq(&first, &load(&stored).unwrap()));
+        entry.set_secret(&[0x99; 32]).unwrap();
+        assert!(
+            load(&stored).is_err(),
+            "cache hit must reauthenticate with current OS key"
+        );
+        assert!(
+            baseline_mac(&keychain_key(entry, false).unwrap(), path, bytes)
+                .unwrap()
+                .verify_slice(&tag)
+                .is_err()
+        );
+        entry.delete_credential().unwrap();
+        assert!(keychain_key(entry, false).is_err());
+        assert!(
+            load(&stored).is_err(),
+            "cache hit must fail after OS key deletion"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn dirty_git_state_is_initial_context_not_a_since_baseline_change() {
         let root = fixture();
         let tree = root.join("workspace");
@@ -659,6 +1214,10 @@ mod tests {
         fs::write(tree.join("app.txt"), "dirty at open").unwrap();
         capture_into(&tree, &baseline).unwrap();
         let initial = refresh_from(&tree, &baseline, TREE_LIMIT).unwrap();
+        assert_eq!(
+            initial.baseline_id.as_deref(),
+            Some(load(&baseline).unwrap().snapshot_id.as_str())
+        );
         assert!(initial.initial_git_status.unwrap().contains("app.txt"));
         assert_eq!(
             initial

@@ -29,9 +29,20 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+const proposal = {
+  source: 'fixture' as const,
+  directory: '/project',
+  proposalId: 'ready-1',
+  sessionId: 'agent-fixture',
+  sessionStatus: 'done' as const,
+  revision: 'snapshot-1',
+  baselineId: 'baseline-1',
+  summary: 'Fixture result',
+};
 const path = '.appliance/agent-results/agent-example.json';
 const snapshot = (generated: boolean): Inspection => ({
   snapshotId: 'snapshot-1',
+  baselineId: 'baseline-1',
   directory: '/project',
   capturedAt: '2026-11-17T01:00:00Z',
   refreshedAt: '2026-11-17T02:00:00Z',
@@ -39,9 +50,13 @@ const snapshot = (generated: boolean): Inspection => ({
   initialGitStatus: '',
   entries: generated ? [{ path, size: 9, state: 'added', generated: true, issue: null }] : [],
 });
-async function mount(generated: boolean, route: boolean) {
+async function mount(generated: boolean, route: boolean, readiness = false) {
   const refresh = vi.fn().mockResolvedValue(snapshot(generated));
-  const workspace = { directory: '/project', binding: { version: 1 }, sessions: [] };
+  const workspace = {
+    directory: '/project',
+    binding: { version: 1 },
+    sessions: readiness ? [{ sessionId: 'agent-fixture', status: 'done' }] : [],
+  };
   const host = {
     platform: 'macos',
     inspectionRefresh: refresh,
@@ -58,7 +73,21 @@ async function mount(generated: boolean, route: boolean) {
           <MemoryRouter initialEntries={['/workbench/%2Fproject']}>
             {route ? (
               <Routes>
-                <Route path="/workbench/:workspaceId" element={<WorkbenchDetailPage />} />
+                <Route
+                  path="/workbench/:workspaceId"
+                  element={
+                    <WorkbenchDetailPage
+                      readinessSource={
+                        readiness
+                          ? {
+                              subscribe: () => () => {},
+                              getSnapshot: () => proposal,
+                            }
+                          : undefined
+                      }
+                    />
+                  }
+                />
               </Routes>
             ) : (
               <WorkspaceInspector directory="/project" />
@@ -74,6 +103,8 @@ async function mount(generated: boolean, route: boolean) {
   return {
     container,
     refresh,
+    client,
+    workspace,
     cleanup: async () => {
       await act(async () => root.unmount());
       container.remove();
@@ -129,3 +160,63 @@ it.each([false, true])(
     }
   }
 );
+
+it('real detail reconciles host session and inspection refresh evidence before presenting a proposal', async () => {
+  const { container, refresh, client, workspace, cleanup } = await mount(false, true, true);
+  const text = () => container.textContent;
+  const refreshButton = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Refresh inspection')!;
+  const refreshTo = async (value: Inspection) => {
+    refresh.mockResolvedValue(value);
+    await act(async () => {
+      refreshButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+  };
+  try {
+    expect(text()).toContain('Agent-proposed · not approved');
+    for (const sessions of [[], [{ sessionId: 'agent-fixture', status: 'running' }]]) {
+      await act(async () => {
+        client.setQueryData(['workbench', '/project'], { ...workspace, sessions });
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      expect(text()).toContain('Stale proposal — Session unknown');
+    }
+    await act(async () => {
+      client.setQueryData(['workbench', '/project'], workspace);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(text()).toContain('Agent-proposed · not approved');
+    for (const value of [
+      { ...snapshot(false), snapshotId: 'snapshot-2' },
+      { ...snapshot(false), baselineId: 'baseline-2' },
+    ]) {
+      await refreshTo(value);
+      expect(text()).toContain('Stale proposal — The workspace baseline or snapshot');
+    }
+    await refreshTo(snapshot(false));
+    expect(text()).toContain('Agent-proposed · not approved');
+    await refreshTo({ ...snapshot(false), comparisonError: 'Baseline authentication failed' });
+    expect(text()).toContain('Stale proposal — Freshness unknown');
+  } finally {
+    await cleanup();
+  }
+});
+
+it('real detail invalidates readiness after a rejected refresh following success', async () => {
+  const { container, refresh, cleanup } = await mount(false, true, true);
+  try {
+    expect(container.textContent).toContain('Agent-proposed · not approved');
+    refresh.mockRejectedValue(new Error('host unavailable after successful inspection'));
+    await act(async () => {
+      [...container.querySelectorAll('button')].find((button) => button.textContent === 'Refresh inspection')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(container.textContent).toContain('host unavailable after successful inspection');
+    expect(container.textContent).toContain('Comparison unavailable');
+    expect(container.textContent).toContain('Stale proposal — Freshness unknown');
+    expect(container.textContent).not.toContain('Agent-proposed · not approved');
+  } finally {
+    await cleanup();
+  }
+});

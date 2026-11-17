@@ -8,6 +8,8 @@ export interface InspectionEntry {
 }
 export interface Inspection {
   snapshotId: string;
+  /** Absent on older hosts: readiness must remain unknown. */
+  baselineId?: string | null;
   directory: string;
   capturedAt: string | null;
   refreshedAt: string;
