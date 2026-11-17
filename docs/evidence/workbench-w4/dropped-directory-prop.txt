@@ -1,12 +1,12 @@
 
  RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
 
- ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 1 failed) 691ms
-   ✓ discloses generated-only changes and reveals rows (real detail route=false) 217ms
-   × discloses generated-only changes and reveals rows (real detail route=true) 105ms
+ ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 1 failed) 323ms
+   ✓ discloses generated-only changes and reveals rows (real detail route=false) 77ms
+   × discloses generated-only changes and reveals rows (real detail route=true) 41ms
      → expected "spy" to be called with arguments: [ '/project' ]
 
-Received: 
+Received:
 
   1st spy call:
 
@@ -18,15 +18,15 @@ Received:
 
 Number of calls: 1
 
-   ✓ negative control: genuinely unchanged shows No changes (route=false) 109ms
-   ✓ negative control: genuinely unchanged shows No changes (route=true) 54ms
-   ✓ failed refresh retains a stale snapshot without a clean comparison (route=false) 110ms
-   ✓ failed refresh retains a stale snapshot without a clean comparison (route=true) 96ms
+   ✓ negative control: genuinely unchanged shows No changes (route=false) 39ms
+   ✓ negative control: genuinely unchanged shows No changes (route=true) 38ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=false) 66ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=true) 61ms
 
  Test Files  1 failed (1)
       Tests  1 failed | 5 passed (6)
-   Start at  08:52:09
-   Duration  2.47s (transform 293ms, setup 0ms, collect 1.01s, tests 691ms, environment 425ms, prepare 103ms)
+   Start at  09:21:08
+   Duration  920ms (transform 104ms, setup 0ms, collect 319ms, tests 323ms, environment 135ms, prepare 29ms)
 
 undefined
 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
@@ -37,7 +37,7 @@ undefined
  FAIL  src/pages/workbench/workspace-inspector.test.tsx > discloses generated-only changes and reveals rows (real detail route=true)
 AssertionError: expected "spy" to be called with arguments: [ '/project' ]
 
-Received: 
+Received:
 
   1st spy call:
 

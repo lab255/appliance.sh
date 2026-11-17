@@ -106,6 +106,8 @@ export interface OpenTerminalOptions {
 
 /** Light, render-safe projection of a session for the chrome. */
 export interface TerminalSessionMeta {
+  /** Monotonic refusal event; contains no typed input. */
+  inputRefusal?: number;
   inputMode?: 'observe' | 'interactive';
   sessionId?: string;
   clusterName?: string;
@@ -266,6 +268,7 @@ let nextSessionSeq = 0;
 export function TerminalSessionsProvider({ children }: { children: React.ReactNode }) {
   const host = useHost();
   const liveRef = React.useRef<Map<string, LiveSession>>(new Map());
+  const refusalSequence = React.useRef(0);
   const holderRef = React.useRef<HTMLDivElement | null>(null);
   const [sessions, setSessions] = React.useState<TerminalSessionMeta[]>([]);
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -306,7 +309,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
       const live = liveRef.current.get(id);
       if (!live || !live.agent) return;
       live.inputMode = mode;
-      live.term.options.disableStdin = mode === 'observe';
+      live.term.options.cursorBlink = mode !== 'observe';
       patchMeta(id, { inputMode: mode });
     },
     [patchMeta]
@@ -379,8 +382,10 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
       }
 
       const term = new Terminal({
-        disableStdin: opts.inputMode === 'observe',
-        cursorBlink: true,
+        // Keep input events observable so the write guard can explain refusals.
+        // disableStdin would swallow keystrokes before onData, silently.
+        disableStdin: false,
+        cursorBlink: opts.inputMode !== 'observe',
         fontSize: 12,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
         theme: { background: getComputedStyle(document.documentElement).getPropertyValue('--color-background').trim() },
@@ -459,6 +464,7 @@ export function TerminalSessionsProvider({ children }: { children: React.ReactNo
           // Read the mutable mode at delivery time, never the opening render's mode.
           const sub = term.onData((d) => {
             if (live.inputMode === 'interactive') void live.session?.write(d);
+            else patchMeta(id, { inputRefusal: ++refusalSequence.current });
           });
           live.disposeInput = () => sub.dispose();
           patchMeta(id, { status: 'open' });

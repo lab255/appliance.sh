@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { useTerminalSessions, type TerminalSessionMeta } from '@/providers/terminal-sessions-provider';
 
@@ -6,15 +7,31 @@ export function AgentInputMode({ session, type }: { session?: TerminalSessionMet
   const { setInputMode } = useTerminalSessions();
   const observing = !session || session.inputMode === 'observe';
   const unavailable = !session || session.status !== 'open';
+  const [refused, setRefused] = React.useState(false);
+  const seenRefusal = React.useRef({ id: session?.id, sequence: session?.inputRefusal });
+  React.useEffect(() => {
+    const previous = seenRefusal.current;
+    seenRefusal.current = { id: session?.id, sequence: session?.inputRefusal };
+    if (!observing || previous.id !== session?.id || !session?.inputRefusal) {
+      setRefused(false);
+      return;
+    }
+    if (previous.sequence === session.inputRefusal) return;
+    setRefused(true);
+    const timer = setTimeout(() => setRefused(false), 3000);
+    return () => clearTimeout(timer);
+  }, [observing, session?.id, session?.inputRefusal]);
   return (
     <section aria-label="Agent input mode" className="space-y-2 border-b border-border p-3 text-sm">
       <p role="status">{!session ? 'No observation attached' : observing ? 'Observing · read-only' : 'Interactive'}</p>
-      <p className="min-h-10">
-        {!session
-          ? 'Choose Observe to open this session in the terminal dock.'
-          : observing
-            ? 'Read-only view. You can copy output; this view sends no input. The agent may still change files.'
-            : 'Interactive terminal. Input is sent to the agent.'}
+      <p className="min-h-10" role="status">
+        {refused
+          ? 'Input not sent — observing read-only. Choose Interact with agent.'
+          : !session
+            ? 'Choose Observe to open this session in the terminal dock.'
+            : observing
+              ? 'Read-only view. You can copy output; this view sends no input. The agent may still change files.'
+              : 'Interactive terminal. Input is sent to the agent.'}
       </p>
       <Button
         size="sm"

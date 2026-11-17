@@ -1,0 +1,56 @@
+
+ RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx (3 tests | 1 failed) 116ms
+   ✓ guards every onData write, preserves shared mode, and Hide keeps the PTY alive 39ms
+   ✓ keeps Interact focusable but guards activation while connecting 5ms
+   × Workbench Observe defaults to read-only through the real component and provider 72ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array [
+      "Workbench must not forward this",
+    ]
+
+
+Number of calls: 1
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  09:21:02
+   Duration  515ms (transform 54ms, setup 0ms, collect 126ms, tests 116ms, environment 133ms, prepare 29ms)
+
+undefined
+/Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/providers/terminal-sessions-provider.test.tsx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/providers/terminal-sessions-provider.test.tsx > Workbench Observe defaults to read-only through the real component and provider
+AssertionError: expected "spy" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st spy call:
+
+    Array [
+      "Workbench must not forward this",
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/providers/terminal-sessions-provider.test.tsx:254:23
+    252|     expect(open).toHaveBeenCalledOnce();
+    253|     await act(async () => terminals[0].input('Workbench must not forwa…
+    254|     expect(write).not.toHaveBeenCalled();
+       |                       ^
+    255|     expect(container.textContent).toContain('Observing · read-only');
+    256|     const interact = [...container.querySelectorAll('button')].find(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

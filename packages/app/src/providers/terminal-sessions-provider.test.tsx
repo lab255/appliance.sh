@@ -1,13 +1,21 @@
 // @vitest-environment jsdom
 import { act } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SessionsObservation } from '@/pages/workbench/sessions-observation';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { HostProvider } from './host-provider';
 import { AgentInputMode } from '@/pages/workbench/agent-input-mode';
 import { TerminalSessionsProvider, useTerminalSessions } from './terminal-sessions-provider';
 import type { ConsoleHost } from '@/lib/host';
+vi.mock('@/components/ui/confirm-dialog', () => ({ useConfirm: () => async () => false }));
 const terminals = vi.hoisted(
-  () => [] as { input: (data: string) => void; options: { disableStdin?: boolean }; focusCalls: number }[]
+  () =>
+    [] as {
+      input: (data: string) => void;
+      options: { disableStdin?: boolean; cursorBlink?: boolean };
+      focusCalls: number;
+    }[]
 );
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
@@ -16,7 +24,7 @@ vi.mock('@xterm/xterm', () => ({
     cols = 80;
     rows = 24;
     buffer = { active: { type: 'normal' } };
-    constructor(options: { disableStdin?: boolean }) {
+    constructor(options: { disableStdin?: boolean; cursorBlink?: boolean }) {
       this.options = options;
       terminals.push(this);
     }
@@ -58,7 +66,11 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   terminals.length = 0;
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 it('guards every onData write, preserves shared mode, and Hide keeps the PTY alive', async () => {
   const write = vi.fn();
   const close = vi.fn();
@@ -90,12 +102,28 @@ it('guards every onData write, preserves shared mode, and Hide keeps the PTY ali
     });
     expect(api.sessions[0].inputMode).toBe('observe');
     expect(container.textContent?.match(/Observing · read-only/g)).toHaveLength(2);
-    expect(terminals[0].options.disableStdin).toBe(true);
+    expect(terminals[0].options.disableStdin).toBe(false); // input must reach the refusal guard
+    expect(terminals[0].options.cursorBlink).toBe(false);
     expect(terminals[0].focusCalls).toBe(0); // drawer must capture opener before attachView focuses
 
-    for (const data of ['typing', '\u001b[200~pasted\u001b[201~', '\r', '\u0003', '\u001b[A']) terminals[0].input(data);
+    vi.useFakeTimers();
+    const refusal = 'Input not sent — observing read-only. Choose Interact with agent.';
+    await act(async () => {
+      for (const data of ['typing', '\u001b[200~pasted\u001b[201~', '\r', '\u0003', '\u001b[A'])
+        terminals[0].input(data);
+    });
+    expect([...container.querySelectorAll('[role=status]')].some((node) => node.textContent === refusal)).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(container.textContent).not.toContain(refusal);
+    await act(async () => terminals[0].input('another refused write'));
+    expect(container.textContent).toContain(refusal);
+    vi.useRealTimers();
     expect(write).not.toHaveBeenCalled();
     await act(async () => api.setInputMode(id, 'interactive'));
+    expect(container.textContent).not.toContain(refusal);
+    expect(terminals[0].options.cursorBlink).toBe(true);
     terminals[0].input('negative control: deliberate input');
     expect(write).toHaveBeenCalledExactlyOnceWith('negative control: deliberate input');
     await act(async () => {
@@ -103,10 +131,13 @@ it('guards every onData write, preserves shared mode, and Hide keeps the PTY ali
     });
     expect(api.sessions[0].inputMode).toBe('interactive');
     expect(container.textContent?.match(/Interactive terminal. Input is sent to the agent./g)).toHaveLength(2); // existing interactive tab is never falsely relabeled
+    terminals[0].input('after dedupe');
+    expect(write).toHaveBeenCalledTimes(2);
     expect(open).toHaveBeenCalledTimes(1);
     await act(async () => api.setInputMode(id, 'observe'));
-    terminals[0].input('blocked again');
-    expect(write).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain(refusal); // old refusals do not reappear on mode changes
+    await act(async () => terminals[0].input('blocked again'));
+    expect(write).toHaveBeenCalledTimes(2);
     await act(async () => api.hide());
     expect(api.activeId).toBeNull();
     expect(api.sessions).toHaveLength(1);
@@ -125,8 +156,8 @@ it('guards every onData write, preserves shared mode, and Hide keeps the PTY ali
       api.openSession({ ...opts, target: 'other', clusterName: 'other', inputMode: 'observe' });
     });
     expect(open).toHaveBeenCalledTimes(3);
-    terminals[2].input('wrong machine');
-    expect(write).toHaveBeenCalledTimes(2);
+    await act(async () => terminals[2].input('wrong machine'));
+    expect(write).toHaveBeenCalledTimes(3);
   } finally {
     await act(async () => root.unmount());
   }
@@ -170,5 +201,67 @@ it('keeps Interact focusable but guards activation while connecting', async () =
   } finally {
     await act(async () => root.unmount());
     container.remove();
+  }
+});
+
+it('Workbench Observe defaults to read-only through the real component and provider', async () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  const write = vi.fn();
+  const open = vi.fn().mockResolvedValue({ write, close: vi.fn(), resize: vi.fn() });
+  const instance = {
+    shell: { list: vi.fn().mockResolvedValue([]) },
+    agent: {
+      list: vi.fn().mockResolvedValue([{ sessionId: 'agent-workbench', type: 'codex', status: 'running', live: true }]),
+    },
+  };
+  const host = {
+    terminal: { open },
+    vm: { list: vi.fn().mockResolvedValue([{ name: 'vm', running: true }]), instance: () => instance },
+  } as unknown as ConsoleHost;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        <HostProvider host={host}>
+          <QueryClientProvider client={client}>
+            <TerminalSessionsProvider>
+              <SessionsObservation
+                workspace={{
+                  directory: '/project',
+                  mount: '/project',
+                  machine: 'vm',
+                  binding: { version: 1 },
+                  sessions: [{ sessionId: 'agent-workbench', vm: 'vm', status: 'running' }],
+                }}
+              />
+            </TerminalSessionsProvider>
+          </QueryClientProvider>
+        </HostProvider>
+      )
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+    const observe = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Observe')!;
+    expect(observe.getAttribute('aria-disabled')).toBe('false');
+    await act(async () => {
+      observe.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(open).toHaveBeenCalledOnce();
+    await act(async () => terminals[0].input('Workbench must not forward this'));
+    expect(write).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Observing · read-only');
+    const interact = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Interact with agent'
+    )!;
+    await act(async () => interact.click());
+    terminals[0].input('deliberate interaction negative control');
+    expect(write).toHaveBeenCalledExactlyOnceWith('deliberate interaction negative control');
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
   }
 });

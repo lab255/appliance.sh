@@ -31,11 +31,11 @@ stale-clean-comparison      exit=1 detected=true
 dropped-directory-prop      exit=1 detected=true
 ```
 
-Individual failures are committed as `.txt`; the final unmutated suite has 8 passing tests. These tests run through the existing app Vitest target under `pnpm verify`.
+Individual failures are committed as `.txt`; the final unmutated suite has 9 passing tests. These tests run through the existing app Vitest target under `pnpm verify`.
 
 ## Browser measurements and boundaries
 
-macOS arm64, Chromium 1248 headless, 1440×1000, dark UI; both `no-preference` and `reduce`. Browser screenshots contain only the application viewport; no OS surface intrudes. `sessions-audit.html` imports the production components with explicitly labelled fixture VM/PTY transport. No live agent authorization or containment certification is claimed. Start with `pnpm --filter @appliance.sh/app exec vite --host 127.0.0.1 --port 1454`; scripts record individual samples. Restart Vite after source edits on this host (file watching served stale transforms during the initial probe).
+macOS arm64, Chromium 1248 headless, 1440×1000, dark UI; both `no-preference` and `reduce`. Browser screenshots contain only the application viewport; no OS surface intrudes. `sessions-audit.html` imports the production components with explicitly labelled fixture VM/PTY transport. No live agent authorization or containment certification is claimed. Start the app Vite fixture server on an available port. Every browser script requires `PLAYWRIGHT_MODULE` (module path, file URL, or resolvable package), `CHROMIUM_PATH` (browser executable), and `W4_BASE_URL` (HTTP(S) server base URL). No machine-specific module path, browser path, or port is defaulted. Missing configuration fails before launching the browser; `config-validation.json` records all five scripts failing clearly with all variables missing and each variable missing individually. The configured `refusal.mjs` run is the positive control. Restart Vite after source edits on this host (file watching served stale transforms during the initial probe).
 
 S3 uses real 65-second timers, ten independent pages per motion setting. A reserved fixture-only acceptance region changes from waiting to `Session accepted · agent-fixture · Observing · read-only`. F3 has no structured event bridge; this is a presentation seam, not a successful live launch. The negative control removes BOTH the feed and enclosing-panel reservation before acceptance. The initial attempt removed only the feed, and the enclosing min-height correctly absorbed the shift; it was discarded as an ineffective negative control.
 
@@ -43,7 +43,7 @@ S3 uses real 65-second timers, ten independent pages per motion setting. A reser
 S3 acceptance, no-preference: n=10 CLS median=0 max=0; raw median=0 max=0
 S3 acceptance, reduce:        n=10 CLS median=0 max=0; raw median=0 max=0
 Unreserved negative control: CLS/raw=0.003162962962962963 in both modes
-Design ledger comparison: 0.02164 -> predicted near-zero; COMPOSITION prediction CONFIRMED for this surface
+S3 reservation: nonzero → 0 on this surface
 ```
 
 The negative control magnitude differs from design-phase 0.02164 because this fixture has different geometry. The supported claim is: reservation takes this surface’s delayed acceptance from nonzero to zero, and the probe detects shift. This does not reproduce the design-phase magnitude or establish a live acceptance adapter.
@@ -84,4 +84,29 @@ Additional focus/forgiveness checks (`extra-checks.json`): gated Enter makes zer
 
 ## Acceptance verification
 
-Uncached command: `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`. **Final outcome: `verify: GREEN`, exit 0** (`verify.log`). The full final run used filesystem access for Rust fixtures under `~/.appliance/vm`; the earlier sandbox-only permission failures are retained in `verify-sandbox-failure.log`. No tests skipped; no cached acceptance. Earlier attempts stopped at formatting of newly generated evidence, which was corrected before the final run.
+Uncached command: `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`. **Delta outcome: `verify: GREEN`, exit 0** (`verify-delta.log`); the original successful run remains in `verify.log`. The full final run used filesystem access for Rust fixtures under `~/.appliance/vm`; the earlier sandbox-only permission failures are retained in `verify-sandbox-failure.log`. No tests skipped; no cached acceptance. Earlier attempts stopped at formatting of newly generated evidence, which was corrected before the final run.
+
+## Delta gate rework
+
+- HIGH-1: refused input produces “Input not sent — observing read-only. Choose Interact with agent.” in the shared mode region’s `role=status`, visible in the drawer. It expires after three seconds and clears when entering Interact. The cursor stops blinking in Observe. xterm `disableStdin` is false so events can reach the central provider guard and receive feedback; no refused input is forwarded or stored in metadata. Browser typing, Enter, Ctrl-C and paste show the notice with zero writes in both motion settings; deliberate Interact writes and restores blinking (`refusal.json`).
+- MEDIUM-1: the new jsdom composition test mounts real SessionsObservation plus provider, clicks Observe, emits PTY input, and checks zero writes and the read-only label; Interact supplies the negative control.
+- LOW-1: input after dedupe checks the live write gate as well as metadata/label.
+- MEDIUM-2: all browser scripts use the required portable environment loader described above.
+
+```text
+missing-refusal-notice: exit=1 (role=status notice assertion fails)
+missing-observe-default: exit=1 (Workbench default-observation guard fails)
+dedupe-gate-label-drift: exit=1 (expected 2 writes, received 1)
+```
+
+The manager explicitly accepted `sessions-audit.tsx`, `sessions-audit.html`, and the `acceptanceFixture` prop as a development-only fixture harness for this PR. They are not a product surface and the library entry does not import the harness; no relocation is included.
+
+Delta uncached verification evidence:
+
+```text
+NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify
+✓ src/pages/workbench/workspace-inspector.test.tsx (6 tests) 807ms
+✓ src/providers/terminal-sessions-provider.test.tsx (3 tests) 625ms
+==> verify: GREEN
+exit=0
+```

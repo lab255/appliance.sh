@@ -1,0 +1,64 @@
+[
+  {
+    "reducedMotion": "no-preference",
+    "refused": {
+      "trace": ["attach"],
+      "blinkingCursor": false
+    },
+    "notice": "Input not sent — observing read-only. Choose Interact with agent.",
+    "expiry": "hidden within 5s (3s timer)",
+    "interactive": {
+      "trace": [
+        "attach",
+        "write:n",
+        "write:e",
+        "write:g",
+        "write:a",
+        "write:t",
+        "write:i",
+        "write:v",
+        "write:e",
+        "write:-",
+        "write:c",
+        "write:o",
+        "write:n",
+        "write:t",
+        "write:r",
+        "write:o",
+        "write:l"
+      ],
+      "blinkingCursor": true
+    }
+  },
+  {
+    "reducedMotion": "reduce",
+    "refused": {
+      "trace": ["attach"],
+      "blinkingCursor": false
+    },
+    "notice": "Input not sent — observing read-only. Choose Interact with agent.",
+    "expiry": "hidden within 5s (3s timer)",
+    "interactive": {
+      "trace": [
+        "attach",
+        "write:n",
+        "write:e",
+        "write:g",
+        "write:a",
+        "write:t",
+        "write:i",
+        "write:v",
+        "write:e",
+        "write:-",
+        "write:c",
+        "write:o",
+        "write:n",
+        "write:t",
+        "write:r",
+        "write:o",
+        "write:l"
+      ],
+      "blinkingCursor": true
+    }
+  }
+]

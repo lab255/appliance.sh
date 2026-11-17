@@ -1,9 +1,8 @@
-import { chromium } from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import { chromium, chromiumPath, fixtureUrl } from './browser-env.mjs';
 import { writeFileSync } from 'node:fs';
 const browser = await chromium.launch({
   headless: true,
-  executablePath:
-    '/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+  executablePath: chromiumPath,
 });
 const results = [];
 // Real 65-second acceptance timers run concurrently; no virtual-clock timing claims.
@@ -17,7 +16,7 @@ await Promise.all(
           colorScheme: 'dark',
         });
         page.on('pageerror', (error) => console.error(error));
-        await page.goto(`http://127.0.0.1:1454/sessions-audit.html?acceptance${i === 10 ? '&negative' : ''}`);
+        await page.goto(fixtureUrl(`?acceptance${i === 10 ? '&negative' : ''}`));
         await page.getByText('Inspection and human Package remain separate from agent acceptance.').waitFor();
         await page.waitForTimeout(500);
         await page.evaluate(() => {

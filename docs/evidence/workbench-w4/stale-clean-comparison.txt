@@ -1,20 +1,20 @@
 
  RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
 
- ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 2 failed) 530ms
-   ✓ discloses generated-only changes and reveals rows (real detail route=false) 135ms
-   ✓ discloses generated-only changes and reveals rows (real detail route=true) 106ms
-   ✓ negative control: genuinely unchanged shows No changes (route=false) 64ms
-   ✓ negative control: genuinely unchanged shows No changes (route=true) 49ms
-   × failed refresh retains a stale snapshot without a clean comparison (route=false) 103ms
+ ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 2 failed) 326ms
+   ✓ discloses generated-only changes and reveals rows (real detail route=false) 77ms
+   ✓ discloses generated-only changes and reveals rows (real detail route=true) 39ms
+   ✓ negative control: genuinely unchanged shows No changes (route=false) 42ms
+   ✓ negative control: genuinely unchanged shows No changes (route=true) 34ms
+   × failed refresh retains a stale snapshot without a clean comparison (route=false) 70ms
      → expected 'Baseline: host-side snapshot · /proje…' to contain 'Comparison unavailable'
-   × failed refresh retains a stale snapshot without a clean comparison (route=true) 73ms
+   × failed refresh retains a stale snapshot without a clean comparison (route=true) 62ms
      → expected 'Workbenchproject/projectAgent machine…' to contain 'Comparison unavailable'
 
  Test Files  1 failed (1)
       Tests  2 failed | 4 passed (6)
-   Start at  08:52:07
-   Duration  1.37s (transform 137ms, setup 0ms, collect 397ms, tests 530ms, environment 199ms, prepare 53ms)
+   Start at  09:21:07
+   Duration  919ms (transform 102ms, setup 0ms, collect 318ms, tests 326ms, environment 134ms, prepare 31ms)
 
 undefined
 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:

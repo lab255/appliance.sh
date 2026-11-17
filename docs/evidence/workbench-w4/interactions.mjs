@@ -1,15 +1,14 @@
-import { chromium } from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import { chromium, chromiumPath, fixtureUrl } from './browser-env.mjs';
 import { writeFileSync } from 'node:fs';
 const browser = await chromium.launch({
   headless: true,
-  executablePath:
-    '/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+  executablePath: chromiumPath,
 });
 const results = [];
 for (const reducedMotion of ['no-preference', 'reduce']) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion, colorScheme: 'dark' });
   page.on('pageerror', (e) => console.error(e));
-  await page.goto('http://127.0.0.1:1454/sessions-audit.html?fail-stop');
+  await page.goto(fixtureUrl('?fail-stop'));
   await page.waitForFunction(() => document.querySelector('button')?.getAttribute('aria-disabled') === 'false');
   async function timed(button, copy, keyboard = false) {
     await page.evaluate((copy) => {

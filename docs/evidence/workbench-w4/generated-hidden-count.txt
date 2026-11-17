@@ -1,20 +1,20 @@
 
  RUN  v3.2.4 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app
 
- ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 2 failed) 371ms
-   × discloses generated-only changes and reveals rows (real detail route=false) 83ms
+ ❯ src/pages/workbench/workspace-inspector.test.tsx (6 tests | 2 failed) 315ms
+   × discloses generated-only changes and reveals rows (real detail route=false) 76ms
      → expected 'Baseline: host-side snapshot · /proje…' to contain '0 files · 1 generated changes hidden'
-   × discloses generated-only changes and reveals rows (real detail route=true) 37ms
+   × discloses generated-only changes and reveals rows (real detail route=true) 38ms
      → expected 'Workbenchproject/projectAgent machine…' to contain '0 files · 1 generated changes hidden'
-   ✓ negative control: genuinely unchanged shows No changes (route=false) 39ms
-   ✓ negative control: genuinely unchanged shows No changes (route=true) 36ms
-   ✓ failed refresh retains a stale snapshot without a clean comparison (route=false) 78ms
-   ✓ failed refresh retains a stale snapshot without a clean comparison (route=true) 96ms
+   ✓ negative control: genuinely unchanged shows No changes (route=false) 40ms
+   ✓ negative control: genuinely unchanged shows No changes (route=true) 35ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=false) 66ms
+   ✓ failed refresh retains a stale snapshot without a clean comparison (route=true) 61ms
 
  Test Files  1 failed (1)
       Tests  2 failed | 4 passed (6)
-   Start at  08:52:04
-   Duration  1.45s (transform 204ms, setup 0ms, collect 652ms, tests 371ms, environment 166ms, prepare 67ms)
+   Start at  09:21:05
+   Duration  911ms (transform 103ms, setup 0ms, collect 321ms, tests 315ms, environment 134ms, prepare 34ms)
 
 undefined
 /Users/eliot/.bb/plugins/environment-git-worktree/host-data/worktrees/thr_j5tgfiaybq-1/appliance.sh/packages/app:

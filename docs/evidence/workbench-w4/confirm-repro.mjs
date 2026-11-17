@@ -1,14 +1,13 @@
-import { chromium } from '/Users/eliot/.bb/plugins/environment-personal-workspace/host-data/workspaces/thr_g274tsjrk3/node_modules/playwright/index.mjs';
+import { chromium, chromiumPath, fixtureUrl } from './browser-env.mjs';
 import { writeFileSync } from 'node:fs';
 const browser = await chromium.launch({
   headless: true,
-  executablePath:
-    '/Users/eliot/Library/Caches/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+  executablePath: chromiumPath,
 });
 const results = [];
 for (const reducedMotion of ['no-preference', 'reduce']) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion });
-  await page.goto('http://127.0.0.1:1454/sessions-audit.html?confirm-only');
+  await page.goto(fixtureUrl('?confirm-only'));
   await page.getByRole('button', { name: 'Open standalone confirmation' }).click();
   const button = page.getByRole('alertdialog').getByRole('button', { name: 'Confirm probe' });
   await page.waitForTimeout(300);
