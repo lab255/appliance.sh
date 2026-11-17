@@ -5,6 +5,8 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { HostProvider } from '@/providers/host-provider';
+import { TerminalSessionsProvider } from '@/providers/terminal-sessions-provider';
+import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import type { ConsoleHost } from '@/lib/host';
 import { useReadinessFixture, type ReadinessFixture, type ReadinessFixtureSource } from '@/lib/workbench-readiness';
 import { WorkbenchDetailPage } from './detail';
@@ -101,11 +103,15 @@ it('bridges a scoped fixture session to detail; stale is not approval and only a
       root.render(
         <HostProvider host={host}>
           <QueryClientProvider client={cache}>
-            <MemoryRouter initialEntries={['/workbench/%2Fworkspace']}>
-              <Routes>
-                <Route path="/workbench/:workspaceId" element={<WorkbenchDetailPage readinessSource={source} />} />
-              </Routes>
-            </MemoryRouter>
+            <TerminalSessionsProvider>
+              <ConfirmProvider>
+                <MemoryRouter initialEntries={['/workbench/%2Fworkspace']}>
+                  <Routes>
+                    <Route path="/workbench/:workspaceId" element={<WorkbenchDetailPage readinessSource={source} />} />
+                  </Routes>
+                </MemoryRouter>
+              </ConfirmProvider>
+            </TerminalSessionsProvider>
           </QueryClientProvider>
         </HostProvider>
       )
