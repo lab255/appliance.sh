@@ -6,8 +6,34 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { HostProvider } from '@/providers/host-provider';
 import type { ConsoleHost } from '@/lib/host';
-import type { ReadinessFixture, ReadinessFixtureSource } from '@/lib/workbench-readiness';
+import { useReadinessFixture, type ReadinessFixture, type ReadinessFixtureSource } from '@/lib/workbench-readiness';
 import { WorkbenchDetailPage } from './detail';
+
+it('rejects another directory at the source hook without relying on PackageSection', async () => {
+  const snapshot: ReadinessFixture = {
+    source: 'fixture',
+    directory: '/workspace',
+    sessionId: 'agent-fixture',
+    proposalId: 'ready-1',
+    sessionStatus: 'done',
+    summary: 'Fixture result',
+  };
+  const source: ReadinessFixtureSource = { getSnapshot: () => snapshot, subscribe: () => () => {} };
+  function Probe({ directory }: { directory: string }) {
+    const result = useReadinessFixture(directory, source);
+    return <p>{result ? result.proposalId : 'No scoped proposal'}</p>;
+  }
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(<Probe directory="/workspace" />));
+    expect(container.textContent).toBe('ready-1');
+    await act(async () => root.render(<Probe directory="/other-workspace" />));
+    expect(container.textContent).toBe('No scoped proposal');
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
 
 vi.mock('@/hooks/use-selected-cluster', () => ({ useSelectedCluster: () => ({ config: { clusters: [] } }) }));
 vi.mock('@/hooks/use-dev-machine-targets', () => ({ useDevMachineTargets: () => ({ visibleClusters: [] }) }));

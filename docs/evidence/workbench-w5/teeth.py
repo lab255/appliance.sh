@@ -8,6 +8,9 @@ mutants = [
     ('disconnected-detail', base / 'detail.tsx', 'readinessProposal={readinessProposal}', 'readinessProposal={null}'),
     ('lost-stale-semantics', base / 'package-section.tsx', ': readinessStaleReason(proposal)', ': undefined'),
     ('auto-package-on-proposal', base / 'package-section.tsx', '  async function packageFromClick() {', '  React.useEffect(() => { if (proposal) void packageFromClick(); }, [proposal]);\n  async function packageFromClick() {'),
+    ('source-directory-guard', Path('packages/app/src/lib/workbench-readiness.ts'), " && proposal.directory === directory", ""),
+    ('package-directory-guard', base / 'package-section.tsx', 'readinessProposal?.directory === directory ? readinessProposal : null', 'readinessProposal'),
+    ('dismiss-stale-guard', base / 'package-section.tsx', 'if (!staleReason) setDismissed', 'setDismissed'),
 ]
 results = []
 for name, path, old, new in mutants:
@@ -15,7 +18,7 @@ for name, path, old, new in mutants:
     assert old in original
     try:
         path.write_text(original.replace(old, new, 1))
-        run = subprocess.run(['pnpm', '--filter', '@appliance.sh/app', 'exec', 'vitest', 'run', 'src/pages/workbench/readiness.test.tsx'], capture_output=True, text=True)
+        run = subprocess.run(['pnpm', '--filter', '@appliance.sh/app', 'exec', 'vitest', 'run', 'src/pages/workbench/readiness.test.tsx', 'src/pages/workbench/package-section.test.tsx'], capture_output=True, text=True)
         lines = [line for line in (run.stdout + run.stderr).splitlines() if 'AssertionError:' in line or 'Tests ' in line or 'Test Files' in line]
         results.append({'mutant': name, 'exitCode': run.returncode, 'evidence': lines})
         assert run.returncode != 0, name + ' survived'

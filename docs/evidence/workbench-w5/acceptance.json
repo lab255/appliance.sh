@@ -5,6 +5,7 @@
     "keyboardDismissRetainsFocus": true,
     "keyboardInspectionFocus": true,
     "stoppedIsStale": true,
+    "staleDismissEnterPreservesReason": true,
     "packageEnabled": true,
     "automaticCalls": 0,
     "zoom200HorizontalOverflow": false
@@ -15,6 +16,7 @@
     "keyboardDismissRetainsFocus": true,
     "keyboardInspectionFocus": true,
     "stoppedIsStale": true,
+    "staleDismissEnterPreservesReason": true,
     "packageEnabled": true,
     "automaticCalls": 0,
     "zoom200HorizontalOverflow": false

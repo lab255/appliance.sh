@@ -1,12 +1,13 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createRequire } from 'node:module';
 const repo = process.cwd();
 const require = createRequire(repo + '/packages/app/package.json');
 const { createServer } = await import(require.resolve('vite'));
 const react = (await import(require.resolve('@vitejs/plugin-react'))).default;
 const tailwind = (await import(require.resolve('@tailwindcss/vite'))).default;
-const root = '/private/tmp/w5-browser';
-fs.mkdirSync(root, { recursive: true });
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'w5-browser-')));
 fs.writeFileSync(
   root + '/index.html',
   '<html class="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="/fixture.tsx"></script></body></html>'

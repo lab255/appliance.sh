@@ -25,6 +25,42 @@ and duplicate-click guard. Proposal arrival and dismissal make zero package call
 a human click makes one. Stale proposals never disable Package. There is no
 Approve button: informational dismissal is the only new human action.
 
+## What a real contract needs
+
+These are requirements for a future live bridge, **not implemented guarantees** of
+this fixture. Adding a live source requires an explicit adapter contract and review:
+
+- **Emitting channel and authority:** a supported agent emits a structured readiness
+  event through its host adapter. Only that registered adapter may deliver events
+  for its launched session; terminal prose, workspace files and arbitrary UI callers
+  are not authenticated event channels. A readiness event remains informational and
+  must never invoke Package, install or promotion.
+- **Provenance:** the host must authenticate the emitting adapter/channel and bind
+  each event to its registered sessionId and canonical workspace directory. It must
+  validate that binding against host-owned launch records rather than trusting
+  identifiers supplied by the agent. Cross-session/directory events are rejected.
+- **Identity and snapshot version:** define a stable proposalId, revision and the
+  host-side baseline/snapshot identity or content digest the proposal describes.
+  A later file change invalidates that revision as stale; session `done` is not
+  freshness evidence. Packaging still reads current files unless a separately
+  reviewed implementation pins/verifies the proposed snapshot.
+- **Lifecycle delivery:** stop, dismiss, error and exit must arrive as identified
+  lifecycle events from the host/session adapter, replacing the fixture's embedded
+  `sessionStatus`. Define terminal-state precedence and reconcile unknown/missing
+  lifecycle evidence before presenting a proposal as current. Hiding an observation
+  tab remains distinct from stopping/dismissing a source session.
+- **Ordering and reconnect:** specify monotonically ordered revisions/events per
+  session, deduplicate stable event IDs, reject old revisions and replays, and
+  reconcile an authoritative snapshot plus a replay cursor on reconnect. A replay
+  must not resurrect a dismissed/stopped proposal; gaps must surface unknown/stale
+  state until reconciliation completes.
+- **Dismissal disposition:** this PR's dismissal is local, unpersisted and never
+  delivered to the agent. The live contract must explicitly choose whether that
+  remains so or becomes durable and/or an adapter-delivered response. Durable
+  dismissal needs proposal/revision scoping; delivery needs acknowledgments,
+  idempotency and visible failure/reconciliation behavior. Neither choice grants
+  packaging authority to the agent.
+
 ## Measurements
 
 macOS 27.0.1 (26A434), arm64; Chromium 1248 headless; real React detail and
@@ -76,14 +112,17 @@ changes the other's region.
 
 ## Regression teeth
 
-[teeth.py](teeth.py) temporarily restores three defects, runs the integration test,
+[teeth.py](teeth.py) temporarily restores six defects, runs the integration test,
 and restores files in `finally`. Run only without concurrent dev server/verify.
 [teeth.json](teeth.json) records actual failures:
 
 - Disconnected detail prop: fails to find `Agent-proposed · not approved`.
 - Removed stale handling: fails to find `Stale proposal —`.
 - Automatic Package effect: fails because package spy was called before human action.
-- Restored implementation: 2 files, 4 tests passed.
+- Restored implementation: 2 files, 7 tests passed.
+- Source directory guard removed: the isolated hook test fails.
+- PackageSection directory guard removed: the direct component test fails.
+- Dismiss stale guard removed: stopped-session reason is overwritten and the test fails.
 
 Independent negative cases include `done` with no proposal, a proposal from a
 different directory, and proposal events without a click. Keyboard/stop/zoom
@@ -96,7 +135,8 @@ From the repo root, install locked dependencies and build app dependencies. Run
 `node docs/evidence/workbench-w5/server.mjs` (fixture source is materialized outside
 the product tree). Then run `measure.mjs` and `acceptance.mjs` from this directory
 via Node. Set `PLAYWRIGHT_MODULE` to an installed Playwright ESM module path and
-`CHROMIUM_PATH` to Chromium; script defaults record this author's tool locations.
+`CHROMIUM_PATH` to Chromium; both variables are required and missing values fail with a clear setup message.
+The server creates a unique fixture directory under `os.tmpdir()`.
 Browser launch may require sandbox permission on macOS. No fixture route is added
 to the product router, and evidence sources are outside the app's build inputs.
 

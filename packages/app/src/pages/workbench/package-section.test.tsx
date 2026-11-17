@@ -39,6 +39,50 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('rejects another directory at PackageSection without relying on the source hook', async () => {
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  const render = (directory: string) =>
+    act(async () =>
+      root.render(
+        <MemoryRouter>
+          <PackageSection directory="/workspace" readinessProposal={{ ...proposal, directory }} />
+        </MemoryRouter>
+      )
+    );
+  try {
+    await render('/workspace');
+    expect(container.textContent).toContain('Agent-proposed · not approved');
+    await render('/other-workspace');
+    expect(container.textContent).toContain('No structured readiness proposal.');
+    expect(container.textContent).not.toContain('Agent-proposed · not approved');
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+it('ignores activation of aria-disabled Dismiss and preserves the stopped-session reason', async () => {
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        <MemoryRouter>
+          <PackageSection directory="/workspace" readinessProposal={{ ...proposal, sessionStatus: 'stopped' }} />
+        </MemoryRouter>
+      )
+    );
+    const dismiss = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Dismiss proposal')!;
+    expect(dismiss.getAttribute('aria-disabled')).toBe('true');
+    // Native keyboard Enter dispatches this click; acceptance.mjs exercises the actual key.
+    await act(async () => dismiss.click());
+    expect(container.textContent).toContain('Stale proposal — The source session was stopped.');
+    expect(container.textContent).not.toContain('You dismissed this proposal.');
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
 it('readiness/result updates make zero calls; only one click crosses the bridge after visible acknowledgment', async () => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   let frames: FrameRequestCallback[] = [];
