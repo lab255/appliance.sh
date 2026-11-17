@@ -39,3 +39,7 @@ The discriminator used 100 newly allocated, held HTTP listeners plus curl in the
 ## Verification scope
 
 `run.py` scrubs workspace/home/temp paths before writing subprocess output. Probe output excludes usernames, response bodies and environment credentials. `verify.txt` is the uncached default-sandbox run: TS build/typecheck/lint/tests and credential-store/helper Rust pass, VM tests fail on sandbox EPERM under the runtime home (and dependent missing-file/traffic assertions). The authorized full elevated rerun uses `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`; `verify-elevated.txt` records GREEN (exit 0), including all 330 VM tests. Draft Windows CI remains a separate platform check.
+
+## Canonical Windows helper pin
+
+The clock-injection source change necessarily changes the packaged credential-helper bytes. Draft validation run `44013232735`, Linux producer job `133804943047`, built SHA256 `90315483cf47724358fcf8a6326939eb4f1dda65a5ea11fd16f2d5995df41798` and rejected the old baked pin. The downloaded `credential-helper-linux` artifact's executable independently hashes to that exact value. The pin is updated from that canonical Ubuntu CI artifact (not a local build); `digest-check.txt` verifies it through the repository's artifact-consumer check. The subsequent CI run must reproduce the pin and execute the canonical artifact on Windows.
