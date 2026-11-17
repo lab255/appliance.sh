@@ -34,7 +34,9 @@ An agent would try to:
 
 The code comment and UI both state that the guarantee weakens on a host the user does not control.
 Out-of-band host-CLI remounts remain host-operator authority, not something this app can prevent;
-overlapping mounts are rejected at desktop mount time, and inspection fails closed only while an overlapping devMount is recorded. A baseline written while an overlapping mount was active is trusted after the mount narrows. Baselines exposed during such a window cannot be trusted afterwards; this is not detected. See follow-up card: keychain-HMAC baseline authentication. No live hostile-VM containment certification is claimed by these tests.
+Overlapping mounts are rejected at desktop mount time, and inspection fails closed while an overlapping devMount is recorded. Each new baseline now carries an HMAC-SHA256 tag over its exact bytes and host storage location, using a 32-byte OS-random key held only in the OS keychain. Every baseline load verifies that tag, including reopen, refresh and file preview. A write through a previously overlapping mount is detected after the mount narrows: comparison is unavailable with an authentication failure reason. Missing tags (including old unsigned baselines), missing keys and denied keychain access fail visibly; reads never generate replacement keys or recapture. File views remain available independently, with the comparison failure disclosed.
+
+This authenticates the captured bytes, not their semantic quality or freshness. A hostile host operator with keychain access remains outside the guarantee; deletion is denial of service, and replay of the identical authentic capture at its original location is not detected. Mount-containment and attempt-once behavior are unchanged. No live hostile-VM containment certification is claimed by these tests.
 
 ## Review locations
 
