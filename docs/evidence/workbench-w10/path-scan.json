@@ -11,7 +11,7 @@
     "worktree thread IDs"
   ],
   "historicalTempIdsChecked": 2,
-  "matchesRemaining": 292,
+  "matchesRemaining": 298,
   "pngCompressedByteMatches": 87,
   "imageLimit": "PNG bytes are scanned, not OCR of rendered pixels",
   "positiveControls": "all detectors passed",
@@ -689,6 +689,36 @@
       "matches": 1
     },
     {
+      "file": "docs/evidence/gla-338/README.md",
+      "line": 120,
+      "pattern": "macOS home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/README.md",
+      "line": 120,
+      "pattern": "Unix home prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/README.md",
+      "line": 120,
+      "pattern": "macOS temp prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/README.md",
+      "line": 121,
+      "pattern": "private var prefix",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-338/README.md",
+      "line": 121,
+      "pattern": "Claude temp prefix",
+      "matches": 1
+    },
+    {
       "file": "docs/evidence/gla-338/folder-no-preference-pending.png",
       "line": 677,
       "pattern": "historical temp directory IDs",
@@ -716,6 +746,12 @@
       "file": "docs/evidence/gla-339/zoom-reduce.png",
       "line": 672,
       "pattern": "historical temp directory IDs",
+      "matches": 1
+    },
+    {
+      "file": "docs/evidence/gla-340/README.md",
+      "line": 55,
+      "pattern": "Unix home prefix",
       "matches": 1
     },
     {

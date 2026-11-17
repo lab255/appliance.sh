@@ -147,7 +147,7 @@ describe('Workbench file recovery', () => {
         )
       );
       await flush();
-      expect(container.querySelector('[role=alert]')?.textContent).toContain(
+      expect(container.querySelector('[role=alert]')?.textContent).toBe(
         kind === 'corrupt' ? message : '/project: No such file or directory (os error 2)'
       );
       const remove = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Remove from Workbench')!;

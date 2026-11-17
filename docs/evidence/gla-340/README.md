@@ -52,7 +52,7 @@ Compute SHA256 over the original response-body bytes before any decoding, reseri
 
 ## Verification scope
 
-`run.py` scrubs workspace<home> paths before writing subprocess output. Probe output excludes usernames, response bodies and environment credentials. `verify.txt` is the uncached default-sandbox run: TS build/typecheck/lint/tests and credential-store/helper Rust pass, VM tests fail on sandbox EPERM under the runtime home (and dependent missing-file/traffic assertions). The authorized full elevated rerun uses `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`; `verify-elevated.txt` records GREEN (exit 0), including all 330 VM tests. Draft Windows CI remains a separate platform check.
+`run.py` scrubs workspace/home/temp paths before writing subprocess output. Probe output excludes usernames, response bodies and environment credentials. `verify.txt` is the uncached default-sandbox run: TS build/typecheck/lint/tests and credential-store/helper Rust pass, VM tests fail on sandbox EPERM under the runtime home (and dependent missing-file/traffic assertions). The authorized full elevated rerun uses `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`; `verify-elevated.txt` records GREEN (exit 0), including all 330 VM tests. Draft Windows CI remains a separate platform check.
 
 ## Canonical Windows helper pin
 

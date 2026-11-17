@@ -199,6 +199,7 @@ export function WorkbenchPage() {
           )}
           {removeError && <p role="alert">{removeError}</p>}
           {query.data?.map((workspace) => {
+            const errorMessage = workspace.error ? workbenchErrorMessage(workspace.error) : '';
             const latest = [...workspace.sessions].sort((a, b) =>
               (b.endedAt || b.launchedAt || '').localeCompare(a.endedAt || a.launchedAt || '')
             )[0];
@@ -232,7 +233,9 @@ export function WorkbenchPage() {
                 {workspace.error && (
                   <>
                     <p role="alert" className="break-words">
-                      {workspace.directory}: {workbenchErrorMessage(workspace.error)}
+                      {errorMessage.includes(workspace.directory)
+                        ? errorMessage
+                        : `${workspace.directory}: ${errorMessage}`}
                     </p>
                     <Button
                       variant="outline"

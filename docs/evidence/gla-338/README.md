@@ -117,8 +117,8 @@ single-run controls. Product source is not edited by either browser control.
 The regression runner scrubs the repo root **before writing** captured output and
 uses [scrub-log.mjs](scrub-log.mjs) for home/temp paths and IDs. Use that same script
 on freshly captured verification logs, then run `node docs/evidence/gla-338/scan-logs.mjs`.
-Its scan covers evidence `.txt`/`.json` files with home-directory prefixes, temporary-directory prefixes,
-private temporary paths, Claude temporary paths, the runtime current username, `thr_[a-z0-9]+`, UUID-shaped
+Its scan covers evidence `.txt`/`.json` files with `/Users/`, `/home/`, `/var/folders`,
+`/private/var`, `/tmp/claude`, the runtime current username, `thr_[a-z0-9]+`, UUID-shaped
 IDs, `playwright_[a-zA-Z0-9_-]+`, `claude-[0-9]+`, and the runtime temporary-directory
 ID. This is the stated pattern set, not a claim of exhaustive privacy detection.
 
