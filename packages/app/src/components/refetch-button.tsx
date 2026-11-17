@@ -4,16 +4,15 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { paintPending } from '@/lib/paint-pending';
 import { cn } from '@/lib/utils';
 
-type RefetchButtonProps = Omit<ButtonProps, 'onClick' | 'asChild'> & {
+type RefetchButtonProps = Omit<ButtonProps, 'asChild'> & {
   onRefetch: () => Promise<unknown>;
   pendingLabel?: string;
 };
 
 /** User-initiated reads only. Query retries, polling and initial loads stay query-owned. */
 export const RefetchButton = React.forwardRef<HTMLButtonElement, RefetchButtonProps>(
-  ({ onRefetch, pendingLabel = 'Retrying…', disabled, children, size, ...props }, ref) => {
+  ({ onRefetch, onClick, pendingLabel = 'Retrying…', disabled, children, size, ...props }, ref) => {
     const [pending, setPending] = React.useState(false);
-    const running = React.useRef(false);
     const mounted = React.useRef(true);
     React.useEffect(() => {
       mounted.current = true;
@@ -23,14 +22,11 @@ export const RefetchButton = React.forwardRef<HTMLButtonElement, RefetchButtonPr
     }, []);
     const busy = pending;
     async function refetch() {
-      if (running.current || busy || disabled || props['aria-disabled'] === true || props['aria-disabled'] === 'true')
-        return;
-      running.current = true;
+      if (busy || disabled || props['aria-disabled'] === true || props['aria-disabled'] === 'true') return;
       try {
         await paintPending(() => setPending(true));
         if (mounted.current) await onRefetch();
       } finally {
-        running.current = false;
         if (mounted.current) setPending(false);
       }
     }
@@ -42,7 +38,10 @@ export const RefetchButton = React.forwardRef<HTMLButtonElement, RefetchButtonPr
         aria-disabled={busy || disabled || props['aria-disabled']}
         aria-busy={busy}
         aria-label={busy ? pendingLabel : props['aria-label']}
-        onClick={() => void refetch()}
+        onClick={(event) => {
+          onClick?.(event);
+          if (!event.defaultPrevented) void refetch();
+        }}
       >
         <span className="inline-grid place-items-center">
           <span

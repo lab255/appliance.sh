@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { RefetchButton } from './refetch-button';
+import { IconTooltip } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 import { AccountSection } from '@/pages/settings-account';
 import { HostProvider } from '@/providers/host-provider';
 import type { ConsoleHost } from '@/lib/host';
@@ -52,6 +54,7 @@ it('paints before queryFn, suppresses rapid duplicate activation and retains foc
       })
   );
   const client = new QueryClient();
+  client.setQueryData(['click'], 'cached');
   cleanups.push(async () => client.clear());
   function Action() {
     const query = useQuery({ queryKey: ['click'], queryFn: work, enabled: false });
@@ -188,4 +191,29 @@ it('keeps unavailable controls idle and focusable without starting work', async 
   expect(button.getAttribute('aria-disabled')).toBe('true');
   expect(button.disabled).toBe(false);
   expect(document.activeElement).toBe(button);
+});
+
+it.each(['plain', 'refetch'] as const)('closes the composed icon tooltip on %s activation', async (kind) => {
+  frames();
+  const work = vi.fn(async () => {});
+  const container = await render(
+    <IconTooltip label="Refresh workloads">
+      {kind === 'plain' ? (
+        <Button size="icon">R</Button>
+      ) : (
+        <RefetchButton size="icon" onRefetch={work}>
+          R
+        </RefetchButton>
+      )}
+    </IconTooltip>
+  );
+  const button = container.querySelector('button')!;
+  await act(async () => button.focus());
+  expect(button.getAttribute('data-state')).toBe('instant-open');
+  await act(async () => button.click());
+  expect(button.getAttribute('data-state')).toBe('closed');
+  if (kind === 'refetch') {
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(work).not.toHaveBeenCalled();
+  }
 });

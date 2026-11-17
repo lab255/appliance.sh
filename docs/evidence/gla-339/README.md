@@ -33,9 +33,9 @@ Final timing table and retry fingerprint are in `measurements.json` and pasted i
 
 Default retry ownership is exercised twice: fake-clock test requires exactly 1000/2000/4000ms between failed starts; a real-clock browser failure requires that same signature after subtracting the fixture's 340ms query duration. Four starts are expected for this failure case (initial attempt plus three React Query retries), rather than confusing automatic retries with duplicate activation.
 
-`refetch-button.test.tsx` covers synchronous acknowledgment, both frame boundaries, duplicate activation, focus, settlement, unmount, retry signature, unavailable-state behavior, and actual AccountSection initial/poll/click reads. `async-recovery.test.tsx` exercises actual deployment retry with cached rows and account error-to-success recovery. The five shared-component tests plus three existing recovery tests are the focused suite.
+`refetch-button.test.tsx` covers synchronous acknowledgment, both frame boundaries, duplicate activation, focus, settlement, unmount, retry signature, unavailable-state behavior, and actual AccountSection initial/poll/click reads. `async-recovery.test.tsx` exercises actual deployment retry with cached rows and account error-to-success recovery. The seven shared-component tests plus three existing recovery tests are the focused suite.
 
-`guard-mutations.py` temporarily removes the paint barrier or restores native disabled, runs the component tests, and restores source in `finally`. Both must fail; retained logs show the behavioral assertions, not compilation failures. Barrier removal starts queryFn before acknowledgment, breaks unmount protection, and loses account-click pending. Native disabled fails the focus-safe DOM requirement.
+`guard-mutations.py` temporarily removes the paint barrier or restores native disabled, runs the component tests, and restores source in `finally`. All four mutants must fail; retained logs show the behavioral assertions, not compilation failures. Barrier removal starts queryFn before acknowledgment, breaks unmount protection, and loses account-click pending. Native disabled fails the focus-safe DOM requirement.
 
 ## Six-property rubric
 
@@ -75,4 +75,16 @@ Do not run mutation probes concurrently with verification or browser measurement
 
 All fixed samples retained focus, kept scroll and geometry unchanged, and made exactly one queryFn start after acknowledgment despite rapid repeat activation. The independent negative control produced 0.0648375 standard CLS/raw shift, 364px neighbor movement, focus loss and 200px scroll change. Real-clock retry delays after subtracting 340ms fixture work were 1003.6 / 2001.8 / 4004.4ms. Medians use the mean of the fifth and sixth sorted samples.
 
-**Acceptance: `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify` GREEN (exit 0).** Full build, typecheck, lint, tests and all Rust build/test/clippy suites passed. App: 31 files, 158 tests. See `verify.txt`. The first sandbox attempt reached VM tests but lacked permission to write their fixtures under the user's appliance directory; the passing run used sandbox escalation, without source workarounds.
+**Acceptance: `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify` GREEN (exit 0).** Full build, typecheck, lint, tests and all Rust build/test/clippy suites passed. App: 31 files, 160 tests (post-gate revision). See `verify.txt`. The first sandbox attempt reached VM tests but lacked permission to write their fixtures under the user's appliance directory; the passing run used sandbox escalation, without source workarounds.
+
+## Gate revisions F1–F5
+
+F1: RefetchButton composes the incoming `onClick` before initiating its read (and respects `preventDefault`). The actual `IconTooltip` regression test passed with plain Button but failed at c630b89 with RefetchButton: expected `closed`, received `instant-open`. Both now close before read work. See `tooltip-before.txt` and the repeatable `no-composed-click` mutant.
+
+F2: All captured paths are scrubbed to `<repo>` in committed logs, and mutation output is scrubbed when captured. Missing `REPO_ROOT` reports an explicit setup instruction.
+
+F3: The repeat-activation test now seeds query cache so React Query cannot hide missing activation guards by merging empty-cache requests. The seeded test passes without the `running` ref (`without-running-ref.txt`), so the redundant ref was deleted. Removing the remaining busy/availability guard fails with two queryFn starts where one is required (`no-repeat-guard.txt`). All four deliberate mutants fail on behavioral assertions; seven component cases pass on production source.
+
+F4: The **movement == 0** assertion is the operative geometry guard. The raw-shift threshold alone is insufficient: the gate's geometry mutants produced only 0.000146/0.000308 raw shift, below 0.01, but were caught by movement.
+
+F5: Reserving the longer pending label deliberately increases the at-rest width of small text Retry buttons from approximately **56.5px to 85.1px**, across about 20 controls. This is an owner-visible tradeoff: wider idle buttons in exchange for no width change on activation. Icon button dimensions remain fixed. The owner may overrule this reservation tradeoff.

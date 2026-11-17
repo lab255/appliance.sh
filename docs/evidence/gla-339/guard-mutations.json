@@ -1,5 +1,13 @@
 [
   {
+    "mutation": "no-composed-click",
+    "exit": 1
+  },
+  {
+    "mutation": "no-repeat-guard",
+    "exit": 1
+  },
+  {
     "mutation": "no-paint-barrier",
     "exit": 1
   },
