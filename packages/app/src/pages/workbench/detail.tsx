@@ -1,3 +1,4 @@
+import type { Inspection } from '@/lib/inspection';
 import { SessionsObservation } from './sessions-observation';
 import { PackageSection } from './package-section';
 import { isUnreadableWorkbenchFile, workbenchErrorMessage } from './errors';
@@ -23,6 +24,7 @@ export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: Rea
   const cache = useQueryClient();
   const { config } = useSelectedCluster();
   const { visibleClusters } = useDevMachineTargets(config?.clusters ?? []);
+  const [inspection, setInspection] = React.useState<Inspection>();
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const initial = (location.state as { workspace?: WorkbenchWorkspace } | null)?.workspace;
@@ -151,7 +153,7 @@ export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: Rea
         <SessionsObservation key={workspace.directory} workspace={workspace} />
         <section className="min-w-0 rounded-lg border border-[var(--color-border)] p-4">
           <div id="workbench-inspection" tabIndex={-1}>
-            <WorkspaceInspector directory={workspace.directory} />
+            <WorkspaceInspector directory={workspace.directory} onSnapshot={setInspection} />
           </div>
           {/* Workbench Package: sibling action; registry reads never invoke it. */}
           <div className="mt-4 border-t border-[var(--color-border)] pt-4">
@@ -160,6 +162,18 @@ export function WorkbenchDetailPage({ readinessSource }: { readinessSource?: Rea
               directory={workspace.directory}
               packageHost={host.workbenchPackage}
               readinessProposal={readinessProposal}
+              readinessContext={{
+                directory: workspace.directory,
+                sessions: workspace.sessions,
+                snapshotId:
+                  inspection?.directory === workspace.directory && !inspection.comparisonError
+                    ? inspection.snapshotId
+                    : undefined,
+                baselineId:
+                  inspection?.directory === workspace.directory && !inspection.comparisonError
+                    ? inspection.baselineId
+                    : undefined,
+              }}
               filesChanging={workspace.sessions.some((session) => ['running', 'spawning'].includes(session.status))}
             />
           </div>

@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { LongOperation } from '@/components/ui/long-operation';
 import { paintPending } from '@/lib/paint-pending';
-import { readinessStaleReason, type ReadinessFixture } from '@/lib/workbench-readiness';
+import { readinessStaleReason, type ReadinessFixture, type ReadinessContext } from '@/lib/workbench-readiness';
 import {
   UNSIGNED_PACKAGE_LABEL,
   type WorkbenchPackageHost,
@@ -16,12 +16,14 @@ export function PackageSection({
   packageHost,
   filesChanging = false,
   readinessProposal = null,
+  readinessContext,
 }: {
   directory: string;
   packageHost?: WorkbenchPackageHost;
   filesChanging?: boolean;
   /** Explicit fixture source; never inferred from done/exited or terminal prose. */
   readinessProposal?: ReadinessFixture | null;
+  readinessContext?: ReadinessContext;
 }) {
   const [dismissed, setDismissed] = React.useState<Set<string>>(() => new Set());
   const proposal = readinessProposal?.directory === directory ? readinessProposal : null;
@@ -29,7 +31,7 @@ export function PackageSection({
   const staleReason = proposal
     ? dismissed.has(proposalKey)
       ? 'You dismissed this proposal.'
-      : readinessStaleReason(proposal)
+      : readinessStaleReason(proposal, readinessContext)
     : undefined;
   const inFlight = React.useRef(false);
   const [status, setStatus] = React.useState<'idle' | 'running' | 'success' | 'error'>('idle');

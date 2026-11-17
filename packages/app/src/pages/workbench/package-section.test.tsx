@@ -10,8 +10,16 @@ const proposal: ReadinessFixture = {
   directory: '/workspace',
   sessionId: 'agent-fixture',
   proposalId: 'ready-1',
+  revision: 'snapshot-1',
+  baselineId: 'baseline-1',
   sessionStatus: 'done',
   summary: 'Fixture changes ready for human review.',
+};
+const context = {
+  directory: '/workspace',
+  sessions: [{ sessionId: 'agent-fixture', status: 'done' }],
+  snapshotId: 'snapshot-1',
+  baselineId: 'baseline-1',
 };
 import { UNSIGNED_PACKAGE_LABEL, type WorkbenchPackageResult } from '@/lib/workbench-package';
 
@@ -46,7 +54,11 @@ it('rejects another directory at PackageSection without relying on the source ho
     act(async () =>
       root.render(
         <MemoryRouter>
-          <PackageSection directory="/workspace" readinessProposal={{ ...proposal, directory }} />
+          <PackageSection
+            directory="/workspace"
+            readinessProposal={{ ...proposal, directory }}
+            readinessContext={context}
+          />
         </MemoryRouter>
       )
     );
@@ -211,6 +223,39 @@ it('warns about changing files without treating agent readiness as authorization
     expect(container.textContent).toContain('Files are still changing. Stop editing and review them before packaging.');
     expect(container.querySelector<HTMLButtonElement>('button[aria-busy]')!.disabled).toBe(false);
     expect(host.package).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+it('reconciles snapshot, baseline and host sessions independently at PackageSection', async () => {
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  const render = async (value: typeof context | undefined) =>
+    act(async () =>
+      root.render(
+        <MemoryRouter>
+          <PackageSection directory="/workspace" readinessProposal={proposal} readinessContext={value} />
+        </MemoryRouter>
+      )
+    );
+  try {
+    await render(context);
+    expect(container.textContent).toContain('Agent-proposed · not approved');
+    for (const value of [
+      undefined,
+      { ...context, snapshotId: 'snapshot-2' },
+      { ...context, baselineId: 'baseline-2' },
+      { ...context, sessions: [] },
+      { ...context, sessions: [{ sessionId: 'agent-fixture', status: 'running' }] },
+      { ...context, directory: '/other' },
+    ]) {
+      await render(value);
+      expect(container.textContent).toContain('Stale proposal —');
+      expect(container.textContent).not.toContain('Agent-proposed · not approved');
+    }
+    await render(context);
+    expect(container.textContent).toContain('Agent-proposed · not approved');
   } finally {
     await act(async () => root.unmount());
   }

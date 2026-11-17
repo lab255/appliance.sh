@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,6 +17,8 @@ it('rejects another directory at the source hook without relying on PackageSecti
     directory: '/workspace',
     sessionId: 'agent-fixture',
     proposalId: 'ready-1',
+    revision: 'snapshot-1',
+    baselineId: 'baseline-1',
     sessionStatus: 'done',
     summary: 'Fixture result',
   };
@@ -39,7 +41,19 @@ it('rejects another directory at the source hook without relying on PackageSecti
 
 vi.mock('@/hooks/use-selected-cluster', () => ({ useSelectedCluster: () => ({ config: { clusters: [] } }) }));
 vi.mock('@/hooks/use-dev-machine-targets', () => ({ useDevMachineTargets: () => ({ visibleClusters: [] }) }));
-vi.mock('./workspace-inspector', () => ({ WorkspaceInspector: () => <p>Inspection fixture</p> }));
+vi.mock('./workspace-inspector', () => ({
+  WorkspaceInspector: ({ onSnapshot }: { onSnapshot: (value: unknown) => void }) => {
+    useEffect(() => {
+      onSnapshot({
+        directory: '/workspace',
+        snapshotId: 'snapshot-1',
+        baselineId: 'baseline-1',
+        comparisonError: null,
+      });
+    }, [onSnapshot]);
+    return <p>Inspection fixture</p>;
+  },
+}));
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal(
@@ -79,6 +93,8 @@ it('bridges a scoped fixture session to detail; stale is not approval and only a
     directory: '/workspace',
     sessionId: 'agent-fixture',
     proposalId: 'ready-1',
+    revision: 'snapshot-1',
+    baselineId: 'baseline-1',
     sessionStatus: 'done',
     summary: 'A simulated captured result; review the changes.',
   };

@@ -27,18 +27,22 @@ Approve button: informational dismissal is the only new human action.
 
 ## Fixture vs contract
 
-The fixture models proposal/session identity, directory and self-reported lifecycle
-status. It has **no revision or snapshot identity**: a `done` proposal stays
-“current” however much files change afterward. Content-drift staleness cannot be
-expressed or falsified by this fixture.
+The fixture binds a proposal to `revision` (the host inspection snapshot ID) and
+`baselineId`. The host exposes the captured baseline identity with each inspection.
+Detail passes successful inspection evidence and `workspace.sessions` to Package;
+missing/failed inspection, a changed snapshot/baseline, an absent/duplicate session,
+or a lifecycle disagreement renders **Stale/unknown**. Refresh invalidates readiness
+while pending; the existing reserved proposal region contains these states.
+Self-reported terminal lifecycle and local dismissal also remain stale conditions.
 
-It also has **no reconciliation against host-owned session records**. `detail.tsx`
-trusts the fixture's embedded `sessionStatus` even when it disagrees with, or its
-session is absent from, `workspace.sessions`. This is the exact trust pattern the
-future contract requirements below forbid. Shipped **Stale covers only
-self-reported lifecycle status plus local dismissal**; the “current” state is not
-evidence of freshness. Snapshot/version binding and host-session reconciliation
-remain follow-up contract work, not guarantees of this PR.
+These are now falsifiable on the Package surface and through the real detail →
+inspector composition. A new snapshot invalidates the old revision even if its
+files happen to be identical; revision IDs are opaque identities, not ordered
+numbers. A matching observation is **not evidence of live freshness**: changes
+between inspection refreshes are not watched, packaging still reads current files,
+and this fixture authenticates no live adapter. Host-session reconciliation uses
+the host records currently loaded in the workspace, not a new lifecycle transport.
+The live contract requirements below remain open.
 
 ## What a real contract needs
 

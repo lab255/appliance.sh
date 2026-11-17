@@ -46,6 +46,7 @@ pub struct Entry {
 #[serde(rename_all = "camelCase")]
 pub struct Inspection {
     snapshot_id: String,
+    baseline_id: Option<String>,
     directory: String,
     captured_at: Option<String>,
     refreshed_at: String,
@@ -468,6 +469,7 @@ fn refresh_from(root: &Path, path: &Path, preview_budget: usize) -> Result<Inspe
         );
     }
     let result = Inspection {
+        baseline_id: baseline.as_ref().ok().map(|b| b.snapshot_id.clone()),
         snapshot_id: live.snapshot_id.clone(),
         directory: live.directory.clone(),
         captured_at: baseline.as_ref().ok().map(|b| b.captured_at.clone()),
@@ -659,6 +661,10 @@ mod tests {
         fs::write(tree.join("app.txt"), "dirty at open").unwrap();
         capture_into(&tree, &baseline).unwrap();
         let initial = refresh_from(&tree, &baseline, TREE_LIMIT).unwrap();
+        assert_eq!(
+            initial.baseline_id.as_deref(),
+            Some(load(&baseline).unwrap().snapshot_id.as_str())
+        );
         assert!(initial.initial_git_status.unwrap().contains("app.txt"));
         assert_eq!(
             initial
