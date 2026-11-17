@@ -25,6 +25,21 @@ and duplicate-click guard. Proposal arrival and dismissal make zero package call
 a human click makes one. Stale proposals never disable Package. There is no
 Approve button: informational dismissal is the only new human action.
 
+## Fixture vs contract
+
+The fixture models proposal/session identity, directory and self-reported lifecycle
+status. It has **no revision or snapshot identity**: a `done` proposal stays
+“current” however much files change afterward. Content-drift staleness cannot be
+expressed or falsified by this fixture.
+
+It also has **no reconciliation against host-owned session records**. `detail.tsx`
+trusts the fixture's embedded `sessionStatus` even when it disagrees with, or its
+session is absent from, `workspace.sessions`. This is the exact trust pattern the
+future contract requirements below forbid. Shipped **Stale covers only
+self-reported lifecycle status plus local dismissal**; the “current” state is not
+evidence of freshness. Snapshot/version binding and host-session reconciliation
+remain follow-up contract work, not guarantees of this PR.
+
 ## What a real contract needs
 
 These are requirements for a future live bridge, **not implemented guarantees** of
@@ -101,14 +116,14 @@ changes the other's region.
 
 ## Six-property rubric
 
-| Property    | Verdict and checkable evidence                                                                                                                                                                                                                                  |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Immediacy   | PASS, fixture: all three acknowledgment medians ≤100ms, 10 samples per motion; simulated backend separately reported above.                                                                                                                                     |
-| Continuity  | PASS, fixture: arrival CLS 0 and button movement 0px; reservation-removed negative control exceeds 0.01; final Dismiss keeps focus. No new animation.                                                                                                           |
-| Restraint   | PASS: ordinary Package button unchanged; no approval animation, automatic operation or completion celebration.                                                                                                                                                  |
-| Precision   | PASS, fixture only: explicit fixture/session/result labels; proposing ≠ approved; wrong-directory source rejected; no readiness inferred from done. Zero calls before human click, exactly one afterward in 20/20 runs. Live authorization remains unavailable. |
-| Legibility  | PASS, fixture: named tokens and text status; 390px and 200% zoom have no horizontal overflow; scrollable region exposes controls via keyboard; Inspect changes focuses the inspector. See acceptance.json and viewport captures.                                |
-| Forgiveness | PASS, fixture: dismissal retains stale context and focus; stopped/error/exited source cannot imply current readiness; Package remains available; existing failure/retry preserved; source subscription cleans up on unmount.                                    |
+| Property    | Verdict and checkable evidence                                                                                                                                                                                                                                                                                                   |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Immediacy   | PASS, fixture: all three acknowledgment medians ≤100ms, 10 samples per motion; simulated backend separately reported above.                                                                                                                                                                                                      |
+| Continuity  | PASS, fixture: arrival CLS 0 and button movement 0px; reservation-removed negative control exceeds 0.01; final Dismiss keeps focus. No new animation.                                                                                                                                                                            |
+| Restraint   | PASS: ordinary Package button unchanged; no approval animation, automatic operation or completion celebration.                                                                                                                                                                                                                   |
+| Precision   | PARTIAL, fixture only: labels, directory scoping and human-only Package invocation are verified. No readiness is inferred from registry done alone, but embedded status is not reconciled with host sessions and file drift cannot be represented; current is not freshness evidence. Live authorization remains unavailable.    |
+| Legibility  | PASS, fixture: named tokens and text status; 390px and 200% zoom have no horizontal overflow; scrollable region exposes controls via keyboard; Inspect changes focuses the inspector. See acceptance.json and viewport captures.                                                                                                 |
+| Forgiveness | PARTIAL, fixture only: local dismissal retains context/focus and self-reported stopped/error/exited status renders Stale; Package and explicit retry remain available. Host-session disagreement, absent sessions and content drift are not reconciled, so stale coverage is limited to embedded lifecycle plus local dismissal. |
 
 ## Regression teeth
 
@@ -142,3 +157,10 @@ to the product router, and evidence sources are outside the app's build inputs.
 
 Run `python3 docs/evidence/workbench-w5/teeth.py` for defect restoration tests.
 Acceptance command is `NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify`.
+
+Verification citation: the completed uncached
+`NX_DAEMON=false NX_SKIP_NX_CACHE=true pnpm verify` at `3556501` passed;
+the dedicated gate independently completed the same uncached command green at
+that head. This final revision differs from `3556501` only in this README (plus
+PR-body documentation); no new full verification was run for the doc-only delta,
+as instructed by the manager under shared-disk pressure.
