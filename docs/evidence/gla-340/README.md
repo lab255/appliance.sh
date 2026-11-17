@@ -17,6 +17,10 @@ Deterministic teeth:
 
 **Product-behavior decision, manager-authorized:** crash recovery is now manual. Acquisition never reaps a lock. Timeout names its exact path, observed age, owner PID, process-start hint and current alive/dead/unknown observation, and instructs removal only when no appliance process is active. PID reuse is explicitly noted. Inaccessible/incomplete lock metadata is reported as unknown. A refusal to write is preferable to lost trust-store mutations. Identity re-read/unlink and rename takeover retain a TOCTOU because Node has no conditional pathname deletion. OS advisory locking is the structural future option, deliberately outside this lane; the owner may overrule this product tradeoff.
 
+After a crash leaves the lock behind, install/uninstall/revoke fail closed; best-effort usage stamping lets each `run` proceed after a 5-second lock wait and stderr warning, repeated on every run until the lock is cleared.
+
+Known diagnostic limitation: if the lock file is replaced between stat and read, the message can pair the old file's age with the new owner's PID; these are best-effort observations, and this affects readability only, not lock enforcement.
+
 Surfaces: CLI install/uninstall, entitlement revoke and runtime usage stamps acquire this shared lock. Desktop install/uninstall/revoke/run use that CLI sidecar too. `run_appliance_capture` in `packages/desktop/src-tauri/src/lib.rs` preserves stderr in its returned error; the Settings revoke catch in `packages/app/src/pages/settings.tsx` renders the error in a `role="alert"`. Lock enforcement is shared; the UI propagation statement is source inspection, not a GUI automation claim. Public `readEntitlementStore` remains unlocked; crash/interrupted-pair recovery is not redesigned here.
 
 ## Credhelper cancellation
@@ -35,6 +39,16 @@ The deadline starts before metadata/browser work. The test's one-second wall-clo
 `ARDAgent` binds wildcard **addresses** at port 3283, not arbitrary ports; its probe returned non-HTTP. Several node/bb listeners return 404 or 200. Four loopback processes resolve to Claude Code version 2.1.325 and answer `407 Proxy Authentication Required`, with `Proxy-Authenticate: Basic realm="srt"` and the identical body SHA256 `933b971c6388d594a23fa1559825db5bec8ade2db1240aa8fc9d0c684949e8c9` (`proxy-listeners.txt`, `http-sandbox.txt`, `http-elevated.txt`). That identifies a source of 407 responses, **not** interception of the test requests.
 
 The discriminator used 100 newly allocated, held HTTP listeners plus curl in the default sandbox and 100 elevated: all 200 responses carry the expected marker; zero interception observed in either mode. Historical evidence retains status assertions only, so no historical header/body fingerprint comparison is possible. W6's retained `docs/evidence/gla-338/verify-http-isolation.txt` explicitly records an elevated 407 failure; a sandbox/elevated binary explanation is unsupported. The mechanism of the three historical sightings remains unresolved. No bind retry, connect verification, suite serialization or test-harness change ships. This is a non-reproduction report for the card, not closure by green reruns.
+
+### Attribution recipe for the next 407 sighting
+
+Capture the failing response before its status assertion throws and before rerunning: retain the full response headers and body, not just the status code. Record the failing test/request, timestamp, execution mode (sandboxed or elevated), and destination address/port; take an immediate listener/PID snapshot if available. Capture at failure time because a later curl or green rerun cannot identify the responder to the original request.
+
+Compute SHA256 over the original response-body bytes before any decoding, reserialization or scrubbing; for comparison with `http-probe.py`, use the bytes following the HTTP header separator (`CRLF CRLF`) as that probe does. Scrub personal paths, temp-directory IDs and any credentials from headers/body at write time, retaining the complete response structure and the pre-scrub digest in the evidence. If raw bytes are unavailable, mark the body comparison unavailable rather than hashing a parsed JSON object.
+
+- `Proxy-Authenticate: Basic realm="srt"` **or** body SHA256 `933b971c6388d594a23fa1559825db5bec8ade2db1240aa8fc9d0c684949e8c9` matches the identified Claude Code 2.1.325 emitter's fingerprint and attributes that response to the identified candidate. Retain both signals when available; a fingerprint match does not by itself explain how the test request reached it or identify a unique proxy PID.
+- If neither fingerprint matches in a complete capture, that sighting refutes the identified emitter candidate; preserve the different headers/body and investigate the actual responder. Missing headers/body leave attribution unresolved, not refuted.
+- Attach the failure-time capture and comparison to the card and PR/report. Do not close the interference mechanism from a rerun passing. The gate encountered another unattributable sighting during this review, reinforcing the need for this capture recipe.
 
 ## Verification scope
 
