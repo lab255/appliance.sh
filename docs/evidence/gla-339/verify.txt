@@ -2095,16 +2095,16 @@ stdout | src/utils/bundle-package.spec.ts > runnable payload packaging > reports
  ✓ src/routes/self-update/self-update.spec.ts (14 tests) 99ms
 (node:70813) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-{"timestamp":"2026-11-17T02:11:47.862Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-dV4FDT","mode":"full"}
-{"timestamp":"2026-11-17T02:11:47.879Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-dV4FDT","mode":"full"}
-{"timestamp":"2026-11-17T02:11:47.884Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-dV4FDT","mode":"full"}
+{"timestamp":"2026-11-17T02:11:47.862Z","level":"info","message":"web console mounted","consoleDir":"<tmp>","mode":"full"}
+{"timestamp":"2026-11-17T02:11:47.879Z","level":"info","message":"web console mounted","consoleDir":"<tmp>","mode":"full"}
+{"timestamp":"2026-11-17T02:11:47.884Z","level":"info","message":"web console mounted","consoleDir":"<tmp>","mode":"full"}
 (node:70814) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-{"timestamp":"2026-11-17T02:11:47.892Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-dV4FDT","mode":"full"}
-{"timestamp":"2026-11-17T02:11:47.900Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-dV4FDT","mode":"full"}
+{"timestamp":"2026-11-17T02:11:47.892Z","level":"info","message":"web console mounted","consoleDir":"<tmp>","mode":"full"}
+{"timestamp":"2026-11-17T02:11:47.900Z","level":"info","message":"web console mounted","consoleDir":"<tmp>","mode":"full"}
 {"timestamp":"2026-11-17T02:11:47.907Z","level":"info","message":"web console bundle not found — serving API only","hint":"set APPLIANCE_CONSOLE_DIR or stage console-dist next to the api-server package"}
 {"timestamp":"2026-11-17T02:11:47.909Z","level":"info","message":"web console disabled (APPLIANCE_CONSOLE_MODE=off) — serving API only"}
-{"timestamp":"2026-11-17T02:11:47.912Z","level":"info","message":"web console mounted","consoleDir":"/var/folders/_1/mk1dnnks74j3pz_jj4htlc440000gn/T/appliance-console-dV4FDT","mode":"bootstrap"}
+{"timestamp":"2026-11-17T02:11:47.912Z","level":"info","message":"web console mounted","consoleDir":"<tmp>","mode":"bootstrap"}
 (node:70817) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
  ✓ src/console-static.spec.ts (8 tests) 67ms
