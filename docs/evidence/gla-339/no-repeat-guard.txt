@@ -1,0 +1,213 @@
+
+ RUN  v3.2.4 <repo>/packages/app
+
+ ❯ src/components/refetch-button.test.tsx (7 tests | 3 failed) 71ms
+   × paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement 19ms
+     → expected "spy" to be called once, but got 2 times
+   ✓ leaves the default 1s/2s/4s React Query retry signature intact 4ms
+   ✓ does not start a queued refetch after unmount 1ms
+   × keeps initial account read and 2s polling immediate while yielding only the retry click 8ms
+     → expected "spy" to be called 3 times, but got 4 times
+   × keeps unavailable controls idle and focusable without starting work 2ms
+     → expected 'true' to be 'false' // Object.is equality
+   ✓ closes the composed icon tooltip on plain activation 27ms
+   ✓ closes the composed icon tooltip on refetch activation 9ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 4 passed (7)
+   Start at  10:10:24
+   Duration  620ms (transform 72ms, setup 0ms, collect 274ms, tests 71ms, environment 134ms, prepare 29ms)
+
+undefined
+<repo>/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/components/refetch-button.test.tsx
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > leaves the default 1s/2s/4s React Query retry signature intact
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > does not start a queued refetch after unmount
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > does not start a queued refetch after unmount
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > does not start a queued refetch after unmount
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps unavailable controls idle and focusable without starting work
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps unavailable controls idle and focusable without starting work
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > keeps unavailable controls idle and focusable without starting work
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on plain activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/refetch-button.test.tsx > closes the composed icon tooltip on refetch activation
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/refetch-button.test.tsx > paints before queryFn, suppresses rapid duplicate activation and retains focus through settlement
+AssertionError: expected "spy" to be called once, but got 2 times
+ ❯ src/components/refetch-button.test.tsx:86:16
+     84|   expect(work).not.toHaveBeenCalled();
+     85|   await frame();
+     86|   expect(work).toHaveBeenCalledOnce();
+       |                ^
+     87|   await act(async () => button.click());
+     88|   expect(work).toHaveBeenCalledOnce();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/components/refetch-button.test.tsx > keeps initial account read and 2s polling immediate while yielding only the retry click
+AssertionError: expected "spy" to be called 3 times, but got 4 times
+ ❯ src/components/refetch-button.test.tsx:171:18
+    169|   expect(status).toHaveBeenCalledTimes(2);
+    170|   await frame();
+    171|   expect(status).toHaveBeenCalledTimes(3);
+       |                  ^
+    172|   expect(button.getAttribute('aria-busy')).toBe('false');
+    173|   await act(async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/components/refetch-button.test.tsx > keeps unavailable controls idle and focusable without starting work
+AssertionError: expected 'true' to be 'false' // Object.is equality
+
+Expected: "false"
+Received: "true"
+
+ ❯ src/components/refetch-button.test.tsx:190:44
+    188|   await act(async () => button.click());
+    189|   expect(work).not.toHaveBeenCalled();
+    190|   expect(button.getAttribute('aria-busy')).toBe('false');
+       |                                            ^
+    191|   expect(button.getAttribute('aria-disabled')).toBe('true');
+    192|   expect(button.disabled).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+

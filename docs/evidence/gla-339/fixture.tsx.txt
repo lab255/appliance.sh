@@ -1,0 +1,39 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { RefreshCw } from 'lucide-react';
+import { RefetchButton } from 'REPO/packages/app/src/components/refetch-button';
+import { Button } from 'REPO/packages/app/src/components/ui/button';
+import { MotionProvider } from '@appliance.sh/ui/motion-provider';
+import 'REPO/packages/app/src/styles.css';
+const params = new URLSearchParams(location.search);
+const defect = params.has('defect');
+const icon = params.has('icon');
+const backoff = params.has('backoff');
+window.starts = [];
+window.ack = null;
+window.complete = false;
+const client = new QueryClient();
+function Fixture() {
+ const query = useQuery({queryKey: ['read'], enabled:false, queryFn: async () => {
+   window.starts.push(performance.now());
+   const until = performance.now() + 160;
+   while (performance.now() < until) {} // synchronous bridge setup reproduces audited defect
+   await new Promise(r=>setTimeout(r,params.has('slow')?1800:180));
+   if (backoff) throw new Error('Fixture offline');
+   return 'complete';
+ }});
+ const props = {size:icon?'icon':'sm', variant:'outline', 'aria-label':icon?'Refresh workloads':undefined};
+ const children = icon ? <RefreshCw className="h-4 w-4"/> : 'Retry';
+ return <main style={{padding:32}}>
+ <h1>GLA-339 production RefetchButton / React Query fixture</h1>
+ <p>Simulated synchronous read setup; no native host or server calls.</p>
+ <div style={{display:'flex',alignItems:'center',gap:16,marginTop:32}}>
+ {defect ? <Button {...props} disabled={query.isFetching} onClick={()=>void query.refetch()}>{children}</Button> :
+ <RefetchButton {...props} pendingLabel={icon?'Refreshing…':'Retrying…'} disabled={query.isFetching} onRefetch={()=>query.refetch()}>{children}</RefetchButton>}
+ <span id="anchor">Adjacent content</span>
+ </div>
+ <p style={{marginTop:32}}>Read state: {query.isFetching?'pending':query.isError?'failed':query.data??'idle'}</p>
+ </main>;
+}
+createRoot(document.getElementById('root')).render(<MotionProvider><QueryClientProvider client={client}><Fixture/></QueryClientProvider></MotionProvider>);

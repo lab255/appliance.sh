@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { Skeleton, SkeletonSwap } from '@appliance.sh/ui';
 import { Link, Navigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -77,14 +78,14 @@ export function DeploymentDetailPage() {
           error={deploymentQuery.error}
           fallbackHeadline="Couldn't load this deployment"
           actions={
-            <Button
+            <RefetchButton
               variant="outline"
               size="sm"
               disabled={deploymentQuery.isFetching}
-              onClick={() => void deploymentQuery.refetch()}
+              onRefetch={() => deploymentQuery.refetch()}
             >
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}

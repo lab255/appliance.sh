@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { Checkbox } from '@appliance.sh/ui';
@@ -272,14 +273,14 @@ export function CredentialsPanel({
           error={credsQuery.error}
           headline="Couldn't read credential rules"
           actions={
-            <Button
+            <RefetchButton
               size="sm"
               variant="outline"
               disabled={credsQuery.isFetching}
-              onClick={() => void credsQuery.refetch()}
+              onRefetch={() => credsQuery.refetch()}
             >
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}

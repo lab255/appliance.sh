@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { afterPendingPaint } from '@/lib/paint-pending';
 import * as React from 'react';
 import { HoverGlide, Skeleton, SkeletonSwap } from '@appliance.sh/ui';
@@ -264,9 +265,9 @@ function LauncherSection({
             title="Couldn't reach the host"
             description="The Sandbox status couldn't be read. Check that the desktop app is available, then retry."
             action={
-              <Button variant="outline" onClick={() => vmListQuery.refetch()}>
+              <RefetchButton variant="outline" onRefetch={() => vmListQuery.refetch()}>
                 Retry
-              </Button>
+              </RefetchButton>
             }
           />
         ) : runningVms.length === 0 ? (
@@ -401,9 +402,9 @@ function RuntimeLauncher({
           error={statusQuery.error}
           headline="Couldn't read the Sandbox"
           actions={
-            <Button variant="outline" size="sm" onClick={() => statusQuery.refetch()}>
+            <RefetchButton variant="outline" size="sm" onRefetch={() => statusQuery.refetch()}>
               Retry
-            </Button>
+            </RefetchButton>
           }
         />
       ) : null}
@@ -493,15 +494,12 @@ function RunsList() {
             title="Couldn't load agent runs"
             description="The host didn't return the current agent sessions. Retry to check again."
             action={
-              <Button
+              <RefetchButton
                 variant="outline"
-                onClick={() => {
-                  void vmListQuery.refetch();
-                  void runsQuery.refetch();
-                }}
+                onRefetch={() => Promise.all([vmListQuery.refetch(), runsQuery.refetch()])}
               >
                 Retry
-              </Button>
+              </RefetchButton>
             }
           />
         ) : runs.length === 0 ? (

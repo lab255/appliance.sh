@@ -1,3 +1,4 @@
+import { RefetchButton } from '@/components/refetch-button';
 import { paintPending } from '@/lib/paint-pending';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { Checkbox } from '@appliance.sh/ui';
@@ -303,14 +304,14 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
             error={statusQuery.error}
             headline="Couldn't read the Sandbox"
             actions={
-              <Button
+              <RefetchButton
                 size="sm"
                 variant="outline"
                 disabled={statusQuery.isFetching}
-                onClick={() => void statusQuery.refetch()}
+                onRefetch={() => statusQuery.refetch()}
               >
                 Retry
-              </Button>
+              </RefetchButton>
             }
           />
         ) : null}
