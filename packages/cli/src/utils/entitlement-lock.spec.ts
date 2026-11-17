@@ -90,8 +90,8 @@ it.each(
       throw missing;
     }
   });
-  // With no automatic reaping, stat is never needed. Install the successor
-  // after the failed acquisition in that case to check the same ownership rule.
+  // Only timeout diagnostics need stat now. If those diagnostics omit it,
+  // install the successor after refusal to check the same ownership rule.
   expect(() => acquireLock(file, 0)).toThrow('No mutation was attempted unlocked');
   if (!successor) {
     releaseLock(first);
