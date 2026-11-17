@@ -1,0 +1,419 @@
+Command: python3 docs/evidence/gla-340/loopback.py
+Listener survey:
+p1017
+cARDAgent
+f10
+n*:3283
+p3304
+cpython3.14
+f6
+n127.0.0.1:49261
+p32603
+cnode
+f63
+n127.0.0.1:4471
+p38221
+cbb
+f21
+n127.0.0.1:58944
+f24
+n127.0.0.1:38887
+p40187
+c2.1.325
+f16
+n127.0.0.1:58994
+f17
+n[::1]:58994
+p40188
+c2.1.325
+f34
+n127.0.0.1:58999
+f36
+n[::1]:58999
+p41730
+c2.1.325
+f37
+n127.0.0.1:59159
+f39
+n[::1]:59159
+p53156
+cbb
+f33
+n127.0.0.1:38886
+p56018
+cnode
+f12
+n127.0.0.1:52015
+p57230
+c2.1.325
+f16
+n127.0.0.1:62219
+f18
+n[::1]:62219
+p60899
+cnode
+f67
+n127.0.0.1:4414
+
+HTTP probe port=3283: non-HTTP response
+HTTP probe port=4414: 404
+HTTP probe port=4471: 404
+HTTP probe port=38886: 200
+HTTP probe port=38887: 404
+HTTP probe port=49261: 200
+HTTP probe port=52015: 404
+HTTP probe port=58944: 404
+HTTP probe port=58994: 407
+HTTP probe port=58999: 407
+HTTP probe port=59159: 407
+HTTP probe port=62219: 407
+bound port=65297 owner_seen=True other_pids=[] suites_running=2
+bound port=65299 owner_seen=True other_pids=[] suites_running=2
+bound port=65300 owner_seen=True other_pids=[] suites_running=2
+bound port=65302 owner_seen=True other_pids=[] suites_running=2
+bound port=65303 owner_seen=True other_pids=[] suites_running=2
+bound port=65304 owner_seen=True other_pids=[] suites_running=2
+bound port=65305 owner_seen=True other_pids=[] suites_running=2
+bound port=65306 owner_seen=True other_pids=[] suites_running=2
+bound port=65307 owner_seen=True other_pids=[] suites_running=2
+bound port=65308 owner_seen=True other_pids=[] suites_running=2
+bound port=65309 owner_seen=True other_pids=[] suites_running=2
+bound port=65310 owner_seen=True other_pids=[] suites_running=2
+bound port=65311 owner_seen=True other_pids=[] suites_running=2
+bound port=65312 owner_seen=True other_pids=[] suites_running=2
+bound port=65313 owner_seen=True other_pids=[] suites_running=2
+bound port=65314 owner_seen=True other_pids=[] suites_running=2
+bound port=65315 owner_seen=True other_pids=[] suites_running=2
+bound port=65316 owner_seen=True other_pids=[] suites_running=2
+bound port=65317 owner_seen=True other_pids=[] suites_running=2
+bound port=65318 owner_seen=True other_pids=[] suites_running=2
+bound port=65319 owner_seen=True other_pids=[] suites_running=2
+bound port=65320 owner_seen=True other_pids=[] suites_running=2
+bound port=65321 owner_seen=True other_pids=[] suites_running=2
+bound port=65322 owner_seen=True other_pids=[] suites_running=2
+bound port=65323 owner_seen=True other_pids=[] suites_running=2
+bound port=65324 owner_seen=True other_pids=[] suites_running=2
+bound port=65325 owner_seen=True other_pids=[] suites_running=2
+bound port=65326 owner_seen=True other_pids=[] suites_running=2
+bound port=65327 owner_seen=True other_pids=[] suites_running=2
+bound port=65328 owner_seen=True other_pids=[] suites_running=2
+bound port=65329 owner_seen=True other_pids=[] suites_running=2
+bound port=65330 owner_seen=True other_pids=[] suites_running=2
+bound port=65331 owner_seen=True other_pids=[] suites_running=2
+bound port=65332 owner_seen=True other_pids=[] suites_running=2
+bound port=65333 owner_seen=True other_pids=[] suites_running=2
+bound port=65334 owner_seen=True other_pids=[] suites_running=2
+bound port=65335 owner_seen=True other_pids=[] suites_running=2
+bound port=65336 owner_seen=True other_pids=[] suites_running=2
+bound port=65337 owner_seen=True other_pids=[] suites_running=2
+bound port=65338 owner_seen=True other_pids=[] suites_running=2
+bound port=65339 owner_seen=True other_pids=[] suites_running=2
+bound port=65340 owner_seen=True other_pids=[] suites_running=2
+bound port=65341 owner_seen=True other_pids=[] suites_running=2
+bound port=65342 owner_seen=True other_pids=[] suites_running=2
+bound port=65343 owner_seen=True other_pids=[] suites_running=2
+bound port=65344 owner_seen=True other_pids=[] suites_running=2
+bound port=65345 owner_seen=True other_pids=[] suites_running=2
+bound port=65346 owner_seen=True other_pids=[] suites_running=2
+bound port=65347 owner_seen=True other_pids=[] suites_running=2
+bound port=65348 owner_seen=True other_pids=[] suites_running=2
+bound port=65349 owner_seen=True other_pids=[] suites_running=2
+bound port=65350 owner_seen=True other_pids=[] suites_running=2
+bound port=65351 owner_seen=True other_pids=[] suites_running=2
+bound port=65352 owner_seen=True other_pids=[] suites_running=2
+bound port=65353 owner_seen=True other_pids=[] suites_running=2
+bound port=65354 owner_seen=True other_pids=[] suites_running=2
+bound port=65355 owner_seen=True other_pids=[] suites_running=2
+bound port=65356 owner_seen=True other_pids=[] suites_running=2
+bound port=65357 owner_seen=True other_pids=[] suites_running=2
+bound port=65358 owner_seen=True other_pids=[] suites_running=2
+bound port=65359 owner_seen=True other_pids=[] suites_running=2
+bound port=65360 owner_seen=True other_pids=[] suites_running=2
+bound port=65361 owner_seen=True other_pids=[] suites_running=2
+bound port=65362 owner_seen=True other_pids=[] suites_running=2
+bound port=65363 owner_seen=True other_pids=[] suites_running=2
+bound port=65365 owner_seen=True other_pids=[] suites_running=2
+bound port=65366 owner_seen=True other_pids=[] suites_running=2
+bound port=65367 owner_seen=True other_pids=[] suites_running=2
+bound port=65368 owner_seen=True other_pids=[] suites_running=2
+bound port=65369 owner_seen=True other_pids=[] suites_running=2
+bound port=65370 owner_seen=True other_pids=[] suites_running=2
+bound port=65371 owner_seen=True other_pids=[] suites_running=2
+bound port=65373 owner_seen=True other_pids=[] suites_running=2
+bound port=65374 owner_seen=True other_pids=[] suites_running=2
+bound port=65375 owner_seen=True other_pids=[] suites_running=2
+bound port=65376 owner_seen=True other_pids=[] suites_running=2
+bound port=65377 owner_seen=True other_pids=[] suites_running=2
+bound port=65378 owner_seen=True other_pids=[] suites_running=2
+bound port=65379 owner_seen=True other_pids=[] suites_running=2
+bound port=65380 owner_seen=True other_pids=[] suites_running=2
+bound port=65381 owner_seen=True other_pids=[] suites_running=2
+bound port=65382 owner_seen=True other_pids=[] suites_running=2
+bound port=65383 owner_seen=True other_pids=[] suites_running=2
+bound port=65384 owner_seen=True other_pids=[] suites_running=2
+bound port=65385 owner_seen=True other_pids=[] suites_running=2
+bound port=65386 owner_seen=True other_pids=[] suites_running=2
+bound port=65387 owner_seen=True other_pids=[] suites_running=2
+bound port=65388 owner_seen=True other_pids=[] suites_running=2
+bound port=65389 owner_seen=True other_pids=[] suites_running=2
+bound port=65390 owner_seen=True other_pids=[] suites_running=2
+bound port=65391 owner_seen=True other_pids=[] suites_running=2
+bound port=65392 owner_seen=True other_pids=[] suites_running=2
+bound port=65393 owner_seen=True other_pids=[] suites_running=2
+bound port=65394 owner_seen=True other_pids=[] suites_running=2
+bound port=65395 owner_seen=True other_pids=[] suites_running=2
+bound port=65396 owner_seen=True other_pids=[] suites_running=2
+bound port=65397 owner_seen=True other_pids=[] suites_running=2
+bound port=65398 owner_seen=True other_pids=[] suites_running=2
+bound port=65399 owner_seen=True other_pids=[] suites_running=2
+bound port=65400 owner_seen=True other_pids=[] suites_running=2
+bound port=65408 owner_seen=True other_pids=[] suites_running=2
+bound port=65412 owner_seen=True other_pids=[] suites_running=2
+bound port=65415 owner_seen=True other_pids=[] suites_running=2
+bound port=65454 owner_seen=True other_pids=[] suites_running=2
+bound port=65469 owner_seen=True other_pids=[] suites_running=2
+bound port=65474 owner_seen=True other_pids=[] suites_running=2
+bound port=65475 owner_seen=True other_pids=[] suites_running=2
+bound port=65478 owner_seen=True other_pids=[] suites_running=2
+bound port=65479 owner_seen=True other_pids=[] suites_running=2
+bound port=65481 owner_seen=True other_pids=[] suites_running=2
+bound port=65482 owner_seen=True other_pids=[] suites_running=2
+bound port=65483 owner_seen=True other_pids=[] suites_running=2
+bound port=65486 owner_seen=True other_pids=[] suites_running=2
+bound port=65495 owner_seen=True other_pids=[] suites_running=2
+bound port=65508 owner_seen=True other_pids=[] suites_running=2
+bound port=65519 owner_seen=True other_pids=[] suites_running=2
+bound port=65522 owner_seen=True other_pids=[] suites_running=2
+bound port=49161 owner_seen=True other_pids=[] suites_running=2
+bound port=49187 owner_seen=True other_pids=[] suites_running=2
+bound port=49188 owner_seen=True other_pids=[] suites_running=2
+bound port=49189 owner_seen=True other_pids=[] suites_running=2
+bound port=49211 owner_seen=True other_pids=[] suites_running=2
+bound port=49224 owner_seen=True other_pids=[] suites_running=2
+bound port=49233 owner_seen=True other_pids=[] suites_running=2
+bound port=49236 owner_seen=True other_pids=[] suites_running=2
+bound port=49243 owner_seen=True other_pids=[] suites_running=2
+bound port=49263 owner_seen=True other_pids=[] suites_running=2
+bound port=49288 owner_seen=True other_pids=[] suites_running=2
+bound port=49291 owner_seen=True other_pids=[] suites_running=2
+bound port=49293 owner_seen=True other_pids=[] suites_running=2
+bound port=49301 owner_seen=True other_pids=[] suites_running=2
+bound port=49306 owner_seen=True other_pids=[] suites_running=2
+bound port=49307 owner_seen=True other_pids=[] suites_running=2
+bound port=49310 owner_seen=True other_pids=[] suites_running=2
+bound port=49311 owner_seen=True other_pids=[] suites_running=2
+bound port=49314 owner_seen=True other_pids=[] suites_running=2
+bound port=49315 owner_seen=True other_pids=[] suites_running=2
+bound port=49318 owner_seen=True other_pids=[] suites_running=2
+bound port=49335 owner_seen=True other_pids=[] suites_running=2
+bound port=49336 owner_seen=True other_pids=[] suites_running=2
+bound port=49339 owner_seen=True other_pids=[] suites_running=2
+bound port=49350 owner_seen=True other_pids=[] suites_running=2
+bound port=49358 owner_seen=True other_pids=[] suites_running=2
+bound port=49359 owner_seen=True other_pids=[] suites_running=2
+bound port=49363 owner_seen=True other_pids=[] suites_running=2
+bound port=49381 owner_seen=True other_pids=[] suites_running=2
+bound port=49392 owner_seen=True other_pids=[] suites_running=2
+bound port=49406 owner_seen=True other_pids=[] suites_running=2
+bound port=49409 owner_seen=True other_pids=[] suites_running=2
+bound port=49419 owner_seen=True other_pids=[] suites_running=2
+bound port=49422 owner_seen=True other_pids=[] suites_running=2
+bound port=49423 owner_seen=True other_pids=[] suites_running=2
+bound port=49424 owner_seen=True other_pids=[] suites_running=2
+bound port=49425 owner_seen=True other_pids=[] suites_running=2
+bound port=49426 owner_seen=True other_pids=[] suites_running=2
+bound port=49427 owner_seen=True other_pids=[] suites_running=2
+bound port=49429 owner_seen=True other_pids=[] suites_running=2
+bound port=49431 owner_seen=True other_pids=[] suites_running=2
+bound port=49436 owner_seen=True other_pids=[] suites_running=2
+bound port=49437 owner_seen=True other_pids=[] suites_running=2
+bound port=49453 owner_seen=True other_pids=[] suites_running=2
+bound port=49456 owner_seen=True other_pids=[] suites_running=2
+bound port=49461 owner_seen=True other_pids=[] suites_running=2
+bound port=49468 owner_seen=True other_pids=[] suites_running=2
+bound port=49469 owner_seen=True other_pids=[] suites_running=2
+bound port=49470 owner_seen=True other_pids=[] suites_running=2
+bound port=49471 owner_seen=True other_pids=[] suites_running=2
+bound port=49476 owner_seen=True other_pids=[] suites_running=2
+bound port=49481 owner_seen=True other_pids=[] suites_running=2
+bound port=49482 owner_seen=True other_pids=[] suites_running=2
+bound port=49483 owner_seen=True other_pids=[] suites_running=2
+bound port=49484 owner_seen=True other_pids=[] suites_running=2
+bound port=49485 owner_seen=True other_pids=[] suites_running=2
+bound port=49486 owner_seen=True other_pids=[] suites_running=2
+bound port=49487 owner_seen=True other_pids=[] suites_running=2
+bound port=49488 owner_seen=True other_pids=[] suites_running=2
+bound port=49489 owner_seen=True other_pids=[] suites_running=2
+bound port=49490 owner_seen=True other_pids=[] suites_running=2
+bound port=49491 owner_seen=True other_pids=[] suites_running=2
+bound port=49492 owner_seen=True other_pids=[] suites_running=2
+bound port=49493 owner_seen=True other_pids=[] suites_running=2
+bound port=49494 owner_seen=True other_pids=[] suites_running=2
+bound port=49495 owner_seen=True other_pids=[] suites_running=2
+bound port=49496 owner_seen=True other_pids=[] suites_running=2
+bound port=49497 owner_seen=True other_pids=[] suites_running=2
+bound port=49498 owner_seen=True other_pids=[] suites_running=2
+bound port=49499 owner_seen=True other_pids=[] suites_running=2
+bound port=49500 owner_seen=True other_pids=[] suites_running=2
+bound port=49501 owner_seen=True other_pids=[] suites_running=2
+bound port=49502 owner_seen=True other_pids=[] suites_running=2
+bound port=49503 owner_seen=True other_pids=[] suites_running=2
+bound port=49504 owner_seen=True other_pids=[] suites_running=2
+bound port=49506 owner_seen=True other_pids=[] suites_running=2
+bound port=49524 owner_seen=True other_pids=[] suites_running=2
+bound port=49525 owner_seen=True other_pids=[] suites_running=2
+bound port=49526 owner_seen=True other_pids=[] suites_running=2
+bound port=49545 owner_seen=True other_pids=[] suites_running=2
+bound port=49546 owner_seen=True other_pids=[] suites_running=2
+bound port=49547 owner_seen=True other_pids=[] suites_running=2
+bound port=49548 owner_seen=True other_pids=[] suites_running=2
+bound port=49549 owner_seen=True other_pids=[] suites_running=2
+bound port=49550 owner_seen=True other_pids=[] suites_running=2
+bound port=49551 owner_seen=True other_pids=[] suites_running=2
+bound port=49552 owner_seen=True other_pids=[] suites_running=2
+bound port=49553 owner_seen=True other_pids=[] suites_running=2
+bound port=49554 owner_seen=True other_pids=[] suites_running=2
+bound port=49555 owner_seen=True other_pids=[] suites_running=2
+bound port=49556 owner_seen=True other_pids=[] suites_running=2
+bound port=49557 owner_seen=True other_pids=[] suites_running=2
+bound port=49558 owner_seen=True other_pids=[] suites_running=2
+bound port=49559 owner_seen=True other_pids=[] suites_running=2
+bound port=49560 owner_seen=True other_pids=[] suites_running=2
+bound port=49563 owner_seen=True other_pids=[] suites_running=2
+bound port=49571 owner_seen=True other_pids=[] suites_running=2
+bound port=49574 owner_seen=True other_pids=[] suites_running=2
+bound port=49575 owner_seen=True other_pids=[] suites_running=2
+bound port=49592 owner_seen=True other_pids=[] suites_running=2
+bound port=49596 owner_seen=True other_pids=[] suites_running=2
+bound port=49616 owner_seen=True other_pids=[] suites_running=2
+bound port=49622 owner_seen=True other_pids=[] suites_running=2
+bound port=49631 owner_seen=True other_pids=[] suites_running=2
+bound port=49638 owner_seen=True other_pids=[] suites_running=2
+bound port=49639 owner_seen=True other_pids=[] suites_running=2
+bound port=49640 owner_seen=True other_pids=[] suites_running=2
+bound port=49653 owner_seen=True other_pids=[] suites_running=2
+bound port=49654 owner_seen=True other_pids=[] suites_running=2
+bound port=49655 owner_seen=True other_pids=[] suites_running=2
+bound port=49656 owner_seen=True other_pids=[] suites_running=2
+bound port=49657 owner_seen=True other_pids=[] suites_running=2
+bound port=49658 owner_seen=True other_pids=[] suites_running=2
+bound port=49659 owner_seen=True other_pids=[] suites_running=2
+bound port=49660 owner_seen=True other_pids=[] suites_running=2
+bound port=49661 owner_seen=True other_pids=[] suites_running=2
+bound port=49662 owner_seen=True other_pids=[] suites_running=2
+bound port=49663 owner_seen=True other_pids=[] suites_running=2
+bound port=49664 owner_seen=True other_pids=[] suites_running=2
+bound port=49665 owner_seen=True other_pids=[] suites_running=2
+bound port=49666 owner_seen=True other_pids=[] suites_running=2
+bound port=49667 owner_seen=True other_pids=[] suites_running=2
+bound port=49668 owner_seen=True other_pids=[] suites_running=2
+bound port=49686 owner_seen=True other_pids=[] suites_running=2
+bound port=49688 owner_seen=True other_pids=[] suites_running=2
+bound port=49689 owner_seen=True other_pids=[] suites_running=2
+bound port=49690 owner_seen=True other_pids=[] suites_running=2
+bound port=49695 owner_seen=True other_pids=[] suites_running=2
+bound port=49701 owner_seen=True other_pids=[] suites_running=2
+bound port=49707 owner_seen=True other_pids=[] suites_running=2
+bound port=49708 owner_seen=True other_pids=[] suites_running=2
+bound port=49710 owner_seen=True other_pids=[] suites_running=2
+bound port=49712 owner_seen=True other_pids=[] suites_running=2
+bound port=49713 owner_seen=True other_pids=[] suites_running=2
+bound port=49720 owner_seen=True other_pids=[] suites_running=2
+bound port=49721 owner_seen=True other_pids=[] suites_running=2
+bound port=49722 owner_seen=True other_pids=[] suites_running=2
+bound port=49723 owner_seen=True other_pids=[] suites_running=2
+bound port=49724 owner_seen=True other_pids=[] suites_running=2
+bound port=49725 owner_seen=True other_pids=[] suites_running=2
+bound port=49726 owner_seen=True other_pids=[] suites_running=2
+bound port=49727 owner_seen=True other_pids=[] suites_running=2
+bound port=49728 owner_seen=True other_pids=[] suites_running=2
+bound port=49729 owner_seen=True other_pids=[] suites_running=2
+bound port=49730 owner_seen=True other_pids=[] suites_running=2
+bound port=49732 owner_seen=True other_pids=[] suites_running=2
+bound port=49733 owner_seen=True other_pids=[] suites_running=2
+bound port=49734 owner_seen=True other_pids=[] suites_running=2
+bound port=49735 owner_seen=True other_pids=[] suites_running=2
+bound port=49737 owner_seen=True other_pids=[] suites_running=2
+bound port=49741 owner_seen=True other_pids=[] suites_running=2
+bound port=49752 owner_seen=True other_pids=[] suites_running=2
+bound port=49753 owner_seen=True other_pids=[] suites_running=2
+bound port=49764 owner_seen=True other_pids=[] suites_running=2
+bound port=49765 owner_seen=True other_pids=[] suites_running=2
+bound port=49767 owner_seen=True other_pids=[] suites_running=2
+bound port=49768 owner_seen=True other_pids=[] suites_running=2
+bound port=49770 owner_seen=True other_pids=[] suites_running=2
+bound port=49771 owner_seen=True other_pids=[] suites_running=2
+bound port=49772 owner_seen=True other_pids=[] suites_running=2
+bound port=49774 owner_seen=True other_pids=[] suites_running=2
+bound port=49775 owner_seen=True other_pids=[] suites_running=2
+bound port=49776 owner_seen=True other_pids=[] suites_running=2
+bound port=49777 owner_seen=True other_pids=[] suites_running=2
+bound port=49778 owner_seen=True other_pids=[] suites_running=2
+bound port=49779 owner_seen=True other_pids=[] suites_running=2
+bound port=49780 owner_seen=True other_pids=[] suites_running=2
+bound port=49781 owner_seen=True other_pids=[] suites_running=2
+bound port=49782 owner_seen=True other_pids=[] suites_running=2
+bound port=49783 owner_seen=True other_pids=[] suites_running=2
+bound port=49784 owner_seen=True other_pids=[] suites_running=2
+bound port=49785 owner_seen=True other_pids=[] suites_running=2
+bound port=49786 owner_seen=True other_pids=[] suites_running=2
+bound port=49787 owner_seen=True other_pids=[] suites_running=2
+bound port=49788 owner_seen=True other_pids=[] suites_running=2
+bound port=49789 owner_seen=True other_pids=[] suites_running=2
+bound port=49790 owner_seen=True other_pids=[] suites_running=2
+bound port=49791 owner_seen=True other_pids=[] suites_running=2
+bound port=49792 owner_seen=True other_pids=[] suites_running=2
+bound port=49793 owner_seen=True other_pids=[] suites_running=2
+bound port=49794 owner_seen=True other_pids=[] suites_running=2
+bound port=49795 owner_seen=True other_pids=[] suites_running=2
+bound port=49796 owner_seen=True other_pids=[] suites_running=2
+bound port=49797 owner_seen=True other_pids=[] suites_running=2
+bound port=49798 owner_seen=True other_pids=[] suites_running=2
+bound port=49800 owner_seen=True other_pids=[] suites_running=2
+bound port=49802 owner_seen=True other_pids=[] suites_running=2
+bound port=49805 owner_seen=True other_pids=[] suites_running=2
+bound port=49812 owner_seen=True other_pids=[] suites_running=2
+bound port=49837 owner_seen=True other_pids=[] suites_running=2
+bound port=49838 owner_seen=True other_pids=[] suites_running=2
+bound port=49839 owner_seen=True other_pids=[] suites_running=2
+bound port=49840 owner_seen=True other_pids=[] suites_running=2
+bound port=49841 owner_seen=True other_pids=[] suites_running=2
+bound port=49842 owner_seen=True other_pids=[] suites_running=2
+bound port=49843 owner_seen=True other_pids=[] suites_running=2
+bound port=49846 owner_seen=True other_pids=[] suites_running=2
+bound port=49859 owner_seen=True other_pids=[] suites_running=2
+bound port=49860 owner_seen=True other_pids=[] suites_running=2
+bound port=49861 owner_seen=True other_pids=[] suites_running=2
+bound port=49862 owner_seen=True other_pids=[] suites_running=2
+bound port=49863 owner_seen=True other_pids=[] suites_running=2
+bound port=49868 owner_seen=True other_pids=[] suites_running=2
+bound port=49871 owner_seen=True other_pids=[] suites_running=2
+bound port=49884 owner_seen=True other_pids=[] suites_running=2
+bound port=49887 owner_seen=True other_pids=[] suites_running=2
+bound port=49888 owner_seen=True other_pids=[] suites_running=2
+bound port=49889 owner_seen=True other_pids=[] suites_running=2
+bound port=49890 owner_seen=True other_pids=[] suites_running=2
+bound port=49892 owner_seen=True other_pids=[] suites_running=2
+bound port=49898 owner_seen=True other_pids=[] suites_running=2
+bound port=49899 owner_seen=True other_pids=[] suites_running=2
+bound port=49900 owner_seen=True other_pids=[] suites_running=2
+bound port=49901 owner_seen=True other_pids=[] suites_running=2
+bound port=49904 owner_seen=True other_pids=[] suites_running=2
+bound port=49909 owner_seen=True other_pids=[] suites_running=2
+bound port=49910 owner_seen=True other_pids=[] suites_running=2
+bound port=49911 owner_seen=True other_pids=[] suites_running=2
+bound port=49912 owner_seen=True other_pids=[] suites_running=2
+bound port=49913 owner_seen=True other_pids=[] suites_running=2
+bound port=49914 owner_seen=True other_pids=[] suites_running=2
+bound port=49915 owner_seen=True other_pids=[] suites_running=2
+bound port=49918 owner_seen=True other_pids=[] suites_running=2
+bound port=49921 owner_seen=True other_pids=[] suites_running=2
+bound port=49922 owner_seen=True other_pids=[] suites_running=2
+bound port=49927 owner_seen=True other_pids=[] suites_running=2
+docs/evidence/gla-340/api-concurrent-2.txt: exit 0
+bound port=49928 owner_seen=True other_pids=[] suites_running=1
+bound port=49930 owner_seen=True other_pids=[] suites_running=1
+docs/evidence/gla-340/api-concurrent-1.txt: exit 0
+bound port=49931 owner_seen=True other_pids=[] suites_running=0
+observations=346 collisions=0 suite_exits=[0, 0]
+Exit: 0

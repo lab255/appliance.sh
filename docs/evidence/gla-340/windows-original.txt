@@ -1,0 +1,11 @@
+Command: gh run view 43988426840 --attempt 1 --job 133722477129 --log
+Excerpt: retained Windows run 43988426840 attempt 1, job 133722477129.
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3759429Z ^[[0m^[[1m380 |^[[0m         ^[[0m^[[35mthrow^[[0m ^[[0m^[[35mnew^[[0m ^[[0m^[[1mEntitlementIntegrityError^[[0m(^[[0m^[[32m`Entitlement rollback detected: store head at sequence ^[[0m${head.sequence}^[[0m^[[32m does not match the protected anchor; controls remain denied pending review.`^[[0m)^[[0m^[[2m;^[[0m
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3760611Z                     ^[[31m^[[1m^^[[0m
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3761624Z ^[[0m^[[31mEntitlementIntegrityError^[[0m^[[2m:^[[0m ^[[1mEntitlement rollback detected: store head at sequence 2 does not match the protected anchor; controls remain denied pending review.^[[0m
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3763154Z ^[[0m      ^[[2mat ^[[0m^[[0m^[[1m^[[3massertStoreAtAnchor^[[0m^[[2m (^[[0m^[[0m^[[36m^[[2m<windows-path>
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3764799Z ^[[0m      ^[[2mat ^[[0m^[[0m^[[1m^[[3mparseAndVerify^[[0m^[[2m (^[[0m^[[0m^[[36m^[[2m<windows-path>
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3766464Z ^[[0m      ^[[2mat ^[[0m^[[0m^[[1m^[[3mmutateStore^[[0m^[[2m (^[[0m^[[0m^[[36m^[[2m<windows-path>
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3767565Z ^[[0m      ^[[2mat ^[[0m^[[0m^[[36m^[[2m<windows-path>
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3767952Z 
+Windows desktop + CLI	UNKNOWN STEP	2026-11-17T00:36:10.3834722Z ##[error]

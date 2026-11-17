@@ -1,0 +1,73 @@
+Command: pnpm --filter @appliance.sh/cli exec vitest run src/utils/entitlement-race.spec.ts src/utils/entitlements.spec.ts -t preserves both signed mutations|refuses a lock whose mtime
+
+ RUN  v3.2.4 <repo>/packages/cli
+
+ ❯ src/utils/entitlements.spec.ts (11 tests | 1 failed | 10 skipped) 47ms
+   ↓ signed entitlement store > round-trips signed records and detects tampering
+   ↓ signed entitlement store > writes the store and anchor with mode 0600
+   ↓ signed entitlement store > detects deletion or reordering of otherwise valid signed history
+   ↓ signed entitlement store > detects whole-file rollback to a valid pre-revoke snapshot while the anchor is intact
+   ↓ signed entitlement store > detects signed tail truncation while the anchor is intact
+   ↓ signed entitlement store > computes upgrade delta by stable id and treats a widening as new
+   ↓ signed entitlement store > refuses required ungranted controls while allowing a denied optional mount
+   ↓ signed entitlement store > stamps monotonic usage and suggests then revokes old grants
+   ↓ signed entitlement store > serializes cross-process writers without losing a CAS mutation
+   × signed entitlement store > refuses a lock whose mtime is older than 60 seconds 47ms
+     → expected [Function] to throw an error
+   ↓ signed entitlement store > validates --days as a present positive whole number
+ ❯ src/utils/entitlement-race.spec.ts (1 test | 1 failed) 70ms
+   × preserves both signed mutations when a contender observes an old lock between CAS and anchor commit 70ms
+     → expected [ 'writer-a' ] to deeply equal [ 'writer-a', 'writer-b' ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/utils/entitlement-race.spec.ts > preserves both signed mutations when a contender observes an old lock between CAS and anchor commit
+AssertionError: expected [ 'writer-a' ] to deeply equal [ 'writer-a', 'writer-b' ]
+
+- Expected
++ Received
+
+  [
+    "writer-a",
+-   "writer-b",
+  ]
+
+ ❯ src/utils/entitlement-race.spec.ts:55:79
+     53|   if (refused) grantManifestEntitlements(manifest('writer-b'), 'cli', …
+     54|   expect(interleaved).toBe(true);
+     55|   expect(readEntitlementStore(options).records.map((record) => record.…
+       |                                                                               ^
+     56|   expect(refused).toBe(true);
+     57| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/utils/entitlements.spec.ts > signed entitlement store > refuses a lock whose mtime is older than 60 seconds
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ src/utils/entitlements.spec.ts:210:7
+    208|     expect(() =>
+    209|       grantManifestEntitlements(manifest(), 'cli', allGrantIds(manifes…
+    210|     ).toThrow('No mutation was attempted unlocked');
+       |       ^
+    211|     expect(fs.existsSync(entitlementLockFile(directory))).toBe(true);
+    212|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 10 skipped (12)
+   Start at  11:48:20
+   Duration  407ms (transform 139ms, setup 0ms, collect 379ms, tests 118ms, environment 0ms, prepare 60ms)
+
+undefined
+<repo>/packages/cli:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/utils/entitlement-race.spec.ts src/utils/entitlements.spec.ts -t preserves both signed mutations|refuses a lock whose mtime
+Exit: 1

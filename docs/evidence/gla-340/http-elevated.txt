@@ -1,0 +1,7 @@
+Command: python3 docs/evidence/gla-340/http-probe.py
+candidate 58994 {"status": "HTTP/1.1 407 Proxy Authentication Required", "headers": ["Proxy-Authenticate: Basic realm=\"srt\""], "body_sha256": "933b971c6388d594a23fa1559825db5bec8ade2db1240aa8fc9d0c684949e8c9"}
+candidate 58999 {"status": "HTTP/1.1 407 Proxy Authentication Required", "headers": ["Proxy-Authenticate: Basic realm=\"srt\""], "body_sha256": "933b971c6388d594a23fa1559825db5bec8ade2db1240aa8fc9d0c684949e8c9"}
+candidate 59159 {"status": "HTTP/1.1 407 Proxy Authentication Required", "headers": ["Proxy-Authenticate: Basic realm=\"srt\""], "body_sha256": "933b971c6388d594a23fa1559825db5bec8ade2db1240aa8fc9d0c684949e8c9"}
+candidate 62219 {"status": "HTTP/1.1 407 Proxy Authentication Required", "headers": ["Proxy-Authenticate: Basic realm=\"srt\""], "body_sha256": "933b971c6388d594a23fa1559825db5bec8ade2db1240aa8fc9d0c684949e8c9"}
+{"trials": 100, "failures": []}
+Exit: 0

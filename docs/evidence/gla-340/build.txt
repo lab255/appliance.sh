@@ -1,0 +1,114 @@
+Command: pnpm exec nx run-many -t build -p @appliance.sh/cli @appliance.sh/api-server
+
+ NX   Running target build for 2 projects and 5 tasks they depend on:
+
+- @appliance.sh/cli
+- @appliance.sh/api-server
+
+
+
+> nx run @appliance.sh/helper:build
+
+(node:59681) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59710) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/helper@1.62.0 build <repo>/packages/helper
+> tsc
+
+
+> nx run @appliance.sh/sdk:build
+
+(node:59678) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:59692) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 build <repo>/packages/sdk
+> tsc --module commonjs --outDir dist/cjs && tsc --module esnext --moduleResolution bundler --outDir dist/esm && pnpm run postbuild
+
+(node:60484) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/sdk@1.62.0 postbuild <repo>/packages/sdk
+> pnpm exec ts-node scripts/postbuild.ts
+
+(node:60534) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Version updated to v1.62.0 in files: [
+  '<repo>/packages/sdk/dist/cjs/version.js',
+  '<repo>/packages/sdk/dist/esm/version.js'
+]
+(node:60571) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> nx run @appliance.sh/install-aws:build
+
+(node:60685) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60689) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/install-aws@1.62.0 build <repo>/packages/install-aws
+> tsc
+
+
+> nx run @appliance.sh/infra:build
+
+(node:60684) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60687) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/infra@1.62.0 build <repo>/packages/infra
+> tsc
+
+
+> nx run @appliance.sh/bootstrap:build
+
+(node:60824) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60827) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/bootstrap@1.62.0 build <repo>/packages/bootstrap
+> tsc
+
+
+> nx run @appliance.sh/api-server:build
+
+(node:60825) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:60828) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/api-server@1.62.0 build <repo>/packages/api-server
+> tsc -p tsconfig.build.json
+
+
+> nx run @appliance.sh/cli:build
+
+(node:61456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 build <repo>/packages/cli
+> tsc && pnpm run compile
+
+(node:62334) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> @appliance.sh/cli@1.62.0 compile <repo>/packages/cli
+> bun build src/appliance.ts --compile --outfile=dist/appliance
+
+[1060ms]  bundle  9226 modules
+ [140ms] compile  dist/appliance
+
+
+
+ NX   Successfully ran target build for 2 projects and 5 tasks they depend on
+
+
+Exit: 0
