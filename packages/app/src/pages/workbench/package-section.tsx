@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { LongOperation } from '@/components/ui/long-operation';
 import { paintPending } from '@/lib/paint-pending';
+import { readinessStaleReason, type ReadinessFixture } from '@/lib/workbench-readiness';
 import {
   UNSIGNED_PACKAGE_LABEL,
   type WorkbenchPackageHost,
@@ -14,14 +15,22 @@ export function PackageSection({
   directory,
   packageHost,
   filesChanging = false,
-  readinessProposal = false,
+  readinessProposal = null,
 }: {
   directory: string;
   packageHost?: WorkbenchPackageHost;
   filesChanging?: boolean;
-  /** True only for an actual agent proposal, never inferred from done/exited. */
-  readinessProposal?: boolean;
+  /** Explicit fixture source; never inferred from done/exited or terminal prose. */
+  readinessProposal?: ReadinessFixture | null;
 }) {
+  const [dismissed, setDismissed] = React.useState<Set<string>>(() => new Set());
+  const proposal = readinessProposal?.directory === directory ? readinessProposal : null;
+  const proposalKey = proposal ? JSON.stringify([proposal.directory, proposal.sessionId, proposal.proposalId]) : '';
+  const staleReason = proposal
+    ? dismissed.has(proposalKey)
+      ? 'You dismissed this proposal.'
+      : readinessStaleReason(proposal)
+    : undefined;
   const inFlight = React.useRef(false);
   const [status, setStatus] = React.useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [result, setResult] = React.useState<WorkbenchPackageResult>();
@@ -81,15 +90,49 @@ export function PackageSection({
           Packaging creates an artifact; it does not install, publish or deploy it. You authorize each next step.
         </p>
         <p className="break-all font-mono text-xs">{directory}</p>
-        <div className="h-24 overflow-auto" data-package-readiness="">
-          {readinessProposal ? (
-            <p className="text-sm">
-              <strong>Agent proposal: Ready to package.</strong> Review the changes. You decide when to package; the
-              agent cannot authorize this step. Select <strong>Package</strong> to start packaging.
-            </p>
+        <div
+          className="h-64 space-y-2 overflow-auto text-sm"
+          data-package-readiness=""
+          aria-label="Agent readiness proposal"
+          role="region"
+          tabIndex={0}
+        >
+          {proposal ? (
+            <>
+              <p>Fixture only — simulated agent session and readiness event. No live approval delivery.</p>
+              <p role="status">{staleReason ? `Stale proposal — ${staleReason}` : 'Agent-proposed · not approved'}</p>
+              <p>
+                <strong>
+                  {staleReason ? 'Previous agent proposal: Ready to package.' : 'Agent proposal: Ready to package.'}
+                </strong>{' '}
+                Review the changes. You decide when to package; the agent cannot authorize this step. Select{' '}
+                <strong>Package</strong> to start packaging.
+              </p>
+              <p className="break-all">
+                Fixture session: {proposal.sessionId} ·{' '}
+                {proposal.sessionStatus === 'done' ? 'Finished' : proposal.sessionStatus}
+              </p>
+              <p className="whitespace-pre-wrap break-words">Fixture result summary: {proposal.summary}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <a href="#workbench-inspection" className="underline">
+                  Inspect changes
+                </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-disabled={!!staleReason}
+                  onClick={() => {
+                    if (!staleReason) setDismissed((previous) => new Set(previous).add(proposalKey));
+                  }}
+                >
+                  Dismiss proposal
+                </Button>
+              </div>
+            </>
           ) : (
-            <p className="text-sm text-[var(--color-muted-foreground)]">
-              Review the changes before packaging. You can package without an agent proposal.
+            <p className="text-[var(--color-muted-foreground)]">
+              No structured readiness proposal. The readiness bridge is fixture-only; live agent statements remain in
+              the session terminal. Review the changes before packaging. You can package without an agent proposal.
             </p>
           )}
         </div>

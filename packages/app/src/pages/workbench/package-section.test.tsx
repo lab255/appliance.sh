@@ -4,6 +4,15 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { PackageSection } from './package-section';
+import type { ReadinessFixture } from '@/lib/workbench-readiness';
+const proposal: ReadinessFixture = {
+  source: 'fixture',
+  directory: '/workspace',
+  sessionId: 'agent-fixture',
+  proposalId: 'ready-1',
+  sessionStatus: 'done',
+  summary: 'Fixture changes ready for human review.',
+};
 import { UNSIGNED_PACKAGE_LABEL, type WorkbenchPackageResult } from '@/lib/workbench-package';
 
 const artifact: WorkbenchPackageResult = {
@@ -56,11 +65,16 @@ it('readiness/result updates make zero calls; only one click crosses the bridge 
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
+  const fixtureProposal = proposal;
   const render = (proposal: boolean) =>
     act(async () =>
       root.render(
         <MemoryRouter>
-          <PackageSection directory="/workspace" packageHost={host} readinessProposal={proposal} />
+          <PackageSection
+            directory="/workspace"
+            packageHost={host}
+            readinessProposal={proposal ? fixtureProposal : null}
+          />
         </MemoryRouter>
       )
     );
@@ -70,7 +84,7 @@ it('readiness/result updates make zero calls; only one click crosses the bridge 
     await render(false);
     await render(true);
     expect(calls).toEqual([]);
-    const button = container.querySelector('button')!;
+    const button = container.querySelector<HTMLButtonElement>('button[aria-busy]')!;
     button.focus();
     await act(async () => {
       button.click();
@@ -120,7 +134,7 @@ it('retains the real v1 error without a successful File hand-off and retries onl
       )
     );
     await act(async () => {
-      container.querySelector('button')!.click();
+      container.querySelector<HTMLButtonElement>('button[aria-busy]')!.click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     expect(host.package).toHaveBeenCalledOnce();
@@ -128,7 +142,7 @@ it('retains the real v1 error without a successful File hand-off and retries onl
     expect(container.querySelector('a[href="/apps"]')).toBeNull();
     expect(container.textContent).toContain('No hand-off file from this attempt.');
     await act(async () => {
-      container.querySelector('button')!.click();
+      container.querySelector<HTMLButtonElement>('button[aria-busy]')!.click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     expect(host.package).toHaveBeenCalledTimes(2);
@@ -146,12 +160,12 @@ it('warns about changing files without treating agent readiness as authorization
     await act(async () =>
       root.render(
         <MemoryRouter>
-          <PackageSection directory="/workspace" packageHost={host} filesChanging readinessProposal />
+          <PackageSection directory="/workspace" packageHost={host} filesChanging readinessProposal={proposal} />
         </MemoryRouter>
       )
     );
     expect(container.textContent).toContain('Files are still changing. Stop editing and review them before packaging.');
-    expect(container.querySelector('button')!.disabled).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>('button[aria-busy]')!.disabled).toBe(false);
     expect(host.package).not.toHaveBeenCalled();
   } finally {
     await act(async () => root.unmount());

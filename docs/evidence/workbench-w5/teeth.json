@@ -1,0 +1,37 @@
+[
+  {
+    "mutant": "disconnected-detail",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed (1)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'Workbenchworkspace/workspaceAgent mac\u2026' to contain 'Agent-proposed \u00b7 not approved'"
+    ]
+  },
+  {
+    "mutant": "lost-stale-semantics",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed (1)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected 'Workbenchworkspace/workspaceAgent mac\u2026' to contain 'Stale proposal \u2014'"
+    ]
+  },
+  {
+    "mutant": "auto-package-on-proposal",
+    "exitCode": 1,
+    "evidence": [
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed (1)",
+      "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+      "AssertionError: expected \"spy\" to not be called at all, but actually been called 1 times"
+    ]
+  },
+  {
+    "mutant": "restored-final-source",
+    "exitCode": 0,
+    "evidence": [" Test Files  2 passed (2)", "      Tests  4 passed (4)"]
+  }
+]
