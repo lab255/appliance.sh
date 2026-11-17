@@ -319,6 +319,7 @@ type UpdatePhase = 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloadi
 function UpdatesSection() {
   const host = useHost();
   const [phase, setPhase] = React.useState<UpdatePhase>('idle');
+  const [relaunching, setRelaunching] = React.useState(false);
   const [update, setUpdate] = React.useState<AvailableUpdate | null>(null);
   const [progress, setProgress] = React.useState<UpdateProgress | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -368,7 +369,8 @@ function UpdatesSection() {
   };
 
   const onRelaunch = async () => {
-    if (!host.updater) return;
+    if (!host.updater || relaunching) return;
+    await paintPending(() => setRelaunching(true));
     try {
       await host.updater.relaunch();
     } catch (err) {
@@ -377,6 +379,8 @@ function UpdatesSection() {
       // the "ready" state so the user can retry or quit themselves.
       setError(err instanceof Error ? err.message : String(err));
       setErrorStep('relaunch');
+    } finally {
+      setRelaunching(false);
     }
   };
 
@@ -443,8 +447,19 @@ function UpdatesSection() {
               <Download className="h-4 w-4" /> Download &amp; install {update?.version}
             </Button>
           ) : phase === 'ready' ? (
-            <Button size="sm" onClick={onRelaunch}>
-              <ArrowUpCircle className="h-4 w-4" /> Restart to update
+            <Button
+              size="sm"
+              onClick={onRelaunch}
+              aria-disabled={relaunching}
+              aria-busy={relaunching}
+              aria-label={relaunching ? 'Restarting…' : 'Restart to update'}
+            >
+              <ArrowUpCircle className="h-4 w-4" aria-hidden />{' '}
+              <span className="inline-grid" aria-hidden>
+                <span className="invisible col-start-1 row-start-1">Restart to update</span>
+                <span className="invisible col-start-1 row-start-1">Restarting…</span>
+                <span className="col-start-1 row-start-1">{relaunching ? 'Restarting…' : 'Restart to update'}</span>
+              </span>
             </Button>
           ) : (
             <Button

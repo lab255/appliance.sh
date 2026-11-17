@@ -1,0 +1,12 @@
+switch no-preference: n=10 ack median=24.65ms; max CLS=0.000000; max raw shift=0.000007; negative-control CLS min=0.062192; geometry/scroll PASS; focus observation only
+program no-preference: n=10 ack median=11.30ms; max CLS=0.000000; max raw shift=0.000025; negative-control CLS min=0.025925; geometry/scroll PASS; focus observation only
+terminal no-preference: n=10 ack median=10.10ms; max CLS=0.000000; max raw shift=0.000015; negative-control CLS min=0.020971; geometry/scroll PASS; focus observation only
+relaunch no-preference: n=10 ack median=11.00ms; max CLS=0.000000; max raw shift=0.000010; negative-control CLS min=0.040933; geometry/scroll PASS; focus observation only
+folder no-preference: n=10 ack median=12.40ms; max CLS=0.000000; max raw shift=0.000000; negative-control CLS min=0.044490; geometry/scroll PASS; focus observation only
+deploy no-preference: n=10 ack median=23.35ms; max CLS=0.000000; max raw shift=0.000016; negative-control CLS min=0.043706; geometry/scroll PASS; focus observation only
+switch reduce: n=10 ack median=13.30ms; max CLS=0.000000; max raw shift=0.000007; negative-control CLS min=0.062192; geometry/scroll PASS; focus observation only
+program reduce: n=10 ack median=14.15ms; max CLS=0.000000; max raw shift=0.000025; negative-control CLS min=0.025925; geometry/scroll PASS; focus observation only
+terminal reduce: n=10 ack median=13.55ms; max CLS=0.000000; max raw shift=0.000015; negative-control CLS min=0.020971; geometry/scroll PASS; focus observation only
+relaunch reduce: n=10 ack median=10.20ms; max CLS=0.000000; max raw shift=0.000010; negative-control CLS min=0.040933; geometry/scroll PASS; focus observation only
+folder reduce: n=10 ack median=12.25ms; max CLS=0.000000; max raw shift=0.000000; negative-control CLS min=0.044490; geometry/scroll PASS; focus observation only
+deploy reduce: n=10 ack median=13.05ms; max CLS=0.000000; max raw shift=0.000016; negative-control CLS min=0.043706; geometry/scroll PASS; focus observation only

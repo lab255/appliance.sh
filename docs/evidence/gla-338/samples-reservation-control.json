@@ -1,0 +1,122 @@
+[
+  {
+    "kind": "switch",
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "start": 820.7999999821186,
+    "ack": 31.599999994039536,
+    "rectBefore": [986.15625, 97, 64.84375, 32],
+    "shifts": [
+      {
+        "value": 0.00004815266927083333,
+        "recent": true,
+        "at": 15.200000017881393
+      }
+    ],
+    "scrollBefore": [0, 0],
+    "observedFocusAtAck": true,
+    "rectPending": [957.5625, 97, 93.4375, 32],
+    "scrollAfter": [0, 0],
+    "workStart": 31.80000001192093,
+    "calls": 1,
+    "controlCls": 0.06219197530864198
+  },
+  {
+    "kind": "program",
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "start": 811.9000000059605,
+    "ack": 18.900000005960464,
+    "rectBefore": [977.1875, 52, 90.8125, 32],
+    "shifts": [
+      {
+        "value": 0.00020098892023533952,
+        "recent": true,
+        "at": 5
+      }
+    ],
+    "scrollBefore": [0, 0],
+    "observedFocusAtAck": true,
+    "rectPending": [913.265625, 52, 154.734375, 32],
+    "scrollAfter": [0, 0],
+    "workStart": 18.900000005960464,
+    "calls": 1,
+    "controlCls": 0.02592469135802469
+  },
+  {
+    "kind": "terminal",
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "start": 808.2999999821186,
+    "ack": 16.5,
+    "rectBefore": [32, 130, 118.765625, 32],
+    "shifts": [],
+    "scrollBefore": [0, 0],
+    "observedFocusAtAck": true,
+    "rectPending": [32, 130, 157.21875, 32],
+    "scrollAfter": [0, 0],
+    "workStart": 16.600000023841858,
+    "calls": 1,
+    "controlCls": 0.020970679012345676
+  },
+  {
+    "kind": "relaunch",
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "start": 978.8000000119209,
+    "ack": 16.399999976158142,
+    "rectBefore": [49, 205, 146.5, 32],
+    "shifts": [
+      {
+        "value": 0.00005731868790991512,
+        "recent": true,
+        "at": 3.5
+      }
+    ],
+    "scrollBefore": [0, 0],
+    "observedFocusAtAck": true,
+    "rectPending": [49, 205, 117.609375, 32],
+    "scrollAfter": [0, 0],
+    "workStart": 16.69999998807907,
+    "calls": 1,
+    "controlCls": 0.04093333333333333
+  },
+  {
+    "kind": "folder",
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "start": 812.9000000059605,
+    "ack": 17,
+    "rectBefore": [671.484375, 311, 125.015625, 26],
+    "shifts": [],
+    "scrollBefore": [0, 0],
+    "observedFocusAtAck": true,
+    "rectPending": [671.484375, 311, 125.640625, 26],
+    "scrollAfter": [0, 0],
+    "workStart": 17.19999998807907,
+    "calls": 1,
+    "controlCls": 0.044490277777777774
+  },
+  {
+    "kind": "deploy",
+    "reducedMotion": "no-preference",
+    "run": 0,
+    "start": 805.0999999940395,
+    "ack": 21.100000023841858,
+    "rectBefore": [953.0625, 302, 114.9375, 32],
+    "shifts": [
+      {
+        "value": 0.0001094581886574074,
+        "recent": true,
+        "at": 12.400000005960464
+      }
+    ],
+    "scrollBefore": [0, 0],
+    "observedFocusAtAck": true,
+    "rectPending": [917.375, 302, 150.625, 32],
+    "scrollAfter": [0, 0],
+    "workStart": 21.30000001192093,
+    "calls": 1,
+    "controlCls": 0.04370648148148148
+  }
+]

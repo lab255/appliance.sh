@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { ToastProvider } from '@/components/ui/toast';
+import { MotionProvider } from '@appliance.sh/ui/motion-provider';
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -40,7 +42,7 @@ function inputValue(input: HTMLInputElement, value: string) {
 
 function button(container: HTMLElement, label: string): HTMLButtonElement {
   const match = Array.from(container.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent?.trim() === label
+    (candidate) => candidate.getAttribute('aria-label') === label || candidate.textContent?.trim() === label
   );
   if (!match) throw new Error(`Button not found: ${label}`);
   return match;
@@ -65,7 +67,11 @@ async function renderPanel(rules: CredentialRule[] = []) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <CredentialsPanel vm={vm} name="appliance" mitmOn platform="windows" />
+        <MotionProvider>
+          <ToastProvider>
+            <CredentialsPanel vm={vm} name="appliance" mitmOn platform="windows" />
+          </ToastProvider>
+        </MotionProvider>
       </QueryClientProvider>
     );
   });
@@ -102,7 +108,7 @@ describe('credential helper argv conversion', () => {
     await act(async () => {
       inputValue(container.querySelector<HTMLInputElement>('#credential-host')!, 'api.example.com');
       button(container, 'Browse').click();
-      await Promise.resolve();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       button(container, 'Add argument').click();
     });
     const first = container.querySelector<HTMLInputElement>('[aria-label="Helper argument 1"]')!;
@@ -127,7 +133,7 @@ describe('credential helper argv conversion', () => {
     await act(async () => {
       inputValue(container.querySelector<HTMLInputElement>('#credential-host')!, 'api.example.com');
       button(container, 'Browse').click();
-      await Promise.resolve();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       button(container, 'Add argument').click();
     });
     const argument = container.querySelector<HTMLInputElement>('[aria-label="Helper argument 1"]')!;

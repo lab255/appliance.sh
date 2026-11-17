@@ -1,0 +1,53 @@
+
+ RUN  v3.2.4 <repo>/packages/app
+
+ ❯ src/pages/pending-handlers.test.tsx (7 tests | 6 failed | 1 skipped) 111ms
+   × switch paints before host work, avoids native disabled, guards duplicates and recovers 28ms
+     → expected true to be false // Object.is equality
+   × program paints before host work, avoids native disabled, guards duplicates and recovers 6ms
+     → expected true to be false // Object.is equality
+   × terminal paints before host work, avoids native disabled, guards duplicates and recovers 34ms
+     → expected true to be false // Object.is equality
+   × relaunch paints before host work, avoids native disabled, guards duplicates and recovers 19ms
+     → expected true to be false // Object.is equality
+   × folder paints before host work, avoids native disabled, guards duplicates and recovers 13ms
+     → expected true to be false // Object.is equality
+   × deploy paints before host work, avoids native disabled, guards duplicates and recovers 10ms
+     → expected true to be false // Object.is equality
+   ↓ provision paints before host work, avoids native disabled, guards duplicates and recovers
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 skipped (7)
+   Start at  10:22:41
+   Duration  850ms (transform 208ms, setup 0ms, collect 463ms, tests 111ms, environment 133ms, prepare 28ms)
+
+undefined
+<repo>/packages/app:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/pages/pending-handlers.test.tsx -t ^(switch|program|terminal|relaunch|folder|deploy)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/pending-handlers.test.tsx > switch paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > program paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > terminal paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > relaunch paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > folder paints before host work, avoids native disabled, guards duplicates and recovers
+ FAIL  src/pages/pending-handlers.test.tsx > deploy paints before host work, avoids native disabled, guards duplicates and recovers
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/pages/pending-handlers.test.tsx:156:50
+    154|         await act(async () => control.click());
+    155|         expect(control.getAttribute('aria-busy')).toBe('true');
+    156|         expect(control.hasAttribute('disabled')).toBe(false);
+       |                                                  ^
+    157|         expect(control.getAttribute('aria-label')).toBe(pending);
+    158|         expect(document.activeElement).toBe(control);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+

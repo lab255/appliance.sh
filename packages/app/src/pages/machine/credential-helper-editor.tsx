@@ -1,3 +1,6 @@
+import * as React from 'react';
+import { paintPending } from '@/lib/paint-pending';
+import { useToast } from '@/components/ui/toast';
 import { IconTooltip } from '@/components/ui/tooltip';
 import { FolderOpen, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -97,6 +100,20 @@ export function CredentialHelperEditor({
   onArgsChange: (args: string[]) => void;
   onPickProgram?: () => Promise<string | null>;
 }) {
+  const [picking, setPicking] = React.useState(false);
+  const { toast } = useToast();
+  const pickProgram = async () => {
+    if (picking || !onPickProgram) return;
+    await paintPending(() => setPicking(true));
+    try {
+      const picked = await onPickProgram();
+      if (picked) onProgramChange(picked);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), { variant: 'error' });
+    } finally {
+      setPicking(false);
+    }
+  };
   const validation = validateHelperArgv(program, args, platform);
   const focusArg = (index: number) =>
     window.requestAnimationFrame(() => document.getElementById(`credential-helper-arg-${index}`)?.focus());
@@ -139,10 +156,17 @@ export function CredentialHelperEditor({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => void onPickProgram().then((picked) => picked && onProgramChange(picked))}
+              onClick={() => void pickProgram()}
+              aria-disabled={picking}
+              aria-busy={picking}
+              aria-label={picking ? 'Choose program…' : 'Browse'}
             >
               <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-              Browse
+              <span className="inline-grid" aria-hidden>
+                <span className="invisible col-start-1 row-start-1">Browse</span>
+                <span className="invisible col-start-1 row-start-1">Choose program…</span>
+                <span className="col-start-1 row-start-1">{picking ? 'Choose program…' : 'Browse'}</span>
+              </span>
             </Button>
           ) : null}
         </div>

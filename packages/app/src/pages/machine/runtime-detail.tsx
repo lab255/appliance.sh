@@ -127,6 +127,14 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   // once the VM is already a dev VM (the engine flag is one-way).
   const [devMode, setDevMode] = React.useState(false);
   // Host folder to share into /persist/workspace on the next dev boot.
+  const [pickingFolder, setPickingFolder] = React.useState(false);
+  const [deployingHere, setDeployingHere] = React.useState<'provisioning' | 'opening' | null>(null);
+  const deployHereLabel =
+    deployingHere === 'provisioning'
+      ? 'Provisioning cluster…'
+      : deployingHere === 'opening'
+        ? 'Opening deploy…'
+        : 'Deploy app';
   const [mountPath, setMountPath] = React.useState<string | null>(null);
   const [removedMount, setRemovedMount] = React.useState<string | null>(null);
   const [hostingConfirm, setHostingConfirm] = React.useState(false);
@@ -169,22 +177,29 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
   // Deploy into this engine: make its cluster the selected one (the
   // wizard targets the selection), then open the wizard.
   const deployHere = async () => {
-    if (!status?.clusterProvisioned) {
-      const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
-      const provisioned = await run('cluster', () => vm.clusterUp(onLog));
-      if (!provisioned) return;
-    }
+    if (deployingHere || busy !== null) return;
+    await paintPending(() => setDeployingHere(status?.clusterProvisioned ? 'opening' : 'provisioning'));
     try {
-      const cfg = await host.getConfig();
-      if (cfg.selectedClusterId !== clusterId) {
-        await host.selectCluster(clusterId);
-        queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
+      if (!status?.clusterProvisioned) {
+        const onLog = (e: { message: string }) => setLog((prev) => [...prev.slice(-199), e.message]);
+        const provisioned = await run('cluster', () => vm.clusterUp(onLog));
+        if (!provisioned) return;
+        await paintPending(() => setDeployingHere('opening'));
       }
-    } catch {
-      // Selection is a convenience — the wizard surfaces the actual
-      // target either way.
+      try {
+        const cfg = await host.getConfig();
+        if (cfg.selectedClusterId !== clusterId) {
+          await host.selectCluster(clusterId);
+          queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
+        }
+      } catch {
+        // Selection is a convenience — the wizard surfaces the actual
+        // target either way.
+      }
+      navigate('/projects/deploy');
+    } finally {
+      setDeployingHere(null);
     }
-    navigate('/projects/deploy');
   };
 
   const setUpHosting = async () => {
@@ -497,13 +512,31 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
                   <button
                     type="button"
                     onClick={async () => {
-                      const picked = await host.local?.pickDirectory();
-                      if (picked) setMountPath(picked);
+                      if (pickingFolder || busy !== null) return;
+                      await paintPending(() => setPickingFolder(true));
+                      try {
+                        const picked = await host.local?.pickDirectory();
+                        if (picked) setMountPath(picked);
+                      } catch (err) {
+                        toast(err instanceof Error ? err.message : String(err), { variant: 'error' });
+                      } finally {
+                        setPickingFolder(false);
+                      }
                     }}
-                    disabled={busy !== null}
-                    className="inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
+                    aria-disabled={busy !== null || pickingFolder}
+                    aria-busy={pickingFolder}
+                    aria-label={pickingFolder ? 'Choose folder…' : mountPath ? 'Change folder' : 'Share a folder…'}
+                    className="aria-disabled:pointer-events-none aria-disabled:text-[var(--color-muted-foreground)] inline-flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]"
                   >
-                    <FolderOpen className="h-3.5 w-3.5" /> {mountPath ? 'Change folder' : 'Share a folder…'}
+                    <FolderOpen className="h-3.5 w-3.5" aria-hidden />
+                    <span className="inline-grid" aria-hidden>
+                      <span className="invisible col-start-1 row-start-1">Share a folder…</span>
+                      <span className="invisible col-start-1 row-start-1">Change folder</span>
+                      <span className="invisible col-start-1 row-start-1">Choose folder…</span>
+                      <span className="col-start-1 row-start-1">
+                        {pickingFolder ? 'Choose folder…' : mountPath ? 'Change folder' : 'Share a folder…'}
+                      </span>
+                    </span>
                   </button>
                   {mountPath ? (
                     <span
@@ -650,8 +683,21 @@ export function RuntimeDetail({ name, clusterId }: { name: string; clusterId: st
                     </Link>
                   </Button>
                 ) : null}
-                <Button variant="outline" size="sm" onClick={() => void deployHere()} disabled={busy !== null}>
-                  <Rocket className="h-4 w-4" /> Deploy app
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void deployHere()}
+                  aria-disabled={busy !== null || deployingHere !== null}
+                  aria-busy={deployingHere !== null}
+                  aria-label={deployHereLabel}
+                >
+                  <Rocket className="h-4 w-4" aria-hidden />{' '}
+                  <span className="inline-grid" aria-hidden>
+                    <span className="invisible col-start-1 row-start-1">Deploy app</span>
+                    <span className="invisible col-start-1 row-start-1">Opening deploy…</span>
+                    <span className="invisible col-start-1 row-start-1">Provisioning cluster…</span>
+                    <span className="col-start-1 row-start-1">{deployHereLabel}</span>
+                  </span>
                 </Button>
               </div>
             </div>

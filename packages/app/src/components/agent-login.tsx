@@ -295,6 +295,7 @@ function ClaudeLogin({
   const [apiKey, setApiKey] = React.useState('');
   const [paste, setPaste] = React.useState('');
   const [hasClaude, setHasClaude] = React.useState<boolean | null>(null);
+  const [openingTerminal, setOpeningTerminal] = React.useState(false);
   const [terminalLaunched, setTerminalLaunched] = React.useState(false);
   // True when the last "Open terminal" click could NOT auto-launch a terminal
   // (non-macOS, where runSetupToken() resolves false, or a launch error). Drives
@@ -345,8 +346,12 @@ function ClaudeLogin({
   };
 
   const openTerminal = async () => {
-    setErr(null);
-    setTerminalAutoOpenFailed(false);
+    if (openingTerminal || busy || hasClaude === null) return;
+    await paintPending(() => {
+      setOpeningTerminal(true);
+      setErr(null);
+      setTerminalAutoOpenFailed(false);
+    });
     try {
       const launched = await auth.runSetupToken();
       setTerminalLaunched(launched);
@@ -358,6 +363,8 @@ function ClaudeLogin({
       setTerminalLaunched(false);
       setTerminalAutoOpenFailed(true);
       setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOpeningTerminal(false);
     }
   };
 
@@ -429,10 +436,20 @@ function ClaudeLogin({
                 variant="outline"
                 size="sm"
                 onClick={() => void openTerminal()}
-                disabled={busy || hasClaude === null}
+                aria-disabled={busy || hasClaude === null || openingTerminal}
+                aria-busy={openingTerminal}
+                aria-label={
+                  openingTerminal ? 'Opening terminal…' : terminalLaunched ? 'Start sign-in again' : 'Start sign-in'
+                }
               >
                 <TerminalSquare className="h-3.5 w-3.5" />
-                {terminalLaunched ? 'Start sign-in again' : 'Start sign-in'}
+                <span className="inline-grid" aria-hidden>
+                  <span className="invisible col-start-1 row-start-1">Start sign-in again</span>
+                  <span className="invisible col-start-1 row-start-1">Opening terminal…</span>
+                  <span className="col-start-1 row-start-1">
+                    {openingTerminal ? 'Opening terminal…' : terminalLaunched ? 'Start sign-in again' : 'Start sign-in'}
+                  </span>
+                </span>
               </Button>
               {hasClaude === null ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-muted-foreground)]" />

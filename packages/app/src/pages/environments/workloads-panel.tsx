@@ -1,4 +1,6 @@
 import { RefetchButton } from '@/components/refetch-button';
+import { paintPending } from '@/lib/paint-pending';
+import { useToast } from '@/components/ui/toast';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@appliance.sh/ui/table';
 import { IconTooltip } from '@/components/ui/tooltip';
 import * as React from 'react';
@@ -43,6 +45,8 @@ export function WorkloadsPanel({
   scopeNote?: string;
 }) {
   const host = useHost();
+  const { toast } = useToast();
+  const [switching, setSwitching] = React.useState(false);
   const terminals = useTerminalSessions();
   const queryClient = useQueryClient();
   const [activePod, setActivePod] = React.useState<LocalPodInfo | null>(null);
@@ -104,11 +108,26 @@ export function WorkloadsPanel({
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  await host.selectCluster(clusterId);
-                  queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
+                  if (switching) return;
+                  await paintPending(() => setSwitching(true));
+                  try {
+                    await host.selectCluster(clusterId);
+                    await queryClient.invalidateQueries({ queryKey: ['host', 'config'] });
+                  } catch (err) {
+                    toast(err instanceof Error ? err.message : String(err), { variant: 'error' });
+                  } finally {
+                    setSwitching(false);
+                  }
                 }}
+                aria-disabled={switching}
+                aria-busy={switching}
+                aria-label={switching ? 'Switching…' : 'Switch'}
               >
-                Switch
+                <span className="inline-grid" aria-hidden>
+                  <span className="invisible col-start-1 row-start-1">Switch</span>
+                  <span className="invisible col-start-1 row-start-1">Switching…</span>
+                  <span className="col-start-1 row-start-1">{switching ? 'Switching…' : 'Switch'}</span>
+                </span>
               </Button>
             </div>
           ) : workloadsQuery.isLoading ? (
