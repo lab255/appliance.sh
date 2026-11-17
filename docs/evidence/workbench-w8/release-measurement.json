@@ -1,0 +1,22 @@
+{
+  "profile": "cargo test --release (optimized)",
+  "platform": "macOS arm64",
+  "corpus": "60 files of 1 MiB ASCII x; byte contents and counts asserted",
+  "scope": "warm OS page cache; filesystem read + HMAC + parsing; isolated test key excludes OS keychain latency; capture and compilation excluded",
+  "before": {
+    "corpusBytes": 62914560,
+    "storedBytes": 251668060,
+    "loadMedianMs": 878.66125,
+    "samplesMs": [860.6787919999999, 878.66125, 884.25]
+  },
+  "after": {
+    "corpusBytes": 62914560,
+    "storedBytes": 83896145,
+    "loadMedianMs": 282.392875,
+    "samplesMs": [250.299292, 282.392875, 366.776375]
+  },
+  "cacheHit": {
+    "loadMedianMs": 199.940625,
+    "samplesMs": [196.630042, 199.940625, 222.241625]
+  }
+}

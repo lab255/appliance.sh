@@ -15,6 +15,11 @@ output = pathlib.Path(OUTPUT)
 output.mkdir(parents=True, exist_ok=True)
 source = "packages/desktop/src-tauri/src/inspection.rs"
 cargo = ["cargo", "test", "--manifest-path", "packages/desktop/src-tauri/Cargo.toml"]
+profile = os.environ.get("WORKBENCH_CARGO_PROFILE", "dev")
+if profile not in ("dev", "release"):
+    sys.exit("WORKBENCH_CARGO_PROFILE must be dev or release")
+if profile == "release":
+    cargo.append("--release")
 env = dict(os.environ, TAURI_CONFIG='{"bundle":{"resources":[],"externalBin":[]}}')
 saved = {}
 
@@ -66,6 +71,11 @@ try:
     elif MODE == "keychain":
         command = cargo + ["hmac_native_keychain", "--lib", "--", "--ignored"]
         env["WORKBENCH_KEYCHAIN_TEST"] = "1"
+    elif MODE == "storage-corpus-defect":
+        replace(source, "for index in 0..60 {", "for index in 0..59 {")
+        command = cargo + ["storage_measurement", "--lib", "--", "--ignored", "--nocapture"]
+        env["WORKBENCH_STORAGE_MEASURE"] = "1"
+        negative = True
     elif MODE == "storage-before":
         current = pathlib.Path(source).read_text()
         start = current.rfind("    #[test]", 0, current.index("    fn storage_measurement()"))

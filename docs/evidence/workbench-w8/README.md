@@ -122,3 +122,48 @@ unchanged `src/lib.rs`: `large_enum_variant` at 1410 and
 `needless_borrows_for_generic_args` at 3961. With only those known lints allowed,
 `-D warnings` passed. No unrelated lint changes are included. Final evidence-only
 README appends were formatted after verification; runtime source was unchanged.
+
+## Director riders: release profile and explicit refusal
+
+The parsed-baseline cache HMAC-verifies on every hit: it accelerates parsing, not
+trust. V1 files on disk are **refused visibly**, never auto-migrated or silently
+re-trusted. Missing authentication and unsupported versions have explicit reasons
+and rebaseline-unavailable wording; original bytes and attempt markers remain.
+
+Prediction versus measurement: ASCII `x` becomes a three-digit JSON number plus
+separator (approximately 4 bytes per retained byte), while base64 uses 4/3 bytes.
+The predicted size reduction is therefore 3×. The measured sizes,
+251668060 → 83896145 bytes, give approximately 3.00×, matching that expectation.
+
+The release pair uses the identical deterministic corpus and assertions, warm OS
+page cache, three samples per condition, sequential execution on macOS arm64, and
+`cargo test --release`. Times include filesystem read and HMAC; the isolated test
+key excludes OS keychain access latency. Compilation and capture are outside the
+load timers. To reproduce:
+
+```sh
+WORKBENCH_CARGO_PROFILE=release WORKBENCH_PROBE=storage-before \
+EVIDENCE_DIR=./probe-output python3 docs/evidence/workbench-w8/run-probes.py
+WORKBENCH_CARGO_PROFILE=release WORKBENCH_PROBE=storage \
+EVIDENCE_DIR=./probe-output python3 docs/evidence/workbench-w8/run-probes.py
+WORKBENCH_CARGO_PROFILE=release WORKBENCH_PROBE=storage-corpus-defect \
+EVIDENCE_DIR=./probe-output python3 docs/evidence/workbench-w8/run-probes.py
+```
+
+The last command deliberately omits one 1 MiB file. It must fail the measurement's
+60-file assertion, rather than report an artificially smaller/faster corpus.
+
+| Release read                                      | Stored bytes | Median ms | Three samples (ms, sorted) |
+| ------------------------------------------------- | -----------: | --------: | -------------------------- |
+| Before: authenticated JSON arrays                 |    251668060 |   878.661 | 860.679, 878.661, 884.250  |
+| After: authenticated base64, parsed cache cleared |     83896145 |   282.393 | 250.299, 282.393, 366.776  |
+| After: authenticated parsed-cache hit             |     83896145 |   199.941 | 196.630, 199.941, 222.242  |
+
+[Machine-readable results](release-measurement.json). The release comparison shows
+approximately 67.9% lower parse-inclusive load time for the same authenticated
+corpus. This measures both formats with HMAC enabled; it does not claim to reproduce
+the earlier 434 ms observation under identical conditions. The cache-hit timing
+still includes current-file read and HMAC verification. The missing-file negative
+control failed at the expected 60-file assertion (59 observed); it emitted no
+successful measurement. Product code and migration behavior are unchanged by this
+evidence-only rider delta.
