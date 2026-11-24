@@ -48,8 +48,10 @@ jobs:
         include:
           - arch: aarch64
             rust_target: aarch64-apple-darwin
-            # Apple-Silicon runner.
-            runs_on: macos-14
+            # Apple-Silicon runner. macos-14 was retired by GitHub (jobs are
+            # cancelled instantly: "configuration macos-14-arm64-us-default
+            # is not supported"); macos-15 is the supported arm64 image.
+            runs_on: macos-15
           - arch: x86_64
             rust_target: x86_64-apple-darwin
             # Intel runner. macos-13 was retired by GitHub (jobs never
