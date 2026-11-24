@@ -415,7 +415,7 @@ jobs:
       matrix:
         include:
           - triple: aarch64-apple-darwin
-            runs_on: macos-14
+            runs_on: macos-15
             extension: ''
           - triple: x86_64-apple-darwin
             runs_on: macos-15-intel
