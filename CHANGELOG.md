@@ -1,3 +1,52 @@
+## 1.63.0 (2026-11-24)
+
+### Features
+
+- **ui:** add ds select and migrate native selectors (GLA-299) ([#162](https://github.com/lab255/appliance.sh/pull/162))
+- **ui:** add checkbox and switch controls and migrate native sites (GLA-300) ([#163](https://github.com/lab255/appliance.sh/pull/163))
+- **ui:** add accordion and doctor disclosure (GLA-297) ([#164](https://github.com/lab255/appliance.sh/pull/164))
+- **ui:** extend hover glide to qualifying choice lists ([#166](https://github.com/lab255/appliance.sh/pull/166))
+- **ui:** add catalogue combobox and evaluate command menu ([#165](https://github.com/lab255/appliance.sh/pull/165))
+- **ui:** add table primitives and migrate workload tables ([#167](https://github.com/lab255/appliance.sh/pull/167))
+- **ui:** add ScrollArea to long log and machine panes ([#168](https://github.com/lab255/appliance.sh/pull/168))
+- **ui:** add tabs and migrate ad-hoc tablists ([#169](https://github.com/lab255/appliance.sh/pull/169))
+- **workbench:** add gated directory bindings and workspace shell ([#176](https://github.com/lab255/appliance.sh/pull/176))
+- **workbench:** host-side baseline and read-only Changes/Files (W3) ([#175](https://github.com/lab255/appliance.sh/pull/175))
+- **workbench:** live Package hand-off with local developer signing ([#177](https://github.com/lab255/appliance.sh/pull/177))
+- **workbench:** bridge fixture readiness proposals to human Package ([#180](https://github.com/lab255/appliance.sh/pull/180))
+- **workbench:** read-only session observation and inspector regression probes ([#181](https://github.com/lab255/appliance.sh/pull/181))
+
+### Bug Fixes
+
+- preserve entitlement lock ownership and make cancellation tests deterministic ([#185](https://github.com/lab255/appliance.sh/pull/185))
+- **app:** preserve installed apps during action refresh ([#158](https://github.com/lab255/appliance.sh/pull/158))
+- **app:** migrate security prompts to ds dialogs (GLA-298) ([#159](https://github.com/lab255/appliance.sh/pull/159))
+- **app:** polish sandbox helper and navigation alignment (GLA-304) ([#161](https://github.com/lab255/appliance.sh/pull/161))
+- **app:** reserve cold-shell header and variable navigation layout (GLA-335) ([#172](https://github.com/lab255/appliance.sh/pull/172))
+- **app:** acknowledge actions before host work (GLA-337) ([#173](https://github.com/lab255/appliance.sh/pull/173))
+- **app:** paint pending before read retries and refetches (GLA-339) ([#182](https://github.com/lab255/appliance.sh/pull/182))
+- **app:** paint pending UI for six audited handlers ([#183](https://github.com/lab255/appliance.sh/pull/183))
+- **cli:** correct MCP and broker safety copy (GLA-334) ([#171](https://github.com/lab255/appliance.sh/pull/171))
+- **desktop:** commit compatible Tauri dependency lockfile (GLA-341) ([#174](https://github.com/lab255/appliance.sh/pull/174))
+- **ui:** unify shell hover, press, and focus feedback (GLA-280) ([#156](https://github.com/lab255/appliance.sh/pull/156))
+- **ui:** apply owner live-pass glide and button rulings (GLA-284) ([#157](https://github.com/lab255/appliance.sh/pull/157))
+- **ui:** add tooltips to icon-only controls (GLA-301) ([#160](https://github.com/lab255/appliance.sh/pull/160))
+- **vm:** simplify doctor predicate for Rust 1.100 clippy ([#178](https://github.com/lab255/appliance.sh/pull/178))
+- **workbench:** reconcile readiness and authenticate compact baselines ([#186](https://github.com/lab255/appliance.sh/pull/186))
+- **workbench:** close enumerated GLA-340 REST lane debt ([#187](https://github.com/lab255/appliance.sh/pull/187))
+
+### Documentation
+
+- dated staleness amendments for agent-sandbox, cloud-promotion, mcp, desktop-ia (GLA-333) ([#170](https://github.com/lab255/appliance.sh/pull/170))
+
+### CI
+
+- **desktop:** reject stale Cargo locks before verification ([#179](https://github.com/lab255/appliance.sh/pull/179))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.62.0 (2026-10-26)
 
 ### Features
