@@ -1,0 +1,19 @@
+# Pin the desktop shell's toolchain to the last release before Cargo's new
+# build-dir layout (Rust 1.100 moved build-script OUT_DIRs from
+# `build/<pkg>-<hash>/out` to `build/<pkg>/<hash>/out`).
+#
+# tauri-build 2.6.x — pinned by Cargo.lock so the tauri crate minor matches
+# @tauri-apps/api (GLA-341) — derives the target dir by walking a fixed three
+# levels up from OUT_DIR. Under the new layout that lands in `target/<profile>/build`,
+# so the `appliance-credhelper` sidecar copy collides with Cargo's build
+# directory for the `appliance-credhelper` crate and macOS fails the
+# `remove_file` with EPERM ("Operation not permitted"). tauri-build 2.7+ resolves
+# the target dir by searching for the `build` ancestor instead.
+#
+# Remove this pin when the Tauri crates and @tauri-apps/* move to a minor whose
+# tauri-build is >= 2.7.
+[toolchain]
+channel = "1.99.0"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
