@@ -1,3 +1,13 @@
+## 1.64.0 (2026-11-25)
+
+### Features
+
+- **desktop:** Authenticode-sign Windows release bundles via Azure Trusted Signing (AP-202) ([#190](https://github.com/lab255/appliance.sh/pull/190))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.63.1 (2026-11-25)
 
 ### Bug Fixes
