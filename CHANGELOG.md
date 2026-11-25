@@ -1,3 +1,17 @@
+## 1.63.1 (2026-11-25)
+
+### Bug Fixes
+
+- **desktop:** pin src-tauri to Rust 1.99 until tauri-build handles the new build-dir layout ([#189](https://github.com/lab255/appliance.sh/pull/189))
+
+### CI
+
+- **release:** move arm64 macOS jobs from retired macos-14 to macos-15 ([#188](https://github.com/lab255/appliance.sh/pull/188))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.63.0 (2026-11-24)
 
 ### Features
