@@ -149,7 +149,10 @@ jobs:
   windows:
     name: Windows desktop + CLI
     runs-on: windows-latest
-    timeout-minutes: 12
+    # 20, not 12: a cold cargo cache (new toolchain or lockfile) needs ~12m of
+    # build+test, and the rust-cache save runs in the post step. At 12 the post
+    # step was cut off, the cache never saved, and every rerun stayed cold.
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
