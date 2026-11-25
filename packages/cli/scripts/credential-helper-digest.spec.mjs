@@ -15,7 +15,7 @@ function checkArtifact(bytes, args = ['--', '--check']) {
   directories.push(root);
   const scripts = path.join(root, 'packages/cli/scripts');
   fs.mkdirSync(scripts, { recursive: true });
-  for (const name of ['credential-helper-digest.mjs', 'verify-credential-helper-digest.mjs']) {
+  for (const name of ['credential-helper-digest.mjs', 'verify-credential-helper-digest.mjs', 'authenticode.mjs']) {
     fs.copyFileSync(path.join(import.meta.dirname, name), path.join(scripts, name));
   }
   const manifest = path.join(scripts, 'credential-helper-checksums.json');

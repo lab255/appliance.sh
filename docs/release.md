@@ -64,6 +64,28 @@ and writes `packages/cli/scripts/credential-helper-checksums.json`. Use
 `APPLIANCE_CREDHELPER_SYSROOT_ARCHIVE=/path/to/windows-msvc-sysroot.tar.xz` to
 reuse an already downloaded archive.
 
-The Windows helper is currently cross-built and unsigned. Authenticode signing
-is tracked by AP-202; release operators should retain the digest guard until the
-signed-asset pipeline replaces it.
+### Authenticode and the pin (AP-202)
+
+The pin is always over the **unsigned** normalized helper. Release builds
+Authenticode-sign Windows binaries with Azure Trusted Signing (the Lab255
+profile), and a signature can't be pinned in advance because its RFC 3161
+timestamp changes on every signing. Every digest check (the desktop release
+guards, `verify-credential-helper-digest.mjs` and the npm postinstall) therefore
+hashes the helper with its Authenticode table stripped
+(`packages/cli/scripts/authenticode.mjs`). Stripping truncates the trailing
+certificate table and zeroes the security directory and the PE checksum, which
+restores the unsigned bytes exactly: the normalized helper has CheckSum 0 and an
+8-byte-aligned length. Each code byte stays pinned. Windows validates the
+signature itself, and `release-desktop.yml` asserts that every shipped PE has a
+valid Lab255 signature.
+
+Signing configuration lives in the `publish` environment: the secrets
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`, and the variables
+`AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT` and `AZURE_SIGNING_PROFILE`.
+If none of the six is set the build is unsigned and prints a warning. If only
+some are set the build fails. Set the variable `WINDOWS_SIGNING_REQUIRED=1` to
+make missing signing configuration fatal.
+
+The desktop installer is signed. The standalone CLI release assets
+(`release-cli-binaries.yml`) are still cross-built unsigned until the AP-202
+follow-up signs them too.
