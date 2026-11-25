@@ -321,9 +321,12 @@ jobs:
     name: Build windows-x86_64 bundle
     runs-on: windows-latest
     # Publishing runs opt in to the `publish` environment for the Tauri
-    # updater secrets (TAURI_SIGNING_PRIVATE_KEY + TAURI_UPDATER_PUBKEY).
-    # Branch smoke tests skip the protected environment and updater artifacts.
-    # (No Apple creds are used here — Authenticode signing is still TODO.)
+    # updater secrets (TAURI_SIGNING_PRIVATE_KEY + TAURI_UPDATER_PUBKEY) and
+    # the Azure Trusted Signing credentials (AZURE_TENANT_ID / AZURE_CLIENT_ID
+    # / AZURE_CLIENT_SECRET secrets + AZURE_SIGNING_ENDPOINT / _ACCOUNT /
+    # _PROFILE variables — the Lab255 profile OpenBook also signs with).
+    # Branch smoke tests skip the protected environment, so they build
+    # unsigned and skip the Authenticode guards.
     environment: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish) && 'publish' || '' }}
     steps:
       - name: Checkout
@@ -393,10 +396,88 @@ jobs:
           fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
           NODE
 
+      # ------------------------------------------------------------------
+      # Authenticode (AP-202). Unsigned Windows binaries are blocked outright
+      # by Smart App Control on fresh Windows 11 installs (CodeIntegrity
+      # 3077/3033: installer -> appliance-desktop.exe, appliance.exe ->
+      # appliance-credhelper.exe). Mirrors OpenBook's release.yml.
+      # ------------------------------------------------------------------
+      - name: Preflight — Windows Authenticode signing configuration
+        shell: bash
+        env:
+          CONFIG_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          CONFIG_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          CONFIG_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          CONFIG_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          CONFIG_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          CONFIG_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          WINDOWS_SIGNING_REQUIRED: ${{ vars.WINDOWS_SIGNING_REQUIRED }}
+        run: |
+          set -euo pipefail
+          present=0
+          missing=0
+          for name in CONFIG_TENANT_ID CONFIG_CLIENT_ID CONFIG_CLIENT_SECRET CONFIG_SIGNING_ENDPOINT CONFIG_SIGNING_ACCOUNT CONFIG_SIGNING_PROFILE; do
+            val="${!name}"
+            val="${val//[[:space:]]/}"
+            if [ -z "$val" ]; then missing=$((missing + 1)); else present=$((present + 1)); fi
+          done
+          if [ "$present" -gt 0 ] && [ "$missing" -gt 0 ]; then
+            echo "::error::Windows signing configuration is partial ($present of 6 values set); refusing to build unsigned." >&2
+            exit 1
+          fi
+          if [ "$missing" -eq 6 ]; then
+            if [ "$(printf '%s' "$WINDOWS_SIGNING_REQUIRED" | tr -d '[:space:]')" = "1" ]; then
+              echo "::error::WINDOWS_SIGNING_REQUIRED=1 but Windows signing configuration is absent." >&2
+              exit 1
+            fi
+            echo "::warning::Windows build is UNSIGNED — Azure Trusted Signing is not configured for this run."
+            echo "win_signing=0" >> "$GITHUB_ENV"
+          else
+            echo "Azure Trusted Signing configured — every Windows binary and the installer will be signed."
+            echo "win_signing=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Azure Trusted Signing CLI
+        if: env.win_signing == '1'
+        shell: bash
+        # Pinned; same version + flags OpenBook ships with. Upstream has since
+        # renamed the crate to artifact-signing-cli.
+        run: cargo install --locked trusted-signing-cli --version 0.9.0
+
+      - name: Resolve signtool
+        if: env.win_signing == '1'
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Where-Object { $_.Directory.Parent.Name -match '^\d+(\.\d+)+$' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { Write-Error 'signtool.exe not found'; exit 1 }
+          "SIGNTOOL_PATH=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Seed pinned Azure Trusted Signing dlib
+        if: env.win_signing == '1'
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'Microsoft.Trusted.Signing.Client.1.0.95.zip'
+          Invoke-WebRequest -Uri 'https://www.nuget.org/api/v2/package/Microsoft.Trusted.Signing.Client/1.0.95' -OutFile $package
+          # Same pin as OpenBook (SHA-256 computed from the NuGet package 2026-08-22).
+          $expectedSha256 = '3bfcf1e0a3cb42af1692f0a8ed45c15de070c2de86f28a59b2795d904d8a920f'
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 $package).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            Write-Error "Trusted Signing dlib SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
+            exit 1
+          }
+          $destination = Join-Path $env:USERPROFILE '.trusted-signing-cli\lib'
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Expand-Archive -LiteralPath $package -DestinationPath $destination -Force
+
       # No Apple secrets here — notarize-macos.mjs skips itself off-darwin.
-      # Windows Authenticode signing is not configured yet; the installer
-      # ships unsigned (SmartScreen shows a "more info" step) until a
-      # WINDOWS_CERTIFICATE secret + signtool step is added.
+      # Authenticode: tauri.release.conf.json sets bundle.windows.signCommand
+      # to scripts/win-sign.mjs, which the bundler runs for the main exe, both
+      # externalBin sidecars (in place in src-tauri/binaries), the vm-bin .exe
+      # resource, the uninstaller and the -setup.exe. Without the AZURE_* env
+      # it no-ops (unsigned dry-run); a signing failure aborts the build.
       - name: Build bundle
         id: bundle
         working-directory: packages/desktop
@@ -404,6 +485,14 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          AZURE_CONFIG_DIR: ${{ runner.temp }}\azure-signing
+          WINDOWS_SIGNING_REQUIRED: ${{ vars.WINDOWS_SIGNING_REQUIRED }}
         run: |
           set -euo pipefail
           pnpm run tauri:build:release
@@ -415,9 +504,17 @@ jobs:
             echo "updater_signing=skipped" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Remove Azure signing credentials
+        if: always()
+        shell: pwsh
+        run: Remove-Item -LiteralPath "${{ runner.temp }}\azure-signing" -Recurse -Force -ErrorAction SilentlyContinue
+
       # The CLI release cross-build and this native desktop build are separate
-      # until AP-202 signs both. Byte identity is therefore asserted against
-      # the CLI package's baked digest before the desktop artifact can stage.
+      # producers, so byte identity is asserted against the CLI package's baked
+      # digest before the desktop artifact can stage. The bundler signs the
+      # staged helper in place; the verifier strips the Authenticode table
+      # before hashing (packages/cli/scripts/authenticode.mjs), so the pin over
+      # the unsigned normalized build still covers every code byte.
       - name: Guard — bundled Windows helper matches CLI baked digest
         shell: bash
         run: >-
@@ -488,6 +585,26 @@ jobs:
             x86_64-pc-windows-msvc `
             (Join-Path $env:INSTALL_DIR 'appliance-credhelper.exe')
           if ($LASTEXITCODE -ne 0) { throw 'Installed desktop credential helper failed the CLI baked-digest guard.' }
+
+          # AP-202: when signing was configured, every PE that ships — the
+          # installer plus every installed .exe/.dll — must carry a VALID
+          # Lab255 Authenticode signature. Smart App Control blocks any one
+          # unsigned child process, so a single gap breaks the install.
+          if ($env:win_signing -eq '1') {
+            $setup = Get-ChildItem 'packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+            $pe = @($setup) + @(Get-ChildItem $env:INSTALL_DIR -File -Recurse -Include '*.exe', '*.dll')
+            $bad = @()
+            foreach ($file in $pe) {
+              $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
+              $subject = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '<none>' }
+              Write-Host "$($sig.Status)  $($file.Name)  $subject"
+              if ($sig.Status -ne 'Valid' -or $subject -notmatch 'Lab255') { $bad += $file.FullName }
+            }
+            if ($bad.Count -gt 0) { throw "Authenticode guard: unsigned or foreign-signed binaries: $($bad -join ', ')" }
+            "Authenticode: $($pe.Count) shipped PE files carry a valid Lab255 signature." >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            Write-Host '::warning::Authenticode guard skipped — this build is unsigned.'
+          }
 
           $stagedApiServer = 'packages/desktop/src-tauri/apiserver-bin'
           $apiServerFiles = @(Get-ChildItem $stagedApiServer -File -Recurse -ErrorAction SilentlyContinue)

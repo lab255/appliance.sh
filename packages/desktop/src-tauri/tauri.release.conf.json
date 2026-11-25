@@ -4,6 +4,12 @@
     "beforeBundleCommand": "node scripts/sign-staged.mjs"
   },
   "bundle": {
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "signCommand": {
+        "cmd": "node",
+        "args": ["../scripts/win-sign.mjs", "%1"]
+      }
+    }
   }
 }

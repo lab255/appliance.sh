@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { credentialHelperContentDigest } from './authenticode.mjs';
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
@@ -32,7 +33,9 @@ export function verifyDownloadedSha256(filePath, expectedDigest) {
     if (!SHA256_PATTERN.test(expectedDigest)) {
       throw new Error('expected credential-helper SHA-256 is malformed');
     }
-    const actualDigest = createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+    // An Authenticode-signed helper is compared on its unsigned content: the
+    // pin predates the (non-deterministic) signature. See authenticode.mjs.
+    const { digest: actualDigest } = credentialHelperContentDigest(fs.readFileSync(filePath), createHash);
     const actual = Buffer.from(actualDigest, 'hex');
     const expected = Buffer.from(expectedDigest, 'hex');
     if (!timingSafeEqual(actual, expected)) {

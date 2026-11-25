@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { credentialHelperContentDigest } from './authenticode.mjs';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const target = process.argv[2] ?? 'x86_64-pc-windows-msvc';
@@ -24,9 +25,20 @@ if (!fs.existsSync(binary)) {
   process.exit(1);
 }
 
-const actual = createHash('sha256').update(fs.readFileSync(binary)).digest('hex');
+// Release helpers are Authenticode-signed (AP-202) and compared on their
+// unsigned content with the signature stripped; the baked pin is over the
+// unsigned normalized build. Windows validates the signature itself, and
+// release-desktop.yml checks it separately after install.
+let actual;
+let signed;
+try {
+  ({ digest: actual, signed } = credentialHelperContentDigest(fs.readFileSync(binary), createHash));
+} catch (error) {
+  console.error(`::error::Credential helper has a malformed Authenticode layout (${binary}): ${error.message}`);
+  process.exit(1);
+}
 if (actual !== expected) {
-  console.error('::error::Windows CLI and desktop credential helpers do not match byte-for-byte.');
+  console.error('::error::Windows CLI and desktop credential helpers do not match byte-for-byte (signature excluded).');
   console.error(`layout: ${binary}`);
   console.error(`actual: ${actual}`);
   console.error(`CLI baked: ${expected}`);
@@ -39,4 +51,6 @@ if (actual !== expected) {
   process.exit(1);
 }
 
-console.log(`Verified ${binary}: ${actual}`);
+console.log(
+  `Verified ${binary}: ${actual}${signed ? ' (Authenticode-signed; compared with signature stripped)' : ' (unsigned)'}`
+);

@@ -109,6 +109,7 @@ describe('canonical Windows helper packaging', () => {
     for (const relative of [
       'packages/desktop/scripts/copy-cli.mjs',
       'packages/cli/scripts/verify-credential-helper-digest.mjs',
+      'packages/cli/scripts/authenticode.mjs',
     ]) {
       fs.copyFileSync(path.join(repository, relative), path.join(root, relative));
     }
