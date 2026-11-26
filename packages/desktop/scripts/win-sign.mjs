@@ -18,8 +18,19 @@
 // trusted-signing-cli (pinned 0.9.0 in release-desktop.yml) authenticates with
 // AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET from the environment
 // and drives signtool (SIGNTOOL_PATH) with the Trusted Signing dlib.
+//
+// Diagnostics: Tauri captures a signCommand's stdout/stderr and, without
+// --verbose, reports only "failed to run node" (v1.64.0's first signed build).
+// Everything this script and trusted-signing-cli print is therefore also
+// appended to $WIN_SIGN_LOG, which release-desktop.yml prints on failure.
+//
+// `win-sign.mjs --check-credentials` requests an Entra ID token for the
+// code-signing scope and exits non-zero with Azure's AADSTS error, so a wrong
+// tenant / client ID / secret fails the job in seconds instead of after the
+// ~10 minute Rust build.
 
 import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
 
 const REQUIRED = [
   'AZURE_TENANT_ID',
@@ -30,47 +41,102 @@ const REQUIRED = [
   'AZURE_SIGNING_PROFILE',
 ];
 
-const missing = REQUIRED.filter((name) => !process.env[name]?.trim());
-const signingRequired = process.env.WINDOWS_SIGNING_REQUIRED?.trim() === '1';
+const logFile = process.env.WIN_SIGN_LOG?.trim();
+
+function record(stream, message) {
+  stream.write(`${message}\n`);
+  if (logFile) {
+    try {
+      fs.appendFileSync(logFile, `${message}\n`);
+    } catch {
+      // Diagnostics must never change the signing outcome.
+    }
+  }
+}
+const info = (message) => record(process.stdout, `[win-sign] ${message}`);
+const fail = (message) => {
+  record(process.stderr, `[win-sign] ERROR: ${message}`);
+  process.exit(1);
+};
+
+const env = (name) => process.env[name]?.trim() ?? '';
+const missing = REQUIRED.filter((name) => !env(name));
+const signingRequired = env('WINDOWS_SIGNING_REQUIRED') === '1';
 
 if (missing.length === REQUIRED.length && !signingRequired) {
-  console.log('[win-sign] Azure Trusted Signing not configured; leaving the file unsigned.');
+  info('Azure Trusted Signing not configured; leaving the file unsigned.');
   process.exit(0);
 }
 if (missing.length > 0) {
-  console.error(`[win-sign] Windows signing configuration incomplete; missing: ${missing.join(', ')}`);
-  process.exit(1);
+  fail(`Windows signing configuration incomplete; missing: ${missing.join(', ')}`);
 }
 
-const [file] = process.argv.slice(2);
-if (!file) {
-  console.error('[win-sign] no file path was provided by the Tauri bundler.');
-  process.exit(1);
+const [arg] = process.argv.slice(2);
+
+if (arg === '--check-credentials') {
+  await checkCredentials();
+  process.exit(0);
 }
 
-console.log(`[win-sign] signing ${file}`);
+if (!arg) fail('no file path was provided by the Tauri bundler.');
+
+info(`signing ${arg}`);
 const result = spawnSync(
   'trusted-signing-cli',
   [
     '--endpoint',
-    process.env.AZURE_SIGNING_ENDPOINT.trim(),
+    env('AZURE_SIGNING_ENDPOINT'),
     '--account',
-    process.env.AZURE_SIGNING_ACCOUNT.trim(),
+    env('AZURE_SIGNING_ACCOUNT'),
     '--certificate',
-    process.env.AZURE_SIGNING_PROFILE.trim(),
+    env('AZURE_SIGNING_PROFILE'),
     '--fd',
     'SHA256',
     '--tr',
     'http://timestamp.acs.microsoft.com',
     '--td',
     'SHA256',
-    file,
+    arg,
   ],
-  { stdio: 'inherit' }
+  { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
 );
 
-if (result.error) {
-  console.error(`[win-sign] failed to run trusted-signing-cli: ${result.error.message}`);
-  process.exit(1);
+for (const [stream, text] of [
+  [process.stdout, result.stdout],
+  [process.stderr, result.stderr],
+]) {
+  const trimmed = text?.trimEnd();
+  if (trimmed) record(stream, trimmed);
 }
-process.exit(result.status ?? 1);
+if (result.error) fail(`could not run trusted-signing-cli: ${result.error.message}`);
+if (result.status !== 0) fail(`trusted-signing-cli exited ${result.status ?? result.signal} for ${arg}`);
+info(`signed ${arg}`);
+process.exit(0);
+
+async function checkCredentials() {
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: env('AZURE_CLIENT_ID'),
+    client_secret: env('AZURE_CLIENT_SECRET'),
+    scope: 'https://codesigning.azure.net/.default',
+  });
+  let response;
+  try {
+    response = await fetch(
+      `https://login.microsoftonline.com/${encodeURIComponent(env('AZURE_TENANT_ID'))}/oauth2/v2.0/token`,
+      { method: 'POST', body, signal: AbortSignal.timeout(30_000) }
+    );
+  } catch (error) {
+    fail(`could not reach Entra ID: ${error.message}`);
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.access_token) {
+    const description = String(payload.error_description ?? '').split(/\r?\n/)[0];
+    fail(
+      `Azure rejected the signing credentials (HTTP ${response.status} ${payload.error ?? ''}): ${description}\n` +
+        'Check the publish environment: AZURE_TENANT_ID = Directory (tenant) ID, AZURE_CLIENT_ID = ' +
+        'Application (client) ID (not the Object ID), AZURE_CLIENT_SECRET = the secret *value*.'
+    );
+  }
+  info('Entra ID issued a code-signing token for the configured service principal.');
+}

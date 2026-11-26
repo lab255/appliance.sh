@@ -437,6 +437,20 @@ jobs:
             echo "win_signing=1" >> "$GITHUB_ENV"
           fi
 
+      # Fail in seconds on a wrong tenant / client ID / secret (AADSTS error in
+      # the log) instead of after the trusted-signing-cli install + Rust build.
+      - name: Verify Azure Trusted Signing credentials
+        if: env.win_signing == '1'
+        shell: bash
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+        run: node packages/desktop/scripts/win-sign.mjs --check-credentials
+
       - name: Install Azure Trusted Signing CLI
         if: env.win_signing == '1'
         shell: bash
@@ -493,6 +507,9 @@ jobs:
           AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
           AZURE_CONFIG_DIR: ${{ runner.temp }}\azure-signing
           WINDOWS_SIGNING_REQUIRED: ${{ vars.WINDOWS_SIGNING_REQUIRED }}
+          # Tauri swallows signCommand output without --verbose; win-sign.mjs
+          # mirrors it here and the next step prints it if the build fails.
+          WIN_SIGN_LOG: ${{ runner.temp }}\win-sign.log
         run: |
           set -euo pipefail
           pnpm run tauri:build:release
@@ -502,6 +519,18 @@ jobs:
             echo "updater_signing=expected" >> "$GITHUB_OUTPUT"
           else
             echo "updater_signing=skipped" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show Windows signing log
+        if: failure() && steps.bundle.conclusion == 'failure'
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/win-sign.log"
+          if [ -f "$log" ]; then
+            echo "::group::win-sign.log"; cat "$log"; echo "::endgroup::"
+            grep -m1 'ERROR' "$log" | sed 's/^/::error::/' || true
+          else
+            echo "No win-sign.log — the bundle failed before any signing call."
           fi
 
       - name: Remove Azure signing credentials
