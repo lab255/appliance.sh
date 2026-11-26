@@ -156,6 +156,14 @@ console.log(rustVersion);
 console.log(run(linker, ['-flavor', 'link', '--version'], { capture: true }));
 run('rustup', ['target', 'add', '--toolchain', rustToolchain, target]);
 const flags = [
+  // Statically link the MSVC C runtime (libcmt/libvcruntime/libucrt from the
+  // pinned sysroot). A dynamically linked helper imports VCRUNTIME140.dll,
+  // which fresh Windows 11 does not ship: it then dies with
+  // STATUS_DLL_NOT_FOUND (0xC0000135, "exit 53" in the CLI) before main().
+  // GitHub's Windows runners carry the VC++ redistributable, so only a clean
+  // machine shows it (PiKVM testbed, v1.64.1). Changing this changes the pin.
+  '-C',
+  'target-feature=+crt-static',
   '-C',
   `linker=${linker}`,
   '-C',
@@ -194,6 +202,9 @@ run(
 
 const binary = path.join(targetDirectory, target, 'release/appliance-credhelper.exe');
 run(process.execPath, [path.join(scriptDirectory, 'normalize-credential-helper-pe.mjs'), binary]);
+// Refuse to pin (or ship) a helper that needs the VC++ redistributable; fresh
+// Windows lacks it and the helper would die with STATUS_DLL_NOT_FOUND.
+run(process.execPath, [path.join(scriptDirectory, 'pe-imports.mjs'), binary]);
 const digest = sha256(binary);
 // Keep evidence even when the baked-pin guard below fails.
 fs.writeFileSync(`${binary}.sha256`, `${digest}  appliance-credhelper.exe\n`);

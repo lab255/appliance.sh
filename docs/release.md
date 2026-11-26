@@ -64,6 +64,20 @@ and writes `packages/cli/scripts/credential-helper-checksums.json`. Use
 `APPLIANCE_CREDHELPER_SYSROOT_ARCHIVE=/path/to/windows-msvc-sysroot.tar.xz` to
 reuse an already downloaded archive.
 
+### Static C runtime
+
+The helper is linked with `-C target-feature=+crt-static`, and so is
+`appliance-vm.exe` (see `packages/vm/.cargo/config.toml`). A dynamically linked
+build imports `VCRUNTIME140.dll`. That DLL comes from the Visual C++
+redistributable, which fresh Windows 11 doesn't include, so the binary fails with
+`STATUS_DLL_NOT_FOUND` (0xC0000135) before `main()`. The CLI reports this as
+"exit 53".
+
+GitHub's Windows runners have the redistributable installed, so version probes
+in CI can't catch it. Instead, `packages/cli/scripts/pe-imports.mjs` reads each
+binary's import table: the helper recipe refuses to pin such a build, and
+`release-desktop.yml` checks every installed `.exe` and `.dll`.
+
 ### Authenticode and the pin (AP-202)
 
 The pin is always over the **unsigned** normalized helper. Release builds

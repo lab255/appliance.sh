@@ -1,0 +1,10 @@
+# Statically link the MSVC C runtime for ad-hoc / local Windows builds of the
+# credential helper (fresh Windows 11 has no VCRUNTIME140.dll; see
+# packages/vm/.cargo/config.toml).
+#
+# The RELEASE helper is NOT built from this file: packages/cli/scripts/
+# credential-helper-digest.mjs sets CARGO_ENCODED_RUSTFLAGS (which overrides
+# config rustflags) and carries +crt-static itself, because its exact flag
+# set determines the pinned SHA-256.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
