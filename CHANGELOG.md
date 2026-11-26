@@ -1,3 +1,13 @@
+## 1.64.1 (2026-11-26)
+
+### Bug Fixes
+
+- **desktop:** surface Windows signing failures and fail fast on bad Azure credentials (AP-202) ([#191](https://github.com/lab255/appliance.sh/pull/191))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.64.0 (2026-11-25)
 
 ### Features
