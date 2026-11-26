@@ -1,0 +1,14 @@
+# Statically link the MSVC C runtime into appliance-vm.exe.
+#
+# A dynamically linked build imports VCRUNTIME140.dll, which fresh Windows 11
+# does not ship, so the engine dies with STATUS_DLL_NOT_FOUND (0xC0000135)
+# before main(). GitHub's Windows runners carry the VC++ redistributable, so
+# CI cannot see it; the clean PiKVM testbed did (v1.64.1). The Tauri desktop
+# shell gets the same treatment from tauri-build's static vcruntime.
+#
+# Picked up when cargo runs from packages/vm (packages/desktop/scripts/
+# build-vm.mjs does), and only for the MSVC target, so macOS/Linux builds are
+# unaffected. An explicit RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS overrides it.
+# release-desktop.yml checks the installed binaries' imports after install.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

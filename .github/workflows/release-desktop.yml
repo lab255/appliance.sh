@@ -615,6 +615,15 @@ jobs:
             (Join-Path $env:INSTALL_DIR 'appliance-credhelper.exe')
           if ($LASTEXITCODE -ne 0) { throw 'Installed desktop credential helper failed the CLI baked-digest guard.' }
 
+          # Fresh Windows has no VC++ redistributable. GitHub runners do, so the
+          # --version probes below can't catch a binary that imports
+          # VCRUNTIME140.dll / MSVCP140.dll — check every shipped PE's import
+          # table instead (v1.64.1: appliance-vm.exe + appliance-credhelper.exe
+          # died with STATUS_DLL_NOT_FOUND on a clean Windows 11).
+          $shippedPe = @(Get-ChildItem $env:INSTALL_DIR -File -Recurse -Include '*.exe', '*.dll' | ForEach-Object FullName)
+          & node packages/cli/scripts/pe-imports.mjs @shippedPe
+          if ($LASTEXITCODE -ne 0) { throw 'A shipped Windows binary depends on the VC++ redistributable runtime.' }
+
           # AP-202: when signing was configured, every PE that ships — the
           # installer plus every installed .exe/.dll — must carry a VALID
           # Lab255 Authenticode signature. Smart App Control blocks any one
