@@ -1,3 +1,14 @@
+## 1.64.2 (2026-11-26)
+
+### Bug Fixes
+
+- **desktop:** don't process.exit() after fetch in win-sign --check-credentials ([#192](https://github.com/lab255/appliance.sh/pull/192))
+- **windows:** statically link the C runtime into appliance-vm.exe and the credential helper ([#193](https://github.com/lab255/appliance.sh/pull/193))
+
+### ❤️ Thank You
+
+- Eliot Lim @eliotlim
+
 ## 1.64.1 (2026-11-26)
 
 ### Bug Fixes
