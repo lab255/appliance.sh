@@ -74,46 +74,56 @@ if (missing.length > 0) {
 const [arg] = process.argv.slice(2);
 
 if (arg === '--check-credentials') {
-  await checkCredentials();
-  process.exit(0);
+  // Never process.exit() after fetch(): on Windows, exiting while undici's
+  // sockets are closing aborts Node with a libuv assertion
+  // (`!(handle->flags & UV_HANDLE_CLOSING)`, src\win\async.c) and exit 127,
+  // even when the token request succeeded (v1.64.1). Set exitCode and let
+  // the event loop drain instead.
+  process.exitCode = (await checkCredentials()) ? 0 : 1;
+} else {
+  signFile(arg);
 }
 
-if (!arg) fail('no file path was provided by the Tauri bundler.');
-
-info(`signing ${arg}`);
-const result = spawnSync(
-  'trusted-signing-cli',
-  [
-    '--endpoint',
-    env('AZURE_SIGNING_ENDPOINT'),
-    '--account',
-    env('AZURE_SIGNING_ACCOUNT'),
-    '--certificate',
-    env('AZURE_SIGNING_PROFILE'),
-    '--fd',
-    'SHA256',
-    '--tr',
-    'http://timestamp.acs.microsoft.com',
-    '--td',
-    'SHA256',
-    arg,
-  ],
-  { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
-);
-
-for (const [stream, text] of [
-  [process.stdout, result.stdout],
-  [process.stderr, result.stderr],
-]) {
-  const trimmed = text?.trimEnd();
-  if (trimmed) record(stream, trimmed);
+function signFile(file) {
+  if (!file) fail('no file path was provided by the Tauri bundler.');
+  info(`signing ${file}`);
+  const result = spawnSync(
+    'trusted-signing-cli',
+    [
+      '--endpoint',
+      env('AZURE_SIGNING_ENDPOINT'),
+      '--account',
+      env('AZURE_SIGNING_ACCOUNT'),
+      '--certificate',
+      env('AZURE_SIGNING_PROFILE'),
+      '--fd',
+      'SHA256',
+      '--tr',
+      'http://timestamp.acs.microsoft.com',
+      '--td',
+      'SHA256',
+      file,
+    ],
+    { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
+  );
+  for (const [stream, text] of [
+    [process.stdout, result.stdout],
+    [process.stderr, result.stderr],
+  ]) {
+    const trimmed = text?.trimEnd();
+    if (trimmed) record(stream, trimmed);
+  }
+  if (result.error) fail(`could not run trusted-signing-cli: ${result.error.message}`);
+  if (result.status !== 0) fail(`trusted-signing-cli exited ${result.status ?? result.signal} for ${file}`);
+  info(`signed ${file}`);
 }
-if (result.error) fail(`could not run trusted-signing-cli: ${result.error.message}`);
-if (result.status !== 0) fail(`trusted-signing-cli exited ${result.status ?? result.signal} for ${arg}`);
-info(`signed ${arg}`);
-process.exit(0);
 
+/** Resolves true when Entra ID issues a code-signing token; logs the AADSTS error otherwise. */
 async function checkCredentials() {
+  const error = (message) => {
+    record(process.stderr, `[win-sign] ERROR: ${message}`);
+    return false;
+  };
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: env('AZURE_CLIENT_ID'),
@@ -126,17 +136,18 @@ async function checkCredentials() {
       `https://login.microsoftonline.com/${encodeURIComponent(env('AZURE_TENANT_ID'))}/oauth2/v2.0/token`,
       { method: 'POST', body, signal: AbortSignal.timeout(30_000) }
     );
-  } catch (error) {
-    fail(`could not reach Entra ID: ${error.message}`);
+  } catch (cause) {
+    return error(`could not reach Entra ID: ${cause.message}`);
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.access_token) {
     const description = String(payload.error_description ?? '').split(/\r?\n/)[0];
-    fail(
+    return error(
       `Azure rejected the signing credentials (HTTP ${response.status} ${payload.error ?? ''}): ${description}\n` +
         'Check the publish environment: AZURE_TENANT_ID = Directory (tenant) ID, AZURE_CLIENT_ID = ' +
         'Application (client) ID (not the Object ID), AZURE_CLIENT_SECRET = the secret *value*.'
     );
   }
   info('Entra ID issued a code-signing token for the configured service principal.');
+  return true;
 }
